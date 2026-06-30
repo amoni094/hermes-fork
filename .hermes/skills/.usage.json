@@ -467,6 +467,19 @@
     "use_count": 0,
     "view_count": 0
   },
+  "github-issue-agent": {
+    "archived_at": null,
+    "created_at": "2026-06-30T09:52:11.200039+00:00",
+    "created_by": null,
+    "last_patched_at": "2026-06-30T09:52:34.919054+00:00",
+    "last_used_at": "2026-06-30T09:54:27.331807+00:00",
+    "last_viewed_at": "2026-06-30T09:54:27.313514+00:00",
+    "patch_count": 2,
+    "pinned": false,
+    "state": "active",
+    "use_count": 2,
+    "view_count": 2
+  },
   "github-issues": {
     "archived_at": null,
     "created_at": "2026-06-12T06:36:48.065769+00:00",
@@ -596,6 +609,19 @@
     "state": "active",
     "use_count": 0,
     "view_count": 0
+  },
+  "hermes-budget-governance": {
+    "archived_at": null,
+    "created_at": "2026-06-30T09:51:38.818829+00:00",
+    "created_by": null,
+    "last_patched_at": "2026-06-30T09:52:08.903152+00:00",
+    "last_used_at": "2026-06-30T09:54:27.322148+00:00",
+    "last_viewed_at": "2026-06-30T09:54:27.302372+00:00",
+    "patch_count": 2,
+    "pinned": false,
+    "state": "active",
+    "use_count": 2,
+    "view_count": 2
   },
   "hermes-coding-review-loop": {
     "archived_at": null,
@@ -731,14 +757,14 @@
     "archived_at": null,
     "created_at": "2026-06-06T11:59:10.886183+00:00",
     "created_by": "agent",
-    "last_patched_at": "2026-06-30T02:47:18.474780+00:00",
-    "last_used_at": "2026-06-30T08:54:56.030637+00:00",
-    "last_viewed_at": "2026-06-30T06:53:50.532562+00:00",
-    "patch_count": 58,
+    "last_patched_at": "2026-06-30T09:58:31.301577+00:00",
+    "last_used_at": "2026-06-30T09:58:05.673281+00:00",
+    "last_viewed_at": "2026-06-30T09:58:05.660916+00:00",
+    "patch_count": 61,
     "pinned": false,
     "state": "active",
-    "use_count": 259,
-    "view_count": 77
+    "use_count": 261,
+    "view_count": 78
   },
   "hermes-operating-pattern": {
     "archived_at": null,
@@ -783,14 +809,14 @@
     "archived_at": null,
     "created_at": "2026-06-22T08:14:21.967866+00:00",
     "created_by": "agent",
-    "last_patched_at": "2026-06-30T03:29:46.670021+00:00",
-    "last_used_at": "2026-06-30T07:11:22.942909+00:00",
-    "last_viewed_at": "2026-06-30T07:11:22.933570+00:00",
-    "patch_count": 49,
+    "last_patched_at": "2026-06-30T09:54:15.692293+00:00",
+    "last_used_at": "2026-06-30T09:54:32.037281+00:00",
+    "last_viewed_at": "2026-06-30T09:54:32.020744+00:00",
+    "patch_count": 51,
     "pinned": false,
     "state": "active",
-    "use_count": 46,
-    "view_count": 46
+    "use_count": 48,
+    "view_count": 48
   },
   "hermes-self-evolution": {
     "archived_at": null,
@@ -914,13 +940,13 @@
     "created_at": "2026-06-07T05:24:28.413953+00:00",
     "created_by": null,
     "last_patched_at": "2026-06-30T09:46:51.685937+00:00",
-    "last_used_at": "2026-06-30T09:46:36.896172+00:00",
-    "last_viewed_at": "2026-06-30T09:46:36.887286+00:00",
+    "last_used_at": "2026-06-30T09:54:18.129922+00:00",
+    "last_viewed_at": "2026-06-30T09:54:18.118884+00:00",
     "patch_count": 3,
     "pinned": false,
     "state": "active",
-    "use_count": 17,
-    "view_count": 17
+    "use_count": 20,
+    "view_count": 20
   },
   "jupyter-live-kernel": {
     "archived_at": null,
@@ -1330,13 +1356,13 @@
     "created_at": "2026-06-30T08:06:12.532721+00:00",
     "created_by": "agent",
     "last_patched_at": "2026-06-30T08:06:33.490141+00:00",
-    "last_used_at": null,
-    "last_viewed_at": null,
+    "last_used_at": "2026-06-30T09:53:46.958493+00:00",
+    "last_viewed_at": "2026-06-30T09:53:46.926841+00:00",
     "patch_count": 2,
     "pinned": false,
     "state": "active",
-    "use_count": 0,
-    "view_count": 0
+    "use_count": 1,
+    "view_count": 1
   },
   "porting-superpowers-to-hermes": {
     "archived_at": null,
@@ -1641,14 +1667,14 @@
     "archived_at": null,
     "created_at": "2026-06-30T07:11:54.836074+00:00",
     "created_by": "agent",
-    "last_patched_at": "2026-06-30T07:16:30.638862+00:00",
-    "last_used_at": "2026-06-30T07:15:53.604489+00:00",
-    "last_viewed_at": "2026-06-30T07:15:53.595233+00:00",
-    "patch_count": 6,
+    "last_patched_at": "2026-06-30T09:53:12.507623+00:00",
+    "last_used_at": "2026-06-30T09:52:47.694357+00:00",
+    "last_viewed_at": "2026-06-30T09:52:47.679871+00:00",
+    "patch_count": 8,
     "pinned": false,
     "state": "active",
-    "use_count": 1,
-    "view_count": 1
+    "use_count": 2,
+    "view_count": 2
   },
   "songsee": {
     "archived_at": null,

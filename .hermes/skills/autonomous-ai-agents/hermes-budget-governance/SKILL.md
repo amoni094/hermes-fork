@@ -104,3 +104,15 @@ GIT_AUTHOR_EMAIL=hermes@local GIT_COMMITTER_EMAIL=hermes@local \
   git commit -m "skills: describe change"
 git log --oneline -5
 ```
+
+## See also
+
+- **Orchestrator patterns** (`references/orchestrator-patterns.md`) — tuning profiles,
+  destructive ops classification from Veto/Helmor/Orca, and per-run vs. per-session budget strategies.
+
+## References
+
+- Veto (PlawIO): https://github.com/PlawIO/veto
+- Helmor: https://github.com/helmor-dev/helmor
+- Orca: Multi-agent orchestrator (patterns observed in public demos)
+- Awesome Multi-Agent Orchestrators: https://github.com/Agent-Analytics/awesome-multi-agent-orchestrators

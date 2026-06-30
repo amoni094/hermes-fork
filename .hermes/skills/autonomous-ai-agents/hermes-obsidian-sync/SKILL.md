@@ -51,6 +51,7 @@ Use this skill when the task is to:
    - If a log read exceeds safety limits, use the reported `total_lines`/size hint and re-read a small tail window near the end rather than starting at line 1 again.
 4. Read the current live-sync note and today's daily note before rewriting them, so repeated cron runs preserve already-curated durable state instead of replacing it with a narrower partial pass.
    - Do not treat a context-compaction summary, prior assistant report, or earlier-turn claim that a note was already read as satisfying this step; re-read the actual note files in the current turn before any rewrite or patch.
+   - **Decision point**: After reading the current notes, check whether they are already accurate and recent. If they are, the next steps (session browsing, log inspection) become secondary context only. Use the decision tree in `references/timestamp-only-maintenance-decision-tree.md` to determine whether full rewrite or timestamp-only refresh is warranted.
 5. Extract only durable items that survived the session as actual state, configuration, or verified result.
    - For maintenance/cleanup sessions, record only the final verified baseline: consolidated cron ownership, config invariants now in force, low-risk skill pruning that actually happened, and any intentionally deferred prune candidates.
    - If a deletion happened, say whether it was absorbed into a canonical umbrella or pruned as a clear orphan; do not imply a broader cleanup than what was verified.
@@ -163,6 +164,7 @@ This class of task is complete only when the files and any affected cron job def
 ## Support files
 
 - `references/live-sync-note-template.md` — compact template and section checklist for the rewritten sync note.
+- `references/timestamp-only-maintenance-decision-tree.md` — decision matrix for determining whether a sync run requires full rewrite vs. timestamp refresh only; includes efficiency notes and the pitfall of confusing "no new sessions" with "no new durable items."
 - `references/memory-layering-and-drift-checks.md` — source-of-truth map for Hermes memory vs Obsidian vs session/log layers, plus duplication/drift review prompts.
 - `references/memory-drift-audit-pattern.md` — lightweight silent-audit pattern for catching reintroduced overlap between Hermes durable memory and vault `MEMORY.md`, plus near-duplicate, overgrowth, and audit-note patterns.
 - `references/timestamp-refresh-and-partial-read-pitfalls.md` — notes on keeping frontmatter and visible timestamps aligned and re-reading full files before overwrite.

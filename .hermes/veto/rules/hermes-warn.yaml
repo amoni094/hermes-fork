@@ -1,0 +1,78 @@
+version: "1.0"
+name: "hermes-warn"
+description: >
+  Warn rules for Hermes — logged to audit trail, tool still executes.
+  Covers destructive-but-sometimes-legitimate patterns worth noting.
+
+rules:
+  - id: warn-etc-write
+    name: Warn on /etc writes
+    description: Flag writes targeting system configuration paths.
+    enabled: true
+    severity: high
+    action: warn
+    tools:
+      - write_file
+      - mcp__write_file
+      - patch
+      - mcp__patch
+    condition_groups:
+      - - field: arguments.path
+          operator: starts_with
+          value: '/etc/'
+
+  - id: warn-curl-pipe-sh
+    name: Warn on curl/wget piped to shell
+    description: Flag command patterns that download and execute scripts.
+    enabled: true
+    severity: high
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '(curl|wget)\s+.*\|\s*(ba)?sh'
+
+  - id: warn-git-force-push
+    name: Warn on git force push
+    description: Flag git push --force which can destroy remote history.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'git\s+push\s+.*(-f\b|--force\b)'
+
+  - id: warn-systemctl-stop
+    name: Warn on stopping system services
+    description: Flag systemctl stop/disable/mask commands.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'systemctl\s+(stop|disable|mask)\s'
+
+  - id: warn-chmod-777
+    name: Warn on world-writable chmod
+    description: Flag chmod 777 or similar world-writable permission sets.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'chmod\s+(-R\s+)?[0-7]*7[0-7]{2}\s'

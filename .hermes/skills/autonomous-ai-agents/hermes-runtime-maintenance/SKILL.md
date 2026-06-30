@@ -168,6 +168,7 @@ Durable fix pattern:
 ## References
 - `references/runtime-maintenance-command-patterns.md` — compact command patterns for preserving the current Hermes session, stopping service-managed siblings, and verifying Atomic-host updates.
 - `references/rpm-ostree-stale-cached-update-diagnosis.md` — JSON-first diagnosis for stale `AvailableUpdate` banners where no real new deployment exists.
+- `references/python-package-isolation-patterns.md` — uv venv isolation patterns for packages with C extensions (rpds-py, Pydantic-core), veto local-only configuration, and git performance pitfalls when using git add from nested Hermes directories.
 
 ## Overlap note
 This overlaps with `hermes-dashboard-troubleshooting` for dashboard-specific service recovery and with `hermes-agent` for general Hermes CLI usage. Keep this skill focused on live process/service maintenance and update verification rather than feature configuration or web UI debugging.

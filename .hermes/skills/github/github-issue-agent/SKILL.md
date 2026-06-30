@@ -72,7 +72,8 @@ delegate_task(
 ## Pitfalls
 
 - **Label filter**: add a label like `agent-ready` or `good-first-issue` to avoid routing
-  complex/blocked issues. Don't dispatch everything blindly.
+  complex/blocked issues. Don't dispatch everything blindly. See `references/issue-dispatch-strategy.md`
+  for a decision tree.
 - **Worktree limit**: git limits open worktrees. Keep `--limit` under 10 at a time.
 - **Branch collision**: if a branch `issue-N-agent` already exists, the worktree add will fail.
   Run `git worktree prune` in the repo first.
