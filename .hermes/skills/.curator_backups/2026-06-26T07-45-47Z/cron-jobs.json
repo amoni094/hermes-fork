@@ -1,0 +1,296 @@
+{
+  "jobs": [
+    {
+      "id": "b053e57fd10b",
+      "name": "hourly-hermes-chat-sync",
+      "prompt": "Resolve the current local date/time with `date`. Then synchronize recent Hermes chat activity into the Obsidian vault at /var/home/rainbow/Documents/SecondBrain.\n\nTasks:\n1. Use session_search to browse recent sessions and read the most relevant sessions from the last 24 hours (up to 5 sessions).\n1a. If present, also inspect `~/.hermes/logs/hermes-memory-capture.jsonl`, `~/.hermes/logs/hermes-obsidian-file-events.jsonl`, and `~/.hermes/state/obsidian-dirty-paths.json` for high-signal local hints about recent durable changes.\n2. Capture only durable/high-signal items: workflow changes, configuration facts, verified results, note syncs, cron changes, maintenance actions, and stable follow-ups.\n3. Rewrite `/var/home/rainbow/Documents/SecondBrain/04 Resources/Hermes Chat Live Sync.md` as a curated note with:\n   - frontmatter\n   - last synced timestamp\n   - scope\n   - recent sessions\n   - key durable themes\n   - follow-ups\n   - privacy notes\n4. Ensure today's daily note exists at `/var/home/rainbow/Documents/SecondBrain/01 Daily/<YYYY-MM-DD Day>.md` and contains or updates a `## Hermes Chat Sync` section linking to `[[Hermes Chat Live Sync]]` with 3-5 concise bullets.\n5. Keep the daily note thin: one link bullet plus only the most durable 2-4 items. Do not copy detailed PR/commit/test minutiae into the daily note unless they changed an ongoing operating rule.\n6. Keep the output curated and concise. Do NOT dump raw transcripts or secrets.\n7. Prefer rewriting the live-sync note cleanly rather than appending duplicate sections forever.\n8. Treat `~/.hermes/memories/MEMORY.md` as the canonical agent-facing durable memory store; vault `MEMORY.md` and live-sync notes are curated human-readable surfaces, while session/log/state files are retrieval or telemetry sources.\n\nVerification:\n- Read back the files you wrote/updated and confirm the sync landed.\n- If there are no meaningful new sessions, keep the note stable and only refresh the timestamp if appropriate.",
+      "skills": [
+        "hermes-obsidian-sync"
+      ],
+      "skill": "hermes-obsidian-sync",
+      "model": "gpt-5.4-mini",
+      "provider": "openai-codex",
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 60,
+        "display": "every 60m"
+      },
+      "schedule_display": "every 60m",
+      "repeat": {
+        "times": null,
+        "completed": 138
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-05T19:33:16.539234+10:00",
+      "next_run_at": "2026-06-26T18:42:10.182179+10:00",
+      "last_run_at": "2026-06-26T17:42:10.182179+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": [
+        "file",
+        "session_search",
+        "terminal",
+        "skills"
+      ],
+      "workdir": "/var/home/rainbow",
+      "profile": null,
+      "fire_claim": null
+    },
+    {
+      "id": "df2442d351f9",
+      "name": "hermes-health-watchdog",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "hermes-health-watchdog.sh",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 720,
+        "display": "every 720m"
+      },
+      "schedule_display": "every 720m",
+      "repeat": {
+        "times": null,
+        "completed": 10
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-05T19:34:00.740591+10:00",
+      "next_run_at": "2026-06-26T22:37:11.682164+10:00",
+      "last_run_at": "2026-06-26T10:37:11.682164+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "profile": null,
+      "fire_claim": null
+    },
+    {
+      "id": "6f25748d76b6",
+      "name": "hermes-stack-regression",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "hermes-stack-regression.sh",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 720,
+        "display": "every 720m"
+      },
+      "schedule_display": "every 720m",
+      "repeat": {
+        "times": null,
+        "completed": 12
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-06T20:19:01.172369+10:00",
+      "next_run_at": "2026-06-26T22:38:16.108833+10:00",
+      "last_run_at": "2026-06-26T10:38:16.108833+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": [
+        "terminal"
+      ],
+      "workdir": null,
+      "profile": null,
+      "fire_claim": null
+    },
+    {
+      "id": "52776e518fc1",
+      "name": "hermes-mutation-gate-watch",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "hermes-mutation-gate-watch.sh",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 1440,
+        "display": "every 1440m"
+      },
+      "schedule_display": "every 1440m",
+      "repeat": {
+        "times": null,
+        "completed": 14
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-06T20:19:02.184896+10:00",
+      "next_run_at": "2026-06-27T17:43:20.740758+10:00",
+      "last_run_at": "2026-06-26T17:43:20.740758+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": [
+        "terminal"
+      ],
+      "workdir": null,
+      "profile": null,
+      "fire_claim": null
+    },
+    {
+      "id": "3170e542c493",
+      "name": "hermes-memory-drift-audit",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "hermes-memory-drift-audit.py",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 1440,
+        "display": "every 1440m"
+      },
+      "schedule_display": "every 1440m",
+      "repeat": {
+        "times": null,
+        "completed": 15
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-07T14:34:04.244533+10:00",
+      "next_run_at": "2026-06-27T17:43:20.768823+10:00",
+      "last_run_at": "2026-06-26T17:43:20.768823+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": [
+        "terminal"
+      ],
+      "workdir": null,
+      "profile": null,
+      "fire_claim": null
+    },
+    {
+      "id": "bc854296be9c",
+      "name": "skillspector-guard",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "skillspector_guard_enforce.sh",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 240,
+        "display": "every 240m"
+      },
+      "schedule_display": "every 240m",
+      "repeat": {
+        "times": null,
+        "completed": 27
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-12T12:40:06.853231+10:00",
+      "next_run_at": "2026-06-26T18:46:12.036131+10:00",
+      "last_run_at": "2026-06-26T14:46:12.036131+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "origin",
+      "origin": null,
+      "enabled_toolsets": [
+        "terminal"
+      ],
+      "workdir": null,
+      "fire_claim": null
+    },
+    {
+      "id": "064999e8aff3",
+      "name": "firecrawl-watchdog",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "firecrawl_watchdog.sh",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 10,
+        "display": "every 10m"
+      },
+      "schedule_display": "every 10m",
+      "repeat": {
+        "times": null,
+        "completed": 39
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-26T11:06:08.602796+10:00",
+      "next_run_at": "2026-06-26T17:46:20.577480+10:00",
+      "last_run_at": "2026-06-26T17:36:20.577480+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "origin",
+      "origin": {
+        "platform": "telegram",
+        "chat_id": "8642613127",
+        "chat_name": "A",
+        "thread_id": null
+      },
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null
+    }
+  ],
+  "updated_at": "2026-06-26T17:43:20.768946+10:00"
+}

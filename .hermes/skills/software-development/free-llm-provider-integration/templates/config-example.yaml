@@ -1,0 +1,87 @@
+# Provider Config Example
+
+Reference template for ~/.hermes/config.yaml custom_providers section.
+
+## Single Provider (Groq)
+
+```yaml
+custom_providers:
+  groq:
+    base_url: "https://api.groq.com/openai/v1"
+    api_key_env: "GROQ_API_KEY"
+    models:
+      - "llama-3.1-70b-versatile"
+      - "mixtral-8x7b-32768"
+```
+
+## Multiple Providers with Fallback Chain
+
+```yaml
+custom_providers:
+  groq:
+    base_url: "https://api.groq.com/openai/v1"
+    api_key_env: "GROQ_API_KEY"
+    models:
+      - "llama-3.1-70b-versatile"
+      - "mixtral-8x7b-32768"
+
+  cerebras:
+    base_url: "https://api.cerebras.ai/v1"
+    api_key_env: "CEREBRAS_API_KEY"
+    models:
+      - "llama-3.1-70b"
+
+  google_ai:
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key_env: "GOOGLE_AI_KEY"
+    models:
+      - "gemini-2.0-flash"
+```
+
+Then in ~/.hermes/.env:
+
+```bash
+GROQ_API_KEY="gsk_..."
+CEREBRAS_API_KEY="csk_..."
+GOOGLE_AI_KEY="AIza..."
+```
+
+## Routing Integration
+
+Reference in `claude-routing-hierarchy` skill to use free providers for leaf tasks:
+
+```yaml
+free_providers:
+  tier_1:
+    - groq:llama-3.1-70b-versatile
+    - cerebras:llama-3.1-70b
+  tier_2:
+    - google_ai:gemini-2.0-flash
+
+routing_rules:
+  leaf_tasks:
+    fallback: free_providers.tier_1
+    rationale: "Free providers suitable for small, non-production verification tasks"
+  cron_jobs:
+    fallback: free_providers.tier_1
+    rate_limit: "monitor daily quota; rotate to tier_2 if tier_1 exhausted"
+```
+
+## Testing
+
+After adding to config.yaml and .env:
+
+```bash
+hermes query "test" --model groq:llama-3.1-70b-versatile
+hermes query "test" --model cerebras:llama-3.1-70b
+hermes query "test" --model google_ai:gemini-2.0-flash
+```
+
+Each should return a response. If 401 Unauthorized: check API key in .env and that it matches the key_env name in config.yaml.
+
+## Notes
+
+- Do NOT commit API keys to git. Keep ~/.hermes/.env in .gitignore.
+- Rotate keys periodically (provider dashboards allow key deletion and regeneration).
+- Monitor quota usage via provider dashboards; free tiers can deplete unexpectedly on high-traffic cron jobs.
+- If a provider endpoint changes or goes down, fallback routing should catch the failure and retry with next in chain.

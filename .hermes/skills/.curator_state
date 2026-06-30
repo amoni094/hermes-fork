@@ -1,0 +1,9 @@
+{
+  "last_report_path": "/var/home/rainbow/.hermes/logs/curator/20260626-074547",
+  "last_run_at": "2026-06-26T07:45:47.457060+00:00",
+  "last_run_duration_seconds": 0.795772,
+  "last_run_summary": "auto: no changes; llm: skipped (consolidation off)",
+  "last_run_summary_shown_at": "2026-06-26T07:45:47.457060+00:00",
+  "paused": false,
+  "run_count": 3
+}

@@ -1,0 +1,45 @@
+# Runtime state
+sessions/
+sessions.bak*/
+state.db*
+state-snapshots/
+gateway.pid
+gateway.lock
+gateway_state.json
+processes.json
+interrupt_debug.log
+context_length_cache.yaml
+models_dev_cache.json
+ollama_cloud_models_cache.json
+provider_models_cache.json
+kanban.db*
+verification_evidence.db
+auth.lock
+
+# Secrets
+auth.json
+
+# Cache / temp
+cache/
+audio_cache/
+image_cache/
+images/
+pastes/
+sandboxes/
+agent-workspace/
+disk-cleanup/
+hindsight/
+spawn-trees/
+lsp/
+logs/
+pairing/
+whatsapp/
+
+# Config backups (keep original, not the proliferating .bak files)
+config.yaml.bak*
+config.yaml.pre-*
+config.yaml.agent-reach-*
+
+# Large binary/data dirs
+backups/
+checkpoints/

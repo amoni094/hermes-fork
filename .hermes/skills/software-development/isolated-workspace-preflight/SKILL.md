@@ -1,0 +1,114 @@
+---
+name: isolated-workspace-preflight
+description: "Decide when to use Hermes worktree isolation for code changes, then verify a clean baseline before substantial implementation."
+version: 1.0.0
+author: Hermes Agent
+license: MIT
+platforms: [linux, macos, windows]
+metadata:
+  hermes:
+    tags: [git, worktree, isolation, preflight, safety]
+    related_skills: [workflow-map, complexity-gated-planning, hermes-agent, subagent-driven-development, requesting-code-review, verification-before-completion]
+---
+
+# Isolated Workspace Preflight
+
+Use this skill before substantial code changes in a git repo when isolation may reduce risk.
+
+Core rule: isolation is a policy choice based on risk and concurrency, not a ritual for every edit.
+
+## When to strongly prefer isolation
+
+Recommend Hermes worktree mode or another isolated workspace when:
+- the task is multi-file and write-heavy
+- multiple agents may edit code in parallel
+- the user asked for parallel work
+- the change is a risky refactor
+- the repo is shared and branch hygiene matters
+- you expect long-running work with many checkpoints
+
+## When isolation is usually unnecessary
+
+Usually skip for:
+- read-only inspection
+- one-line or tiny local edits
+- non-git directories
+- documentation-only or obviously reversible tweaks
+
+## Step 1: Detect repo/isolation state
+
+Check:
+- are you in a git repo?
+- are you already in an isolated workspace/worktree?
+- does the user explicitly want in-place edits?
+- are parallel agents likely?
+
+If already isolated, do not create more isolation just for ceremony.
+
+## Step 2: Decide and explain
+
+Choose one of:
+- `use isolation`
+- `work in place`
+
+State the reason briefly.
+
+Good examples:
+- "Using isolation because this is a multi-file refactor and parallel review may happen."
+- "Working in place because this is a tiny read/write change in one file and no parallel edits are needed."
+
+## Step 3: If using isolation
+
+Prefer Hermes-native isolation:
+- `hermes -w` for spawned agents
+- existing harness-native worktree mechanisms if already provided
+
+Avoid inventing extra nested isolation if the environment already created a worktree.
+
+## Step 4: Verify baseline before heavy work
+
+Before substantial implementation in the chosen workspace:
+- inspect git status
+- run the narrowest relevant baseline test/build if the project has one
+- note pre-existing failures before continuing
+
+Why:
+- you need to distinguish new breakage from existing breakage
+
+## Step 5: Carry the isolation decision forward
+
+If you spawn workers or background Hermes sessions for code work, pass the isolation choice through consistently.
+For parallel code-editing agents, default to isolated workspaces.
+
+## Practical Hermes mapping
+
+- Main session staying local: fine for small edits
+- Spawned worker doing code changes: prefer `hermes -w`
+- `delegate_task`: cannot directly toggle CLI worktree mode, so compensate with narrower task scope and careful file verification
+
+## Report format
+
+Before implementing, be explicit:
+- Repo state: git / non-git
+- Isolation decision: yes / no
+- Reason: one sentence
+- Baseline check: command or inspection used
+
+## Pitfalls
+
+- forcing worktrees for tiny changes
+- skipping baseline checks before major edits
+- forgetting that multiple workers editing one checkout can conflict
+- assuming isolation exists without checking
+- treating worktree creation as success without verifying the workspace is usable
+- running config-mutating CLIs from inside a scratch clone or evaluation checkout without checking their config root behavior first; some tools persist local `config/` files relative to the current working directory, which pollutes the repo and creates false positives during evaluation
+
+## Scratch-evaluation hygiene
+
+When cloning a repo only to evaluate or trial-install it:
+- keep the clone in a scratch area
+- prefer installing into a dedicated venv or user-local path rather than the repo itself
+- run baseline checks from the repo, but run persistent config commands from a neutral directory like `$HOME` unless the tool explicitly documents project-local config as intended
+- after any installer/config step, check `git status --short` in the scratch clone to catch accidental repo-local state writes before you conclude the evaluation is clean
+
+This matters for CLIs that auto-create local config directories based on the current working directory. A successful command can still leave misleading untracked files in the evaluation clone.
