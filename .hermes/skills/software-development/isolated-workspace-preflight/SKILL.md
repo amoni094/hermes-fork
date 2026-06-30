@@ -15,25 +15,33 @@ metadata:
 
 Use this skill before substantial code changes in a git repo when isolation may reduce risk.
 
-Core rule: isolation is a policy choice based on risk and concurrency, not a ritual for every edit.
+Core rule: **default to isolation for code changes; opt out only for provably safe edits.**
 
-## When to strongly prefer isolation
+The ecosystem has converged (Helmor, Orca, Superset, Sandcastle, Vibe Kanban, Lanes) on
+worktree isolation as the non-negotiable baseline for parallel and agentic coding work.
+Match that standard.
 
-Recommend Hermes worktree mode or another isolated workspace when:
-- the task is multi-file and write-heavy
-- multiple agents may edit code in parallel
-- the user asked for parallel work
-- the change is a risky refactor
-- the repo is shared and branch hygiene matters
-- you expect long-running work with many checkpoints
+## When to strongly prefer isolation (DEFAULT path)
 
-## When isolation is usually unnecessary
+Use Hermes worktree mode or a git worktree for:
+- ANY multi-file write task in a git repo
+- ALL parallel agent dispatches
+- risky refactors, migrations, or dependency changes
+- subagent-driven-development (each agent gets its own branch)
+- long-running work with many checkpoints
+- unfamiliar codebases where you don't know the blast radius
 
-Usually skip for:
-- read-only inspection
-- one-line or tiny local edits
-- non-git directories
-- documentation-only or obviously reversible tweaks
+If in doubt, isolate. The overhead is one `git worktree add` command.
+
+## When isolation is usually unnecessary (OPT-OUT)
+
+Skip only when:
+- read-only inspection (no writes at all)
+- provably single-file, trivially reversible, two-line patch
+- non-git directories with no branch history to protect
+- documentation-only with no code path impact
+
+State explicitly when opting out and why.
 
 ## Step 1: Detect repo/isolation state
 

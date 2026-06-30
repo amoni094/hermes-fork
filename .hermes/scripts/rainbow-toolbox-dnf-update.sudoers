@@ -1,0 +1,2 @@
+Defaults:rainbow !requiretty
+rainbow ALL=(root) NOPASSWD: /usr/bin/dnf upgrade --refresh -y

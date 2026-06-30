@@ -1,0 +1,8 @@
+# Hermes session budget policy
+# Hard limits — agent is warned at soft_warn_pct and blocked at 100%
+hard_limits:
+  tool_calls: 500          # total tool invocations per session
+  destructive_calls: 30    # rm/DROP/DELETE/write ops per session
+  delegation_depth: 4      # max subagent nesting depth
+
+soft_warn_pct: 0.85        # warn at 85% of each hard limit
