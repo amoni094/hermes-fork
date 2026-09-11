@@ -270,6 +270,62 @@ class PluginContext:
         if c is not None:
             c.current_intent = str(text)[:500]  # bounded; why 500: matches hint file cap
 
+    def emit_episode(self, text: str, tags: list = None) -> None:
+        """Emit an EXG episode via ``agent.emit_memory``. Fail-open.
+
+        Resolves the live agent through ``PluginManager._agent`` (weakref). If the
+        agent is gone or ``emit_memory`` is missing, logs at DEBUG and returns.
+        """
+        try:
+            agent = getattr(self._manager, "_agent", None)
+            if agent is None:
+                logger.debug("PluginContext.emit_episode: agent not reachable")
+                return
+            emit = getattr(agent, "emit_memory", None)
+            if not callable(emit):
+                logger.debug("PluginContext.emit_episode: agent.emit_memory missing")
+                return
+            emit(text, tags)
+        except Exception as exc:
+            logger.debug("PluginContext.emit_episode failed (fail-open): %s", exc)
+
+    def recall_episodes(self, query: str, limit: int = 5) -> list:
+        """Recall EXG episodes matching *query*. Returns ``[]`` on failure."""
+        try:
+            agent = getattr(self._manager, "_agent", None)
+            if agent is None:
+                logger.debug("PluginContext.recall_episodes: agent not reachable")
+                return []
+            recall = getattr(agent, "recall_memory", None)
+            if callable(recall):
+                result = recall(query, limit=limit)
+                if isinstance(result, list):
+                    return result[: max(0, int(limit))]
+                return []
+            mm = getattr(agent, "_memory_manager", None)
+            if mm is None or not hasattr(mm, "has_tool") or not mm.has_tool("hindsight_recall"):
+                return []
+            raw = mm.handle_tool_call("hindsight_recall", {"query": str(query or "")})
+            if isinstance(raw, list):
+                return raw[: max(0, int(limit))]
+            if isinstance(raw, str) and raw.strip():
+                try:
+                    parsed = json.loads(raw)
+                except Exception:
+                    lines = [ln for ln in raw.splitlines() if ln.strip()]
+                    return lines[: max(0, int(limit))]
+                if isinstance(parsed, dict) and "result" in parsed:
+                    parsed = parsed["result"]
+                if isinstance(parsed, list):
+                    return parsed[: max(0, int(limit))]
+                if isinstance(parsed, str) and parsed.strip():
+                    lines = [ln for ln in parsed.splitlines() if ln.strip()]
+                    return lines[: max(0, int(limit))]
+            return []
+        except Exception as exc:
+            logger.debug("PluginContext.recall_episodes failed (fail-open): %s", exc)
+            return []
+
     def has_plugin(self, plugin_id: str) -> bool:
         """Return True when another plugin is loaded and enabled (runtime probe for advisory
         ``requires_plugins``). Matches on registry key or manifest name.

@@ -156,6 +156,12 @@ How it gets set:
 Empty or missing `intent` is ignored. The attribute is set even if the
 compressor has not declared it yet (Domain A); consumers should `getattr`.
 
+## Task Complexity Scoring
+
+lambda-tuner scores accumulated user text (length, code density, ambiguity, constraints, multistep, tool hints, questions, novelty) after classification lock.
+High complexity (>0.7) raises `protect_last_n` by 5 (cap 40); low complexity (<0.3) lowers `proactive_prune_tokens` by 8000 (floor 8000).
+`session_complexity(sid)` reads the locked score from `_fired`.
+
 ## Entropy-adaptive profile
 
 Use `--entropy-adaptive` (or `HERMES_SESSION_TYPE=entropy-adaptive`) when

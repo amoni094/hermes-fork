@@ -1679,6 +1679,7 @@ class EntropyEstimator:
         self._counts: Counter = Counter()
         self._total_tokens = 0
         self._turns_seen = 0
+        self._checkpoints: dict = {}
 
     @staticmethod
     def _tokenize(text: str) -> List[str]:
@@ -1744,6 +1745,43 @@ class EntropyEstimator:
             return max(0, int(math.ceil(budget / h)))
         except Exception:
             return 0
+
+    def checkpoint(self, name: str, clock: int) -> None:
+        """Store a named ChronoMem clock. Fail-open."""
+        try:
+            self._checkpoints[str(name)] = int(clock)
+        except Exception:
+            return
+
+    def since_checkpoint(self, name: str, current_clock: int) -> int:
+        """Turns since a named checkpoint, or -1 if unknown. Fail-open."""
+        try:
+            stored = self._checkpoints.get(str(name))
+            if stored is None:
+                return -1
+            return int(current_clock) - int(stored)
+        except Exception:
+            return -1
+
+
+class MessageImportanceScorer:
+    """Gallager-style importance: tool results and long reasoning beat ack turns."""
+
+    LOW_ACK_RE = re.compile(
+        r"^\s*(ok|sure|got it|continue|go ahead|yes|no|thanks|thank you|good|great|next|done)\.?\s*$",
+        re.I,
+    )
+
+    def score(self, role: str, content: str) -> float:
+        if role == "tool" or (isinstance(content, str) and "tool_result" in content[:50]):
+            return 1.0
+        if role == "assistant" and isinstance(content, str) and len(content) > 200:
+            return 0.85
+        if role == "user" and isinstance(content, str) and self.LOW_ACK_RE.match(content):
+            return 0.1
+        if role == "user" and isinstance(content, str) and len(content) < 30:
+            return 0.4
+        return 0.7
 
 
 def _message_text_for_entropy(msg: Any) -> str:
@@ -2488,6 +2526,9 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         # Entropy-rate estimator + intent plumbing (additive; unused unless opted in).
         self._entropy_estimator = EntropyEstimator()
         self._entropy_fed_count = 0
+        self._turn_clock = 0
+        self._importance_scorer = MessageImportanceScorer()
+        self._last_scored_messages: List[Dict[str, Any]] = []
         self._active_compression_profile: str | None = None
         self.current_intent: str | None = None
 
@@ -2688,6 +2729,7 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
     def feed_turn(self, text: str) -> None:
         """Update the entropy estimator with one turn's text. Fail-open."""
         try:
+            self._turn_clock = int(getattr(self, "_turn_clock", 0) or 0) + 1
             estimator = getattr(self, "_entropy_estimator", None)
             if estimator is None:
                 self._entropy_estimator = EntropyEstimator()
@@ -2696,11 +2738,44 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         except Exception:
             return
 
+    @property
+    def turn_clock(self) -> int:
+        """Monotonic ChronoMem turn counter (increments in ``feed_turn``)."""
+        return int(getattr(self, "_turn_clock", 0) or 0)
+
+    def score_message(self, role, content) -> float:
+        """Delegate to :class:`MessageImportanceScorer`. Fail-open to 0.7."""
+        try:
+            scorer = getattr(self, "_importance_scorer", None)
+            if scorer is None:
+                self._importance_scorer = MessageImportanceScorer()
+                scorer = self._importance_scorer
+            return float(scorer.score(role, content))
+        except Exception:
+            return 0.7
+
+    def importance_scores(self, history: list) -> list:
+        """Score each message dict with ``role`` / ``content`` keys. Fail-open."""
+        try:
+            out: List[float] = []
+            for msg in history or []:
+                if isinstance(msg, dict):
+                    out.append(self.score_message(msg.get("role") or "", msg.get("content")))
+                else:
+                    out.append(0.7)
+            return out
+        except Exception:
+            return []
+
     def _feed_messages_for_entropy(self, messages: List[Dict[str, Any]] | None) -> None:
         """Ingest newly appended history messages into the estimator. Fail-open."""
         try:
             if not messages:
                 return
+            try:
+                self._last_scored_messages = list(messages[-20:])
+            except Exception:
+                self._last_scored_messages = []
             n = len(messages)
             start = getattr(self, "_entropy_fed_count", 0)
             if start > n:
@@ -2724,7 +2799,7 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
             return
 
     def _pre_compress_checkpoint(
-        self, *, trigger_reason: str, context_tokens: int | None = None
+        self, *, trigger_reason: str, context_tokens: int | None = None, messages=None
     ) -> None:
         """Structured pre-compress log (CatchBench: capture earliest info state)."""
         try:
@@ -2743,6 +2818,12 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
             intent = getattr(self, "current_intent", None)
             if intent:
                 payload["intent"] = intent
+            try:
+                hist = messages[-20:] if messages else getattr(self, "_last_scored_messages", None)
+                scores = self.importance_scores(hist or [])
+                payload["avg_importance"] = (sum(scores) / len(scores)) if scores else 0.0
+            except Exception:
+                payload["avg_importance"] = 0.0
             logger.info("pre_compress_checkpoint %s", payload)
         except Exception:
             return
@@ -5061,6 +5142,7 @@ Write only the summary body. Do not include any preamble or prefix."""
         self._pre_compress_checkpoint(
             trigger_reason="manual" if force else "auto",
             context_tokens=int(display_tokens or 0),
+            messages=messages,
         )
         # Phase 1: Prune old tool results (cheap, no LLM call)
         messages, pruned_count = self._prune_old_tool_results(

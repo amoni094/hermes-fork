@@ -12,6 +12,9 @@ hooks:
   - on_session_start
   - on_session_finalize
   - pre_compress
+capabilities:
+  - emit_episode
+  - recall_episodes
 settings:
   enabled: true
   # Canonical classifier/lock/hint/wrapper: FORK_README.md § lambda-tuner.
