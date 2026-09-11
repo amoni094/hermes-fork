@@ -2877,6 +2877,21 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
             return False, None
         if self._automatic_compression_blocked():
             return False, self._compression_block_reason() or "blocked"
+        # AEP floor (Shannon/Cover-Thomas Ch.3): if the context is already below the
+        # minimum tokens needed to faithfully represent the session's information content,
+        # compressing further causes irreversible loss without size benefit.
+        estimator = getattr(self, "_entropy_estimator", None)
+        if estimator is not None:
+            try:
+                aep_floor = estimator.min_retain_tokens(budget_bits=estimator.entropy_rate() * tokens * 0.5)
+                if tokens <= aep_floor:
+                    logger.debug(
+                        "pre_compress blocked by AEP floor: tokens=%d floor=%d entropy=%.3f",
+                        tokens, aep_floor, estimator.entropy_rate(),
+                    )
+                    return False, "aep_floor"
+            except Exception:
+                pass  # fail-open: AEP floor is advisory only
         self._pre_compress_checkpoint(trigger_reason="threshold", context_tokens=tokens)
         return True, None
 

@@ -57,19 +57,28 @@ def _read_hint() -> dict[str, Any] | None:
 
 
 def _apply_intent_from_hint(agent: Any, hint: dict[str, Any] | None) -> None:
-    """Set compressor.current_intent from hint['intent'] (fail-open)."""
+    """Apply hint['type'] as compression profile and hint['intent'] to compressor (fail-open)."""
     if not hint or agent is None:
         return
+    compressor = getattr(agent, "context_compressor", None)
+    # Apply session-type profile from hint (covers entropy-adaptive + all other types).
+    try:
+        hint_type = hint.get("type")
+        if isinstance(hint_type, str) and hint_type.strip() and compressor is not None:
+            if hasattr(compressor, "set_compression_profile"):
+                compressor.set_compression_profile(hint_type.strip(), _source="lambda-tuner-hint")
+    except Exception as exc:
+        logger.debug("lambda-tuner: applying profile from hint failed (fail-open): %s", exc)
+    # Apply intent.
     try:
         intent = hint.get("intent")
         if not isinstance(intent, str) or not intent.strip():
             return
-        compressor = getattr(agent, "context_compressor", None)
         if compressor is None:
             return
-        compressor.current_intent = intent.strip()
+        compressor.current_intent = intent.strip()[:500]  # why: cap matches PluginContext.set_intent bound
         global _pending_intent
-        _pending_intent = intent.strip()
+        _pending_intent = intent.strip()[:500]
     except Exception as exc:
         logger.debug("lambda-tuner: applying intent from hint failed (fail-open): %s", exc)
 
@@ -404,7 +413,7 @@ def register(ctx: Any) -> None:
         except Exception as exc:
             logger.debug("lambda-tuner: classify failed (fail-open): %s", exc)
 
-    def on_session_end(*, session_id: str = "", **_kwargs: Any) -> None:
+    def on_session_end(*, session_id: str = "", **_kwargs: Any) -> None:  # registered as on_session_finalize
         """Drop per-session classifier state so long-running gateways cannot leak it."""
         try:
             _session_messages.pop(session_id, None)
@@ -413,9 +422,36 @@ def register(ctx: Any) -> None:
         except Exception as exc:
             logger.debug("lambda-tuner: on_session_end cleanup failed (fail-open): %s", exc)
 
+    def on_pre_compress(
+        *,
+        session_id: str = "",
+        context_tokens: int = 0,
+        agent: Any = None,
+        **_kwargs: Any,
+    ) -> None:
+        """pre_compress hook: reaffirm compression profile before each compress event.
+
+        If the session type is already locked, reapply the profile (guards against
+        update_model() resets). If no type is locked yet and context is large,
+        apply entropy-adaptive to let the estimator guide the threshold.
+        """
+        try:
+            fired_entry = _fired.get(session_id)
+            if fired_entry is not None:
+                # Reaffirm the locked session type profile (idempotent; guards against resets).
+                session_type = fired_entry.get("type", "mixed")
+                _apply_profile(ctx, agent, session_type, session_id, fired_entry.get("confidence", 0.0), 0)
+            elif context_tokens > 60_000:
+                # Session type not yet determined but context is large: use entropy-adaptive
+                # so EntropyEstimator guides the threshold until the classifier locks in.
+                _apply_profile(ctx, agent, "entropy-adaptive", session_id, 0.5, 0)
+        except Exception as exc:
+            logger.debug("lambda-tuner: on_pre_compress failed (fail-open): %s", exc)
+
     ctx.register_hook("on_session_start", on_session_start)
     ctx.register_hook("pre_llm_call", on_pre_llm_call)
-    ctx.register_hook("on_session_end", on_session_end)
+    ctx.register_hook("pre_compress", on_pre_compress)
+    ctx.register_hook("on_session_finalize", on_session_end)
     # Run before other pre_llm_call hooks that might read compression state.
     try:
         hooks = ctx._manager._hooks.get("pre_llm_call")

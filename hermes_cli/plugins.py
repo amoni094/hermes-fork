@@ -271,10 +271,15 @@ class PluginContext:
         """Propagate the current task intent to the live compressor (bounded).
 
         Used for intent-conditioned compression. No-op when no compressor is bound.
+
+        NOTE: resolves the compressor via self.compressor (PluginManager._agent weakref).
+        In a multi-session gateway process, prefer setting compressor.current_intent
+        directly via the ``agent`` kwarg passed to ``pre_llm_call`` hooks to avoid
+        cross-session writes. See FORK_README.md § Intent-conditioned compression.
         """
         c = self.compressor
         if c is not None:
-            c.current_intent = str(text)[:500]  # bounded
+            c.current_intent = str(text)[:500]  # bounded; why 500: matches hint file cap
 
     def has_plugin(self, plugin_id: str) -> bool:
         """Return True when another plugin is loaded and enabled (runtime probe for advisory
