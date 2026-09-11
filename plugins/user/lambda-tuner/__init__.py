@@ -485,6 +485,11 @@ def register(ctx: Any) -> None:
             logger.debug("lambda-tuner: classify failed (fail-open): %s", exc)
 
     def on_session_end(*, session_id: str = "", **_kwargs: Any) -> None:  # registered as on_session_finalize
+        # Clear ctx._session_id so compact_tool_result doesn't use a stale session_id.
+        try:
+            ctx._session_id = None
+        except Exception:
+            pass
         """Drop per-session classifier state so long-running gateways cannot leak it."""
         try:
             rec = _fired.get(session_id) or {}
