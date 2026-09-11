@@ -238,6 +238,8 @@ _MAX_MESSAGES_PER_SESSION = 32
 # session_id -> {"type": str, "confidence": float, "ts": float}
 _fired: OrderedDict[str, dict[str, Any]] = OrderedDict()
 _session_messages: OrderedDict[str, list[str]] = OrderedDict()
+# session_id -> last 3 raw turn complexity scores (EMA input)
+_complexity_buffers: OrderedDict[str, list[float]] = OrderedDict()
 
 
 def _fired_type(session_id: str) -> str | None:
@@ -260,10 +262,13 @@ def _touch_session(session_id: str) -> None:
         _fired.move_to_end(session_id)
     if session_id in _intent_applied:
         _intent_applied.move_to_end(session_id)
+    if session_id in _complexity_buffers:
+        _complexity_buffers.move_to_end(session_id)
     while len(_session_messages) > _MAX_SESSIONS:
         evicted, _ = _session_messages.popitem(last=False)
         _fired.pop(evicted, None)
         _intent_applied.pop(evicted, None)
+        _complexity_buffers.pop(evicted, None)
     while len(_fired) > _MAX_SESSIONS:
         evicted, _ = _fired.popitem(last=False)
         _intent_applied.pop(evicted, None)
@@ -294,6 +299,111 @@ def _apply_profile(ctx: Any, agent: Any, session_type: str, session_id: str, con
             )
         except Exception as exc:
             logger.debug("lambda-tuner: set_compression_profile failed: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Adaptive reasoning effort — per-turn complexity + EMA smoothing
+# ---------------------------------------------------------------------------
+
+_EFFORT_FROM_SCORE = ("low", "medium", "high", "xhigh")
+_EMA_ALPHA = 0.5  # 3-sample EMA; more weight on the latest turn
+_EMA_WINDOW = 3
+
+
+def _score_to_base_effort(score: float) -> str:
+    if score < 0.25:
+        return "low"
+    if score < 0.50:
+        return "medium"
+    if score <= 0.75:
+        return "high"
+    return "xhigh"
+
+
+def _apply_session_bias(effort: str, session_type: str) -> str:
+    if session_type != "research":
+        return effort
+    try:
+        idx = _EFFORT_FROM_SCORE.index(effort)
+    except ValueError:
+        return effort
+    return _EFFORT_FROM_SCORE[min(idx + 1, len(_EFFORT_FROM_SCORE) - 1)]
+
+
+def _ema(scores: list[float], alpha: float = _EMA_ALPHA) -> float:
+    if not scores:
+        return 0.0
+    e = float(scores[0])
+    for s in scores[1:]:
+        e = alpha * float(s) + (1.0 - alpha) * e
+    return e
+
+
+def _reasoning_mode_for_score(score: float) -> str:
+    if score < 0.25:
+        return "fast"
+    if score <= 0.75:
+        return "default"
+    return "deep"
+
+
+def _apply_adaptive_effort(ctx: Any, session_id: str, user_message: str, session_type: str) -> None:
+    """Score this turn, EMA-smooth, map to effort, fail-open on ctx APIs."""
+    from .predicates import is_greeter_turn
+
+    greeter = False
+    try:
+        greeter = bool(is_greeter_turn(user_message))
+    except Exception:
+        greeter = False
+
+    raw = 0.0
+    if not greeter:
+        try:
+            raw = float(DEFAULT_SCORER.score(user_message))
+            DEFAULT_SCORER.update_recent(user_message)
+        except Exception as exc:
+            logger.debug("lambda-tuner: turn complexity score failed (fail-open): %s", exc)
+            raw = 0.0
+
+    if greeter:
+        effort = "low"
+        mode = "fast"
+        stored_score = 0.0
+    else:
+        buf = _complexity_buffers.setdefault(session_id, [])
+        buf.append(raw)
+        if len(buf) > _EMA_WINDOW:
+            del buf[:-_EMA_WINDOW]
+        if session_id in _complexity_buffers:
+            _complexity_buffers.move_to_end(session_id)
+        while len(_complexity_buffers) > _MAX_SESSIONS:
+            _complexity_buffers.popitem(last=False)
+        map_score = _ema(buf)
+        effort = _apply_session_bias(_score_to_base_effort(map_score), session_type or "mixed")
+        mode = _reasoning_mode_for_score(map_score)
+        stored_score = raw
+
+    try:
+        ctx._turn_complexity_score = stored_score
+        ctx._recommended_effort = effort
+    except Exception:
+        pass
+
+    try:
+        setter = getattr(ctx, "set_adaptive_effort", None)
+        if callable(setter):
+            try:
+                setter(effort, confidence=1.0, priority=10)
+            except TypeError:
+                setter(effort)
+    except Exception as exc:
+        logger.debug("lambda-tuner: set_adaptive_effort failed (fail-open): %s", exc)
+
+    try:
+        ctx.set_reasoning_mode(mode)
+    except Exception as exc:
+        logger.debug("lambda-tuner: set_reasoning_mode failed (fail-open): %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -386,11 +496,13 @@ def register(ctx: Any) -> None:
             del bucket[:-_MAX_MESSAGES_PER_SESSION]
         _touch_session(session_id)
 
+        session_type = "mixed"
         try:
             locked = _fired_type(session_id)
             if locked is not None:
                 # Re-apply locked profile in case the compressor was rebuilt
                 # (model switch / engine swap) after we first committed.
+                session_type = locked
                 rec = _fired.get(session_id) or {}
                 conf = 1.0
                 if isinstance(rec, dict):
@@ -399,95 +511,88 @@ def register(ctx: Any) -> None:
                     except (TypeError, ValueError):
                         conf = 1.0
                 _apply_profile(ctx, agent, locked, session_id, conf, len(bucket))
-                return
+            else:
+                session_type, confidence, scores = _classify(bucket)
+                commit = session_type != "mixed" or len(bucket) >= 3
 
-            session_type, confidence, scores = _classify(bucket)
-            commit = session_type != "mixed" or len(bucket) >= 3
+                _apply_profile(ctx, agent, session_type, session_id, confidence, len(bucket))
+                _write_hint(session_type, confidence, scores)
 
-            _apply_profile(ctx, agent, session_type, session_id, confidence, len(bucket))
-            _write_hint(session_type, confidence, scores)
-
-            if commit:
-                accumulated_text = " ".join(bucket)
-                complexity = 0.0
-                try:
-                    complexity = float(DEFAULT_SCORER.score(accumulated_text))
-                    DEFAULT_SCORER.update_recent(accumulated_text)
-                except Exception as exc:
-                    logger.debug("lambda-tuner: complexity score failed (fail-open): %s", exc)
+                if commit:
+                    accumulated_text = " ".join(bucket)
                     complexity = 0.0
-
-                try:
-                    if session_id:
-                        ctx._session_id = session_id
-                    if complexity > 0.75:
-                        mode, effort = "deep", "high"
-                    elif complexity < 0.25:
-                        mode, effort = "fast", "low"
-                    else:
-                        mode, effort = "default", "medium"
-                    ctx.set_reasoning_mode(mode)
-                    setter = getattr(ctx, "set_adaptive_effort", None)
-                    if callable(setter):
-                        # Highest authority: direct effort call beats mode-hint (priority=5).
-                        setter(effort, confidence=1.0, priority=10)
-                except Exception as exc:
-                    logger.debug("lambda-tuner: set_reasoning_mode failed (fail-open): %s", exc)
-
-                compressor = None
-                if agent is not None:
-                    compressor = getattr(agent, "context_compressor", None)
-                if compressor is None:
                     try:
-                        compressor = ctx.compressor
+                        complexity = float(DEFAULT_SCORER.score(accumulated_text))
+                        DEFAULT_SCORER.update_recent(accumulated_text)
+                    except Exception as exc:
+                        logger.debug("lambda-tuner: complexity score failed (fail-open): %s", exc)
+                        complexity = 0.0
+
+                    try:
+                        if session_id:
+                            ctx._session_id = session_id
                     except Exception:
-                        compressor = None
+                        pass
 
-                try:
-                    if compressor is not None and hasattr(compressor, "set_compression_profile"):
-                        if complexity > 0.7:
-                            protect = int(getattr(compressor, "protect_last_n", 20) or 20) + 5
-                            compressor.set_compression_profile(
-                                {"protect_last_n": min(protect, 40)},
-                                _source="lambda-tuner-complexity",
-                            )
-                        elif complexity < 0.3:
-                            prune = int(getattr(compressor, "proactive_prune_tokens", 16000) or 0) - 8000
-                            compressor.set_compression_profile(
-                                {"proactive_prune_tokens": max(prune, 8000)},
-                                _source="lambda-tuner-complexity",
-                            )
-                except Exception as exc:
-                    logger.debug("lambda-tuner: complexity profile adjust failed (fail-open): %s", exc)
+                    compressor = None
+                    if agent is not None:
+                        compressor = getattr(agent, "context_compressor", None)
+                    if compressor is None:
+                        try:
+                            compressor = ctx.compressor
+                        except Exception:
+                            compressor = None
 
-                _fired[session_id] = {
-                    "type": session_type,
-                    "confidence": float(confidence),
-                    "ts": time.time(),
-                    "complexity": complexity,
-                }
-                _fired.move_to_end(session_id)
-                logger.debug(
-                    "lambda-tuner: committed sid=%s type=%s conf=%.2f scores=%s turn=%d complexity=%.3f",
-                    session_id, session_type, confidence, scores, len(bucket), complexity,
-                )
-                try:
-                    ctx.emit_episode(
-                        f"Session {session_id} classified as {session_type} confidence={confidence}",
-                        tags=["classification", "lambda-tuner"],
+                    try:
+                        if compressor is not None and hasattr(compressor, "set_compression_profile"):
+                            if complexity > 0.7:
+                                protect = int(getattr(compressor, "protect_last_n", 20) or 20) + 5
+                                compressor.set_compression_profile(
+                                    {"protect_last_n": min(protect, 40)},
+                                    _source="lambda-tuner-complexity",
+                                )
+                            elif complexity < 0.3:
+                                prune = int(getattr(compressor, "proactive_prune_tokens", 16000) or 0) - 8000
+                                compressor.set_compression_profile(
+                                    {"proactive_prune_tokens": max(prune, 8000)},
+                                    _source="lambda-tuner-complexity",
+                                )
+                    except Exception as exc:
+                        logger.debug("lambda-tuner: complexity profile adjust failed (fail-open): %s", exc)
+
+                    _fired[session_id] = {
+                        "type": session_type,
+                        "confidence": float(confidence),
+                        "ts": time.time(),
+                        "complexity": complexity,
+                    }
+                    _fired.move_to_end(session_id)
+                    logger.debug(
+                        "lambda-tuner: committed sid=%s type=%s conf=%.2f scores=%s turn=%d complexity=%.3f",
+                        session_id, session_type, confidence, scores, len(bucket), complexity,
                     )
-                except Exception as exc:
-                    logger.debug("lambda-tuner: emit_episode failed (fail-open): %s", exc)
-                try:
-                    if compressor is not None:
-                        est = getattr(compressor, "_entropy_estimator", None)
-                        if est is not None and hasattr(est, "checkpoint"):
-                            est.checkpoint("classification_locked", compressor.turn_clock)
-                except Exception as exc:
-                    logger.debug("lambda-tuner: classification checkpoint failed (fail-open): %s", exc)
+                    try:
+                        ctx.emit_episode(
+                            f"Session {session_id} classified as {session_type} confidence={confidence}",
+                            tags=["classification", "lambda-tuner"],
+                        )
+                    except Exception as exc:
+                        logger.debug("lambda-tuner: emit_episode failed (fail-open): %s", exc)
+                    try:
+                        if compressor is not None:
+                            est = getattr(compressor, "_entropy_estimator", None)
+                            if est is not None and hasattr(est, "checkpoint"):
+                                est.checkpoint("classification_locked", compressor.turn_clock)
+                    except Exception as exc:
+                        logger.debug("lambda-tuner: classification checkpoint failed (fail-open): %s", exc)
 
         except Exception as exc:
             logger.debug("lambda-tuner: classify failed (fail-open): %s", exc)
+
+        try:
+            _apply_adaptive_effort(ctx, session_id, user_message, session_type)
+        except Exception as exc:
+            logger.debug("lambda-tuner: adaptive effort failed (fail-open): %s", exc)
 
     def on_session_end(*, session_id: str = "", **_kwargs: Any) -> None:  # registered as on_session_finalize
         # Clear ctx._session_id so compact_tool_result doesn't use a stale session_id.
@@ -521,6 +626,7 @@ def register(ctx: Any) -> None:
             _session_messages.pop(session_id, None)
             _fired.pop(session_id, None)
             _intent_applied.pop(session_id, None)
+            _complexity_buffers.pop(session_id, None)
         except Exception as exc:
             logger.debug("lambda-tuner: on_session_end cleanup failed (fail-open): %s", exc)
 
@@ -586,10 +692,13 @@ def register(ctx: Any) -> None:
 # Export predicates for other plugins (lazy-read `_fired` at call time).
 from .predicates import (  # noqa: E402
     is_code_session,
+    is_greeter_turn,
     is_high_confidence,
     is_research_session,
+    recommended_effort,
     session_complexity,
     session_type,
+    turn_complexity_score,
 )
 
 __all__ = [
@@ -597,8 +706,11 @@ __all__ = [
     "is_research_session",
     "is_code_session",
     "is_high_confidence",
+    "is_greeter_turn",
     "session_type",
     "session_complexity",
+    "turn_complexity_score",
+    "recommended_effort",
     "TaskComplexityScorer",
 ]
 
