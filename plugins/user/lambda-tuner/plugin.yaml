@@ -1,0 +1,11 @@
+name: lambda-tuner
+version: "1.0.0"
+description: >
+  Auto-detect session type (research/code/mixed) from first user message
+  and write rr_scorer_lambda hint for the next session's hermes-session wrapper.
+  Does NOT mutate the live compressor (not accessible from plugins); writes a
+  signal file ~/.hermes/cache/last-session-type.txt for hermes-session to consume.
+provides_hooks:
+  - pre_llm_call
+settings:
+  enabled: true

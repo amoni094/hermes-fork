@@ -235,6 +235,22 @@ class PluginContext:
         """Return the effective registry id used for this plugin's namespaces."""
         return manifest_key(self.manifest)
 
+    @property
+    def compressor(self) -> "Any | None":
+        """Live :class:`ContextCompressor` for this session, or ``None`` if not yet set.
+
+        Plugins can call :meth:`~agent.context_compressor.ContextCompressor.set_compression_profile`
+        from a ``pre_llm_call`` hook to adjust compression behaviour between turns::
+
+            def on_pre_llm_call(ctx, agent=None, **kw):
+                if agent:
+                    c = ctx.compressor
+                    if c:
+                        c.set_compression_profile("research", _source="my-plugin")
+        """
+        agent = getattr(self._manager, "_agent", None)
+        return getattr(agent, "context_compressor", None)
+
     def has_plugin(self, plugin_id: str) -> bool:
         """Return True when another plugin is loaded and enabled (runtime probe for advisory
         ``requires_plugins``). Matches on registry key or manifest name.
@@ -1130,6 +1146,7 @@ class PluginManager(PluginLoaderMixin, PluginDispatchMixin, PluginLedgerMixin):
         self._discovery_lock = threading.RLock()
         self._discovered: bool = False
         self._cli_ref = None  # Set by CLI after plugin discovery
+        self._agent = None  # Set by agent_init after compressor construction; enables ctx.compressor
         self._gateway_message_injector: tuple[object, Callable] | None = None
         self._context_engine = None  # Set by a plugin via register_context_engine()
         # Manager-local registries keyed by name (see the matching ``PluginContext.register_*``):

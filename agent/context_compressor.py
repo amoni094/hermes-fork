@@ -2387,6 +2387,90 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         for flag, _class, _msg in _TERMINAL_SUMMARY_FAILURES:
             setattr(self, flag, False)
 
+    # --- Adaptive compression API (for plugins and session-type tuning) ---------
+
+    #: Built-in profiles that plugins can reference by name.
+    COMPRESSION_PROFILES: "dict[str, dict]" = {
+        # Research sessions: large context windows, wide knowledge accumulation.
+        # Prune earlier to give room; protect fewer tail messages since the middle
+        # is often relevant context (papers, notes, analysis).
+        "research": {
+            "threshold_percent": 0.45,
+            "proactive_prune_tokens": 40_000,
+            "protect_last_n": 15,
+        },
+        # Coding sessions: causal chains matter; protect more of the tail so
+        # recent error/fix pairs are never evicted.  Trigger compression later
+        # so tool call results accumulate.
+        "code": {
+            "threshold_percent": 0.55,
+            "proactive_prune_tokens": 28_000,
+            "protect_last_n": 25,
+        },
+        # Mixed / default: balanced settings close to the out-of-box defaults.
+        "mixed": {
+            "threshold_percent": 0.50,
+            "proactive_prune_tokens": 32_000,
+            "protect_last_n": 20,
+        },
+    }
+
+    def set_compression_profile(
+        self,
+        profile: "str | dict",
+        *,
+        _source: str = "plugin",
+    ) -> None:
+        """Apply a named or custom compression profile between turns.
+
+        Safe to call from ``pre_llm_call`` hooks: each compression pass re-reads
+        these attributes from scratch, so a change between turns takes full effect
+        on the next micro-compact or full-compress event.
+
+        *Not* safe to call mid-pass (inside the compressor's own call stack).
+
+        Args:
+            profile: A key from :attr:`COMPRESSION_PROFILES` (``"research"``,
+                ``"code"``, ``"mixed"``) **or** a dict with any subset of keys
+                ``threshold_percent``, ``proactive_prune_tokens``, ``protect_last_n``.
+            _source: Informational label for debug logs (e.g. ``"lambda-tuner"``).
+
+        Raises:
+            ValueError: ``profile`` is a string not in :attr:`COMPRESSION_PROFILES`.
+            TypeError:  ``profile`` is neither a str nor a dict.
+        """
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
+
+        if isinstance(profile, str):
+            if profile not in self.COMPRESSION_PROFILES:
+                raise ValueError(
+                    f"Unknown compression profile {profile!r}. "
+                    f"Valid: {list(self.COMPRESSION_PROFILES)}"
+                )
+            settings = self.COMPRESSION_PROFILES[profile]
+        elif isinstance(profile, dict):
+            settings = profile
+        else:
+            raise TypeError(f"profile must be str or dict, got {type(profile).__name__!r}")
+
+        if "threshold_percent" in settings:
+            self.threshold_percent = float(settings["threshold_percent"])
+            # Invalidate cached token threshold so it is recomputed from the new ratio.
+            self._threshold_tokens = None
+        if "proactive_prune_tokens" in settings:
+            self.proactive_prune_tokens = max(0, int(settings["proactive_prune_tokens"]))
+        if "protect_last_n" in settings:
+            self.protect_last_n = max(1, int(settings["protect_last_n"]))
+
+        _log.debug(
+            "context_compressor: profile applied by %s — %s",
+            _source,
+            {k: getattr(self, k) for k in ("threshold_percent", "proactive_prune_tokens", "protect_last_n")},
+        )
+
+    # --- end adaptive compression API -------------------------------------------
+
     def update_from_response(self, usage: Dict[str, Any]):
         """Update tracked token usage from API response."""
         self.last_prompt_tokens = usage.get("prompt_tokens", 0)
