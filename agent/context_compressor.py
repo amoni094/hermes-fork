@@ -1866,9 +1866,10 @@ _REACQ_NUM4_RE = re.compile(r"\b\d{4,}\b")
 _FACT_PATH_RE = re.compile(r"/[\w./\-]+\.(?:py|yaml|yml|json)")
 _FACT_ARXIV_RE = re.compile(r"\d{4}\.\d{4,5}")
 _FACT_MODEL_RE = re.compile(r"(?:haiku|sonnet|grok|mistral|claude)[\w.-]*", re.I)
-_FACT_NUM_RE = re.compile(r"\b\d{2,6}\b")
+_FACT_NUM_RE = re.compile(r"\b\d{3,6}\b")  # 3+ digits; window check requires adjacent word
 _FACT_SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
-_FACT_NAMED_MARKERS = ("result:", "found:", "fixed:", "error:", "PASSED", "FAILED")
+_FACT_NAMED_MARKERS = ("result:", "found:", "fixed:", "error:", "PASSED", "FAILED",
+                       "LIVITANYI", "MACLANE", "SA-", "spike:", "phase ", "Phase ")
 
 
 def _msg_tool_name(msg: Any) -> str:
@@ -3030,9 +3031,19 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
                 _add(match)
             for match in _FACT_NUM_RE.finditer(content):
                 start, end = match.span()
-                window = content[max(0, start - 24): min(len(content), end + 24)]
-                if re.search(r"[A-Za-z]", window):
-                    _add(match.group())
+                # Skip if adjacent to dot (part of arXiv ID or decimal)
+                if (start > 0 and content[start-1] == '.') or (end < len(content) and content[end] == '.'):
+                    continue
+                window = content[max(0, start - 40): min(len(content), end + 40)]
+                if re.search(r"[A-Za-z]{2,}", window):  # require a real word nearby
+                    # Emit window line for context, not bare number
+                    line_start = content.rfind('\n', 0, start) + 1
+                    line_end = content.find('\n', end)
+                    if line_end == -1:
+                        line_end = len(content)
+                    ctx_line = content[line_start:line_end].strip()[:120]
+                    if ctx_line:
+                        _add(ctx_line)
             for line in content.splitlines():
                 if any(marker in line for marker in _FACT_NAMED_MARKERS):
                     _add(line.strip()[:240])

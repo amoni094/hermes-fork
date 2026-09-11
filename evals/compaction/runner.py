@@ -102,7 +102,7 @@ SUMMARY_PREAMBLE_MARKERS = (
     "[CONTEXT COMPACTION",
 )
 MIN_VALID_PER_TIER = 3  # 5/5/5 fast-mode; raise to 9 for ship-gate N=30 runs
-HEAD_HIT_CHARS = 2000
+HEAD_HIT_CHARS = 5000  # summary header ~1-2K, ledger follows; need enough room
 OUTPUT_TOKENS_PER_RECALL_POINT_TARGET = 1200
 
 
