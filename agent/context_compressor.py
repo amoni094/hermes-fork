@@ -1849,6 +1849,60 @@ def _message_text_for_entropy(msg: Any) -> str:
         return ""
 
 
+_CAUSAL_TOOLS = frozenset({
+    "execute_code", "write_file", "patch", "terminal", "delegate_task", "web_extract",
+})
+_NOISE_TOOLS = frozenset({"read_file", "search_files", "web_search", "skill_view"})
+_CHEAP_REACQ_TOOLS = frozenset({
+    "read_file", "search_files", "web_extract", "skill_view", "web_search",
+})
+_CAUSAL_VERBS = (
+    "decided", "fixed", "conclusion", "finding", "result:", "error:", "FAILED", "PASSED",
+)
+_STRUCTURAL_MARKERS = ("path:", "config:", "constraint:", "plan:", "```", "def ", "class ")
+_TAG_PRIOR = {"CAUSAL": 1.0, "STRUCTURAL": 0.6, "NEUTRAL": 0.5, "NOISE": 0.1}
+_REACQ_EXPENSIVE_MARKERS = ("FAILED", "error:", "fixed")
+_REACQ_NUM4_RE = re.compile(r"\b\d{4,}\b")
+_FACT_PATH_RE = re.compile(r"/[\w./\-]+\.(?:py|yaml|yml|json)")
+_FACT_ARXIV_RE = re.compile(r"\d{4}\.\d{4,5}")
+_FACT_MODEL_RE = re.compile(r"(?:haiku|sonnet|grok|mistral|claude)[\w.-]*", re.I)
+_FACT_NUM_RE = re.compile(r"\b\d{2,6}\b")
+_FACT_SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
+_FACT_NAMED_MARKERS = ("result:", "found:", "fixed:", "error:", "PASSED", "FAILED")
+
+
+def _msg_tool_name(msg: Any) -> str:
+    """Best-effort tool name from a message dict."""
+    if not isinstance(msg, dict):
+        return ""
+    for key in ("tool_name", "name"):
+        val = msg.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
+def _tag_message_type(msg: Any) -> str:
+    """Deterministic CAUSAL | STRUCTURAL | NOISE | NEUTRAL tag. No LLM."""
+    if not isinstance(msg, dict):
+        return "NEUTRAL"
+    role = str(msg.get("role") or "")
+    content = _message_text_for_entropy(msg)
+    tool = _msg_tool_name(msg)
+    if (role == "tool" and tool in _CAUSAL_TOOLS) or any(v in content for v in _CAUSAL_VERBS):
+        return "CAUSAL"
+    if any(m in content for m in _STRUCTURAL_MARKERS):
+        return "STRUCTURAL"
+    if (
+        role == "tool"
+        and tool in _NOISE_TOOLS
+        and len(content) > 2000
+        and not any(ch.isdigit() for ch in content)
+    ):
+        return "NOISE"
+    return "NEUTRAL"
+
+
 class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngine):
     """Default context engine: prune tool results, protect head/tail, summarize the middle
     with an LLM, and iteratively update the previous summary on later compactions."""
@@ -2636,12 +2690,12 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         "research": {
             "threshold_percent": 0.45,  # research: compress sooner; large tool_result dumps fill context fast
             "proactive_prune_tokens": 40_000,  # later cheap prune; full compression (lower threshold) reclaims the dump
-            "protect_last_n": 15,  # why: 15 not 25 — bulky dumps; keep last burst, don't shield stale tool_results
+            "protect_last_n": 22,  # why: 22 not 15 — eval calibration (research after_tokens vs recall)
         },
         "code": {
             "threshold_percent": 0.55,  # later full compression; keep causal exec/read chains
             "proactive_prune_tokens": 28_000,
-            "protect_last_n": 25,  # why: 25 not 15 — coding sessions need a longer recent-file/tool tail
+            "protect_last_n": 28,  # why: 28 not 25 — eval calibration (code tail needs extra exec rounds)
         },
         "mixed": {
             "threshold_percent": 0.50,  # conservative midpoint when type is unknown or mixed
@@ -2840,14 +2894,19 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         except Exception:
             return 0.7
 
-    def rr_score(self, role: str, content: str) -> float:
-        """Kolmogorov-informed retention score: importance + zlib uniqueness. Fail-open."""
+    def rr_score(self, role: str, content: str, msg: Optional[Dict[str, Any]] = None) -> float:
+        """Retention score: importance + zlib uniqueness + causal/noise tag prior. Fail-open."""
         try:
             scorer = getattr(self, "_importance_scorer", None)
             if scorer is None:
                 self._importance_scorer = MessageImportanceScorer()
                 scorer = self._importance_scorer
-            return 0.6 * self.score_message(role, content) + 0.4 * scorer.compressibility(content)
+            if msg is None:
+                msg = {"role": role, "content": content}
+            tag = _tag_message_type(msg)
+            tag_prior = _TAG_PRIOR.get(tag, 0.5)
+            uniqueness = scorer.compressibility(content)
+            return 0.5 * self.score_message(role, content) + 0.2 * uniqueness + 0.3 * tag_prior
         except Exception:
             return 0.7
 
@@ -2897,27 +2956,134 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
                     continue
                 role = ""
                 content = ""
+                tag = "NEUTRAL"
                 if isinstance(msg, dict):
                     role = str(msg.get("role") or "")
                     content = str(msg.get("content", "") or "")
+                    tag = _tag_message_type(msg)
                 if role == "system":
                     continue
-                candidates.append((float(self.rr_score(role, content)), i))
-            candidates.sort(key=lambda item: (item[0], item[1]))
+                if tag == "CAUSAL":
+                    continue  # never evict causal chains
+                score = float(self.rr_score(role, content, msg if isinstance(msg, dict) else None))
+                noise_rank = 0 if tag == "NOISE" else 1
+                candidates.append((noise_rank, score, i, tag))
+            candidates.sort(key=lambda item: (item[0], item[1], item[2]))
             evict: set[int] = set()
+            truncated: Dict[int, str] = {}
             tokens_pruned = 0
-            for _score, i in candidates:
+            for _noise_rank, _score, i, tag in candidates:
                 if tokens_pruned >= int(target_prune_tokens):
                     break
                 text = _message_text_for_entropy(messages[i])
-                tokens_pruned += int(estimate_tokens_rough(text) or 0)
-                evict.add(i)
-            if not evict:
+                if tag == "STRUCTURAL":
+                    kept_text = text[:200]
+                    before_tok = int(estimate_tokens_rough(text) or 0)
+                    after_tok = int(estimate_tokens_rough(kept_text) or 0)
+                    delta = max(0, before_tok - after_tok)
+                    if delta <= 0:
+                        continue
+                    tokens_pruned += delta
+                    truncated[i] = kept_text
+                else:
+                    tokens_pruned += int(estimate_tokens_rough(text) or 0)
+                    evict.add(i)
+            if not evict and not truncated:
                 return messages, 0
-            kept = [m for i, m in enumerate(messages) if i not in evict]
+            kept = []
+            for i, m in enumerate(messages):
+                if i in evict:
+                    continue
+                if i in truncated and isinstance(m, dict):
+                    kept.append(_rewritten(m, truncated[i]))
+                else:
+                    kept.append(m)
             return kept, tokens_pruned
         except Exception:
             return messages, 0
+
+    def _extract_fact_ledger(self, turns_to_summarize: List[Dict[str, Any]]) -> str:
+        """Harvest named facts from compacted turns and format a head ledger. Deduped, capped."""
+        facts: List[str] = []
+        seen: set[str] = set()
+
+        def _add(item: str) -> None:
+            text = " ".join((item or "").split())
+            if not text or text in seen:
+                return
+            seen.add(text)
+            facts.append(text)
+
+        for msg in turns_to_summarize or []:
+            if not isinstance(msg, dict):
+                continue
+            content = _message_text_for_entropy(msg)
+            if not content:
+                continue
+            for match in _FACT_PATH_RE.findall(content):
+                _add(match)
+            for match in _FACT_ARXIV_RE.findall(content):
+                _add(match)
+            for match in _FACT_MODEL_RE.findall(content):
+                _add(match)
+            for match in _FACT_SHA_RE.findall(content):
+                _add(match)
+            for match in _FACT_NUM_RE.finditer(content):
+                start, end = match.span()
+                window = content[max(0, start - 24): min(len(content), end + 24)]
+                if re.search(r"[A-Za-z]", window):
+                    _add(match.group())
+            for line in content.splitlines():
+                if any(marker in line for marker in _FACT_NAMED_MARKERS):
+                    _add(line.strip()[:240])
+            if len(facts) >= 80:
+                break
+        del facts[80:]
+        if not facts:
+            return ""
+        # ~1500 tokens ≈ 6000 chars
+        lines: List[str] = []
+        used = 0
+        budget_chars = 6000
+        for fact in facts:
+            extra = len(fact) + 1
+            if used + extra > budget_chars:
+                break
+            lines.append(fact)
+            used += extra
+        if not lines:
+            return ""
+        return "FACT LEDGER\n" + "\n".join(lines)
+
+    def _prepend_fact_ledger(self, summary: str, turns_to_summarize: List[Dict[str, Any]]) -> str:
+        """Put the fact ledger at the summary head so named facts survive Lost-in-the-Middle."""
+        body = summary or ""
+        if body.lstrip().startswith("FACT LEDGER"):
+            return body
+        ledger = self._extract_fact_ledger(turns_to_summarize)
+        if not ledger:
+            return body
+        combined = ledger + "\n" + body
+        # Ledger must occupy the head of the summary (first 2000 chars include it).
+        if len(ledger) > 2000:
+            ledger = ledger[:2000].rstrip()
+            combined = ledger + "\n" + body
+        return combined
+
+    def _reacquisition_class(self, msg: Any) -> str:
+        """CHEAP if the body is bulky tool dump that can be re-fetched; else EXPENSIVE."""
+        if not isinstance(msg, dict):
+            return "EXPENSIVE"
+        tool = _msg_tool_name(msg)
+        content = _message_text_for_entropy(msg)
+        if (
+            tool in _CHEAP_REACQ_TOOLS
+            and len(content) > 1500
+            and _REACQ_NUM4_RE.search(content) is None
+            and not any(marker in content for marker in _REACQ_EXPENSIVE_MARKERS)
+        ):
+            return "CHEAP"
+        return "EXPENSIVE"
 
     def _feed_messages_for_entropy(self, messages: List[Dict[str, Any]] | None) -> None:
         """Ingest newly appended history messages into the estimator. Fail-open."""
@@ -3797,7 +3963,19 @@ Summary generation was unavailable, so this is a best-effort deterministic fallb
                 continue
             if len(content) < _LEAN_TAIL_DEMOTE_MIN_CHARS or SKILL_PRUNED_MARKER_PREFIX in content or _is_summary_stub(content):
                 continue
-            result[i] = _rewritten(msg, _lean_recovery_stub(msg.get("tool_name") or "", len(content), session_id))
+            class_ = self._reacquisition_class(msg)
+            if class_ == "CHEAP":
+                stub = content[:400].rstrip() + "\n" + _lean_recovery_stub(
+                    msg.get("tool_name") or _msg_tool_name(msg) or "", len(content), session_id,
+                )
+                result[i] = _rewritten(msg, stub)
+            else:
+                # EXPENSIVE: never stub; keep an extractive first line if the body is bulky.
+                first_line = content.splitlines()[0] if content else content
+                extractive = (first_line or content)[:500]
+                if extractive == content:
+                    continue
+                result[i] = _rewritten(msg, extractive)
             demoted += 1
         if demoted and not self.quiet_mode:
             logger.info("Lean tail: demoted %d stale tool result(s)", demoted)
@@ -3805,6 +3983,7 @@ Summary generation was unavailable, so this is a best-effort deterministic fallb
 
     def _augment_summary_lean(self, summary: str, turns_to_summarize: List[Dict[str, Any]]) -> str:
         """Append deterministic lean-mode sections to a summary; no-op in legacy mode."""
+        summary = self._prepend_fact_ledger(summary, turns_to_summarize)
         if getattr(self, "tail_mode", "lean") != "lean":
             return summary
         for heading, build in (
@@ -4033,6 +4212,9 @@ Summary generation was unavailable, so this is a best-effort deterministic fallb
             "summary — replace any that appear with [REDACTED]. Note that credentials were present, but do "
             "not preserve their values."
         )
+        _focus = getattr(self, "summary_focus_topic", None)
+        if _focus:
+            _summarizer_preamble = f"FOCUS: Prioritize {_focus}. " + _summarizer_preamble
         # Lean mode folds the session log into this SAME single request (one aux call).
         _session_log_section = _LEAN_SESSION_LOG_SECTION if getattr(self, "tail_mode", "lean") == "lean" else ""
         _template_sections = self._summary_template_sections(_section, summary_budget, _session_log_section)
@@ -4088,20 +4270,23 @@ This compaction should PRIORITISE preserving all information related to the focu
             )
         return ""
 
-    @classmethod
-    def _summary_template_sections(cls, _section: Dict[str, str], summary_budget: int, _session_log_section: str) -> str:
+    def _summary_template_sections(self, _section: Dict[str, str], summary_budget: int, _session_log_section: str) -> str:
         """The ``## ...`` section template shared by the fresh and iterative-update prompts."""
-        _temporal_anchoring_rule = cls._temporal_anchoring_rule()
+        _temporal_anchoring_rule = self._temporal_anchoring_rule()
+        suppress = {
+            str(s).strip().lower()
+            for s in (getattr(self, "summary_suppress_sections", None) or [])
+        }
+        goal_block = ""
+        if "goal" not in suppress:
+            goal_block = f"## Goal\n{_section['goal']}\n\n"
+        constraints_block = ""
+        if not any(key in suppress for key in ("constraints", "constraints & preferences")):
+            constraints_block = f"## Constraints & Preferences\n{_section['constraints']}\n\n"
         return f"""{HISTORICAL_TASK_HEADING}
 {_section["historical_task"]}
 
-## Goal
-{_section["goal"]}
-
-## Constraints & Preferences
-{_section["constraints"]}
-
-## Completed Actions
+{goal_block}{constraints_block}## Completed Actions
 [Numbered list of concrete actions taken — include tool used, target, and outcome.
 Format each as: N. ACTION target — outcome [tool: name]
 Example:
@@ -5255,9 +5440,14 @@ Write only the summary body. Do not include any preamble or prefix."""
         # messages-only; comparing them fakes ~96% savings and kills the anti-thrashing guard.
         # Message-only savings are diagnostic; the verdict belongs to the next provider prompt count.
         pre_estimate = estimate_messages_tokens_rough(messages)
-        saved_estimate = pre_estimate - estimate_messages_tokens_rough(compressed)
+        after_estimate = estimate_messages_tokens_rough(compressed)
+        saved_estimate = pre_estimate - after_estimate
         savings_pct = (saved_estimate / pre_estimate * 100) if pre_estimate > 0 else 0
         self._last_compression_savings_pct = savings_pct
+        try:
+            self._last_ratio = (after_estimate / pre_estimate) if pre_estimate > 0 else None
+        except Exception:
+            self._last_ratio = None
         if not self.quiet_mode:
             logger.info("Compressed: %d -> %d messages (~%d tokens saved, %.0f%%)", n_messages, len(compressed), saved_estimate, savings_pct)
             logger.info("Compression #%d complete", self.compression_count)

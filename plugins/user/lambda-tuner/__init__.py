@@ -449,6 +449,43 @@ def _apply_profile(ctx: Any, agent: Any, session_type: str, session_id: str, con
             )
         except Exception as exc:
             logger.debug("lambda-tuner: set_compression_profile failed: %s", exc)
+    _apply_summary_template(compressor, session_type)
+
+
+_SUMMARY_FOCUS = {
+    "research": "named facts, citations, causal findings, numeric results, paper ids",
+    "code": "file paths, test outcomes, diffs, exit codes, error messages",
+}
+
+
+def _apply_summary_template(compressor: Any, session_type: str) -> None:
+    """Session-type summarizer focus / suppress. Fail-open."""
+    if compressor is None:
+        return
+    try:
+        if session_type == "research":
+            compressor.summary_focus_topic = _SUMMARY_FOCUS["research"]
+            compressor.summary_suppress_sections = ["Goal", "Constraints"]
+        elif session_type == "code":
+            compressor.summary_focus_topic = _SUMMARY_FOCUS["code"]
+            compressor.summary_suppress_sections = []
+        else:
+            compressor.summary_focus_topic = None
+            compressor.summary_suppress_sections = []
+    except Exception as exc:
+        logger.debug("lambda-tuner: summary template apply failed (fail-open): %s", exc)
+
+
+def _resolve_compressor(ctx: Any, agent: Any) -> Any:
+    compressor = None
+    if agent is not None:
+        compressor = getattr(agent, "context_compressor", None)
+    if compressor is None:
+        try:
+            compressor = ctx.compressor
+        except Exception:
+            compressor = None
+    return compressor
 
 
 # ---------------------------------------------------------------------------
@@ -530,6 +567,36 @@ def register(ctx: Any) -> None:
         except Exception:
             pass
 
+        try:
+            compressor = _resolve_compressor(ctx, agent)
+            profile = getattr(compressor, "_active_compression_profile", None) if compressor is not None else None
+            ratio = getattr(compressor, "_last_ratio", None) if compressor is not None else None
+            if profile and ratio is not None:
+                try:
+                    ratio_f = float(ratio)
+                except (TypeError, ValueError):
+                    ratio_f = None
+                if ratio_f is not None:
+                    if ratio_f > 0.12:
+                        ctx.set_model_preference("sonnet")
+                    elif ratio_f < 0.09:
+                        ctx.set_model_preference("haiku")
+            complexity = None
+            if compressor is not None:
+                complexity = getattr(compressor, "_last_complexity_score", None)
+            if complexity is None:
+                rec = _fired.get(session_id) or {}
+                if isinstance(rec, dict):
+                    complexity = rec.get("complexity")
+            try:
+                complexity_f = float(complexity) if complexity is not None else None
+            except (TypeError, ValueError):
+                complexity_f = None
+            if complexity_f is not None and complexity_f > 0.7:
+                ctx.set_reasoning_mode("deep")
+        except Exception as exc:
+            logger.debug("lambda-tuner: routing coherence failed (fail-open): %s", exc)
+
         if not isinstance(user_message, str):
             user_message = str(user_message or "")
         if not user_message.strip():
@@ -575,6 +642,13 @@ def register(ctx: Any) -> None:
                 except Exception as exc:
                     logger.debug("lambda-tuner: complexity score failed (fail-open): %s", exc)
                     complexity = 0.0
+
+                try:
+                    compressor = _resolve_compressor(ctx, agent)
+                    if compressor is not None:
+                        compressor._last_complexity_score = complexity
+                except Exception:
+                    compressor = None
 
                 try:
                     if session_id:

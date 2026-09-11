@@ -275,6 +275,27 @@ class PluginContext:
         # Freshness: do not cache; the agent may rebuild context_compressor in place.
         return getattr(agent, "context_compressor", None)
 
+    def set_model_preference(self, preference: str) -> None:
+        """Soft model-class hint for compression-to-LLM routing (``sonnet`` / ``haiku``). Fail-open."""
+        try:
+            chosen = str(preference or "").strip().lower()
+            if not chosen:
+                return
+            self._model_preference = chosen
+            manager = getattr(self, "_manager", None)
+            if manager is not None:
+                manager._model_preference = chosen
+                sid = getattr(self, "_session_id", None)
+                if sid:
+                    prefs = getattr(manager, "_session_model_preferences", None)
+                    if not isinstance(prefs, dict):
+                        manager._session_model_preferences = {}
+                        prefs = manager._session_model_preferences
+                    prefs[str(sid)] = chosen
+            logger.debug("PluginContext.set_model_preference: %s", chosen)
+        except Exception as exc:
+            logger.debug("PluginContext.set_model_preference failed (fail-open): %s", exc)
+
     def set_reasoning_mode(self, mode: str) -> None:
         """Set per-session reasoning depth: ``deep``, ``fast``, or ``default``. Fail-open."""
         try:

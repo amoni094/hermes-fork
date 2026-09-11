@@ -46,30 +46,46 @@ POLICIES: Dict[str, Dict[str, Any]] = {
         "attrs": {"_session_id": "eval-session"},
     },
     # Fork: research profile — compress sooner (0.45), smaller tail (22 msgs).
-    # Lean algorithm (now default on main). Tests lambda-tuner research classification.
     "fork_research": {
         "ctor": {"threshold_percent": 0.45, "protect_last_n": 22},
-        "attrs": {"proactive_prune_tokens": 40_000},
+        "attrs": {
+            "proactive_prune_tokens": 40_000,
+            "session_type": "research",
+            "importance_biased_prune_enabled": True,
+        },
     },
     # Fork: code profile — compress later (0.55), larger tail (28 msgs).
-    # Lean algorithm. Tests lambda-tuner code/debug classification.
     "fork_code": {
         "ctor": {"threshold_percent": 0.55, "protect_last_n": 28},
-        "attrs": {"proactive_prune_tokens": 28_000},
+        "attrs": {
+            "proactive_prune_tokens": 28_000,
+            "session_type": "code",
+            "importance_biased_prune_enabled": True,
+        },
     },
-    # Fork: mixed profile — midpoint (0.50, 20 msgs). Matches lean default
-    # exactly; serves as a named control for the session-type comparison.
+    # Fork: mixed profile — midpoint (0.50, 20 msgs).
     "fork_mixed": {
         "ctor": {"threshold_percent": 0.50, "protect_last_n": 20},
-        "attrs": {"proactive_prune_tokens": 32_000},
+        "attrs": {
+            "proactive_prune_tokens": 32_000,
+            "session_type": "mixed",
+            "importance_biased_prune_enabled": True,
+        },
     },
-    # Lean + recovery arm with research threshold: compound best-of-both.
-    # lean attr set for session_search recovery pointer generation.
+    # Lean + research threshold compound arm.
     "lean_fork_research": {
         "ctor": {"threshold_percent": 0.45, "protect_last_n": 22},
-        "attrs": {"_session_id": "eval-session", "proactive_prune_tokens": 40_000},
+        "attrs": {
+            "_session_id": "eval-session",
+            "proactive_prune_tokens": 40_000,
+            "session_type": "research",
+            "importance_biased_prune_enabled": True,
+        },
     },
 }
+
+# Runtime attrs the runner must setattr onto the compressor when present.
+FORK_RUNTIME_ATTRS = ("session_type", "importance_biased_prune_enabled")
 
 
 def apply_policy(compressor, spec: Dict[str, Any]):
