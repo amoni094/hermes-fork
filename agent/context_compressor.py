@@ -2064,10 +2064,31 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         #      session boundary — reset here, not in set_compression_profile.
         self.protect_last_n = getattr(self, "_config_protect_last_n", self.protect_last_n)
         self.proactive_prune_tokens = getattr(self, "_config_proactive_prune_tokens", self.proactive_prune_tokens)
+        # MEDIUM-A: restore threshold from _config_ (not mutated _base_threshold_percent).
+        # why: set_compression_profile mutates _base_threshold_percent; /new must use the
+        #      original config value, then re-derive _base via model overrides.
+        _config_pct = getattr(self, "_config_threshold_percent", None)
+        if _config_pct is not None:
+            self._base_threshold_percent = resolve_model_threshold(
+                self.model, getattr(self, "model_thresholds", {}), _config_pct
+            )
         self.threshold_percent = self._effective_threshold_percent(
             self._resolve_context_length(),
             getattr(self, "_base_threshold_percent", self._config_threshold_percent),
         )
+        # HIGH-7: reset ChronoMem state so session 2 does not inherit session 1 clock/checkpoints.
+        # why: _turn_clock and _entropy_estimator._checkpoints are per-session; /new is a boundary.
+        self._turn_clock = 0
+        self._active_compression_profile = None
+        est = getattr(self, "_entropy_estimator", None)
+        if est is not None:
+            try:
+                est.reset()
+                est._checkpoints.clear()
+            except Exception:
+                pass
+        else:
+            self._entropy_estimator = EntropyEstimator()
         self._summary_failure_cooldown_until = 0.0
         self._cooldown_persist_failed = False
         self._last_summary_error = None
@@ -3023,18 +3044,24 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         # minimum tokens needed to faithfully represent the session's information content,
         # compressing further causes irreversible loss without size benefit.
         estimator = getattr(self, "_entropy_estimator", None)
-        if estimator is not None:
+        _clock = getattr(self, "_turn_clock", 0) or 0
+        # AEP floor only meaningful once we have seen > protect_last_n turns.
+        # Before that the avg_tokens estimate is inflated (few turns, large denominator-free estimate)
+        # and H cancels in min_retain_tokens, making floor = protect_last_n * avg which always blocks.
+        # why: gate on clock > protect_last_n to ensure estimator has enough data to be meaningful.
+        if estimator is not None and _clock > getattr(self, "protect_last_n", 20):
             try:
+                avg_turn_tokens = max(tokens // max(_clock, 1), 64)
                 aep_floor = estimator.min_retain_tokens(
-                        budget_bits=estimator.entropy_rate() * max(
-                            getattr(self, 'protect_last_n', 20) * max(tokens // max(getattr(self, '_turn_clock', 1) or 1, 1), 64),
-                            256,
-                        )
+                    budget_bits=estimator.entropy_rate() * max(
+                        getattr(self, "protect_last_n", 20) * avg_turn_tokens,
+                        256,
                     )
+                )
                 if tokens <= aep_floor:
                     logger.debug(
-                        "pre_compress blocked by AEP floor: tokens=%d floor=%d entropy=%.3f",
-                        tokens, aep_floor, estimator.entropy_rate(),
+                        "pre_compress blocked by AEP floor: tokens=%d floor=%d entropy=%.3f clock=%d",
+                        tokens, aep_floor, estimator.entropy_rate(), _clock,
                     )
                     return False, "aep_floor"
             except Exception:
