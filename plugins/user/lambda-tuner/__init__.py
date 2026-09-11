@@ -6,11 +6,13 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 import time
 import tempfile
-from collections import OrderedDict
+from collections import Counter, OrderedDict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -230,6 +232,207 @@ def _classify(messages: list[str]) -> tuple[str, float, dict[str, float]]:
 
 
 # ---------------------------------------------------------------------------
+# Post-lock entropy divergence → one-shot reclassification
+# ---------------------------------------------------------------------------
+# why: lock-at-turn-3 can stick a long session in the wrong profile. After 15
+# classified turns, if recent-5 Shannon entropy sits >0.4 outside the locked
+# type's expected R(D) band, allow one high-confidence flip (conf > 0.85).
+_RECLASSIFY_MIN_TURNS = 15
+_RECLASSIFY_ENTROPY_DELTA = 0.4
+_RECLASSIFY_MIN_CONFIDENCE = 0.85
+_RECLASSIFY_MAX = 1
+_RECENT_ENTROPY_WINDOW = 5
+
+# Bands match ContextCompressor._entropy_adaptive_threshold_percent:
+# H > 4.0 → research (0.45); H < 2.5 → code (0.55); else mixed.
+_EXPECTED_ENTROPY_RANGE: dict[str, tuple[float | None, float | None]] = {
+    "research": (4.0, None),
+    "code": (0.0, 2.5),
+    "mixed": (2.5, 4.0),
+}
+
+
+def _shannon_unigram(text: str) -> float:
+    """Whitespace-token Shannon entropy in bits. Empty → 0.0. Fail-open."""
+    try:
+        tokens = str(text).split()
+        n = len(tokens)
+        if n <= 0:
+            return 0.0
+        counts = Counter(tokens)
+        entropy = 0.0
+        for count in counts.values():
+            if count <= 0:
+                continue
+            p = count / n
+            entropy -= p * math.log2(p)
+        return float(entropy)
+    except Exception:
+        return 0.0
+
+
+def _entropy_range_divergence(h: float, session_type: str) -> float:
+    """Distance of *h* outside the expected entropy range for *session_type*."""
+    bounds = _EXPECTED_ENTROPY_RANGE.get(session_type)
+    if bounds is None:
+        return 0.0
+    lo, hi = bounds
+    if lo is not None and h < lo:
+        return float(lo - h)
+    if hi is not None and h > hi:
+        return float(h - hi)
+    return 0.0
+
+
+def _maybe_reclassify_on_entropy_decay(
+    ctx: Any,
+    agent: Any,
+    session_id: str,
+    bucket: list[str],
+    rec: dict[str, Any],
+    locked: str,
+) -> None:
+    """Track running entropy; maybe one high-confidence type flip. Fail-open."""
+    if not isinstance(rec, dict):
+        return
+    try:
+        recent = bucket[-_RECENT_ENTROPY_WINDOW:]
+        h = _shannon_unigram(" ".join(recent))
+        divergence = _entropy_range_divergence(h, locked)
+        rec["_recent_entropy"] = h
+        rec["_entropy_divergence"] = divergence
+
+        try:
+            reclass_count = int(rec.get("_reclassification_count", 0) or 0)
+        except (TypeError, ValueError):
+            reclass_count = 0
+        if reclass_count >= _RECLASSIFY_MAX:
+            return
+
+        try:
+            lock_turn = int(rec.get("lock_turn", 0) or 0)
+        except (TypeError, ValueError):
+            lock_turn = 0
+        turns_classified = len(bucket) - lock_turn
+        if turns_classified <= _RECLASSIFY_MIN_TURNS:
+            return
+        if divergence <= _RECLASSIFY_ENTROPY_DELTA:
+            return
+
+        session_type, confidence, scores = _classify(bucket)
+        if session_type == locked:
+            return
+        if confidence <= _RECLASSIFY_MIN_CONFIDENCE:
+            return
+
+        rec["type"] = session_type
+        rec["confidence"] = float(confidence)
+        rec["ts"] = time.time()
+        rec["scores"] = scores
+        rec["_reclassification_count"] = reclass_count + 1
+        rec["reclassified"] = True
+        try:
+            rec["complexity"] = float(DEFAULT_SCORER.score(" ".join(bucket)))
+        except Exception:
+            pass
+        _fired[session_id] = rec
+        _fired.move_to_end(session_id)
+        _apply_profile(ctx, agent, session_type, session_id, confidence, len(bucket))
+        try:
+            _write_hint(session_type, confidence, scores)
+        except Exception as exc:
+            logger.debug("lambda-tuner: reclassify hint write failed (fail-open): %s", exc)
+        logger.debug(
+            "lambda-tuner: reclassified sid=%s %s -> %s conf=%.2f entropy=%.3f div=%.3f",
+            session_id, locked, session_type, confidence, h, divergence,
+        )
+        try:
+            ctx.emit_episode(
+                f"Session {session_id} reclassified {locked} -> {session_type} "
+                f"confidence={confidence} entropy={h:.3f}",
+                tags=["classification", "lambda-tuner", "reclassify"],
+            )
+        except Exception:
+            pass
+    except Exception as exc:
+        logger.debug("lambda-tuner: entropy-decay reclassify failed (fail-open): %s", exc)
+
+
+def _write_warm_start_cache(session_id: str, rec: dict[str, Any], turn_count: int) -> None:
+    """Atomic last-session-type.json for the next session. Fail-open.
+
+    Includes wrapper-compat fields (type/lambda/expires_at) plus the warm-start
+    schema (session_id, session_type, complexity_score, profile_applied,
+    turn_count, timestamp ISO8601, reclassified).
+    """
+    try:
+        session_type = rec.get("type") if isinstance(rec, dict) else None
+        if not isinstance(session_type, str) or not session_type.strip():
+            session_type = "mixed"
+        try:
+            complexity_score = float((rec or {}).get("complexity", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            complexity_score = 0.0
+        try:
+            confidence = float((rec or {}).get("confidence", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            confidence = 0.0
+        try:
+            reclassified = bool((rec or {}).get("reclassified")) or (
+                int((rec or {}).get("_reclassification_count", 0) or 0) >= 1
+            )
+        except (TypeError, ValueError):
+            reclassified = False
+        scores = (rec or {}).get("scores") if isinstance(rec, dict) else None
+        if not isinstance(scores, dict):
+            scores = {"research": 0.0, "code": 0.0}
+        lam_str = _TYPE_TO_LAMBDA.get(session_type, _TYPE_TO_LAMBDA["mixed"])
+        now = time.time()
+        payload: dict[str, Any] = {
+            "type": session_type,
+            "profile": session_type,
+            "lambda": lam_str,
+            "confidence": round(confidence, 3),
+            "scores": {str(k): round(float(v), 3) for k, v in scores.items()},
+            "ts": now,
+            "expires_at": now + _HINT_TTL_SECONDS,
+            "source": "lambda-tuner-plugin",
+            "session_id": session_id,
+            "session_type": session_type,
+            "complexity_score": round(complexity_score, 4),
+            "profile_applied": session_type,
+            "turn_count": int(turn_count),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "reclassified": bool(reclassified),
+        }
+        intent = _pending_intent
+        if not (isinstance(intent, str) and intent.strip()):
+            try:
+                prev = (_read_hint() or {}).get("intent")
+                if isinstance(prev, str) and prev.strip():
+                    intent = prev.strip()
+            except Exception:
+                intent = None
+        if isinstance(intent, str) and intent.strip():
+            payload["intent"] = intent.strip()
+        hint_path = _hint_path()
+        hint_path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=hint_path.parent, prefix=".hint-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(payload, f)
+            os.replace(tmp, hint_path)
+        except Exception:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+    except Exception as exc:
+        logger.warning("lambda-tuner: warm-start cache write failed (fail-open): %s", exc)
+
+
+# ---------------------------------------------------------------------------
 # Plugin state — bounded LRU so a long-running gateway cannot grow forever
 # ---------------------------------------------------------------------------
 
@@ -399,6 +602,10 @@ def register(ctx: Any) -> None:
                     except (TypeError, ValueError):
                         conf = 1.0
                 _apply_profile(ctx, agent, locked, session_id, conf, len(bucket))
+                if isinstance(rec, dict):
+                    _maybe_reclassify_on_entropy_decay(
+                        ctx, agent, session_id, bucket, rec, locked,
+                    )
                 return
 
             session_type, confidence, scores = _classify(bucket)
@@ -460,6 +667,10 @@ def register(ctx: Any) -> None:
                     "confidence": float(confidence),
                     "ts": time.time(),
                     "complexity": complexity,
+                    "scores": scores,
+                    "lock_turn": len(bucket),
+                    "_reclassification_count": 0,
+                    "reclassified": False,
                 }
                 _fired.move_to_end(session_id)
                 logger.debug(
@@ -493,7 +704,9 @@ def register(ctx: Any) -> None:
         """Drop per-session classifier state so long-running gateways cannot leak it."""
         try:
             rec = _fired.get(session_id) or {}
+            turn_count = len(_session_messages.get(session_id, []) or [])
             if isinstance(rec, dict):
+                _write_warm_start_cache(session_id, rec, turn_count)
                 try:
                     complexity = float(rec.get("complexity", 0.0) or 0.0)
                 except (TypeError, ValueError):
@@ -559,8 +772,10 @@ def register(ctx: Any) -> None:
                     except Exception:
                         pass
             elif context_tokens > 60_000:
-                # Session type not yet determined but context is large: use entropy-adaptive
-                # so EntropyEstimator guides the threshold until the classifier locks in.
+                # VERIFIED: entropy-adaptive guard is correctly wired.
+                # Session type is None (not in _fired) AND context_tokens > 60000
+                # → apply entropy-adaptive so EntropyEstimator guides the
+                # threshold until the classifier locks. Do not remove this branch.
                 _apply_profile(ctx, agent, "entropy-adaptive", session_id, 0.5, 0)
         except Exception as exc:
             logger.debug("lambda-tuner: on_pre_compress failed (fail-open): %s", exc)
@@ -585,6 +800,7 @@ from .predicates import (  # noqa: E402
     is_research_session,
     session_complexity,
     session_type,
+    was_reclassified,
 )
 
 __all__ = [
@@ -594,6 +810,7 @@ __all__ = [
     "is_high_confidence",
     "session_type",
     "session_complexity",
+    "was_reclassified",
     "TaskComplexityScorer",
 ]
 

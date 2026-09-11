@@ -6,7 +6,7 @@ return False / None.
 
 Reads ``_fired`` from the parent package. After classify/lock it stores:
 
-    {session_id: {"type": str, "confidence": float, "ts": float}}
+    {session_id: {"type": str, "confidence": float, "ts": float, ...}}
 """
 from __future__ import annotations
 
@@ -100,3 +100,16 @@ def session_complexity(sid: str) -> Optional[float]:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def was_reclassified(sid: str) -> bool:
+    """True if this session flipped type after the turn-3 lock. Fail-open False."""
+    rec = _record(sid)
+    if not rec:
+        return False
+    try:
+        if rec.get("reclassified"):
+            return True
+        return int(rec.get("_reclassification_count", 0) or 0) >= 1
+    except (TypeError, ValueError):
+        return False

@@ -1,8 +1,37 @@
-"""Task complexity scorer — 8-signal mean in [0, 1]. Stdlib only."""
+"""Task complexity scorer — 8-signal inverse-entropy weighted mean in [0, 1]. Stdlib only."""
 from __future__ import annotations
 
 import re
 from typing import Optional
+
+
+# Inverse-entropy prior weights (higher = more type-discriminative).
+# Requested names mapped onto the 8 live signals in this scorer:
+#   code_fraction           → code_density
+#   question_density        → question_count
+#   tool_diversity          → tool_hints
+#   message_length_variance → length_score
+#   url_density             → novelty (no URL extractor; novelty is the leftover I-content signal)
+#   nested_depth            → constraints
+#   iteration_count         → multistep
+#   error_rate              → ambiguity (least discriminative)
+# Raw priors sum to 9.0; scale so sum(weights) == 8.0, then
+# weighted mean sum(s_i * w_i) / sum(w) stays in [0, 1].
+_RAW_SIGNAL_WEIGHTS = {
+    "code_density": 1.5,
+    "question_count": 1.3,
+    "tool_hints": 1.4,
+    "length_score": 1.2,
+    "novelty": 1.2,
+    "constraints": 0.8,
+    "multistep": 0.9,
+    "ambiguity": 0.7,
+}
+_RAW_WEIGHT_SUM = sum(_RAW_SIGNAL_WEIGHTS.values())
+SIGNAL_WEIGHTS = {
+    name: raw * (8.0 / _RAW_WEIGHT_SUM) for name, raw in _RAW_SIGNAL_WEIGHTS.items()
+}
+WEIGHT_SUM = 8.0
 
 
 class TaskComplexityScorer:
@@ -16,7 +45,7 @@ class TaskComplexityScorer:
         self._recent_tokens: set[str] = set()
 
     def score(self, text: str, recent_tokens: Optional[set] = None) -> float:
-        """Mean of 8 sub-scores in [0, 1]. Empty text → 0.0."""
+        """Inverse-entropy weighted mean of 8 sub-scores in [0, 1]. Empty text → 0.0."""
         if not text:
             return 0.0
         n = len(text)
@@ -38,17 +67,18 @@ class TaskComplexityScorer:
         else:
             novelty = sum(1 for tok in tokens if tok not in recent) / len(tokens)
 
-        scores = (
-            length_score,
-            code_density,
-            ambiguity,
-            constraints,
-            multistep,
-            tool_hints,
-            question_count,
-            novelty,
-        )
-        return float(sum(scores) / len(scores))
+        signals = {
+            "length_score": length_score,
+            "code_density": code_density,
+            "ambiguity": ambiguity,
+            "constraints": constraints,
+            "multistep": multistep,
+            "tool_hints": tool_hints,
+            "question_count": question_count,
+            "novelty": novelty,
+        }
+        numer = sum(signals[name] * SIGNAL_WEIGHTS[name] for name in SIGNAL_WEIGHTS)
+        return float(numer / WEIGHT_SUM)
 
     def update_recent(self, text: str) -> None:
         """Ingest tokens into the novelty set, capped at 2000."""
