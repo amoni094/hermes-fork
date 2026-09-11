@@ -5,12 +5,12 @@ description: Session-type adaptive compression. See FORK_README.md § lambda-tun
 provides_hooks:
   - pre_llm_call
   - on_session_start
-  - on_session_end
+  - on_session_finalize
   - pre_compress
 hooks:
   - pre_llm_call
   - on_session_start
-  - on_session_end
+  - on_session_finalize
   - pre_compress
 settings:
   enabled: true
