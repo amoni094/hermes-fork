@@ -2106,6 +2106,8 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         self._last_compress_entropy = 0.0
         self._last_compress_clock = 0
         self._active_compression_profile = None
+        # Reset plugin-set flags so a code session doesn't leak IB prune into a research session.
+        self.importance_biased_prune_enabled = False
         est = getattr(self, "_entropy_estimator", None)
         if est is not None:
             try:
