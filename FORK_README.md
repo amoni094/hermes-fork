@@ -136,7 +136,7 @@ from hermes_plugins.<slug>.predicates import (
 Also re-exported from `plugins/user/lambda-tuner/__init__.py`. All predicates
 fail-open (unknown session → `False` / `None`).
 
-## Intent-conditioned compression
+## Intent instrumentation (future: intent-conditioned compression)
 
 `ContextCompressor.current_intent` is an optional string describing what the
 user is trying to do this session (e.g. `"implement feature X"`). When set,

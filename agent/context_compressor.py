@@ -2057,6 +2057,17 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         """Bind the current session row so durable cooldowns can round-trip."""
         self._session_db = session_db
         self._session_id = session_id or ""
+        # Reset profile-mutated knobs to config defaults so a new session (/new) does not
+        # inherit a previous session's profile. Threshold resets via _base_threshold_percent
+        # already; protect_last_n and proactive_prune_tokens need explicit reset.
+        # why: set_compression_profile() mutates these in-place; bind_session_state is the
+        #      session boundary — reset here, not in set_compression_profile.
+        self.protect_last_n = getattr(self, "_config_protect_last_n", self.protect_last_n)
+        self.proactive_prune_tokens = getattr(self, "_config_proactive_prune_tokens", self.proactive_prune_tokens)
+        self.threshold_percent = self._effective_threshold_percent(
+            self._resolve_context_length(),
+            getattr(self, "_base_threshold_percent", self._config_threshold_percent),
+        )
         self._summary_failure_cooldown_until = 0.0
         self._cooldown_persist_failed = False
         self._last_summary_error = None
@@ -2473,6 +2484,10 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         # Effective trigger = min(ratio threshold, cap); re-applied in update_model().
         self.threshold_tokens_cap = self._coerce_threshold_tokens_cap(threshold_tokens_cap)
         self.protect_first_n, self.protect_last_n = protect_first_n, protect_last_n
+        # Snapshot config values so bind_session_state can restore after profile mutations.
+        # why: set_compression_profile() mutates these live; /new must reset to config, not carry leak.
+        self._config_protect_last_n = protect_last_n
+        self._config_proactive_prune_tokens = int(proactive_prune_tokens or 0)
         # Proactive prune runs independently of the full-compression trigger. 0 = disabled.
         self.proactive_prune_tokens = int(proactive_prune_tokens or 0)
         # Floor at 200 chars: below that a summary can exceed what it replaces and pass 2 re-summarizes
@@ -2964,7 +2979,12 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         estimator = getattr(self, "_entropy_estimator", None)
         if estimator is not None:
             try:
-                aep_floor = estimator.min_retain_tokens(budget_bits=estimator.entropy_rate() * tokens * 0.5)
+                aep_floor = estimator.min_retain_tokens(
+                        budget_bits=estimator.entropy_rate() * max(
+                            getattr(self, 'protect_last_n', 20) * max(tokens // max(getattr(self, '_turn_clock', 1) or 1, 1), 64),
+                            256,
+                        )
+                    )
                 if tokens <= aep_floor:
                     logger.debug(
                         "pre_compress blocked by AEP floor: tokens=%d floor=%d entropy=%.3f",
@@ -5141,7 +5161,12 @@ Write only the summary body. Do not include any preamble or prefix."""
             _agent = None
             try:
                 from hermes_cli.plugins import get_plugin_manager as _gpm
-                _agent = getattr(_gpm(), "_agent", None)
+                pm = _gpm()
+                # why: _agent is last-bound via plugin_manager; correct for single-session CLI.
+                # In multi-session gateway, hook receives the last agent that bound, not
+                # necessarily the one owning this compressor. Known limitation: tracked in
+                # FORK_README. Plugins should prefer the agent= kwarg from pre_llm_call.
+                _agent = getattr(pm, "_agent", None)
             except Exception:
                 _agent = None
             _invoke_hook(
