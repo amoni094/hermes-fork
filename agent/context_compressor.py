@@ -2524,7 +2524,7 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         # Rate-distortion proxy: threshold is recomputed from EntropyEstimator at
         # apply/trigger time. Placeholder 0.50 is the empty-estimator default.
         "entropy-adaptive": {
-            "threshold_percent": 0.50,
+            "threshold_percent": 0.50,  # placeholder; live R(D) from EntropyEstimator (not a fixed percent)
             "proactive_prune_tokens": 32_000,
             "protect_last_n": 20,
         },
@@ -2558,8 +2558,9 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
 
         Args:
             profile: A key from :attr:`COMPRESSION_PROFILES` (``"research"``,
-                ``"code"``, ``"mixed"``) **or** a dict with any subset of keys
-                ``threshold_percent``, ``proactive_prune_tokens``, ``protect_last_n``.
+                ``"code"``, ``"mixed"``, ``"entropy-adaptive"``) **or** a dict
+                with any subset of keys ``threshold_percent``,
+                ``proactive_prune_tokens``, ``protect_last_n``.
                 Dict profiles merge with live state (unspecified keys unchanged).
             **kwargs: ``_source`` is an informational log label; anything else
                 is dropped.
@@ -2578,6 +2579,9 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
                 return
             settings = dict(self.COMPRESSION_PROFILES[profile])
             # why: research protect_last_n=15 not 25 — dumps fill context fast; 25 would shield stale tool_results
+            if profile == "entropy-adaptive":
+                settings["threshold_percent"] = self._entropy_adaptive_threshold_percent()
+            self._active_compression_profile = profile
         elif isinstance(profile, dict):
             # Partial update: do not full-replace unspecified keys with defaults.
             settings = {k: profile[k] for k in self._PROFILE_KEYS if k in profile}
@@ -2587,6 +2591,7 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
                     _source,
                 )
                 return
+            self._active_compression_profile = "custom"
         else:
             _log.warning(
                 "context_compressor: profile must be str or dict, got %s from %s — ignored",
@@ -2642,6 +2647,105 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
             _source,
             {k: getattr(self, k) for k in self._PROFILE_KEYS},
         )
+
+    def _entropy_adaptive_threshold_percent(self) -> float:
+        """Map empirical entropy rate H to a rate-distortion threshold.
+
+        High H (>4.0 bits/token) → retain more (0.45). Low H (<2.5) →
+        compress later (0.55). Empty estimator → 0.50 (fail-open default).
+        """
+        try:
+            estimator = getattr(self, "_entropy_estimator", None)
+            if estimator is None or int(getattr(estimator, "_total_tokens", 0) or 0) <= 0:
+                return 0.50
+            h = float(estimator.entropy_rate())
+            if h > 4.0:
+                return 0.45
+            if h < 2.5:
+                return 0.55
+            return 0.50
+        except Exception:
+            return 0.50
+
+    def _refresh_entropy_adaptive_threshold(self) -> None:
+        """Recompute threshold when the active profile is entropy-adaptive."""
+        try:
+            if getattr(self, "_active_compression_profile", None) != "entropy-adaptive":
+                return
+            pct = self._entropy_adaptive_threshold_percent()
+            pct = min(self._PROFILE_THRESHOLD_MAX, max(self._PROFILE_THRESHOLD_MIN, pct))
+            pct = self._effective_threshold_percent(
+                getattr(self, "_resolved_context_length", 0) or 0, pct
+            )
+            if pct != self.threshold_percent:
+                self.threshold_percent = pct
+                self._base_threshold_percent = pct
+                self._threshold_tokens = None
+                self._tail_token_budget = None
+        except Exception:
+            return
+
+    def feed_turn(self, text: str) -> None:
+        """Update the entropy estimator with one turn's text. Fail-open."""
+        try:
+            estimator = getattr(self, "_entropy_estimator", None)
+            if estimator is None:
+                self._entropy_estimator = EntropyEstimator()
+                estimator = self._entropy_estimator
+            estimator.update(text or "")
+        except Exception:
+            return
+
+    def _feed_messages_for_entropy(self, messages: List[Dict[str, Any]] | None) -> None:
+        """Ingest newly appended history messages into the estimator. Fail-open."""
+        try:
+            if not messages:
+                return
+            n = len(messages)
+            start = getattr(self, "_entropy_fed_count", 0)
+            if start > n:
+                self._entropy_fed_count = n
+                return
+            for msg in messages[start:]:
+                text = _message_text_for_entropy(msg)
+                if text:
+                    self.feed_turn(text)
+            self._entropy_fed_count = n
+        except Exception:
+            return
+
+    def on_turn_complete(
+        self, messages: List[Dict[str, Any]], usage: Optional[Dict[str, Any]] = None, **kwargs: Any
+    ) -> None:
+        """Keep the entropy estimator current as turns land in history."""
+        try:
+            self._feed_messages_for_entropy(messages)
+        except Exception:
+            return
+
+    def _pre_compress_checkpoint(
+        self, *, trigger_reason: str, context_tokens: int | None = None
+    ) -> None:
+        """Structured pre-compress log (CatchBench: capture earliest info state)."""
+        try:
+            estimator = getattr(self, "_entropy_estimator", None)
+            payload: Dict[str, Any] = {
+                "session_id": getattr(self, "_session_id", "") or "",
+                "turn_count": int(getattr(estimator, "_turns_seen", 0) or 0) if estimator is not None else 0,
+                "context_tokens": int(
+                    context_tokens if context_tokens is not None else (self.last_prompt_tokens or 0)
+                ),
+                "estimated_entropy_rate": float(estimator.entropy_rate()) if estimator is not None else 0.0,
+                "threshold_percent": float(self.threshold_percent),
+                "profile_name": getattr(self, "_active_compression_profile", None) or "default",
+                "trigger_reason": str(trigger_reason or "unknown"),
+            }
+            intent = getattr(self, "current_intent", None)
+            if intent:
+                payload["intent"] = intent
+            logger.info("pre_compress_checkpoint %s", payload)
+        except Exception:
+            return
 
     # --- end adaptive compression API -------------------------------------------
 
@@ -2750,10 +2854,12 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         ``reason`` is None unless compression is needed but blocked: ``"cooldown:<seconds>"`` or
         ``"ineffective"``. Callers should surface a warning when it is non-None."""
         tokens = prompt_tokens if prompt_tokens is not None else self.last_prompt_tokens
+        self._refresh_entropy_adaptive_threshold()
         if tokens < self.threshold_tokens:
             return False, None
         if self._automatic_compression_blocked():
             return False, self._compression_block_reason() or "blocked"
+        self._pre_compress_checkpoint(trigger_reason="threshold", context_tokens=tokens)
         return True, None
 
     def _compression_block_reason(self) -> "str | None":
@@ -4913,6 +5019,7 @@ Write only the summary body. Do not include any preamble or prefix."""
             )
             return messages
         display_tokens = current_tokens if current_tokens else self.last_prompt_tokens or estimate_messages_tokens_rough(messages)
+        self._feed_messages_for_entropy(messages)
         # Constraint-weakening hook (arXiv:2608.24569): fire before this full compression so
         # plugins can persist constraint state, inject summary reminders, or retune the profile.
         try:
@@ -4935,6 +5042,11 @@ Write only the summary body. Do not include any preamble or prefix."""
             )
         except Exception:
             pass  # fail-open: compression must not depend on plugin dispatch
+        self._refresh_entropy_adaptive_threshold()
+        self._pre_compress_checkpoint(
+            trigger_reason="manual" if force else "auto",
+            context_tokens=int(display_tokens or 0),
+        )
         # Phase 1: Prune old tool results (cheap, no LLM call)
         messages, pruned_count = self._prune_old_tool_results(
             messages, protect_tail_count=self.protect_last_n, protect_tail_tokens=self.tail_token_budget,
