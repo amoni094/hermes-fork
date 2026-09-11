@@ -1,8 +1,14 @@
-"""Task complexity scorer — 8-signal inverse-entropy weighted mean in [0, 1]. Stdlib only."""
+"""Task complexity scorer — 9-signal inverse-entropy weighted mean in [0, 1]. Stdlib only."""
 from __future__ import annotations
 
 import re
+import zlib
 from typing import Optional
+
+
+def description_compression_ratio(text: str) -> float:
+    """MDL proxy: compressed_len / raw_len. High ratio = low compressibility = high complexity."""
+    return len(zlib.compress(text.encode())) / max(len(text), 1)
 
 
 # Inverse-entropy prior weights (higher = more type-discriminative).
@@ -31,6 +37,8 @@ _RAW_WEIGHT_SUM = sum(_RAW_SIGNAL_WEIGHTS.values())
 SIGNAL_WEIGHTS = {
     name: raw * (8.0 / _RAW_WEIGHT_SUM) for name, raw in _RAW_SIGNAL_WEIGHTS.items()
 }
+# why: th-decomp2 — description complexity (MDL proxy via zlib) discriminates ambiguous from clear tasks
+SIGNAL_WEIGHTS["description_complexity"] = 1.0
 WEIGHT_SUM = sum(SIGNAL_WEIGHTS.values())
 
 
@@ -45,7 +53,7 @@ class TaskComplexityScorer:
         self._recent_tokens: set[str] = set()
 
     def score(self, text: str, recent_tokens: Optional[set] = None) -> float:
-        """Inverse-entropy weighted mean of 8 sub-scores in [0, 1]. Empty text → 0.0."""
+        """Inverse-entropy weighted mean of 9 sub-scores in [0, 1]. Empty text → 0.0."""
         if not text:
             return 0.0
         n = len(text)
@@ -60,6 +68,8 @@ class TaskComplexityScorer:
         multistep = min(len(self.MULTISTEP_RE.findall(text)) / tok_n, 1.0)
         tool_hints = min(len(self.TOOL_RE.findall(text)) / tok_n, 1.0)
         question_count = min(text.count("?") / 5.0, 1.0)
+        # zlib headers can make ratio > 1 on short text; clamp so the mean stays in [0, 1]
+        description_complexity = min(description_compression_ratio(text), 1.0)
 
         recent = recent_tokens if recent_tokens is not None else self._recent_tokens
         if not tokens:
@@ -79,6 +89,7 @@ class TaskComplexityScorer:
             "tool_hints": tool_hints,
             "question_count": question_count,
             "novelty": novelty,
+            "description_complexity": description_complexity,
         }
         numer = sum(signals[name] * SIGNAL_WEIGHTS[name] for name in SIGNAL_WEIGHTS)
         return float(numer / WEIGHT_SUM)
