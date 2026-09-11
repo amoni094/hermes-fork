@@ -66,7 +66,8 @@ compression profile live.
 - Writes `$HERMES_HOME/cache/last-session-type.json` (default `~/.hermes/cache/...`)
   for the launch wrapper; skips the write when type+lambda is unchanged
 - Fail-open: errors are debug-logged, never raised
-- Hooks: `pre_llm_call` (classify + live profile), `pre_compress` (re-apply
+- Hooks: `pre_llm_call` (classify + live profile + hint intent), `on_session_start`
+  (apply hint `intent` → `compressor.current_intent`), `pre_compress` (re-apply
   before a full compression pass), `on_session_end` (drop LRU/`_fired`)
 - Registers at the front of the `pre_llm_call` list so the profile is set before
   other hooks in the same wave that might read compression state
@@ -130,8 +131,7 @@ from hermes_plugins.<slug>.predicates import (
     is_high_confidence,
     session_type,
 )
-# Also re-exported on the plugin's __init__ module.
-
+```
 
 Also re-exported from `plugins/user/lambda-tuner/__init__.py`. All predicates
 fail-open (unknown session → `False` / `None`).
