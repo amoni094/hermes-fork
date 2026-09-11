@@ -344,7 +344,7 @@ def register(ctx: Any) -> None:
                     try:
                         intent = (hint or {}).get("intent")
                         if isinstance(intent, str) and intent.strip():
-                            compressor.current_intent = intent.strip()
+                            compressor.current_intent = intent.strip()[:500]  # why: cap matches PluginContext.set_intent and wrapper
                             global _pending_intent
                             _pending_intent = intent.strip()
                     except Exception as exc:
