@@ -332,6 +332,13 @@ def register(ctx: Any) -> None:
         **_kwargs: Any,
     ) -> None:
         try:
+            # Populate ctx._session_id so compact_tool_result can read it.
+            # why: PluginContext._session_id is None until set here; compact_tool_result
+            #      needs it to call predicates.session_type(session_id).
+            try:
+                ctx._session_id = session_id
+            except Exception:
+                pass
             _maybe_apply_hint_intent(session_id, agent)
             if agent is None:
                 # on_session_start may not receive agent; try ctx.compressor.
@@ -526,11 +533,24 @@ def register(ctx: Any) -> None:
                 # Reaffirm the locked session type profile (idempotent; guards against resets).
                 session_type = fired_entry.get("type", "mixed")
                 _apply_profile(ctx, agent, session_type, session_id, fired_entry.get("confidence", 0.0), 0)
-                if session_type == "research":
+                # IB prune is only beneficial for code sessions (evicts ack/boilerplate turns).
+                # Research sessions must keep unique mid-conversation turns; tool stubs
+                # already handled by _prune_old_tool_results.
+                # why: importance_biased_prune evicts by lowest score (0.7 = user/assistant) —
+                #      deleting unique analytical history is harmful in research but safe in code.
+                if session_type == "code":
                     try:
                         compressor = getattr(agent, "context_compressor", None) if agent is not None else None
                         if compressor is not None:
                             compressor.importance_biased_prune_enabled = True
+                    except Exception:
+                        pass
+                elif session_type == "research":
+                    # Ensure IB prune is off for research (may have been set by an earlier /new leak).
+                    try:
+                        compressor = getattr(agent, "context_compressor", None) if agent is not None else None
+                        if compressor is not None:
+                            compressor.importance_biased_prune_enabled = False
                     except Exception:
                         pass
             elif context_tokens > 60_000:

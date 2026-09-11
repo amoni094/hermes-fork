@@ -156,7 +156,9 @@ How it gets set:
 Empty or missing `intent` is ignored. The attribute is set even if the
 compressor has not declared it yet (Domain A); consumers should `getattr`.
 
-## Task Complexity Scoring
+**Task Complexity Scoring**
+
+> Known limitation: `DEFAULT_SCORER.update_recent()` accumulates a single 2000-token vocabulary across all sessions in a long-running gateway process. Novelty scores for session N reflect session N-1's vocabulary. This is intentional for single-session CLI use but may bias novelty in persistent gateways. Mitigation: instantiate a per-session `TaskComplexityScorer()` if isolation is required.
 
 lambda-tuner scores accumulated user text (length, code density, ambiguity, constraints, multistep, tool hints, questions, novelty) after classification lock.
 High complexity (>0.7) raises `protect_last_n` by 5 (cap 40); low complexity (<0.3) lowers `proactive_prune_tokens` by 8000 (floor 8000).
@@ -174,7 +176,11 @@ Callers that skip the hook still get the original `agent_results` unchanged.
 `PluginContext.compact_tool_result` lazily imports the compactor and only runs it when `predicates.session_type(session_id) == 'research'`.
 `DEFAULT_COMPACTOR` is the shared instance exported from `plugins/user/lambda-tuner/complexity.py`.
 
-## Entropy-adaptive profile
+**AEP Floor (informational)**
+
+The AEP information floor (`should_compress_info` gating) is gated on `_turn_clock > protect_last_n` to avoid inflated estimates early in sessions. In practice once gated, `floor ≈ protect_last_n × 64 ≈ 1280 tokens`, which is well below the compress threshold (~40K+). The floor is therefore a no-op in normal operation. It provides a hard safety valve only for very small context windows (<2K tokens) where threshold-based compression might otherwise destroy all information. This is intentional — the entropy-adaptive *profile* (dynamic threshold) is the primary theory-grounded mechanism; the AEP floor is a belt-and-suspenders guard.
+
+**Entropy-adaptive profile**
 
 Use `--entropy-adaptive` (or `HERMES_SESSION_TYPE=entropy-adaptive`) when
 session type is not known up front and compression should follow message
