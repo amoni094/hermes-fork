@@ -31,7 +31,7 @@ _RAW_WEIGHT_SUM = sum(_RAW_SIGNAL_WEIGHTS.values())
 SIGNAL_WEIGHTS = {
     name: raw * (8.0 / _RAW_WEIGHT_SUM) for name, raw in _RAW_SIGNAL_WEIGHTS.items()
 }
-WEIGHT_SUM = 8.0
+WEIGHT_SUM = sum(SIGNAL_WEIGHTS.values())
 
 
 class TaskComplexityScorer:
@@ -64,8 +64,11 @@ class TaskComplexityScorer:
         recent = recent_tokens if recent_tokens is not None else self._recent_tokens
         if not tokens:
             novelty = 0.0
+        elif not recent:
+            # why: empty recent at first lock caused novelty=1.0, inflating complexity and triggering deep reasoning mode unnecessarily
+            novelty = 0.5
         else:
-            novelty = sum(1 for tok in tokens if tok not in recent) / len(tokens)
+            novelty = len(set(tokens) - recent) / max(len(tokens), 1)
 
         signals = {
             "length_score": length_score,

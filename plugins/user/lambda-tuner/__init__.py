@@ -6,12 +6,11 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import os
 import re
 import time
 import tempfile
-from collections import Counter, OrderedDict
+from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -54,6 +53,10 @@ def _read_hint() -> dict[str, Any] | None:
         with open(hint_path, encoding="utf-8") as f:
             hint = json.load(f)
         if not isinstance(hint, dict):
+            return None
+        if "expires_at" in hint and time.time() > hint["expires_at"]:
+            return None
+        if "confidence" in hint and hint["confidence"] < 0.5:
             return None
         return hint
     except Exception:
@@ -232,56 +235,16 @@ def _classify(messages: list[str]) -> tuple[str, float, dict[str, float]]:
 
 
 # ---------------------------------------------------------------------------
-# Post-lock entropy divergence → one-shot reclassification
+# Post-lock one-shot reclassification
 # ---------------------------------------------------------------------------
 # why: lock-at-turn-3 can stick a long session in the wrong profile. After 15
-# classified turns, if recent-5 Shannon entropy sits >0.4 outside the locked
-# type's expected R(D) band, allow one high-confidence flip (conf > 0.85).
+# classified turns, allow one high-confidence flip (conf > 0.85) if the
+# classifier verdict differs. Entropy-band gate removed: those bands were
+# calibrated on compressor R(D), not user-message unigrams, so they could not
+# distinguish session types.
 _RECLASSIFY_MIN_TURNS = 15
-_RECLASSIFY_ENTROPY_DELTA = 0.4
 _RECLASSIFY_MIN_CONFIDENCE = 0.85
 _RECLASSIFY_MAX = 1
-_RECENT_ENTROPY_WINDOW = 5
-
-# Bands match ContextCompressor._entropy_adaptive_threshold_percent:
-# H > 4.0 → research (0.45); H < 2.5 → code (0.55); else mixed.
-_EXPECTED_ENTROPY_RANGE: dict[str, tuple[float | None, float | None]] = {
-    "research": (4.0, None),
-    "code": (0.0, 2.5),
-    "mixed": (2.5, 4.0),
-}
-
-
-def _shannon_unigram(text: str) -> float:
-    """Whitespace-token Shannon entropy in bits. Empty → 0.0. Fail-open."""
-    try:
-        tokens = str(text).split()
-        n = len(tokens)
-        if n <= 0:
-            return 0.0
-        counts = Counter(tokens)
-        entropy = 0.0
-        for count in counts.values():
-            if count <= 0:
-                continue
-            p = count / n
-            entropy -= p * math.log2(p)
-        return float(entropy)
-    except Exception:
-        return 0.0
-
-
-def _entropy_range_divergence(h: float, session_type: str) -> float:
-    """Distance of *h* outside the expected entropy range for *session_type*."""
-    bounds = _EXPECTED_ENTROPY_RANGE.get(session_type)
-    if bounds is None:
-        return 0.0
-    lo, hi = bounds
-    if lo is not None and h < lo:
-        return float(lo - h)
-    if hi is not None and h > hi:
-        return float(h - hi)
-    return 0.0
 
 
 def _maybe_reclassify_on_entropy_decay(
@@ -292,16 +255,10 @@ def _maybe_reclassify_on_entropy_decay(
     rec: dict[str, Any],
     locked: str,
 ) -> None:
-    """Track running entropy; maybe one high-confidence type flip. Fail-open."""
+    """Maybe one high-confidence type flip after lock. Fail-open."""
     if not isinstance(rec, dict):
         return
     try:
-        recent = bucket[-_RECENT_ENTROPY_WINDOW:]
-        h = _shannon_unigram(" ".join(recent))
-        divergence = _entropy_range_divergence(h, locked)
-        rec["_recent_entropy"] = h
-        rec["_entropy_divergence"] = divergence
-
         try:
             reclass_count = int(rec.get("_reclassification_count", 0) or 0)
         except (TypeError, ValueError):
@@ -315,8 +272,6 @@ def _maybe_reclassify_on_entropy_decay(
             lock_turn = 0
         turns_classified = len(bucket) - lock_turn
         if turns_classified <= _RECLASSIFY_MIN_TURNS:
-            return
-        if divergence <= _RECLASSIFY_ENTROPY_DELTA:
             return
 
         session_type, confidence, scores = _classify(bucket)
@@ -338,24 +293,21 @@ def _maybe_reclassify_on_entropy_decay(
         _fired[session_id] = rec
         _fired.move_to_end(session_id)
         _apply_profile(ctx, agent, session_type, session_id, confidence, len(bucket))
-        try:
-            _write_hint(session_type, confidence, scores)
-        except Exception as exc:
-            logger.debug("lambda-tuner: reclassify hint write failed (fail-open): %s", exc)
+        # why: mid-session hint writes from multiple sessions would race on one global path; write only at finalize
         logger.debug(
-            "lambda-tuner: reclassified sid=%s %s -> %s conf=%.2f entropy=%.3f div=%.3f",
-            session_id, locked, session_type, confidence, h, divergence,
+            "lambda-tuner: reclassified sid=%s %s -> %s conf=%.2f",
+            session_id, locked, session_type, confidence,
         )
         try:
             ctx.emit_episode(
                 f"Session {session_id} reclassified {locked} -> {session_type} "
-                f"confidence={confidence} entropy={h:.3f}",
+                f"confidence={confidence}",
                 tags=["classification", "lambda-tuner", "reclassify"],
             )
         except Exception:
             pass
     except Exception as exc:
-        logger.debug("lambda-tuner: entropy-decay reclassify failed (fail-open): %s", exc)
+        logger.debug("lambda-tuner: reclassify failed (fail-open): %s", exc)
 
 
 def _write_warm_start_cache(session_id: str, rec: dict[str, Any], turn_count: int) -> None:
@@ -612,7 +564,7 @@ def register(ctx: Any) -> None:
             commit = session_type != "mixed" or len(bucket) >= 3
 
             _apply_profile(ctx, agent, session_type, session_id, confidence, len(bucket))
-            _write_hint(session_type, confidence, scores)
+            # why: mid-session hint writes from multiple sessions would race on one global path; write only at finalize
 
             if commit:
                 accumulated_text = " ".join(bucket)
