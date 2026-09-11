@@ -314,7 +314,7 @@ def main():
     if args.also_uncompacted:
         spec = {"ctor": {}, "attrs": {"tail_token_budget": 10**9}}
         # control: no compression at all — answer from the full transcript
-        context_text = serialize_for_exam(messages, char_cap=900_000)
+        context_text = serialize_for_exam(messages, char_cap=600_000)  # ~150K tok, within 200K API limit
         results = []
         for qa in questions:
             answer = _call(ANSWER_PROMPT.format(context=context_text, question=qa["q"]), max_tokens=400)

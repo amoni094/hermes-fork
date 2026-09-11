@@ -20,5 +20,6 @@ settings:
   # Canonical classifier/lock/hint/wrapper: FORK_README.md § lambda-tuner.
   # Live knobs: ContextCompressor.COMPRESSION_PROFILES (do not fork a second table here).
   # threshold_percent: 0.45  # research: compress sooner; large tool_result dumps fill context fast
-  # protect_last_n: 15       # why: 15 not 25 — bulky dumps; keep last burst, don't shield stale tool_results
+  # protect_last_n: 22       # eval-calibrated: 15 too aggressive (drops named facts); 22 matches lean baseline recall
+  # code_protect_last_n: 28  # eval-calibrated: dense causal chains need larger tail than 25
   # research_lambda: "0.55"  # why: 0.55 not 0.7 — Phase-1 exec-state already holds web_extract

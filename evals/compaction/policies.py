@@ -45,6 +45,30 @@ POLICIES: Dict[str, Dict[str, Any]] = {
         "ctor": {"tail_mode": "lean"},
         "attrs": {"_session_id": "eval-session"},
     },
+    # Fork: research profile — compress sooner (0.45), smaller tail (22 msgs).
+    # Lean algorithm (now default on main). Tests lambda-tuner research classification.
+    "fork_research": {
+        "ctor": {"threshold_percent": 0.45, "protect_last_n": 22},
+        "attrs": {"proactive_prune_tokens": 40_000},
+    },
+    # Fork: code profile — compress later (0.55), larger tail (28 msgs).
+    # Lean algorithm. Tests lambda-tuner code/debug classification.
+    "fork_code": {
+        "ctor": {"threshold_percent": 0.55, "protect_last_n": 28},
+        "attrs": {"proactive_prune_tokens": 28_000},
+    },
+    # Fork: mixed profile — midpoint (0.50, 20 msgs). Matches lean default
+    # exactly; serves as a named control for the session-type comparison.
+    "fork_mixed": {
+        "ctor": {"threshold_percent": 0.50, "protect_last_n": 20},
+        "attrs": {"proactive_prune_tokens": 32_000},
+    },
+    # Lean + recovery arm with research threshold: compound best-of-both.
+    # lean attr set for session_search recovery pointer generation.
+    "lean_fork_research": {
+        "ctor": {"threshold_percent": 0.45, "protect_last_n": 22},
+        "attrs": {"_session_id": "eval-session", "proactive_prune_tokens": 40_000},
+    },
 }
 
 
