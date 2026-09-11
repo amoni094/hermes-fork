@@ -119,7 +119,7 @@ class TestBoilerplateRemoval:
         "Terms of Service",
         "Terms of Use",
         "All rights reserved",
-        "Click here to ",  # pattern is 'click here (to)?' — trailing content not matched
+        "Click here to learn more",  # trailing content now matched by updated regex
         "Subscribe to our newsletter",
         "Follow us on",
         "Share this article",
@@ -194,14 +194,18 @@ class TestDedup:
         assert "abd" in result
 
     def test_dedup_fires_via_compress_when_over_budget(self):
-        # Repeated lines that pad the payload over budget — dedup should recover
+        # Repeated lines that pad the payload over budget — dedup should collapse them.
         repeated = "\n".join(["same line content here"] * 100)
         unique = "uniquedata_sentinel"
         text = repeated + "\n" + unique
-        result = _tc().compress(text, max_chars=50)
-        # Either dedup reduced it or head+tail fired — unique may or may not survive
-        # the important thing is no crash and result is within budget (with marker overhead)
-        assert len(result) <= 50 + 200
+        # Budget is tight enough that only post-dedup the payload fits
+        budget = len("same line content here\n") + len(unique) + 10
+        result = _tc().compress(text, max_chars=budget)
+        lines = [l for l in result.splitlines() if l.strip()]
+        # After dedup there should be exactly 1 instance of the repeated line
+        assert lines.count("same line content here") == 1, (
+            "dedup pass should have collapsed 100 repeated lines to 1"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -383,3 +387,55 @@ class TestToolResultCompactor:
         compactor = ToolResultCompactor()
         assert compactor.should_compact("user", "x" * 5000) is False
         assert compactor.should_compact("assistant", "x" * 5000) is False
+
+    def test_compact_threshold_aligned_with_should_compact(self):
+        # F1 regression: compact() must compress content in (2000, 4000] — previously
+        # it passthroughed content <= 4000 even when should_compact returned True.
+        compactor = ToolResultCompactor()
+        payload = "<p>" + ("important content. " * 150) + "</p>"  # ~2850 chars
+        assert 2000 < len(payload) < 4000, "fixture must be in (2000,4000] range"
+        assert compactor.should_compact("tool", payload) is True
+        result = compactor.compact(payload)
+        # Telegraphic passes must have fired: HTML tags stripped
+        assert "<p>" not in result
+
+
+# ---------------------------------------------------------------------------
+# Edge cases: None content, list content, head+tail boundary
+# ---------------------------------------------------------------------------
+
+class TestEdgeCases:
+    def test_head_tail_min_chunk_guard(self):
+        # F15: max_chars < 3 previously produced chunk=0, making text[-0:] = full text.
+        # The result should not be larger than the original + marker.
+        text = "abcdefghij" * 20
+        result = _tc()._head_tail(text, max_chars=2)
+        assert len(result) < len(text) + 200  # marker overhead allowed
+
+    def test_compress_unicode_content(self):
+        # Unicode must not crash compress().
+        text = "Привет мир\n" * 300
+        result = _tc().compress(text, max_chars=50)
+        assert isinstance(result, str)
+
+    def test_compress_long_line_no_whitespace(self):
+        # A single very long line with no whitespace — only head+tail can truncate it.
+        text = "a" * 10_000
+        result = _tc().compress(text, max_chars=100)
+        assert len(result) <= 100 + 200  # allow marker
+        assert "omitted" in result
+
+    def test_should_compress_rejects_non_string_safely(self):
+        # should_compress receives non-str content (e.g. list) — must not raise.
+        # In the live path the runner now guards with isinstance(content, str).
+        # should_compress itself uses len() which works on lists, but role must be 'tool'.
+        content_list = ["block1", "block2"]
+        # should not raise — list has len()
+        result = _tc().should_compress("tool", content_list)  # type: ignore[arg-type]
+        assert isinstance(result, bool)
+
+    def test_compact_with_short_content_not_compressed(self):
+        # Content under threshold should passthrough unchanged.
+        compactor = ToolResultCompactor()
+        short = "x" * 100
+        assert compactor.compact(short) is short

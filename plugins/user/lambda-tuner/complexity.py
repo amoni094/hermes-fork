@@ -115,10 +115,12 @@ class TelegraphicCompressor:
     Strategy (in order, each pass lowers token count without losing meaning):
       1. Strip HTML tags and decode common HTML entities.
       2. Normalize excess whitespace (blank line runs → single blank, trailing spaces).
-      3. Deduplicate adjacent repeated lines (verbatim and near-verbatim via prefix hash).
-      4. Remove low-signal boilerplate lines (nav menus, cookie banners, "click here", …).
-      5. Collapse long JSON/dict-like lines to structural skeleton (key names kept, values
-         truncated) — preserves schema signal without raw data noise.
+      3. Remove low-signal boilerplate lines (nav menus, cookie banners, …).
+      4. Deduplicate adjacent repeated lines (verbatim and near-verbatim via prefix hash).
+      5. Collapse long JSON string values to structural skeleton (key names kept, long
+         string values truncated). Note: array/object alternatives match the outermost
+         container and stub it wholesale — preserves structure signal but inner keys are
+         lost. Acceptable trade-off for large nested blobs.
       6. If still over budget, apply head+tail window as last resort.
 
     Why this beats naive head+tail:
@@ -146,7 +148,7 @@ class TelegraphicCompressor:
         r"|privacy\s+policy"
         r"|terms\s+(of\s+)?(service|use)"
         r"|all\s+rights\s+reserved"
-        r"|click\s+here\s+(to\s+)?"
+        r"|click\s+here(\s+to\s+\S.*?)?$"
         r"|subscribe\s+(to\s+)?(our\s+)?(newsletter|updates)"
         r"|follow\s+us\s+on"
         r"|share\s+(this\s+)?(article|page|post)"
@@ -222,7 +224,7 @@ class TelegraphicCompressor:
         return self._JSON_VALUE_RE.sub(_stub, text)
 
     def _head_tail(self, text: str, max_chars: int) -> str:
-        chunk = max_chars // 3
+        chunk = max(max_chars // 3, 1)  # guard: chunk=0 when max_chars<3 makes text[-0:] = full text
         head = text[:chunk]
         tail = text[-chunk:]
         omitted = len(text) - 2 * chunk
@@ -282,7 +284,10 @@ class ToolResultCompactor:
     TRUNCATION_MARKERS = ["[truncated]", "...", "(continued)", "[omitted]"]
 
     def compact(self, content: str, max_chars: int = 4000) -> str:
-        if len(content) <= max_chars:
+        # why: align gate with should_compact threshold (2000) — F1 fix.
+        # Content in (2000, 4000] was previously passthroughed without compression
+        # even though should_compact returned True. Now compress anything over 2000.
+        if not _DEFAULT_TELEGRAPHIC.should_compress("tool", content, threshold=2000):
             return content
         return _DEFAULT_TELEGRAPHIC.compress(content, max_chars)
 

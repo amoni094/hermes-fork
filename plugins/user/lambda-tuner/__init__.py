@@ -835,6 +835,27 @@ def register(ctx: Any) -> None:
     ctx.register_hook("pre_llm_call", on_pre_llm_call)
     ctx.register_hook("pre_compress", on_pre_compress)
     ctx.register_hook("on_session_finalize", on_session_end)
+
+    # Wire TelegraphicCompressor into the live tool-result path via transform_tool_result.
+    # Runs after post_tool_call and before the result string enters context history.
+    # Fail-open: any exception returns the original result unchanged.
+    def on_transform_tool_result(
+        *,
+        result: str = "",
+        session_id: str = "",
+        **_kwargs,
+    ) -> str:
+        try:
+            if not isinstance(result, str):
+                return result
+            from .complexity import _DEFAULT_TELEGRAPHIC
+            if _DEFAULT_TELEGRAPHIC.should_compress("tool", result):
+                return _DEFAULT_TELEGRAPHIC.compress(result)
+        except Exception as exc:
+            logger.debug("lambda-tuner: on_transform_tool_result failed (fail-open): %s", exc)
+        return result
+
+    ctx.register_hook("transform_tool_result", on_transform_tool_result)
     # Run before other pre_llm_call hooks that might read compression state.
     try:
         hooks = ctx._manager._hooks.get("pre_llm_call")
