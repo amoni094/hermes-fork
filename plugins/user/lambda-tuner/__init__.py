@@ -1,18 +1,6 @@
-"""lambda-tuner — classify session type from first message, tune compression live.
+"""lambda-tuner — classify session type, tune compression live.
 
-Classifies each session as research / code / mixed from accumulated user messages,
-then applies the appropriate ContextCompressor profile via the fork's new
-``set_compression_profile()`` API (takes effect on the next compression event
-after the hook returns — note turn-start compaction runs before pre_llm_call).
-Also writes a hint file for the ``hermes-session`` launch wrapper so the
-next-session warm-up path still works.
-
-Design:
-- Uses ``ctx.compressor.set_compression_profile(profile)`` when the compressor is
-  reachable (hermes-fork only). Falls back to hint-file-only on vanilla Hermes.
-- Accumulates all user turns; greeting/ack turns are filtered before scoring.
-- Locks classification once a confident non-mixed result is found.
-- Fail-open: any error is silently logged, never raised into hook dispatch.
+# See FORK_README.md § lambda-tuner
 """
 from __future__ import annotations
 
@@ -41,9 +29,49 @@ _HINT_TTL_SECONDS = 6 * 3600  # 6h — stale hints fall back to mixed in wrapper
 
 # Matches hermes-session wrapper table (rr_scorer_lambda). Hint schema includes
 # lambda for the wrapper; live compressor uses COMPRESSION_PROFILES instead.
-_TYPE_TO_LAMBDA = {"research": "0.55", "code": "0.2", "mixed": "0.4"}
+_TYPE_TO_LAMBDA = {
+    "research": "0.55",  # why: 0.55 not 0.7 — Phase-1 exec-state already holds web_extract
+    "code": "0.2",
+    "mixed": "0.4",
+    "entropy-adaptive": "0.4",
+}
 
 _last_hint_key: tuple[str, str] | None = None  # (type, lambda_str) dirty-check
+_pending_intent: str | None = None
+_intent_applied: OrderedDict[str, bool] = OrderedDict()
+
+
+def _read_hint() -> dict[str, Any] | None:
+    """Load the hint JSON. Fail-open: missing/malformed → None."""
+    try:
+        hint_path = _hint_path()
+        if not hint_path.is_file():
+            return None
+        with open(hint_path, encoding="utf-8") as f:
+            hint = json.load(f)
+        if not isinstance(hint, dict):
+            return None
+        return hint
+    except Exception:
+        return None
+
+
+def _apply_intent_from_hint(agent: Any, hint: dict[str, Any] | None) -> None:
+    """Set compressor.current_intent from hint['intent'] (fail-open)."""
+    if not hint or agent is None:
+        return
+    try:
+        intent = hint.get("intent")
+        if not isinstance(intent, str) or not intent.strip():
+            return
+        compressor = getattr(agent, "context_compressor", None)
+        if compressor is None:
+            return
+        compressor.current_intent = intent.strip()
+        global _pending_intent
+        _pending_intent = intent.strip()
+    except Exception as exc:
+        logger.debug("lambda-tuner: applying intent from hint failed (fail-open): %s", exc)
 
 
 def _write_hint(session_type: str, confidence: float, scores: dict[str, float]) -> None:
@@ -55,7 +83,7 @@ def _write_hint(session_type: str, confidence: float, scores: dict[str, float]) 
         return
     hint_path = _hint_path()
     hint_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
+    payload: dict[str, Any] = {
         "type": session_type,
         "profile": session_type,  # maps directly to COMPRESSION_PROFILES key
         "lambda": lam_str,
@@ -65,6 +93,17 @@ def _write_hint(session_type: str, confidence: float, scores: dict[str, float]) 
         "expires_at": time.time() + _HINT_TTL_SECONDS,
         "source": "lambda-tuner-plugin",
     }
+    # Preserve wrapper-provided intent across classifier rewrites.
+    intent = _pending_intent
+    if not (isinstance(intent, str) and intent.strip()):
+        try:
+            prev = (_read_hint() or {}).get("intent")
+            if isinstance(prev, str) and prev.strip():
+                intent = prev.strip()
+        except Exception:
+            intent = None
+    if isinstance(intent, str) and intent.strip():
+        payload["intent"] = intent.strip()
     fd, tmp = tempfile.mkstemp(dir=hint_path.parent, prefix=".hint-", suffix=".tmp")
     try:
         with os.fdopen(fd, "w") as f:
@@ -144,7 +183,7 @@ _GREETING_RE = re.compile(
 # ---------------------------------------------------------------------------
 
 _SCORE_MARGIN = 1.5
-_MIN_SIGNAL   = 1
+_MIN_SIGNAL   = 1  # why: 1 not 2 — _MIN_SIGNAL=2 is too strict for short messages
 
 
 def _weighted_score(text: str) -> dict[str, float]:
@@ -185,8 +224,21 @@ def _classify(messages: list[str]) -> tuple[str, float, dict[str, float]]:
 
 _MAX_SESSIONS = 64
 _MAX_MESSAGES_PER_SESSION = 32
-_fired: OrderedDict[str, str] = OrderedDict()  # session_id -> locked type
+# session_id -> {"type": str, "confidence": float, "ts": float}
+_fired: OrderedDict[str, dict[str, Any]] = OrderedDict()
 _session_messages: OrderedDict[str, list[str]] = OrderedDict()
+
+
+def _fired_type(session_id: str) -> str | None:
+    rec = _fired.get(session_id)
+    if rec is None:
+        return None
+    if isinstance(rec, dict):
+        t = rec.get("type")
+        return t if isinstance(t, str) else None
+    if isinstance(rec, str):
+        return rec
+    return None
 
 
 def _touch_session(session_id: str) -> None:
@@ -195,11 +247,17 @@ def _touch_session(session_id: str) -> None:
         _session_messages.move_to_end(session_id)
     if session_id in _fired:
         _fired.move_to_end(session_id)
+    if session_id in _intent_applied:
+        _intent_applied.move_to_end(session_id)
     while len(_session_messages) > _MAX_SESSIONS:
         evicted, _ = _session_messages.popitem(last=False)
         _fired.pop(evicted, None)
+        _intent_applied.pop(evicted, None)
     while len(_fired) > _MAX_SESSIONS:
-        _fired.popitem(last=False)
+        evicted, _ = _fired.popitem(last=False)
+        _intent_applied.pop(evicted, None)
+    while len(_intent_applied) > _MAX_SESSIONS:
+        _intent_applied.popitem(last=False)
 
 
 def _apply_profile(ctx: Any, agent: Any, session_type: str, session_id: str, confidence: float, n_turns: int) -> None:
@@ -275,7 +333,16 @@ def register(ctx: Any) -> None:
         except Exception as exc:
             logger.debug("lambda-tuner: classify failed (fail-open): %s", exc)
 
+    def on_session_end(*, session_id: str = "", **_kwargs: Any) -> None:
+        """Drop per-session classifier state so long-running gateways cannot leak it."""
+        try:
+            _session_messages.pop(session_id, None)
+            _fired.pop(session_id, None)
+        except Exception as exc:
+            logger.debug("lambda-tuner: on_session_end cleanup failed (fail-open): %s", exc)
+
     ctx.register_hook("pre_llm_call", on_pre_llm_call)
+    ctx.register_hook("on_session_end", on_session_end)
     # Run before other pre_llm_call hooks that might read compression state.
     try:
         hooks = ctx._manager._hooks.get("pre_llm_call")
