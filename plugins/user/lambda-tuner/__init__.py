@@ -641,6 +641,31 @@ def register(ctx: Any) -> None:
                         est = getattr(compressor, "_entropy_estimator", None)
                         if est is not None and hasattr(est, "checkpoint"):
                             est.checkpoint("classification_locked", compressor.turn_clock)
+                        # SPIKE: per-session R(D) compression floor (SPIKE_FIRST — not production).
+                        # Theory: context compression should target the rate-distortion bound
+                        # R(D) for agent-relevant information. Entropy-adaptive profiles already
+                        # exist; this is whether a tighter per-session R(D) estimate is feasible.
+                        #
+                        # How a per-session R(D) estimate would work:
+                        #   - Estimate source entropy H(X) from recent 10 messages
+                        #     (already done via compressor._entropy_estimator.entropy_rate();
+                        #     live window is 32 turns, not 10 — would need a 10-message slice).
+                        #   - Estimate distortion D from task complexity score
+                        #     (already done via DEFAULT_SCORER / rec["complexity"] in [0, 1]).
+                        #   - Exact R(D) = H(X) - H(X|relevant). The hard part is estimating
+                        #     conditional entropy H(X|relevant); Hermes has no relevance oracle
+                        #     that would make H(X|relevant) observable.
+                        #   - Practical approximation:
+                        #         R(D) = max(0, H(X) * (1 - complexity_score))
+                        #     as a floor on how much can be discarded.
+                        #   - Per-session compression floor: do not compress below R(D) bits.
+                        #     Map: raise min_retain / lower threshold_percent so discarded
+                        #     mass stays above that floor.
+                        #
+                        # Open questions (why this stays SPIKE_FIRST):
+                        #   - H(X) here is unigram bits/token, not bits of agent-relevant info.
+                        #   - complexity_score is not a distortion measure D.
+                        #   - Do not guess a numeric threshold; spike on held-out sessions first.
                 except Exception as exc:
                     logger.debug("lambda-tuner: classification checkpoint failed (fail-open): %s", exc)
 
