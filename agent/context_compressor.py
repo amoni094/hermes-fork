@@ -2546,6 +2546,8 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         self._last_scored_messages: List[Dict[str, Any]] = []
         self._active_compression_profile: str | None = None
         self.current_intent: str | None = None
+        # Opt-in Gallager-style eviction of low-importance non-head/tail messages.
+        self.importance_biased_prune_enabled: bool = False
 
     # --- Adaptive compression API (for plugins and session-type tuning) ---------
 
@@ -2781,6 +2783,50 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
             return out
         except Exception:
             return []
+
+    def importance_biased_prune(
+        self, messages: list, target_prune_tokens: int, protect_last_n: int = 20,
+    ) -> tuple:
+        """Evict lowest-importance middle messages until ``target_prune_tokens``. Fail-open.
+
+        Candidates exclude system-role rows, the first ``protect_first_n``, and the last
+        ``protect_last_n``. Lowest score is dropped first (Gallager sufficient statistics).
+        """
+        try:
+            if not messages or int(target_prune_tokens or 0) <= 0:
+                return messages, 0
+            n = len(messages)
+            scores = self.importance_scores(messages)
+            if len(scores) != n:
+                scores = (list(scores) + [0.7] * n)[:n]
+            protect_first = max(0, int(getattr(self, "protect_first_n", 0) or 0))
+            protect_last = max(0, int(protect_last_n or 0))
+            last_start = max(0, n - protect_last)
+            candidates: List[tuple] = []
+            for i, msg in enumerate(messages):
+                if i < protect_first or i >= last_start:
+                    continue
+                role = ""
+                if isinstance(msg, dict):
+                    role = str(msg.get("role") or "")
+                if role == "system":
+                    continue
+                candidates.append((float(scores[i]), i))
+            candidates.sort(key=lambda item: (item[0], item[1]))
+            evict: set[int] = set()
+            tokens_pruned = 0
+            for _score, i in candidates:
+                if tokens_pruned >= int(target_prune_tokens):
+                    break
+                text = _message_text_for_entropy(messages[i])
+                tokens_pruned += int(estimate_tokens_rough(text) or 0)
+                evict.add(i)
+            if not evict:
+                return messages, 0
+            kept = [m for i, m in enumerate(messages) if i not in evict]
+            return kept, tokens_pruned
+        except Exception:
+            return messages, 0
 
     def _feed_messages_for_entropy(self, messages: List[Dict[str, Any]] | None) -> None:
         """Ingest newly appended history messages into the estimator. Fail-open."""
@@ -3380,6 +3426,17 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         pruned_msgs, pruned_count = self._prune_old_tool_results(
             messages, protect_tail_count=self.protect_last_n, protect_tail_tokens=None, min_prune_chars=self.proactive_prune_min_result_chars,
         )
+        if (
+            getattr(self, "importance_biased_prune_enabled", False)
+            and getattr(self, "_importance_scorer", None) is not None
+        ):
+            target = max(int(self.proactive_prune_min_reclaim_tokens or 0), 1)
+            ib_msgs, ib_tokens = self.importance_biased_prune(
+                pruned_msgs, target_prune_tokens=target, protect_last_n=self.protect_last_n,
+            )
+            if ib_tokens:
+                pruned_count = int(pruned_count) + max(0, len(pruned_msgs) - len(ib_msgs))
+                pruned_msgs = ib_msgs
         if not pruned_count:
             # No-op contract: return the INPUT object so callers can gate on `result is not input`.
             self._warn_reclamation_no_op("prune:nothing_eligible", current_tokens)
@@ -5173,6 +5230,16 @@ Write only the summary body. Do not include any preamble or prefix."""
         messages, pruned_count = self._prune_old_tool_results(
             messages, protect_tail_count=self.protect_last_n, protect_tail_tokens=self.tail_token_budget,
         )
+        if (
+            getattr(self, "importance_biased_prune_enabled", False)
+            and getattr(self, "_importance_scorer", None) is not None
+        ):
+            target = max(int(getattr(self, "proactive_prune_min_reclaim_tokens", 0) or 0), 1)
+            messages, ib_tokens = self.importance_biased_prune(
+                messages, target_prune_tokens=target, protect_last_n=self.protect_last_n,
+            )
+            if ib_tokens and not self.quiet_mode:
+                logger.info("Pre-compression: importance-biased prune ~%s tokens", ib_tokens)
         if pruned_count and not self.quiet_mode:
             logger.info("Pre-compression: pruned %d old tool result(s)", pruned_count)
         messages = self._drop_blank_echoes(messages)

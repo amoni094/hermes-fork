@@ -11,6 +11,7 @@ and an ``__init__.py`` exposing ``register(ctx)``. Plugins register callbacks fo
 from __future__ import annotations
 
 import asyncio
+import difflib
 import importlib.metadata
 import inspect
 import json
@@ -131,6 +132,10 @@ VALID_HOOKS: Set[str] = {
     # reminders, or call set_compression_profile based on context_tokens
     # (arXiv:2608.24569 Constraint Weakening).
     "pre_compress",
+    # pre_agent_exchange: before delegated agent results are passed to the parent
+    # (BoN diversity, arXiv:2608.11065). Kwargs: agent_results, parent_session_id,
+    # exchange_round. Hooks may mutate agent_results in place.
+    "pre_agent_exchange",
     # on_skill_lifecycle: successful skill lifecycle facts (local skill name visible to plugins).
     "on_skill_lifecycle", "subagent_start", "subagent_stop",
     # pre_gateway_dispatch: once per incoming MessageEvent, after the internal-event guard, BEFORE
@@ -225,6 +230,8 @@ class PluginContext:
         self.manifest = manifest
         self._manager = manager
         self._llm: Any = None  # lazy; tests preseed it (see ``llm``)
+        self._skill_suggestions: list = []
+        self._session_id: Any = None
 
     @property
     def plugin_id(self) -> str:
@@ -325,6 +332,76 @@ class PluginContext:
         except Exception as exc:
             logger.debug("PluginContext.recall_episodes failed (fail-open): %s", exc)
             return []
+
+    def suggest_skill_update(self, skill_name: str, finding: str, severity: str = "low") -> None:
+        """Record a SkillOpt-style improvement hint. Fail-open."""
+        try:
+            self._skill_suggestions.append(
+                {"skill": skill_name, "finding": finding, "severity": severity}
+            )
+        except Exception:
+            return
+
+    def get_skill_suggestions(self) -> list:
+        """Return a shallow copy of accumulated skill-update suggestions."""
+        try:
+            return list(self._skill_suggestions)
+        except Exception:
+            return []
+
+    def filter_duplicate_results(
+        self, results: list, key: str = "content", similarity_threshold: float = 0.85,
+    ) -> list:
+        """Keep the first of each near-duplicate cluster (difflib.SequenceMatcher)."""
+        try:
+            kept: list = []
+            kept_vals: list[str] = []
+            for item in results or []:
+                if isinstance(item, dict):
+                    val = str(item.get(key, "") or "")
+                else:
+                    val = str(item)
+                if any(
+                    difflib.SequenceMatcher(None, val, prev).ratio() >= float(similarity_threshold)
+                    for prev in kept_vals
+                ):
+                    continue
+                kept.append(item)
+                kept_vals.append(val)
+            return kept
+        except Exception:
+            return results
+
+    def compact_tool_result(self, role: str, content: str) -> str:
+        """MDL-compact a tool payload for research sessions. Fail-open."""
+        try:
+            session_id = getattr(self, "_session_id", None)
+            if not session_id:
+                return content
+            try:
+                from hermes_plugins.lambda_tuner.predicates import session_type as _session_type
+            except Exception:
+                return content
+            if _session_type(session_id) != "research":
+                return content
+            try:
+                from hermes_plugins.lambda_tuner.complexity import ToolResultCompactor
+            except Exception:
+                import importlib.util
+                cpath = Path(__file__).resolve().parent.parent / "plugins" / "user" / "lambda-tuner" / "complexity.py"
+                spec = importlib.util.spec_from_file_location("_lambda_tuner_complexity", cpath)
+                if spec is None or spec.loader is None:
+                    return content
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                ToolResultCompactor = mod.ToolResultCompactor
+            compactor = ToolResultCompactor()
+            text = "" if content is None else str(content)
+            if not compactor.should_compact(role, text):
+                return content
+            return compactor.compact(text)
+        except Exception:
+            return content
 
     def has_plugin(self, plugin_id: str) -> bool:
         """Return True when another plugin is loaded and enabled (runtime probe for advisory
@@ -1793,6 +1870,18 @@ def _delivery_manager() -> PluginManager:
         _join_background_discovery()
         manager.discover_and_load()
     return manager
+
+
+def invoke_hook_for_exchange(
+    agent_results: list, parent_session_id: str, exchange_round: int = 0,
+) -> list:
+    """Module-level alias of :meth:`PluginManager.invoke_hook_for_exchange`. Fail-open."""
+    try:
+        return _delivery_manager().invoke_hook_for_exchange(
+            agent_results, parent_session_id, exchange_round,
+        )
+    except Exception:
+        return agent_results
 
 
 def invoke_hook(hook_name: str, **kwargs: Any) -> List[Any]:
