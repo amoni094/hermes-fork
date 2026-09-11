@@ -289,7 +289,61 @@ def _apply_profile(ctx: Any, agent: Any, session_type: str, session_id: str, con
 # Plugin registration
 # ---------------------------------------------------------------------------
 
+def _maybe_apply_hint_intent(session_id: str, agent: Any) -> None:
+    """Read hint intent once per session and set compressor.current_intent.
+
+    Skips (does not mark applied) when *agent* is None so on_session_start
+    without an agent kwarg can retry from pre_llm_call.
+    """
+    if session_id in _intent_applied:
+        return
+    if agent is None:
+        return
+    try:
+        hint = _read_hint()
+        _apply_intent_from_hint(agent, hint)
+    except Exception as exc:
+        logger.debug("lambda-tuner: hint intent apply failed (fail-open): %s", exc)
+    try:
+        _intent_applied[session_id] = True
+        _intent_applied.move_to_end(session_id)
+        while len(_intent_applied) > _MAX_SESSIONS:
+            _intent_applied.popitem(last=False)
+    except Exception:
+        pass
+
+
 def register(ctx: Any) -> None:
+    def on_session_start(
+        *,
+        session_id: str = "",
+        agent: Any = None,
+        **_kwargs: Any,
+    ) -> None:
+        try:
+            _maybe_apply_hint_intent(session_id, agent)
+            if agent is None:
+                # on_session_start may not receive agent; try ctx.compressor.
+                try:
+                    compressor = ctx.compressor
+                except Exception:
+                    compressor = None
+                if compressor is not None:
+                    hint = _read_hint()
+                    try:
+                        intent = (hint or {}).get("intent")
+                        if isinstance(intent, str) and intent.strip():
+                            compressor.current_intent = intent.strip()
+                            global _pending_intent
+                            _pending_intent = intent.strip()
+                    except Exception as exc:
+                        logger.debug(
+                            "lambda-tuner: ctx.compressor intent set failed (fail-open): %s",
+                            exc,
+                        )
+        except Exception as exc:
+            logger.debug("lambda-tuner: on_session_start failed (fail-open): %s", exc)
+
     def on_pre_llm_call(
         *,
         session_id: str = "",
@@ -298,6 +352,11 @@ def register(ctx: Any) -> None:
         agent: Any = None,
         **_kwargs: Any,
     ) -> None:
+        try:
+            _maybe_apply_hint_intent(session_id, agent)
+        except Exception:
+            pass
+
         if not isinstance(user_message, str):
             user_message = str(user_message or "")
         if not user_message.strip():
@@ -310,10 +369,18 @@ def register(ctx: Any) -> None:
         _touch_session(session_id)
 
         try:
-            if session_id in _fired:
+            locked = _fired_type(session_id)
+            if locked is not None:
                 # Re-apply locked profile in case the compressor was rebuilt
                 # (model switch / engine swap) after we first committed.
-                _apply_profile(ctx, agent, _fired[session_id], session_id, 1.0, len(bucket))
+                rec = _fired.get(session_id) or {}
+                conf = 1.0
+                if isinstance(rec, dict):
+                    try:
+                        conf = float(rec.get("confidence", 1.0) or 1.0)
+                    except (TypeError, ValueError):
+                        conf = 1.0
+                _apply_profile(ctx, agent, locked, session_id, conf, len(bucket))
                 return
 
             session_type, confidence, scores = _classify(bucket)
@@ -323,7 +390,11 @@ def register(ctx: Any) -> None:
             _write_hint(session_type, confidence, scores)
 
             if commit:
-                _fired[session_id] = session_type
+                _fired[session_id] = {
+                    "type": session_type,
+                    "confidence": float(confidence),
+                    "ts": time.time(),
+                }
                 _fired.move_to_end(session_id)
                 logger.debug(
                     "lambda-tuner: committed sid=%s type=%s conf=%.2f scores=%s turn=%d",
@@ -338,9 +409,11 @@ def register(ctx: Any) -> None:
         try:
             _session_messages.pop(session_id, None)
             _fired.pop(session_id, None)
+            _intent_applied.pop(session_id, None)
         except Exception as exc:
             logger.debug("lambda-tuner: on_session_end cleanup failed (fail-open): %s", exc)
 
+    ctx.register_hook("on_session_start", on_session_start)
     ctx.register_hook("pre_llm_call", on_pre_llm_call)
     ctx.register_hook("on_session_end", on_session_end)
     # Run before other pre_llm_call hooks that might read compression state.
@@ -350,4 +423,21 @@ def register(ctx: Any) -> None:
             hooks.insert(0, hooks.pop())
     except Exception:
         pass  # fail-open: registration order stays as-is
+
+
+# Export predicates for other plugins (lazy-read `_fired` at call time).
+from .predicates import (  # noqa: E402
+    is_code_session,
+    is_high_confidence,
+    is_research_session,
+    session_type,
+)
+
+__all__ = [
+    "register",
+    "is_research_session",
+    "is_code_session",
+    "is_high_confidence",
+    "session_type",
+]
 
