@@ -19,7 +19,7 @@ import uuid
 from collections import deque
 from contextlib import suppress
 from datetime import datetime
-from types import SimpleNamespace
+from types import MethodType, SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse, urlunparse
 
@@ -1297,6 +1297,27 @@ def _init_memory(agent, _agent_cfg, skip_memory, platform):
 
     from agent.memory_manager import inject_memory_provider_tools
     inject_memory_provider_tools(agent)
+    agent.emit_memory = MethodType(emit_memory, agent)
+
+
+def emit_memory(agent, text, tags=None) -> None:
+    """Retain an episode via ``hindsight_retain`` when importable. Fail-open."""
+    try:
+        try:
+            from plugins.memory.hindsight import RETAIN_SCHEMA  # noqa: F401
+        except Exception:
+            logger.debug("emit_memory: hindsight_retain not importable")
+            return
+        mm = getattr(agent, "_memory_manager", None)
+        if mm is not None and hasattr(mm, "has_tool") and mm.has_tool("hindsight_retain"):
+            args: Dict[str, Any] = {"content": str(text or "")}
+            if tags is not None:
+                args["tags"] = tags
+            mm.handle_tool_call("hindsight_retain", args)
+            return
+        logger.debug("emit_memory: hindsight_retain importable but no live provider")
+    except Exception as exc:
+        logger.debug("emit_memory failed (fail-open): %s", exc)
 
 
 def _apply_agent_section(agent, _agent_cfg):
@@ -2317,6 +2338,8 @@ def init_agent(
     _configure_ollama_num_ctx(agent, _model_cfg, _config_context_length)
     _emit_compression_summary(agent, cs)
     _snapshot_primary_runtime(agent)
+    if not callable(getattr(agent, "emit_memory", None)):
+        agent.emit_memory = MethodType(emit_memory, agent)
 
 
 __all__ = ["init_agent"]

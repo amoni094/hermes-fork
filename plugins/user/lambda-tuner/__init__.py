@@ -14,6 +14,8 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
+from .complexity import DEFAULT_SCORER, TaskComplexityScorer
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -399,16 +401,66 @@ def register(ctx: Any) -> None:
             _write_hint(session_type, confidence, scores)
 
             if commit:
+                accumulated_text = " ".join(bucket)
+                complexity = 0.0
+                try:
+                    complexity = float(DEFAULT_SCORER.score(accumulated_text))
+                    DEFAULT_SCORER.update_recent(accumulated_text)
+                except Exception as exc:
+                    logger.debug("lambda-tuner: complexity score failed (fail-open): %s", exc)
+                    complexity = 0.0
+
+                compressor = None
+                if agent is not None:
+                    compressor = getattr(agent, "context_compressor", None)
+                if compressor is None:
+                    try:
+                        compressor = ctx.compressor
+                    except Exception:
+                        compressor = None
+
+                try:
+                    if compressor is not None and hasattr(compressor, "set_compression_profile"):
+                        if complexity > 0.7:
+                            protect = int(getattr(compressor, "protect_last_n", 20) or 20) + 5
+                            compressor.set_compression_profile(
+                                {"protect_last_n": min(protect, 40)},
+                                _source="lambda-tuner-complexity",
+                            )
+                        elif complexity < 0.3:
+                            prune = int(getattr(compressor, "proactive_prune_tokens", 16000) or 0) - 8000
+                            compressor.set_compression_profile(
+                                {"proactive_prune_tokens": max(prune, 8000)},
+                                _source="lambda-tuner-complexity",
+                            )
+                except Exception as exc:
+                    logger.debug("lambda-tuner: complexity profile adjust failed (fail-open): %s", exc)
+
                 _fired[session_id] = {
                     "type": session_type,
                     "confidence": float(confidence),
                     "ts": time.time(),
+                    "complexity": complexity,
                 }
                 _fired.move_to_end(session_id)
                 logger.debug(
-                    "lambda-tuner: committed sid=%s type=%s conf=%.2f scores=%s turn=%d",
-                    session_id, session_type, confidence, scores, len(bucket),
+                    "lambda-tuner: committed sid=%s type=%s conf=%.2f scores=%s turn=%d complexity=%.3f",
+                    session_id, session_type, confidence, scores, len(bucket), complexity,
                 )
+                try:
+                    ctx.emit_episode(
+                        f"Session {session_id} classified as {session_type} confidence={confidence}",
+                        tags=["classification", "lambda-tuner"],
+                    )
+                except Exception as exc:
+                    logger.debug("lambda-tuner: emit_episode failed (fail-open): %s", exc)
+                try:
+                    if compressor is not None:
+                        est = getattr(compressor, "_entropy_estimator", None)
+                        if est is not None and hasattr(est, "checkpoint"):
+                            est.checkpoint("classification_locked", compressor.turn_clock)
+                except Exception as exc:
+                    logger.debug("lambda-tuner: classification checkpoint failed (fail-open): %s", exc)
 
         except Exception as exc:
             logger.debug("lambda-tuner: classify failed (fail-open): %s", exc)
@@ -466,6 +518,7 @@ from .predicates import (  # noqa: E402
     is_code_session,
     is_high_confidence,
     is_research_session,
+    session_complexity,
     session_type,
 )
 
@@ -475,5 +528,7 @@ __all__ = [
     "is_code_session",
     "is_high_confidence",
     "session_type",
+    "session_complexity",
+    "TaskComplexityScorer",
 ]
 

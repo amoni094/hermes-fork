@@ -65,3 +65,38 @@ def is_high_confidence(session_id: str, threshold: float = 0.8) -> bool:
         return float(rec.get("confidence", 0.0) or 0.0) >= float(threshold)
     except (TypeError, ValueError):
         return False
+
+
+def turns_since_classification(session_id: str, compressor=None) -> int:
+    """Turns since classification lock. -1 if unknown.
+
+    When *compressor* is provided, reads the ChronoMem ``classification_locked``
+    checkpoint directly. *session_id* is accepted for API symmetry.
+    """
+    del session_id  # checkpoint lives on the compressor, not in _fired
+    if compressor is None:
+        return -1
+    try:
+        est = getattr(compressor, "_entropy_estimator", None)
+        if est is None or not hasattr(est, "since_checkpoint"):
+            return -1
+        clock = getattr(compressor, "turn_clock", None)
+        if clock is None:
+            return -1
+        return int(est.since_checkpoint("classification_locked", clock))
+    except Exception:
+        return -1
+
+
+def session_complexity(sid: str) -> Optional[float]:
+    """Locked complexity score from ``_fired``, or None if unknown."""
+    rec = _record(sid)
+    if not rec:
+        return None
+    try:
+        value = rec.get("complexity")
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
