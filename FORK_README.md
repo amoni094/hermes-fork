@@ -11,7 +11,7 @@ Three small, additive changes that expose live compression tuning to plugins:
 **`agent/context_compressor.py`** — `ContextCompressor.set_compression_profile(profile, **kwargs)`
 
 Allows plugins to adjust compression behaviour between turns without restart.
-Built-in profiles: `"research"`, `"code"`, `"mixed"`. Custom dicts accepted
+Built-in profiles: `"research"`, `"code"`, `"mixed"`, `"entropy-adaptive"`. Custom dicts accepted
 (merge with live state; unspecified keys unchanged). Unknown names warn and
 are ignored (fail-open). Values are clamped to safe ranges; `_source` is a
 log label only.
@@ -53,8 +53,9 @@ Wires the agent into the plugin manager after compressor construction so
 
 ### 2. `plugins/user/lambda-tuner` — session-type adaptive compression
 
-A plugin that classifies each session as `research`, `code`, or `mixed` from
-accumulated user messages and applies the matching compression profile live.
+A plugin that classifies each session as `research`, `code`, `mixed`, or
+`entropy-adaptive` from accumulated user messages and applies the matching
+compression profile live.
 
 - Uses the new `set_compression_profile()` API when available (this fork)
 - Falls back to hint-file-only on vanilla Hermes (N+1 lag)
@@ -65,6 +66,8 @@ accumulated user messages and applies the matching compression profile live.
 - Writes `$HERMES_HOME/cache/last-session-type.json` (default `~/.hermes/cache/...`)
   for the launch wrapper; skips the write when type+lambda is unchanged
 - Fail-open: errors are debug-logged, never raised
+- Hooks: `pre_llm_call` (classify + live profile), `pre_compress` (re-apply
+  before a full compression pass), `on_session_end` (drop LRU/`_fired`)
 - Registers at the front of the `pre_llm_call` list so the profile is set before
   other hooks in the same wave that might read compression state
 
@@ -75,9 +78,11 @@ accumulated user messages and applies the matching compression profile live.
 | `research` | 0.45              | 40 000                 | 15             |
 | `code`     | 0.55              | 28 000                 | 25             |
 | `mixed`    | 0.50              | 32 000                 | 20             |
+| `entropy-adaptive` | R(D) from message entropy (placeholder 0.50) | 32 000 | 20 |
 
 Lower `threshold_percent` = earlier full compression. research < mixed < code.
 `proactive_prune_tokens` is a trigger *floor* (higher = later cheap prune).
+`entropy-adaptive` is not a fixed percent — Shannon R(D) proxy; fail-open to mixed.
 
 ### 3. `hermes-session` launch wrapper
 
@@ -91,7 +96,79 @@ HERMES_SESSION_TYPE=code hermes-session [hermes args...]
 hermes-session --session-type research [hermes args...]
 ```
 
-Lambda table: research=0.55, code=0.2, mixed=0.4.
+Lambda table: research=0.55, code=0.2, mixed=0.4, entropy-adaptive=0.4.
+
+New flags:
+
+```
+hermes-session --entropy-adaptive [hermes args...]
+hermes-session --intent 'implement feature X' research
+hermes-session --no-hint          # skip hint file; start mixed
+hermes-session --dry-run          # print profile+lambda; do not exec
+```
+
+`--entropy-adaptive` sets `HERMES_SESSION_TYPE=entropy-adaptive` and writes
+`profile: entropy-adaptive` into the hint file. `--intent` adds an `intent`
+string to the hint JSON so lambda-tuner can set `compressor.current_intent`.
+Missing `expires_at` in the hint is treated as expired (`hint.get('expires_at', 0)`).
+
+## Predicates
+
+`plugins/user/lambda-tuner/predicates.py` exposes boolean helpers other plugins
+can import to gate behavior without re-implementing the classifier. They read
+the in-process `_fired` dict:
+
+```
+{session_id: {"type": str, "confidence": float, "ts": float}}
+```
+
+```python
+# Import from the loaded plugin package (directory slug is lambda-tuner).
+from hermes_plugins.<slug>.predicates import (
+    is_research_session,
+    is_code_session,
+    is_high_confidence,
+    session_type,
+)
+# Also re-exported on the plugin's __init__ module.
+
+
+Also re-exported from `plugins/user/lambda-tuner/__init__.py`. All predicates
+fail-open (unknown session → `False` / `None`).
+
+## Intent-conditioned compression
+
+`ContextCompressor.current_intent` is an optional string describing what the
+user is trying to do this session (e.g. `"implement feature X"`). When set,
+intent-conditioned offload / RR scoring can keep spans that match the intent
+and demote unrelated tool results more aggressively.
+
+How it gets set:
+
+1. `hermes-session --intent '...'` writes `"intent"` into
+   `$HERMES_HOME/cache/last-session-type.json`.
+2. lambda-tuner reads the hint on `on_session_start` / first `pre_llm_call`
+   and, if the value is a non-empty string and the agent is available, sets
+   `agent.context_compressor.current_intent` (fail-open).
+3. Classifier rewrites of the hint preserve an existing `intent` field so the
+   wrapper-provided string is not lost after lock-in.
+
+Empty or missing `intent` is ignored. The attribute is set even if the
+compressor has not declared it yet (Domain A); consumers should `getattr`.
+
+## Entropy-adaptive profile
+
+Use `--entropy-adaptive` (or `HERMES_SESSION_TYPE=entropy-adaptive`) when
+session type is not known up front and compression should follow message
+entropy rather than a research/code prior:
+
+- Wrapper warm-up lambda is `0.4` (same as mixed) so launch is safe.
+- Hint `type`/`profile` is `entropy-adaptive` for Domain A's named profile.
+- Do **not** use it for a session that is already clearly code or research —
+  those named profiles protect causal chains (code) or dump stale web results
+  (research) more predictably.
+- The classifier may still lock research/code/mixed after enough user turns;
+  entropy-adaptive is a launch prior, not a lock that overrides classify.
 
 ## Syncing upstream
 

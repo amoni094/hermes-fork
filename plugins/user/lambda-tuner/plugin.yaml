@@ -1,11 +1,7 @@
 name: lambda-tuner
 version: "1.0.2"
-description: >
-  Auto-detect session type (research/code/mixed) from accumulated user messages
-  and apply the matching ContextCompressor profile live via set_compression_profile.
-  Also writes ~/.hermes/cache/last-session-type.json (HERMES_HOME-aware) for the
-  hermes-session launch wrapper. Fail-open: errors are debug-logged, never raised.
-  Cleans per-session classifier state on on_session_end.
+# See FORK_README.md § lambda-tuner
+description: Session-type adaptive compression. See FORK_README.md § lambda-tuner.
 provides_hooks:
   - pre_llm_call
   - on_session_end
@@ -16,3 +12,8 @@ hooks:
   - pre_compress
 settings:
   enabled: true
+  # Canonical classifier/lock/hint/wrapper: FORK_README.md § lambda-tuner.
+  # Live knobs: ContextCompressor.COMPRESSION_PROFILES (do not fork a second table here).
+  # threshold_percent: 0.45  # research: compress sooner; large tool_result dumps fill context fast
+  # protect_last_n: 15       # why: 15 not 25 — bulky dumps; keep last burst, don't shield stale tool_results
+  # research_lambda: "0.55"  # why: 0.55 not 0.7 — Phase-1 exec-state already holds web_extract
