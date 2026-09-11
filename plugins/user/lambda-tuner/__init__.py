@@ -468,6 +468,27 @@ def register(ctx: Any) -> None:
     def on_session_end(*, session_id: str = "", **_kwargs: Any) -> None:  # registered as on_session_finalize
         """Drop per-session classifier state so long-running gateways cannot leak it."""
         try:
+            rec = _fired.get(session_id) or {}
+            if isinstance(rec, dict):
+                try:
+                    complexity = float(rec.get("complexity", 0.0) or 0.0)
+                except (TypeError, ValueError):
+                    complexity = 0.0
+                if complexity > 0.8 and rec.get("type") == "code":
+                    try:
+                        ctx.suggest_skill_update(
+                            "hermes-fork",
+                            "High-complexity code session; consider raising code profile protect_last_n",
+                            "medium",
+                        )
+                    except Exception:
+                        pass
+            try:
+                suggestions = ctx.get_skill_suggestions()
+                if suggestions:
+                    logger.info("lambda-tuner skill suggestions: %s", suggestions)
+            except Exception:
+                pass
             _session_messages.pop(session_id, None)
             _fired.pop(session_id, None)
             _intent_applied.pop(session_id, None)
@@ -493,6 +514,13 @@ def register(ctx: Any) -> None:
                 # Reaffirm the locked session type profile (idempotent; guards against resets).
                 session_type = fired_entry.get("type", "mixed")
                 _apply_profile(ctx, agent, session_type, session_id, fired_entry.get("confidence", 0.0), 0)
+                if session_type == "research":
+                    try:
+                        compressor = getattr(agent, "context_compressor", None) if agent is not None else None
+                        if compressor is not None:
+                            compressor.importance_biased_prune_enabled = True
+                    except Exception:
+                        pass
             elif context_tokens > 60_000:
                 # Session type not yet determined but context is large: use entropy-adaptive
                 # so EntropyEstimator guides the threshold until the classifier locks in.

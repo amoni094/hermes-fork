@@ -63,3 +63,30 @@ class TaskComplexityScorer:
 
 
 DEFAULT_SCORER = TaskComplexityScorer()
+
+
+class ToolResultCompactor:
+    """Head+tail MDL cut for oversized tool payloads. Stdlib only."""
+
+    TRUNCATION_MARKERS = ["[truncated]", "...", "(continued)", "[omitted]"]
+
+    def compact(self, content: str, max_chars: int = 4000) -> str:
+        if len(content) <= max_chars:
+            return content
+        chunk = max_chars // 3
+        head = content[:chunk]
+        tail = content[-chunk:]
+        omitted = len(content) - 2 * chunk
+        return (
+            head
+            + chr(10)
+            + "[...{} chars omitted by lambda-tuner MDL compactor...]".format(omitted)
+            + chr(10)
+            + tail
+        )
+
+    def should_compact(self, role: str, content: str) -> bool:
+        return role == "tool" and len(content) > 4000
+
+
+DEFAULT_COMPACTOR = ToolResultCompactor()

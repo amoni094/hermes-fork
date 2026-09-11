@@ -207,6 +207,24 @@ class PluginDispatchMixin:
                     "Hook '%s' callback %s raised: %s", hook_name, getattr(cb, "__name__", repr(cb)), exc)
         return results
 
+    def invoke_hook_for_exchange(
+        self, agent_results: list, parent_session_id: str, exchange_round: int = 0,
+    ) -> list:
+        """Fire ``pre_agent_exchange`` so plugins can diversify BoN samples. Fail-open.
+
+        Hooks may mutate ``agent_results`` in place. Returns the (possibly mutated) list.
+        """
+        try:
+            self.invoke_hook(
+                "pre_agent_exchange",
+                agent_results=agent_results,
+                parent_session_id=parent_session_id,
+                exchange_round=exchange_round,
+            )
+            return agent_results
+        except Exception:
+            return agent_results
+
     def _run_hook_callback_bounded(
         self, hook_name: str, cb: Callable, kwargs: Dict[str, Any], timeout: float
     ) -> Any:

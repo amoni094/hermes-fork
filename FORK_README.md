@@ -162,6 +162,18 @@ lambda-tuner scores accumulated user text (length, code density, ambiguity, cons
 High complexity (>0.7) raises `protect_last_n` by 5 (cap 40); low complexity (<0.3) lowers `proactive_prune_tokens` by 8000 (floor 8000).
 `session_complexity(sid)` reads the locked score from `_fired`.
 
+## Multi-agent diversity (pre_agent_exchange hook)
+
+`invoke_hook_for_exchange` fires `pre_agent_exchange` with `agent_results`, `parent_session_id`, and `exchange_round` so plugins can diversify Best-of-N samples before parent aggregation (arXiv:2608.11065); hooks may mutate the list in place and the helper fail-opens.
+`PluginContext.filter_duplicate_results` keeps the first of each near-duplicate cluster using `difflib.SequenceMatcher` (default key `content`, threshold 0.85).
+Callers that skip the hook still get the original `agent_results` unchanged.
+
+## Tool result compaction (MDL)
+
+`ToolResultCompactor` in lambda-tuner applies a head+tail MDL cut to oversized tool payloads, inserting an omitted-char marker instead of shipping the full dump.
+`PluginContext.compact_tool_result` lazily imports the compactor and only runs it when `predicates.session_type(session_id) == 'research'`.
+`DEFAULT_COMPACTOR` is the shared instance exported from `plugins/user/lambda-tuner/complexity.py`.
+
 ## Entropy-adaptive profile
 
 Use `--entropy-adaptive` (or `HERMES_SESSION_TYPE=entropy-adaptive`) when
