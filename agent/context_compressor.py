@@ -2413,8 +2413,13 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         """Apply a named or custom compression profile between turns.
 
         Safe to call from ``pre_llm_call`` hooks: each compression pass re-reads
-        these attributes from scratch, so a change between turns takes full effect
-        on the next micro-compact or full-compress event.
+        these attributes from scratch, so a change takes effect on the next
+        compression event that starts *after* this hook returns.
+
+        **Timing note:** turn-start compaction (idle + preflight) runs *before*
+        ``pre_llm_call`` on the same turn. A profile applied here affects
+        mid-turn micro-compact events and all subsequent turns — not the
+        turn-start compaction that already completed.
 
         *Not* safe to call mid-pass (inside the compressor's own call stack).
 
@@ -2469,6 +2474,11 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
                 )
             else:
                 pct = min(self._PROFILE_THRESHOLD_MAX, max(self._PROFILE_THRESHOLD_MIN, pct))
+                # Re-apply the raise-only small-context floor so models <512K cannot be
+                # pulled below 75% by plugin profiles (matches init / update_model behaviour).
+                pct = self._effective_threshold_percent(
+                    getattr(self, "_resolved_context_length", 0) or 0, pct
+                )
                 self.threshold_percent = pct
                 # Keep the context_length setter from reverting to the pre-profile base.
                 self._base_threshold_percent = pct

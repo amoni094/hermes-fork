@@ -237,8 +237,10 @@ class PluginContext:
         Plugins can call :meth:`~agent.context_compressor.ContextCompressor.set_compression_profile`
         from a ``pre_llm_call`` hook to adjust compression behaviour between turns::
 
-            def on_pre_llm_call(ctx, agent=None, **kw):
-                c = ctx.compressor
+            # ctx is the PluginContext captured in register(), NOT a hook kwarg.
+            # Hook payload keys: session_id, user_message, agent, model, etc.
+            def on_pre_llm_call(*, agent=None, **kw):
+                c = getattr(agent, "context_compressor", None) if agent else None
                 if c and hasattr(c, "set_compression_profile"):
                     c.set_compression_profile("research", _source="my-plugin")
         """

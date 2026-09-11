@@ -2,9 +2,10 @@
 
 Classifies each session as research / code / mixed from accumulated user messages,
 then applies the appropriate ContextCompressor profile via the fork's new
-``set_compression_profile()`` API (takes effect on the next compression event,
-no N+1 lag). Also writes a hint file for the ``hermes-session`` launch wrapper so
-the next-session warm-up path still works.
+``set_compression_profile()`` API (takes effect on the next compression event
+after the hook returns — note turn-start compaction runs before pre_llm_call).
+Also writes a hint file for the ``hermes-session`` launch wrapper so the
+next-session warm-up path still works.
 
 Design:
 - Uses ``ctx.compressor.set_compression_profile(profile)`` when the compressor is
@@ -90,9 +91,10 @@ _RESEARCH_RE = re.compile(
     r"|research(?:\s+paper|\s+on|\s+about)?"
     r"|literature\s+(?:review|survey|search)"
     r"|systematic\s+review"
-    r"|citation|bibliography|abstract"
+    r"|citation|bibliography"
+    r"|(?:paper|article)\s+abstract|read\s+(?:the\s+)?abstract"
     r"|sweep(?:\s+papers?|\s+arxiv)?"
-    r"|web\s+search|web\s+scrape|web\s+extract"
+    r"|web\s+scrape|web\s+extract"
     r"|find\s+papers?|search\s+papers?"
     r"|rss\s+feed|news\s+feed|news\s+monitor"
     r"|survey\s+(?:the\s+)?(?:literature|papers?|field|domain)"
@@ -201,13 +203,18 @@ def _touch_session(session_id: str) -> None:
 
 
 def _apply_profile(ctx: Any, agent: Any, session_type: str, session_id: str, confidence: float, n_turns: int) -> None:
+    # Prefer the per-call agent kwarg (correct session) over ctx.compressor which
+    # goes through the process-global PluginManager._agent (last-writer-wins, can be
+    # a different session in gateway/subagent scenarios). Fall back to ctx.compressor
+    # only when the hook was not passed a live agent reference.
     compressor = None
-    try:
-        compressor = ctx.compressor
-    except AttributeError:
-        pass
-    if compressor is None and agent is not None:
+    if agent is not None:
         compressor = getattr(agent, "context_compressor", None)
+    if compressor is None:
+        try:
+            compressor = ctx.compressor
+        except AttributeError:
+            pass
     if compressor is not None and hasattr(compressor, "set_compression_profile"):
         try:
             # _source is accepted via **kwargs on set_compression_profile and only used for logs.
