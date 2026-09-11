@@ -126,6 +126,12 @@ VALID_HOOKS: Set[str] = {
     # error_body may be unredacted.
     "transform_api_error_classification", "on_session_start", "on_session_end",
     "on_session_finalize", "on_session_reset",
+    # pre_compress: BEFORE ContextCompressor.compress() runs a full compression event.
+    # Kwargs: session_id, turn_count, context_tokens, trigger_reason ("manual"|"auto"),
+    # agent (ephemeral). Plugins can persist constraint state, inject compression-prompt
+    # reminders, or call set_compression_profile based on context_tokens
+    # (arXiv:2608.24569 Constraint Weakening).
+    "pre_compress",
     # on_skill_lifecycle: successful skill lifecycle facts (local skill name visible to plugins).
     "on_skill_lifecycle", "subagent_start", "subagent_stop",
     # pre_gateway_dispatch: once per incoming MessageEvent, after the internal-event guard, BEFORE
@@ -260,6 +266,15 @@ class PluginContext:
             return None
         # Freshness: do not cache; the agent may rebuild context_compressor in place.
         return getattr(agent, "context_compressor", None)
+
+    def set_intent(self, text: str) -> None:
+        """Propagate the current task intent to the live compressor (bounded).
+
+        Used for intent-conditioned compression. No-op when no compressor is bound.
+        """
+        c = self.compressor
+        if c is not None:
+            c.current_intent = str(text)[:500]  # bounded
 
     def has_plugin(self, plugin_id: str) -> bool:
         """Return True when another plugin is loaded and enabled (runtime probe for advisory
@@ -1156,9 +1171,9 @@ class PluginManager(PluginLoaderMixin, PluginDispatchMixin, PluginLedgerMixin):
         self._discovery_lock = threading.RLock()
         self._discovered: bool = False
         self._cli_ref = None  # Set by CLI after plugin discovery
-        # Weakref to the live agent (set by agent_init after compressor construction).
-        # Avoids PluginManager → agent keeping the last session alive forever, and
-        # breaks the agent → (hook kwargs) → manager → agent cycle if one forms.
+        # why: weakref for _agent allows GC of finished sessions (a strong ref would pin the last agent forever).
+        # Set by agent_init after compressor construction. Also breaks an
+        # agent → (hook kwargs) → manager → agent cycle if one forms.
         # Attribute assignment is atomic under the GIL; pre_llm_call may run on a
         # timeout worker, so readers must tolerate a None / stale-but-whole agent.
         self._agent_ref: "weakref.ref | None" = None

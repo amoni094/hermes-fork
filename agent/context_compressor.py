@@ -7,10 +7,12 @@ import copy
 import hashlib
 import json
 import logging
+import math
 import sqlite3
 import re
 import time
 import uuid
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -1675,6 +1677,116 @@ Describe agent/tool work only as completed actions, state, or historical work.]"
 }
 
 
+class EntropyEstimator:
+    """Sliding-window unigram Shannon entropy estimator (stdlib only).
+
+    Empirical entropy rate ``H = -sum p log2 p`` over whitespace-split tokens
+    in recent turns. Used as a rate-distortion proxy: higher H means denser
+    information, so compression should retain more (lower threshold_percent).
+
+    AEP floor: a history of n tokens at rate H needs about nH bits to represent
+    faithfully — ``min_retain_tokens(budget_bits)`` returns that n.
+
+    Update is O(tokens in the new turn) with a running Counter; query is
+    O(|vocab in window|), typically ~1000. Fail-open: public methods never raise.
+    """
+
+    def __init__(self, window_turns: int = 32) -> None:
+        self.window_turns = max(1, int(window_turns))
+        self._turn_token_lists: List[List[str]] = []
+        self._counts: Counter = Counter()
+        self._total_tokens = 0
+        self._turns_seen = 0
+
+    @staticmethod
+    def _tokenize(text: str) -> List[str]:
+        if not text:
+            return []
+        return str(text).split()
+
+    def reset(self) -> None:
+        try:
+            self._turn_token_lists.clear()
+            self._counts.clear()
+            self._total_tokens = 0
+            self._turns_seen = 0
+        except Exception:
+            return
+
+    def update(self, text: str) -> None:
+        """Ingest one turn. O(tokens in turn); evicts the oldest turn when full."""
+        try:
+            tokens = self._tokenize(text)
+            self._turn_token_lists.append(tokens)
+            if tokens:
+                self._counts.update(tokens)
+                self._total_tokens += len(tokens)
+            self._turns_seen += 1
+            while len(self._turn_token_lists) > self.window_turns:
+                old = self._turn_token_lists.pop(0)
+                if old:
+                    self._counts.subtract(old)
+                    self._total_tokens -= len(old)
+                    # Counter.subtract keeps zero/negative keys; drop them.
+                    stale = [key for key, count in self._counts.items() if count <= 0]
+                    for key in stale:
+                        del self._counts[key]
+            if self._total_tokens < 0:
+                self._total_tokens = 0
+        except Exception:
+            return
+
+    def entropy_rate(self) -> float:
+        """Empirical Shannon entropy in bits per token. 0.0 when empty."""
+        try:
+            total = self._total_tokens
+            if total <= 0:
+                return 0.0
+            entropy = 0.0
+            for count in self._counts.values():
+                if count <= 0:
+                    continue
+                p = count / total
+                entropy -= p * math.log2(p)
+            return float(entropy)
+        except Exception:
+            return 0.0
+
+    def min_retain_tokens(self, budget_bits: float) -> int:
+        """AEP retain floor: smallest n such that n * H >= budget_bits."""
+        try:
+            h = self.entropy_rate()
+            budget = float(budget_bits)
+            if h <= 0.0 or budget <= 0.0:
+                return 0
+            return max(0, int(math.ceil(budget / h)))
+        except Exception:
+            return 0
+
+
+def _message_text_for_entropy(msg: Any) -> str:
+    """Best-effort plaintext from a chat message. Fail-open to empty string."""
+    try:
+        if not isinstance(msg, dict):
+            return ""
+        content = msg.get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: List[str] = []
+            for part in content:
+                if isinstance(part, str):
+                    parts.append(part)
+                elif isinstance(part, dict):
+                    text = part.get("text")
+                    if isinstance(text, str):
+                        parts.append(text)
+            return " ".join(parts)
+        return ""
+    except Exception:
+        return ""
+
+
 class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngine):
     """Default context engine: prune tool results, protect head/tail, summarize the middle
     with an LLM, and iteratively update the previous summary on later compactions."""
@@ -1897,6 +2009,11 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         self._last_compression_telemetry = self._active_compression_telemetry = None
         self._compression_telemetry_seed = None
         self._reset_proactive_prune_rearm()
+        estimator = getattr(self, "_entropy_estimator", None)
+        if estimator is not None:
+            estimator.reset()
+        self._entropy_fed_count = 0
+        self.current_intent = None
 
     def bind_session_state(self, session_db: Any = None, session_id: str = "") -> None:
         """Bind the current session row so durable cooldowns can round-trip."""
@@ -2386,6 +2503,11 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         # must ABORT and preserve the session regardless of abort_on_summary_failure (see _TERMINAL_SUMMARY_FAILURES).
         for flag, _class, _msg in _TERMINAL_SUMMARY_FAILURES:
             setattr(self, flag, False)
+        # Entropy-rate estimator + intent plumbing (additive; unused unless opted in).
+        self._entropy_estimator = EntropyEstimator()
+        self._entropy_fed_count = 0
+        self._active_compression_profile: str | None = None
+        self.current_intent: str | None = None
 
     # --- Adaptive compression API (for plugins and session-type tuning) ---------
 
@@ -2403,16 +2525,23 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
     #: ``_MAX_TAIL_MESSAGE_FLOOR``.
     COMPRESSION_PROFILES: "dict[str, dict]" = {
         "research": {
-            "threshold_percent": 0.45,
-            "proactive_prune_tokens": 40_000,
-            "protect_last_n": 15,
+            "threshold_percent": 0.45,  # research: compress sooner; large tool_result dumps fill context fast
+            "proactive_prune_tokens": 40_000,  # later cheap prune; full compression (lower threshold) reclaims the dump
+            "protect_last_n": 15,  # why: 15 not 25 — bulky dumps; keep last burst, don't shield stale tool_results
         },
         "code": {
-            "threshold_percent": 0.55,
+            "threshold_percent": 0.55,  # later full compression; keep causal exec/read chains
             "proactive_prune_tokens": 28_000,
-            "protect_last_n": 25,
+            "protect_last_n": 25,  # why: 25 not 15 — coding sessions need a longer recent-file/tool tail
         },
         "mixed": {
+            "threshold_percent": 0.50,  # conservative midpoint when type is unknown or mixed
+            "proactive_prune_tokens": 32_000,
+            "protect_last_n": 20,
+        },
+        # Rate-distortion proxy: threshold is recomputed from EntropyEstimator at
+        # apply/trigger time. Placeholder 0.50 is the empty-estimator default.
+        "entropy-adaptive": {
             "threshold_percent": 0.50,
             "proactive_prune_tokens": 32_000,
             "protect_last_n": 20,
@@ -2466,6 +2595,7 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
                 )
                 return
             settings = dict(self.COMPRESSION_PROFILES[profile])
+            # why: research protect_last_n=15 not 25 — dumps fill context fast; 25 would shield stale tool_results
         elif isinstance(profile, dict):
             # Partial update: do not full-replace unspecified keys with defaults.
             settings = {k: profile[k] for k in self._PROFILE_KEYS if k in profile}
@@ -4801,6 +4931,28 @@ Write only the summary body. Do not include any preamble or prefix."""
             )
             return messages
         display_tokens = current_tokens if current_tokens else self.last_prompt_tokens or estimate_messages_tokens_rough(messages)
+        # Constraint-weakening hook (arXiv:2608.24569): fire before this full compression so
+        # plugins can persist constraint state, inject summary reminders, or retune the profile.
+        try:
+            from hermes_cli.lifecycle import invoke_hook as _invoke_hook
+            _agent = None
+            try:
+                from hermes_cli.plugins import get_plugin_manager as _gpm
+                _agent = getattr(_gpm(), "_agent", None)
+            except Exception:
+                _agent = None
+            _invoke_hook(
+                "pre_compress",
+                session_id=self._session_id or "",
+                turn_count=sum(
+                    1 for m in messages if isinstance(m, dict) and m.get("role") == "user"
+                ),
+                context_tokens=int(display_tokens or 0),
+                trigger_reason="manual" if force else "auto",
+                agent=_agent,  # ephemeral; invoke_hook does not persist it
+            )
+        except Exception:
+            pass  # fail-open: compression must not depend on plugin dispatch
         # Phase 1: Prune old tool results (cheap, no LLM call)
         messages, pruned_count = self._prune_old_tool_results(
             messages, protect_tail_count=self.protect_last_n, protect_tail_tokens=self.tail_token_budget,

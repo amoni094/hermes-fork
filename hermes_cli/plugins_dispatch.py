@@ -179,6 +179,9 @@ class PluginDispatchMixin:
         caller thread. ``pre_llm_call`` may return ``{"context": "..."}`` (or a str) to inject.
         """
         from hermes_cli.plugins import _resolve_hook_callback_timeout
+        # pre_agent_exchange — before a delegated agent result is passed to the parent
+        # (Interaction Tax, arXiv:2608.23541). Intended kwargs: agent_result,
+        # parent_session_id, exchange_round. Infrastructure only; no callers yet.
         # Gateway platform events define event-local envelopes; a bus-wide version here would turn
         # unrelated adapter payloads into one monolithic compatibility contract.
         if hook_name != "gateway_platform_event":
