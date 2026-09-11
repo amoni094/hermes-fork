@@ -2872,6 +2872,18 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         Candidates exclude system-role rows, the first ``protect_first_n``, and the last
         ``protect_last_n``. Lowest score is dropped first (Gallager sufficient statistics).
         """
+        # SPIKE: Decision-Aware Memory Cards (arXiv:2606.08151)
+        # Per-span importance is computed here (rr_score) before eviction — the
+        # counterfactual hook. Do not replace IB-prune with an embedding model yet.
+        # Counterfactual importance I(span) = P(same next action | context) - P(same next action | context \ span)
+        # Approximation: I(span) = similarity(span_embedding, next_action_embedding) -- requires embedding model
+        # Alternative: use IB-prune score already computed; spans with IB score < 0.2 are low-counterfactual-impact
+        # Cross-link: this method is the IB-prune implementation; rr_score is the per-span IB score.
+        # SPIKE math-007-manifold (arXiv:2609.00552): manifold-based span scoring
+        # Claim: project span embeddings to a low-dim manifold before scoring importance.
+        # Synthetic win 4/5 metrics. Blocked: requires token embeddings (no embedding model in fork).
+        # Approximation without embeddings: use n-gram overlap with task goal as manifold proxy.
+        # Revisit trigger: fork has access to an embedding endpoint (e.g. via MCP).
         try:
             if not messages or int(target_prune_tokens or 0) <= 0:
                 return messages, 0
