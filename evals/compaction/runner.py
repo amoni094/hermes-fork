@@ -435,6 +435,24 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
     from agent.context_compressor import ContextCompressor
 
     before = copy.deepcopy(messages)
+
+    # Telegraphic pre-pass: compact tool_result messages before the context
+    # compressor sees them, reducing context size entering the compressor.
+    if spec.get("pre_telegraphic"):
+        import importlib.util as _ilu
+        import pathlib as _pl
+        _lt_path = REPO_ROOT / "plugins" / "user" / "lambda-tuner" / "complexity.py"
+        _spec = _ilu.spec_from_file_location("lambda_tuner_complexity", _lt_path)
+        if _spec is not None and _spec.loader is not None:
+            _lt = _ilu.module_from_spec(_spec)
+            _spec.loader.exec_module(_lt)  # type: ignore[union-attr]
+            _tc = _lt.TelegraphicCompressor()
+            before = [
+                {**m, "content": _tc.compress(m["content"])
+                 if _tc.should_compress(m.get("role", ""), m.get("content", ""))
+                 else m.get("content")}
+                for m in before
+            ]
     comp = apply_policy(ContextCompressor(model=EVAL_MODEL, quiet_mode=True), spec)
     for key, value in (spec.get("ctor") or {}).items():
         setattr(comp, key, value)
@@ -447,7 +465,8 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
         except Exception:
             pass  # fall through to lean baseline on any error
     t0 = time.time()
-    compressed = comp.compress(copy.deepcopy(messages), current_tokens=total_tokens(messages), force=True)
+    # Use `before` (which may be telegraphic-preprocessed) as the input.
+    compressed = comp.compress(copy.deepcopy(before), current_tokens=total_tokens(before), force=True)
     elapsed = time.time() - t0
 
     # The archived region = original messages that did not survive verbatim.

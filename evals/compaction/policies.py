@@ -93,6 +93,29 @@ POLICIES: Dict[str, Dict[str, Any]] = {
             "importance_biased_prune_enabled": True,
         },
     },
+    # Telegraphic pre-pass arms: tool_result messages are compacted by
+    # TelegraphicCompressor before the context compressor sees them.
+    # This reduces context size entering the compressor, effectively giving
+    # more headroom before a full compaction is needed.
+    #
+    # "lean+telegraphic": lean baseline with telegraphic pre-pass.
+    # "fork_research+telegraphic": research profile with telegraphic pre-pass.
+    #
+    # The runner handles "pre_telegraphic": True in the spec.
+    "lean_telegraphic": {
+        "ctor": {"tail_mode": "lean"},
+        "attrs": {"_session_id": "eval-session"},
+        "pre_telegraphic": True,
+    },
+    "fork_research_telegraphic": {
+        "ctor": {"threshold_percent": 0.45, "protect_last_n": 22},
+        "attrs": {
+            "proactive_prune_tokens": 40_000,
+            "session_type": "research",
+            "importance_biased_prune_enabled": True,
+        },
+        "pre_telegraphic": True,
+    },
 }
 
 # Runtime attrs the runner must setattr onto the compressor when present.
