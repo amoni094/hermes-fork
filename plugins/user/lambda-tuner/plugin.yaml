@@ -13,8 +13,8 @@ hooks:
   - on_session_finalize
   - pre_compress
 capabilities:
-  - emit_episode
-  - recall_episodes
+  # emit_episode and recall_episodes are PluginContext API methods (not hermes capability tokens).
+  # They do not need to be declared here; they are always available via ctx.
 settings:
   enabled: true
   # Canonical classifier/lock/hint/wrapper: FORK_README.md § lambda-tuner.
