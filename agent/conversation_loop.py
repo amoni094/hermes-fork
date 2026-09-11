@@ -1602,6 +1602,12 @@ def run_conversation(
         persist_user_platform_id=persist_user_platform_id,
         moa_config=moa_config,
     )
+    try:
+        if callable(getattr(agent, "_should_compact_thinking", None)) and agent._should_compact_thinking():
+            from agent.reasoning_verbosity import compact_thinking_history
+            compact_thinking_history(agent)
+    except Exception:
+        pass
     return export_current_turn_boundary(agent, result, user_message)
 
 

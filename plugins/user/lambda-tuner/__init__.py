@@ -347,7 +347,33 @@ def _reasoning_mode_for_score(score: float) -> str:
     return "deep"
 
 
-def _apply_adaptive_effort(ctx: Any, session_id: str, user_message: str, session_type: str) -> None:
+def _verbosity_mode_for(score: float, effort: str) -> str:
+    """Map complexity score + effort onto full/compact/suppress."""
+    effort = (effort or "").strip().lower()
+    if score > 0.50:
+        return "full"
+    if score < 0.25 and effort in ("none", "off", "disabled"):
+        return "suppress"
+    return "compact"
+
+
+def _apply_reasoning_verbosity(ctx: Any, agent: Any, score: float, effort: str) -> None:
+    mode = _verbosity_mode_for(float(score or 0.0), effort)
+    try:
+        setter = getattr(ctx, "set_verbosity_mode", None)
+        if callable(setter):
+            setter(mode)
+    except Exception as exc:
+        logger.debug("lambda-tuner: set_verbosity_mode failed (fail-open): %s", exc)
+    try:
+        agent_setter = getattr(agent, "set_reasoning_verbosity", None) if agent is not None else None
+        if callable(agent_setter):
+            agent_setter(mode)
+    except Exception as exc:
+        logger.debug("lambda-tuner: set_reasoning_verbosity failed (fail-open): %s", exc)
+
+
+def _apply_adaptive_effort(ctx: Any, session_id: str, user_message: str, session_type: str, agent: Any = None) -> None:
     """Score this turn, EMA-smooth, map to effort, fail-open on ctx APIs."""
     from .predicates import is_greeter_turn
 
@@ -404,6 +430,12 @@ def _apply_adaptive_effort(ctx: Any, session_id: str, user_message: str, session
         ctx.set_reasoning_mode(mode)
     except Exception as exc:
         logger.debug("lambda-tuner: set_reasoning_mode failed (fail-open): %s", exc)
+
+    try:
+        verbosity_score = 0.0 if greeter else map_score
+        _apply_reasoning_verbosity(ctx, agent, verbosity_score, effort)
+    except Exception as exc:
+        logger.debug("lambda-tuner: verbosity apply failed (fail-open): %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -590,7 +622,7 @@ def register(ctx: Any) -> None:
             logger.debug("lambda-tuner: classify failed (fail-open): %s", exc)
 
         try:
-            _apply_adaptive_effort(ctx, session_id, user_message, session_type)
+            _apply_adaptive_effort(ctx, session_id, user_message, session_type, agent)
         except Exception as exc:
             logger.debug("lambda-tuner: adaptive effort failed (fail-open): %s", exc)
 
