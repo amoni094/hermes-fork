@@ -64,6 +64,7 @@ from hermes_cli.plugins_state import (
     PluginState, _locked_plugin_state, _nested_plugin_mapping, _nested_plugin_value,
     _plugin_relative_segments, _plugin_settings_entry,
 )
+from hermes_cli.reasoning_resolver import MODE_TO_EFFORT, ReasoningConflictResolver
 
 
 def get_bundled_plugins_dir() -> Path:
@@ -233,6 +234,25 @@ class PluginContext:
         self._skill_suggestions: list = []
         self._session_id: Any = None
         self._reasoning_mode: str = "default"
+        self._adaptive_effort: Optional[str] = None
+        self._MODE_TO_EFFORT = MODE_TO_EFFORT
+        resolver = getattr(manager, "_reasoning_resolver", None)
+        if resolver is None:
+            resolver = ReasoningConflictResolver()
+            try:
+                manager._reasoning_resolver = resolver
+            except Exception:
+                pass
+        self._reasoning_resolver = resolver
+        contexts = getattr(manager, "_plugin_contexts", None)
+        if contexts is None:
+            try:
+                manager._plugin_contexts = []
+                contexts = manager._plugin_contexts
+            except Exception:
+                contexts = None
+        if isinstance(contexts, list):
+            contexts.append(weakref.ref(self))
 
     @property
     def plugin_id(self) -> str:
@@ -281,6 +301,9 @@ class PluginContext:
                         manager._session_reasoning_modes = {}
                         modes = manager._session_reasoning_modes
                     modes[str(sid)] = chosen
+            effort = MODE_TO_EFFORT.get(chosen)
+            if effort:
+                self.set_adaptive_effort(effort, confidence=0.7, priority=5)
         except Exception as exc:
             logger.debug("PluginContext.set_reasoning_mode failed (fail-open): %s", exc)
 
@@ -290,6 +313,68 @@ class PluginContext:
             return str(getattr(self, "_reasoning_mode", None) or "default")
         except Exception:
             return "default"
+
+    def set_adaptive_effort(
+        self,
+        effort: str,
+        confidence: float = 1.0,
+        priority: int = 0,
+    ) -> None:
+        """Recommend a reasoning effort for this turn. Fail-open.
+
+        Does not last-write-win. Recommendations are collected on the shared
+        :class:`ReasoningConflictResolver` and arbitrated by
+        :meth:`apply_adaptive_effort_to_agent`.
+
+        ``confidence`` is 0.0-1.0. ``priority`` is higher = more authoritative
+        (lambda-tuner should pass 10; mode hints use 5; others default 0).
+        """
+        try:
+            plugin_name = getattr(self.manifest, "name", None) or self.plugin_id
+            self._reasoning_resolver.add_recommendation(
+                plugin_name, effort, confidence, priority,
+            )
+            self._adaptive_effort = str(effort or "").strip().lower() or None
+        except Exception as exc:
+            logger.debug("PluginContext.set_adaptive_effort failed (fail-open): %s", exc)
+
+    def apply_adaptive_effort_to_agent(
+        self,
+        agent: Any = None,
+        configured_floor: str = "low",
+    ) -> str:
+        """Resolve collected recommendations and optionally stamp *agent*. Fail-open.
+
+        Returns the winning effort, never below *configured_floor*.
+        """
+        floor = configured_floor or "low"
+        try:
+            winner = self._reasoning_resolver.resolve(floor)
+        except Exception as exc:
+            logger.debug("PluginContext.apply_adaptive_effort_to_agent resolve failed: %s", exc)
+            winner = str(floor)
+        self._adaptive_effort = winner
+        if agent is not None:
+            try:
+                agent.reasoning_effort = winner
+            except Exception as exc:
+                logger.debug("PluginContext.apply_adaptive_effort_to_agent stamp failed: %s", exc)
+        return winner
+
+    def get_reasoning_recommendation_log(self) -> list:
+        """Return this turn's recommendations: plugin, effort, confidence, priority, won."""
+        try:
+            return self._reasoning_resolver.recommendation_log()
+        except Exception:
+            return []
+
+    def reset_reasoning_state(self) -> None:
+        """Clear this turn's recommendations (called before each pre_llm_call)."""
+        try:
+            self._reasoning_resolver.clear()
+            self._adaptive_effort = None
+        except Exception:
+            return
 
     def set_intent(self, text: str) -> None:
         """Propagate the current task intent to the live compressor (bounded).
@@ -1395,6 +1480,8 @@ class PluginManager(PluginLoaderMixin, PluginDispatchMixin, PluginLedgerMixin):
         self._predeclared_tools: Dict[str, List[str]] = {}
         self._reasoning_mode: str = "default"
         self._session_reasoning_modes: Dict[str, str] = {}
+        self._reasoning_resolver = ReasoningConflictResolver()
+        self._plugin_contexts: list = []
 
     @property
     def _agent(self) -> Any:
@@ -1760,6 +1847,21 @@ def get_session_reasoning_mode(session_id: Optional[str] = None) -> str:
 
 
 get_reasoning_mode = get_session_reasoning_mode
+
+
+def apply_adaptive_effort_to_agent(
+    ctx: "PluginContext",
+    agent: Any = None,
+    configured_floor: str = "low",
+) -> str:
+    """Resolve plugin effort recommendations on *ctx* and optionally stamp *agent*."""
+    apply = getattr(ctx, "apply_adaptive_effort_to_agent", None)
+    if callable(apply):
+        return apply(agent=agent, configured_floor=configured_floor)
+    resolver = getattr(ctx, "_reasoning_resolver", None)
+    if resolver is None:
+        return configured_floor or "low"
+    return resolver.resolve(configured_floor or "low")
 
 
 def get_plugin_manager() -> PluginManager:

@@ -421,11 +421,16 @@ def register(ctx: Any) -> None:
                     if session_id:
                         ctx._session_id = session_id
                     if complexity > 0.75:
-                        ctx.set_reasoning_mode("deep")
+                        mode, effort = "deep", "high"
                     elif complexity < 0.25:
-                        ctx.set_reasoning_mode("fast")
+                        mode, effort = "fast", "low"
                     else:
-                        ctx.set_reasoning_mode("default")
+                        mode, effort = "default", "medium"
+                    ctx.set_reasoning_mode(mode)
+                    setter = getattr(ctx, "set_adaptive_effort", None)
+                    if callable(setter):
+                        # Highest authority: direct effort call beats mode-hint (priority=5).
+                        setter(effort, confidence=1.0, priority=10)
                 except Exception as exc:
                     logger.debug("lambda-tuner: set_reasoning_mode failed (fail-open): %s", exc)
 

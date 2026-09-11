@@ -15,6 +15,7 @@ import re
 import threading
 import time
 import types
+import weakref
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Union
 
@@ -163,6 +164,31 @@ class PluginDispatchMixin:
             if name in parameters and parameters[name].kind in keyword_kinds
         })
 
+    def _reset_plugin_reasoning_state(self) -> None:
+        """Clear per-turn reasoning recommendations before ``pre_llm_call`` hooks run."""
+        seen: set[int] = set()
+        for ref in list(getattr(self, "_plugin_contexts", []) or []):
+            ctx = ref() if isinstance(ref, weakref.ref) else ref
+            if ctx is None:
+                continue
+            ident = id(ctx)
+            if ident in seen:
+                continue
+            seen.add(ident)
+            reset = getattr(ctx, "reset_reasoning_state", None)
+            if callable(reset):
+                try:
+                    reset()
+                except Exception:
+                    pass
+        resolver = getattr(self, "_reasoning_resolver", None)
+        clear = getattr(resolver, "clear", None)
+        if callable(clear):
+            try:
+                clear()
+            except Exception:
+                pass
+
     def invoke_hook(self, hook_name: str, **kwargs: Any) -> List[Any]:
         """Call all callbacks for *hook_name*; return their non-``None`` results.
 
@@ -180,6 +206,8 @@ class PluginDispatchMixin:
         # unrelated adapter payloads into one monolithic compatibility contract.
         if hook_name != "gateway_platform_event":
             kwargs.setdefault("telemetry_schema_version", OBSERVER_SCHEMA_VERSION)
+        if hook_name == "pre_llm_call":
+            self._reset_plugin_reasoning_state()
         results: List[Any] = []
         timeout = _resolve_hook_callback_timeout()
         use_timeout = _hook_uses_callback_timeout(hook_name, timeout)
