@@ -314,29 +314,59 @@ class PluginContext:
         except Exception:
             return "default"
 
+    def set_verbosity_mode(self, mode: str) -> None:
+        """Set reasoning-verbosity: ``full``, ``compact``, or ``suppress``. Fail-open."""
+        try:
+            if mode not in ("full", "compact", "suppress"):
+                logger.debug("PluginContext.set_verbosity_mode: invalid mode %r", mode)
+                return
+            agent = getattr(self._manager, "_agent", None)
+            setter = getattr(agent, "set_reasoning_verbosity", None) if agent is not None else None
+            if callable(setter):
+                setter(mode)
+        except Exception as exc:
+            logger.debug("PluginContext.set_verbosity_mode failed (fail-open): %s", exc)
+
     def set_adaptive_effort(
         self,
         effort: str,
         confidence: float = 1.0,
         priority: int = 0,
     ) -> None:
-        """Recommend a reasoning effort for this turn. Fail-open.
+        """Store a per-turn reasoning-effort override. Fail-open.
 
-        Does not last-write-win. Recommendations are collected on the shared
-        :class:`ReasoningConflictResolver` and arbitrated by
-        :meth:`apply_adaptive_effort_to_agent`.
-
-        ``confidence`` is 0.0-1.0. ``priority`` is higher = more authoritative
-        (lambda-tuner should pass 10; mode hints use 5; others default 0).
+        Valid values are :data:`agent.reasoning_effort.EFFORT_LADDER` except
+        ``ultra`` (internal Codex product tier; no wire accepts it). Extra
+        ``confidence``/``priority`` kwargs feed the shared conflict resolver;
+        :func:`apply_adaptive_effort_to_agent` arbitrates and stamps the
+        per-call agent. The override is a floor-respecting raise — it never
+        lowers below the user's configured effort.
         """
         try:
+            from agent.reasoning_effort import EFFORT_LADDER
+            allowed = tuple(level for level in EFFORT_LADDER if level != "ultra")
+            chosen = str(effort or "").strip().lower()
+            if chosen not in allowed:
+                logger.debug("PluginContext.set_adaptive_effort: ignored invalid effort %r", effort)
+                return
+            self._adaptive_effort = chosen
+            manager = getattr(self, "_manager", None)
+            if manager is not None:
+                manager._adaptive_effort = chosen
             plugin_name = getattr(self.manifest, "name", None) or self.plugin_id
             self._reasoning_resolver.add_recommendation(
-                plugin_name, effort, confidence, priority,
+                plugin_name, chosen, confidence, priority,
             )
-            self._adaptive_effort = str(effort or "").strip().lower() or None
         except Exception as exc:
             logger.debug("PluginContext.set_adaptive_effort failed (fail-open): %s", exc)
+
+    def get_adaptive_effort(self) -> Optional[str]:
+        """Return the stored adaptive effort, or ``None``. Fail-open."""
+        try:
+            value = getattr(self, "_adaptive_effort", None)
+            return str(value) if value is not None else None
+        except Exception:
+            return None
 
     def apply_adaptive_effort_to_agent(
         self,
@@ -345,9 +375,16 @@ class PluginContext:
     ) -> str:
         """Resolve collected recommendations and optionally stamp *agent*. Fail-open.
 
-        Returns the winning effort, never below *configured_floor*.
+        Returns the winning effort, never below *configured_floor*. When
+        *agent* is provided the winner is written to
+        ``agent._adaptive_effort_override`` (consumed one-shot by
+        ``_reasoning_config_for_wire``).
         """
         floor = configured_floor or "low"
+        if agent is not None:
+            cfg = getattr(agent, "reasoning_config", None)
+            if isinstance(cfg, dict) and cfg.get("effort"):
+                floor = str(cfg.get("effort") or floor)
         try:
             winner = self._reasoning_resolver.resolve(floor)
         except Exception as exc:
@@ -356,7 +393,13 @@ class PluginContext:
         self._adaptive_effort = winner
         if agent is not None:
             try:
-                agent.reasoning_effort = winner
+                if not getattr(agent, "_reasoning_disable_rejected", False):
+                    cfg = getattr(agent, "reasoning_config", None)
+                    disabled = isinstance(cfg, dict) and (
+                        cfg.get("enabled") is False or cfg.get("effort") == "none"
+                    )
+                    if not disabled:
+                        agent._adaptive_effort_override = winner
             except Exception as exc:
                 logger.debug("PluginContext.apply_adaptive_effort_to_agent stamp failed: %s", exc)
         return winner
@@ -1482,6 +1525,7 @@ class PluginManager(PluginLoaderMixin, PluginDispatchMixin, PluginLedgerMixin):
         self._session_reasoning_modes: Dict[str, str] = {}
         self._reasoning_resolver = ReasoningConflictResolver()
         self._plugin_contexts: list = []
+        self._adaptive_effort: Optional[str] = None
 
     @property
     def _agent(self) -> Any:
@@ -1849,19 +1893,52 @@ def get_session_reasoning_mode(session_id: Optional[str] = None) -> str:
 get_reasoning_mode = get_session_reasoning_mode
 
 
-def apply_adaptive_effort_to_agent(
-    ctx: "PluginContext",
-    agent: Any = None,
-    configured_floor: str = "low",
-) -> str:
-    """Resolve plugin effort recommendations on *ctx* and optionally stamp *agent*."""
-    apply = getattr(ctx, "apply_adaptive_effort_to_agent", None)
-    if callable(apply):
-        return apply(agent=agent, configured_floor=configured_floor)
-    resolver = getattr(ctx, "_reasoning_resolver", None)
-    if resolver is None:
-        return configured_floor or "low"
-    return resolver.resolve(configured_floor or "low")
+def apply_adaptive_effort_to_agent(ctx: Any, agent: Any) -> None:
+    """Copy ``ctx._adaptive_effort`` onto ``agent._adaptive_effort_override``.
+
+    Floor-respecting: never below the user's configured effort. Silently
+    skips when *agent* is ``None``, reasoning is disabled, or
+    ``_reasoning_disable_rejected`` is set. Uses the shared conflict
+    resolver when recommendations exist. Fail-open on any error.
+    """
+    try:
+        if agent is None or ctx is None:
+            return
+        if getattr(agent, "_reasoning_disable_rejected", False):
+            return
+        cfg = getattr(agent, "reasoning_config", None)
+        if isinstance(cfg, dict) and (
+            cfg.get("enabled") is False or cfg.get("effort") == "none"
+        ):
+            return
+        from agent.reasoning_effort import EFFORT_LADDER
+        configured = cfg.get("effort") if isinstance(cfg, dict) else None
+        effort = None
+        resolver = getattr(ctx, "_reasoning_resolver", None)
+        recs = getattr(resolver, "_recs", None) if resolver is not None else None
+        if recs:
+            try:
+                floor = configured if configured in EFFORT_LADDER else "none"
+                effort = resolver.resolve(floor)
+            except Exception:
+                effort = None
+        if effort is None:
+            effort = getattr(ctx, "_adaptive_effort", None)
+        if effort is None:
+            return
+        try:
+            ci = EFFORT_LADDER.index(configured) if configured in EFFORT_LADDER else -1
+            oi = EFFORT_LADDER.index(effort) if effort in EFFORT_LADDER else -1
+        except Exception:
+            return
+        if oi < 0:
+            return
+        clamped = configured if ci >= oi else effort
+        if ci < 0:
+            clamped = effort
+        agent._adaptive_effort_override = clamped
+    except Exception as exc:
+        logger.debug("apply_adaptive_effort_to_agent failed (fail-open): %s", exc)
 
 
 def get_plugin_manager() -> PluginManager:
@@ -2046,8 +2123,18 @@ def invoke_hook(hook_name: str, **kwargs: Any) -> List[Any]:
     Ensures plugins are discovered on first invocation so callers in processes that never explicitly call
     ``discover_plugins()`` (gateway platform events, TUI slash workers, query mode, cron) still fire
     callbacks registered by user plugins (tracking #64178).
+
+    After ``pre_llm_call`` plugins run, any adaptive-effort request is copied
+    onto the per-call ``agent`` so ``_reasoning_config_for_wire`` can consume it.
     """
-    return _delivery_manager().invoke_hook(hook_name, **kwargs)
+    manager = _delivery_manager()
+    results = manager.invoke_hook(hook_name, **kwargs)
+    if hook_name == "pre_llm_call":
+        try:
+            apply_adaptive_effort_to_agent(manager, kwargs.get("agent"))
+        except Exception:
+            logger.debug("adaptive effort apply after pre_llm_call failed (fail-open)", exc_info=True)
+    return results
 
 
 def render_system_prompt_sections(session_info: Mapping[str, Any]) -> List[RenderedPluginSystemPromptSection]:

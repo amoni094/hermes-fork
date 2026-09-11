@@ -38,6 +38,7 @@ from agent.model_metadata import is_local_endpoint
 from agent.message_content import flatten_message_text
 from agent.message_metadata import append_message, stamp_message_timestamp
 from agent.message_sanitization import (_sanitize_surrogates, _repair_tool_call_arguments)
+from agent.reasoning_effort import EFFORT_LADDER
 from agent.reasoning_summaries import separate_glued_reasoning_blocks
 from agent.stream_single_writer import claim_stream_writer, stream_writer_is_current
 from tools.terminal_tool_lifecycle import is_persistent_env
@@ -1175,17 +1176,51 @@ def _consume_ephemeral_reasoning_off(agent) -> bool:
     return consumed
 
 
+def _higher_effort_on_ladder(configured, override):
+    """Return ``max(configured, override)`` on :data:`EFFORT_LADDER`.
+
+    Unknown names are ignored so a bad plugin value cannot clobber the
+    user's configured effort. Fast: two ``in``/``index`` lookups on an
+    8-tuple.
+    """
+    try:
+        ci = EFFORT_LADDER.index(configured) if configured in EFFORT_LADDER else -1
+        oi = EFFORT_LADDER.index(override) if override in EFFORT_LADDER else -1
+    except Exception:
+        return configured
+    if oi < 0:
+        return configured
+    if ci < 0:
+        return override
+    return configured if ci >= oi else override
+
+
 def _reasoning_config_for_wire(agent):
-    """``agent.reasoning_config`` with the one-shot reasoning-off override applied.
+    """``agent.reasoning_config`` with one-shot overrides applied.
 
     Once the route has answered a disable with "reasoning is mandatory"
     (``agent._reasoning_disable_rejected``), every disable — configured or
     the one-shot continuation override — is dropped for the rest of the
     session: the request goes out without a reasoning config and the route
     applies its own default.
+
+    Plugins may set ``agent._adaptive_effort_override`` (via PluginContext)
+    to raise effort for this turn based on task complexity. The override is
+    a floor-respecting raise: it never goes below the user's configured
+    effort, never fires when reasoning is disabled (``enabled=False`` or
+    ``effort="none"``), and is cleared after each wire read so retries
+    don't reuse a stale value. The one-shot ``ephemeral_off`` path is
+    undisturbed — it always wins over an adaptive raise.
     """
     cfg = agent.reasoning_config
     ephemeral_off = _consume_ephemeral_reasoning_off(agent)
+    # Consume the plugin override up front (one-shot, like ephemeral_off)
+    # even if we later skip applying it.
+    try:
+        adaptive_override = getattr(agent, "_adaptive_effort_override", None)
+        agent._adaptive_effort_override = None
+    except Exception:
+        adaptive_override = None
     if getattr(agent, "_reasoning_disable_rejected", False):
         # The route rejects disables. Resend exactly what the session has
         # been sending — the user's own config — so the retry lands on the
@@ -1199,6 +1234,19 @@ def _reasoning_config_for_wire(agent):
         return cfg
     if ephemeral_off:
         cfg = {**(cfg or {}), "enabled": False, "effort": "none"}
+        return cfg
+    if adaptive_override is not None:
+        try:
+            if isinstance(cfg, dict) and (
+                cfg.get("enabled") is False or cfg.get("effort") == "none"
+            ):
+                return cfg
+            configured = cfg.get("effort") if isinstance(cfg, dict) else None
+            clamped = _higher_effort_on_ladder(configured, adaptive_override)
+            if clamped is not None:
+                cfg = {**(cfg or {}), "effort": clamped}
+        except Exception:
+            pass
     return cfg
 
 

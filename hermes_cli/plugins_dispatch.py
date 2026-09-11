@@ -227,6 +227,12 @@ class PluginDispatchMixin:
             except Exception as exc:
                 logger.warning(
                     "Hook '%s' callback %s raised: %s", hook_name, getattr(cb, "__name__", repr(cb)), exc)
+        if hook_name == "pre_llm_call":
+            try:
+                from hermes_cli.plugins import apply_adaptive_effort_to_agent
+                apply_adaptive_effort_to_agent(self, kwargs.get("agent"))
+            except Exception:
+                logger.debug("adaptive effort apply after pre_llm_call failed (fail-open)", exc_info=True)
         return results
 
     def invoke_hook_for_exchange(
