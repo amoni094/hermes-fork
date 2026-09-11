@@ -1763,6 +1763,13 @@ class EntropyEstimator:
         except Exception:
             return -1
 
+    def entropy_delta_since(self, last_h: float) -> float:
+        """Absolute change in entropy rate since *last_h*. Fail-open."""
+        try:
+            return abs(self.entropy_rate() - float(last_h))
+        except Exception:
+            return 0.0
+
 
 class MessageImportanceScorer:
     """Gallager-style importance: tool results and long reasoning beat ack turns."""
@@ -1782,6 +1789,23 @@ class MessageImportanceScorer:
         if role == "user" and isinstance(content, str) and len(content) < 30:
             return 0.4
         return 0.7
+
+    def compressibility(self, content: str) -> float:
+        """zlib ratio as a Kolmogorov-complexity proxy. Lower = more compressible.
+
+        Returns a value in ``[0.0, 1.0]``. Fail-open to ``0.5``.
+        """
+        try:
+            import zlib
+            text = "" if content is None else str(content)
+            ratio = len(zlib.compress(text.encode("utf-8", errors="ignore"))) / max(len(text), 1)
+            if ratio < 0.0:
+                return 0.0
+            if ratio > 1.0:
+                return 1.0
+            return float(ratio)
+        except Exception:
+            return 0.5
 
 
 def _message_text_for_entropy(msg: Any) -> str:
@@ -2061,6 +2085,8 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         # HIGH-7: reset ChronoMem state so session 2 does not inherit session 1 clock/checkpoints.
         # why: _turn_clock and _entropy_estimator._checkpoints are per-session; /new is a boundary.
         self._turn_clock = 0
+        self._last_compress_entropy = 0.0
+        self._last_compress_clock = 0
         self._active_compression_profile = None
         est = getattr(self, "_entropy_estimator", None)
         if est is not None:
@@ -2563,6 +2589,8 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         self._entropy_estimator = EntropyEstimator()
         self._entropy_fed_count = 0
         self._turn_clock = 0
+        self._last_compress_entropy: float = 0.0
+        self._last_compress_clock: int = 0
         self._importance_scorer = MessageImportanceScorer()
         self._last_scored_messages: List[Dict[str, Any]] = []
         self._active_compression_profile: str | None = None
@@ -2792,6 +2820,17 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         except Exception:
             return 0.7
 
+    def rr_score(self, role: str, content: str) -> float:
+        """Kolmogorov-informed retention score: importance + zlib uniqueness. Fail-open."""
+        try:
+            scorer = getattr(self, "_importance_scorer", None)
+            if scorer is None:
+                self._importance_scorer = MessageImportanceScorer()
+                scorer = self._importance_scorer
+            return 0.6 * self.score_message(role, content) + 0.4 * scorer.compressibility(content)
+        except Exception:
+            return 0.7
+
     def importance_scores(self, history: list) -> list:
         """Score each message dict with ``role`` / ``content`` keys. Fail-open."""
         try:
@@ -2817,9 +2856,6 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
             if not messages or int(target_prune_tokens or 0) <= 0:
                 return messages, 0
             n = len(messages)
-            scores = self.importance_scores(messages)
-            if len(scores) != n:
-                scores = (list(scores) + [0.7] * n)[:n]
             protect_first = max(0, int(getattr(self, "protect_first_n", 0) or 0))
             protect_last = max(0, int(protect_last_n or 0))
             last_start = max(0, n - protect_last)
@@ -2828,11 +2864,13 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
                 if i < protect_first or i >= last_start:
                     continue
                 role = ""
+                content = ""
                 if isinstance(msg, dict):
                     role = str(msg.get("role") or "")
+                    content = str(msg.get("content", "") or "")
                 if role == "system":
                     continue
-                candidates.append((float(scores[i]), i))
+                candidates.append((float(self.rr_score(role, content)), i))
             candidates.sort(key=lambda item: (item[0], item[1]))
             evict: set[int] = set()
             tokens_pruned = 0
@@ -2904,8 +2942,16 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
                 hist = messages[-20:] if messages else getattr(self, "_last_scored_messages", None)
                 scores = self.importance_scores(hist or [])
                 payload["avg_importance"] = (sum(scores) / len(scores)) if scores else 0.0
+                rr_vals: List[float] = []
+                for m in hist or []:
+                    if isinstance(m, dict):
+                        rr_vals.append(self.rr_score(str(m.get("role") or ""), str(m.get("content", "") or "")))
+                    else:
+                        rr_vals.append(self.rr_score("", str(m)))
+                payload["avg_rr_score"] = (sum(rr_vals) / len(rr_vals)) if rr_vals else 0.0
             except Exception:
                 payload["avg_importance"] = 0.0
+                payload["avg_rr_score"] = 0.0
             logger.info("pre_compress_checkpoint %s", payload)
         except Exception:
             return
@@ -3027,6 +3073,27 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         # compressing further causes irreversible loss without size benefit.
         estimator = getattr(self, "_entropy_estimator", None)
         _clock = getattr(self, "_turn_clock", 0) or 0
+        # Entropy-delta gate (Shannon/Gallager): if H has not moved since the last
+        # successful compression, another pass will not help. Require last_clock > 0
+        # and >3 turns since that pass so a never-compressed (stale) clock cannot skip
+        # the first compression.
+        try:
+            last_clock = int(getattr(self, "_last_compress_clock", 0) or 0)
+            last_h = float(getattr(self, "_last_compress_entropy", 0.0) or 0.0)
+            if (
+                estimator is not None
+                and last_clock > 0
+                and (_clock - last_clock) > 3
+            ):
+                delta = estimator.entropy_delta_since(last_h)
+                if delta < 0.15:
+                    logger.debug(
+                        "pre_compress skipped: low_entropy_delta clock=%d last=%d delta=%.3f",
+                        _clock, last_clock, delta,
+                    )
+                    return False, "low_entropy_delta"
+        except Exception:
+            pass
         # AEP floor only meaningful once we have seen > protect_last_n turns.
         # Before that the avg_tokens estimate is inflated (few turns, large denominator-free estimate)
         # and H cancels in min_retain_tokens, making floor = protect_last_n * avg which always blocks.
@@ -5171,6 +5238,12 @@ Write only the summary body. Do not include any preamble or prefix."""
         if _pruned_replay and not self.quiet_mode:
             logger.info("Pruned stale replay items from %d assistant message(s) during compaction", _pruned_replay)
         self._last_compression_made_progress = True
+        try:
+            est = getattr(self, "_entropy_estimator", None)
+            self._last_compress_entropy = float(est.entropy_rate()) if est is not None else 0.0
+            self._last_compress_clock = int(getattr(self, "_turn_clock", 0) or 0)
+        except Exception:
+            pass
 
         # Compaction frees the biggest allocation: hand pages back to the OS (glibc/config-gated,
         # rate-limited, #70782). debug, not warning: compression must never fail because of a trim.

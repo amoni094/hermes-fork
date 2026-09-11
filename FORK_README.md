@@ -188,6 +188,17 @@ entropy rather than a research/code prior:
 - The classifier may still lock research/code/mixed after enough user turns;
   entropy-adaptive is a launch prior, not a lock that overrides classify.
 
+## Compression scheduling (entropy-delta gate)
+
+If Shannon entropy rate has not moved by 0.15 bits/token since the last successful compression and more than 3 ChronoMem turns have elapsed, `should_compress_info` skips with reason `low_entropy_delta` (another pass will not help).
+`_last_compress_entropy` / `_last_compress_clock` update only after a successful `compress()` and reset in `bind_session_state` (`/new`).
+A never-compressed clock (`_last_compress_clock == 0`) does not skip the first compression.
+
+## RR scoring (Kolmogorov proxy)
+
+`MessageImportanceScorer.compressibility` is a zlib ratio (lower = more compressible = less unique). `ContextCompressor.rr_score` is `0.6 * importance + 0.4 * compressibility` and is the eviction key in `importance_biased_prune`.
+`_pre_compress_checkpoint` logs `avg_rr_score` over the last 20 messages.
+
 ## Syncing upstream
 
 ```bash

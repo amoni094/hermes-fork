@@ -232,6 +232,7 @@ class PluginContext:
         self._llm: Any = None  # lazy; tests preseed it (see ``llm``)
         self._skill_suggestions: list = []
         self._session_id: Any = None
+        self._reasoning_mode: str = "default"
 
     @property
     def plugin_id(self) -> str:
@@ -262,6 +263,33 @@ class PluginContext:
             return None
         # Freshness: do not cache; the agent may rebuild context_compressor in place.
         return getattr(agent, "context_compressor", None)
+
+    def set_reasoning_mode(self, mode: str) -> None:
+        """Set per-session reasoning depth: ``deep``, ``fast``, or ``default``. Fail-open."""
+        try:
+            allowed = ("deep", "fast", "default")
+            chosen = mode if mode in allowed else "default"
+            self._reasoning_mode = chosen
+            logger.debug("PluginContext.set_reasoning_mode: %s", chosen)
+            manager = getattr(self, "_manager", None)
+            if manager is not None:
+                manager._reasoning_mode = chosen
+                sid = getattr(self, "_session_id", None)
+                if sid:
+                    modes = getattr(manager, "_session_reasoning_modes", None)
+                    if not isinstance(modes, dict):
+                        manager._session_reasoning_modes = {}
+                        modes = manager._session_reasoning_modes
+                    modes[str(sid)] = chosen
+        except Exception as exc:
+            logger.debug("PluginContext.set_reasoning_mode failed (fail-open): %s", exc)
+
+    def get_reasoning_mode(self) -> str:
+        """Return the live reasoning mode (``deep`` / ``fast`` / ``default``). Fail-open."""
+        try:
+            return str(getattr(self, "_reasoning_mode", None) or "default")
+        except Exception:
+            return "default"
 
     def set_intent(self, text: str) -> None:
         """Propagate the current task intent to the live compressor (bounded).
@@ -1365,6 +1393,8 @@ class PluginManager(PluginLoaderMixin, PluginDispatchMixin, PluginLedgerMixin):
         # and contributed tool names (so `hermes plugins list` still attributes them).
         self._predeclared_modules: Dict[str, types.ModuleType] = {}
         self._predeclared_tools: Dict[str, List[str]] = {}
+        self._reasoning_mode: str = "default"
+        self._session_reasoning_modes: Dict[str, str] = {}
 
     @property
     def _agent(self) -> Any:
@@ -1710,6 +1740,26 @@ def _clear_plugin_submodules(manager: Optional[PluginManager]) -> None:
         with _MODULE_NAMESPACE_LOCK:
             if _BARE_MODULE_SCOPE.get(module_name) == manager.scope_key:
                 _BARE_MODULE_SCOPE.pop(module_name, None)
+
+
+def get_session_reasoning_mode(session_id: Optional[str] = None) -> str:
+    """Query the live PluginContext reasoning mode via the plugin manager. Fail-open.
+
+    Reads ``PluginContext._reasoning_mode`` as mirrored on the manager
+    (and, when *session_id* is set, the per-session map).
+    """
+    try:
+        manager = get_plugin_manager()
+        if session_id:
+            modes = getattr(manager, "_session_reasoning_modes", None)
+            if isinstance(modes, dict) and session_id in modes:
+                return str(modes.get(session_id) or "default")
+        return str(getattr(manager, "_reasoning_mode", None) or "default")
+    except Exception:
+        return "default"
+
+
+get_reasoning_mode = get_session_reasoning_mode
 
 
 def get_plugin_manager() -> PluginManager:

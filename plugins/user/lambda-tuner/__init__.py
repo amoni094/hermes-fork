@@ -410,6 +410,18 @@ def register(ctx: Any) -> None:
                     logger.debug("lambda-tuner: complexity score failed (fail-open): %s", exc)
                     complexity = 0.0
 
+                try:
+                    if session_id:
+                        ctx._session_id = session_id
+                    if complexity > 0.75:
+                        ctx.set_reasoning_mode("deep")
+                    elif complexity < 0.25:
+                        ctx.set_reasoning_mode("fast")
+                    else:
+                        ctx.set_reasoning_mode("default")
+                except Exception as exc:
+                    logger.debug("lambda-tuner: set_reasoning_mode failed (fail-open): %s", exc)
+
                 compressor = None
                 if agent is not None:
                     compressor = getattr(agent, "context_compressor", None)
