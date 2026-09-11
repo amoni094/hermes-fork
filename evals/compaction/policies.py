@@ -72,6 +72,17 @@ POLICIES: Dict[str, Dict[str, Any]] = {
             "importance_biased_prune_enabled": True,
         },
     },
+    # Classifier-routed arm: starts from lean baseline, then auto-selects fork profile
+    # based on session_classifier heuristic. Tests end-to-end classifier routing benefit.
+    "classified": {
+        "ctor": {"threshold_percent": 0.50, "protect_last_n": 20},
+        "attrs": {
+            "_session_id": "eval-session",
+            "proactive_prune_tokens": 32_000,
+            "importance_biased_prune_enabled": True,
+            "use_classifier": True,
+        },
+    },
     # Lean + research threshold compound arm.
     "lean_fork_research": {
         "ctor": {"threshold_percent": 0.45, "protect_last_n": 22},

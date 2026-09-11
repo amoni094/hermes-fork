@@ -439,6 +439,13 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
     for key, value in (spec.get("ctor") or {}).items():
         setattr(comp, key, value)
     _apply_fork_runtime_attrs(comp, spec)
+    # Classifier-routed arm: invoke session classifier on the message window so the
+    # compressor self-selects the best fork profile before compression.
+    if (spec.get("attrs") or {}).get("use_classifier"):
+        try:
+            comp._maybe_route_session_profile(messages)
+        except Exception:
+            pass  # fall through to lean baseline on any error
     t0 = time.time()
     compressed = comp.compress(copy.deepcopy(messages), current_tokens=total_tokens(messages), force=True)
     elapsed = time.time() - t0
