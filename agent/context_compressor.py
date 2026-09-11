@@ -2372,36 +2372,43 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
     # --- Adaptive compression API (for plugins and session-type tuning) ---------
 
     #: Built-in profiles that plugins can reference by name.
+    #:
+    #: Direction (threshold_percent): lower = earlier full compression.
+    #: research (0.45) < mixed (0.50) < code (0.55). Research dumps large tool
+    #: results so it should trip compression first; code keeps causal chains.
+    #:
+    #: proactive_prune_tokens is the *trigger floor* (prune when current_tokens
+    #: >= this). Higher = later prune. Research 40k / mixed 32k / code 28k is
+    #: intentional: research is allowed a larger tool-result buffer before the
+    #: cheap prune, then full compression (lower threshold) reclaims the rest.
+    #: protect_last_n is a requested floor; actual tail cut still caps at
+    #: ``_MAX_TAIL_MESSAGE_FLOOR``.
     COMPRESSION_PROFILES: "dict[str, dict]" = {
-        # Research sessions: large context windows, wide knowledge accumulation.
-        # Prune earlier to give room; protect fewer tail messages since the middle
-        # is often relevant context (papers, notes, analysis).
         "research": {
             "threshold_percent": 0.45,
             "proactive_prune_tokens": 40_000,
             "protect_last_n": 15,
         },
-        # Coding sessions: causal chains matter; protect more of the tail so
-        # recent error/fix pairs are never evicted.  Trigger compression later
-        # so tool call results accumulate.
         "code": {
             "threshold_percent": 0.55,
             "proactive_prune_tokens": 28_000,
             "protect_last_n": 25,
         },
-        # Mixed / default: balanced settings close to the out-of-box defaults.
         "mixed": {
             "threshold_percent": 0.50,
             "proactive_prune_tokens": 32_000,
             "protect_last_n": 20,
         },
     }
+    _PROFILE_THRESHOLD_MIN = 0.20
+    _PROFILE_THRESHOLD_MAX = 0.85
+    _PROFILE_PROTECT_LAST_N_MAX = 128
+    _PROFILE_KEYS = ("threshold_percent", "proactive_prune_tokens", "protect_last_n")
 
     def set_compression_profile(
         self,
         profile: "str | dict",
-        *,
-        _source: str = "plugin",
+        **kwargs,
     ) -> None:
         """Apply a named or custom compression profile between turns.
 
@@ -2411,44 +2418,89 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
 
         *Not* safe to call mid-pass (inside the compressor's own call stack).
 
+        Fail-open: unknown names, bad types, and out-of-range values are logged
+        and ignored (or clamped) rather than raised. Extra kwargs (including
+        ``_source``) are accepted and never forwarded into compressor internals.
+
         Args:
             profile: A key from :attr:`COMPRESSION_PROFILES` (``"research"``,
                 ``"code"``, ``"mixed"``) **or** a dict with any subset of keys
                 ``threshold_percent``, ``proactive_prune_tokens``, ``protect_last_n``.
-            _source: Informational label for debug logs (e.g. ``"lambda-tuner"``).
-
-        Raises:
-            ValueError: ``profile`` is a string not in :attr:`COMPRESSION_PROFILES`.
-            TypeError:  ``profile`` is neither a str nor a dict.
+                Dict profiles merge with live state (unspecified keys unchanged).
+            **kwargs: ``_source`` is an informational log label; anything else
+                is dropped.
         """
         import logging as _logging
         _log = _logging.getLogger(__name__)
+        _source = kwargs.pop("_source", "plugin")
+        # Remaining kwargs are intentionally discarded (plugin telemetry, etc.).
 
         if isinstance(profile, str):
             if profile not in self.COMPRESSION_PROFILES:
-                raise ValueError(
-                    f"Unknown compression profile {profile!r}. "
-                    f"Valid: {list(self.COMPRESSION_PROFILES)}"
+                _log.warning(
+                    "context_compressor: unknown profile %r from %s (valid: %s) — ignored",
+                    profile, _source, list(self.COMPRESSION_PROFILES),
                 )
-            settings = self.COMPRESSION_PROFILES[profile]
+                return
+            settings = dict(self.COMPRESSION_PROFILES[profile])
         elif isinstance(profile, dict):
-            settings = profile
+            # Partial update: do not full-replace unspecified keys with defaults.
+            settings = {k: profile[k] for k in self._PROFILE_KEYS if k in profile}
+            if not settings:
+                _log.warning(
+                    "context_compressor: empty/unknown-key dict profile from %s — ignored",
+                    _source,
+                )
+                return
         else:
-            raise TypeError(f"profile must be str or dict, got {type(profile).__name__!r}")
+            _log.warning(
+                "context_compressor: profile must be str or dict, got %s from %s — ignored",
+                type(profile).__name__, _source,
+            )
+            return
 
         if "threshold_percent" in settings:
-            self.threshold_percent = float(settings["threshold_percent"])
-            # Invalidate cached token threshold so it is recomputed from the new ratio.
-            self._threshold_tokens = None
+            try:
+                pct = float(settings["threshold_percent"])
+            except (TypeError, ValueError):
+                _log.warning(
+                    "context_compressor: invalid threshold_percent %r from %s — skipped",
+                    settings["threshold_percent"], _source,
+                )
+            else:
+                pct = min(self._PROFILE_THRESHOLD_MAX, max(self._PROFILE_THRESHOLD_MIN, pct))
+                self.threshold_percent = pct
+                # Keep the context_length setter from reverting to the pre-profile base.
+                self._base_threshold_percent = pct
+                # Invalidate derived caches so the next compress/prune recomputes.
+                self._threshold_tokens = None
+                self._tail_token_budget = None
         if "proactive_prune_tokens" in settings:
-            self.proactive_prune_tokens = max(0, int(settings["proactive_prune_tokens"]))
+            try:
+                self.proactive_prune_tokens = max(0, int(settings["proactive_prune_tokens"]))
+            except (TypeError, ValueError):
+                _log.warning(
+                    "context_compressor: invalid proactive_prune_tokens %r from %s — skipped",
+                    settings["proactive_prune_tokens"], _source,
+                )
+            # Rearm is left intact on purpose: resetting it would cache-break
+            # immediately. Next prune still uses the new floor.
+            # TODO: consider lowering rearm if the new floor is more aggressive.
         if "protect_last_n" in settings:
-            self.protect_last_n = max(1, int(settings["protect_last_n"]))
+            try:
+                n = int(settings["protect_last_n"])
+            except (TypeError, ValueError):
+                _log.warning(
+                    "context_compressor: invalid protect_last_n %r from %s — skipped",
+                    settings["protect_last_n"], _source,
+                )
+            else:
+                self.protect_last_n = max(1, min(n, self._PROFILE_PROTECT_LAST_N_MAX))
 
         _log.debug(
             "context_compressor: profile applied by %s — %s",
             _source,
-            {k: getattr(self, k) for k in ("threshold_percent", "proactive_prune_tokens", "protect_last_n")},
+            {k: getattr(self, k) for k in self._PROFILE_KEYS},
         )
 
     # --- end adaptive compression API -------------------------------------------
@@ -2696,7 +2748,10 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
     ) -> int:
         """First index of the protected tail; token budget (when given) beats the count floor."""
         if protect_tail_tokens is None or protect_tail_tokens <= 0:
-            return len(result) - protect_tail_count
+            # Clamp: protect_last_n > len(history) must not yield a negative index.
+            # Callers also use max(0, boundary), but a negative here would invert
+            # "everything protected" vs "nothing to walk" depending on the site.
+            return max(0, len(result) - max(0, int(protect_tail_count)))
         # Token-budget walk; cap the message-count floor like tail-cut so a bulky recent run stays prunable.
         min_protect = min(protect_tail_count, len(result), _MAX_TAIL_MESSAGE_FLOOR)
         boundary, _ = self._walk_tail_budget(result, 0, protect_tail_tokens, min_protect, cut_at_break=True)

@@ -21,6 +21,7 @@ import re
 import sys
 import threading
 import types
+import weakref
 from contextlib import suppress
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -228,16 +229,23 @@ class PluginContext:
     def compressor(self) -> "Any | None":
         """Live :class:`ContextCompressor` for this session, or ``None`` if not yet set.
 
+        Always re-reads ``agent.context_compressor`` (never caches the instance).
+        A model/engine swap that replaces the compressor is therefore visible on
+        the next property access. Returns ``None`` if the agent was GC'd (weakref)
+        or not yet bound.
+
         Plugins can call :meth:`~agent.context_compressor.ContextCompressor.set_compression_profile`
         from a ``pre_llm_call`` hook to adjust compression behaviour between turns::
 
             def on_pre_llm_call(ctx, agent=None, **kw):
-                if agent:
-                    c = ctx.compressor
-                    if c:
-                        c.set_compression_profile("research", _source="my-plugin")
+                c = ctx.compressor
+                if c and hasattr(c, "set_compression_profile"):
+                    c.set_compression_profile("research", _source="my-plugin")
         """
         agent = getattr(self._manager, "_agent", None)
+        if agent is None:
+            return None
+        # Freshness: do not cache; the agent may rebuild context_compressor in place.
         return getattr(agent, "context_compressor", None)
 
     def has_plugin(self, plugin_id: str) -> bool:
@@ -1135,7 +1143,13 @@ class PluginManager(PluginLoaderMixin, PluginDispatchMixin, PluginLedgerMixin):
         self._discovery_lock = threading.RLock()
         self._discovered: bool = False
         self._cli_ref = None  # Set by CLI after plugin discovery
-        self._agent = None  # Set by agent_init after compressor construction; enables ctx.compressor
+        # Weakref to the live agent (set by agent_init after compressor construction).
+        # Avoids PluginManager → agent keeping the last session alive forever, and
+        # breaks the agent → (hook kwargs) → manager → agent cycle if one forms.
+        # Attribute assignment is atomic under the GIL; pre_llm_call may run on a
+        # timeout worker, so readers must tolerate a None / stale-but-whole agent.
+        self._agent_ref: "weakref.ref | None" = None
+        self._agent_strong: Any = None  # fallback for non-weakrefable test doubles
         self._gateway_message_injector: tuple[object, Callable] | None = None
         self._context_engine = None  # Set by a plugin via register_context_engine()
         # Manager-local registries keyed by name (see the matching ``PluginContext.register_*``):
@@ -1196,6 +1210,25 @@ class PluginManager(PluginLoaderMixin, PluginDispatchMixin, PluginLedgerMixin):
         # and contributed tool names (so `hermes plugins list` still attributes them).
         self._predeclared_modules: Dict[str, types.ModuleType] = {}
         self._predeclared_tools: Dict[str, List[str]] = {}
+
+    @property
+    def _agent(self) -> Any:
+        ref = self._agent_ref
+        if ref is not None:
+            return ref()
+        return self._agent_strong
+
+    @_agent.setter
+    def _agent(self, value: Any) -> None:
+        self._agent_strong = None
+        self._agent_ref = None
+        if value is None:
+            return
+        try:
+            self._agent_ref = weakref.ref(value)
+        except TypeError:
+            # TODO: non-weakrefable stubs (some slots classes); keep a strong ref.
+            self._agent_strong = value
 
     @property
     def has_gateway_message_injector(self) -> bool:

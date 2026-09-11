@@ -21,6 +21,7 @@ import os
 import re
 import time
 import tempfile
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -37,14 +38,26 @@ def _hint_path() -> Path:
 
 _HINT_TTL_SECONDS = 6 * 3600  # 6h — stale hints fall back to mixed in wrapper
 
+# Matches hermes-session wrapper table (rr_scorer_lambda). Hint schema includes
+# lambda for the wrapper; live compressor uses COMPRESSION_PROFILES instead.
+_TYPE_TO_LAMBDA = {"research": "0.55", "code": "0.2", "mixed": "0.4"}
+
+_last_hint_key: tuple[str, str] | None = None  # (type, lambda_str) dirty-check
+
 
 def _write_hint(session_type: str, confidence: float, scores: dict[str, float]) -> None:
-    """Atomically write the JSON hint file."""
+    """Atomically write the JSON hint file. Skip if type+lambda unchanged."""
+    global _last_hint_key
+    lam_str = _TYPE_TO_LAMBDA.get(session_type, _TYPE_TO_LAMBDA["mixed"])
+    key = (session_type, lam_str)
+    if _last_hint_key == key:
+        return
     hint_path = _hint_path()
     hint_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "type": session_type,
         "profile": session_type,  # maps directly to COMPRESSION_PROFILES key
+        "lambda": lam_str,
         "confidence": round(confidence, 3),
         "scores": {k: round(v, 3) for k, v in scores.items()},
         "ts": time.time(),
@@ -56,6 +69,7 @@ def _write_hint(session_type: str, confidence: float, scores: dict[str, float]) 
         with os.fdopen(fd, "w") as f:
             json.dump(payload, f)
         os.replace(tmp, hint_path)
+        _last_hint_key = key
     except Exception:
         try:
             os.unlink(tmp)
@@ -164,11 +178,46 @@ def _classify(messages: list[str]) -> tuple[str, float, dict[str, float]]:
 
 
 # ---------------------------------------------------------------------------
-# Plugin state
+# Plugin state — bounded LRU so a long-running gateway cannot grow forever
 # ---------------------------------------------------------------------------
 
-_fired: set[str] = set()  # session_ids where classification is locked
-_session_messages: dict[str, list[str]] = {}
+_MAX_SESSIONS = 64
+_MAX_MESSAGES_PER_SESSION = 32
+_fired: OrderedDict[str, str] = OrderedDict()  # session_id -> locked type
+_session_messages: OrderedDict[str, list[str]] = OrderedDict()
+
+
+def _touch_session(session_id: str) -> None:
+    """LRU-touch and evict oldest sessions (and their _fired entries) over cap."""
+    if session_id in _session_messages:
+        _session_messages.move_to_end(session_id)
+    if session_id in _fired:
+        _fired.move_to_end(session_id)
+    while len(_session_messages) > _MAX_SESSIONS:
+        evicted, _ = _session_messages.popitem(last=False)
+        _fired.pop(evicted, None)
+    while len(_fired) > _MAX_SESSIONS:
+        _fired.popitem(last=False)
+
+
+def _apply_profile(ctx: Any, agent: Any, session_type: str, session_id: str, confidence: float, n_turns: int) -> None:
+    compressor = None
+    try:
+        compressor = ctx.compressor
+    except AttributeError:
+        pass
+    if compressor is None and agent is not None:
+        compressor = getattr(agent, "context_compressor", None)
+    if compressor is not None and hasattr(compressor, "set_compression_profile"):
+        try:
+            # _source is accepted via **kwargs on set_compression_profile and only used for logs.
+            compressor.set_compression_profile(session_type, _source="lambda-tuner")
+            logger.debug(
+                "lambda-tuner: live profile=%s sid=%s conf=%.2f turn=%d",
+                session_type, session_id, confidence, n_turns,
+            )
+        except Exception as exc:
+            logger.debug("lambda-tuner: set_compression_profile failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -191,42 +240,26 @@ def register(ctx: Any) -> None:
 
         bucket = _session_messages.setdefault(session_id, [])
         bucket.append(user_message)
-
-        if session_id in _fired:
-            return
+        if len(bucket) > _MAX_MESSAGES_PER_SESSION:
+            del bucket[:-_MAX_MESSAGES_PER_SESSION]
+        _touch_session(session_id)
 
         try:
+            if session_id in _fired:
+                # Re-apply locked profile in case the compressor was rebuilt
+                # (model switch / engine swap) after we first committed.
+                _apply_profile(ctx, agent, _fired[session_id], session_id, 1.0, len(bucket))
+                return
+
             session_type, confidence, scores = _classify(bucket)
             commit = session_type != "mixed" or len(bucket) >= 3
 
-            # --- Live compression profile (hermes-fork API) ------------------
-            # Try ctx.compressor first (fork), then agent.context_compressor
-            # (fallback direct attr), then hint-file-only (vanilla Hermes).
-            compressor = None
-            try:
-                compressor = ctx.compressor  # PluginContext.compressor property
-            except AttributeError:
-                pass
-            if compressor is None and agent is not None:
-                compressor = getattr(agent, "context_compressor", None)
-
-            if compressor is not None and hasattr(compressor, "set_compression_profile"):
-                try:
-                    compressor.set_compression_profile(
-                        session_type, _source="lambda-tuner"
-                    )
-                    logger.debug(
-                        "lambda-tuner: live profile=%s sid=%s conf=%.2f turn=%d",
-                        session_type, session_id, confidence, len(bucket),
-                    )
-                except Exception as exc:
-                    logger.debug("lambda-tuner: set_compression_profile failed: %s", exc)
-
-            # --- Hint file (for hermes-session launch wrapper) ---------------
+            _apply_profile(ctx, agent, session_type, session_id, confidence, len(bucket))
             _write_hint(session_type, confidence, scores)
 
             if commit:
-                _fired.add(session_id)
+                _fired[session_id] = session_type
+                _fired.move_to_end(session_id)
                 logger.debug(
                     "lambda-tuner: committed sid=%s type=%s conf=%.2f scores=%s turn=%d",
                     session_id, session_type, confidence, scores, len(bucket),
@@ -236,3 +269,11 @@ def register(ctx: Any) -> None:
             logger.debug("lambda-tuner: classify failed (fail-open): %s", exc)
 
     ctx.register_hook("pre_llm_call", on_pre_llm_call)
+    # Run before other pre_llm_call hooks that might read compression state.
+    try:
+        hooks = ctx._manager._hooks.get("pre_llm_call")
+        if hooks and hooks[-1] is on_pre_llm_call:
+            hooks.insert(0, hooks.pop())
+    except Exception:
+        pass  # fail-open: registration order stays as-is
+

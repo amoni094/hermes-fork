@@ -48,6 +48,8 @@ _STDERR_MESSAGE_LIMIT = 400
 _TRUTHY = {"1", "true", "yes", "on"}
 # kwargs promoted to top-level payload keys; everything else lands under ``extra``.
 _TOP_LEVEL_PAYLOAD_KEYS = {"tool_name", "args", "session_id", "parent_session_id"}
+# Live objects that must never be JSON-serialized into stdin/POST extra.
+_SKIP_EXTRA_KEYS = {"agent", "parent_agent"}
 
 # (home, event, matcher, command) wired in this process: matcher in the key (one script may register
 # per-tool under one event), home so multiplexed-gateway profiles can register identical triples.
@@ -88,7 +90,10 @@ def _payload_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
         "tool_input": kwargs.get("args") if isinstance(kwargs.get("args"), dict) else None,
         "session_id": kwargs.get("session_id") or kwargs.get("parent_session_id") or "",
         "cwd": cwd,
-        "extra": {k: v for k, v in kwargs.items() if k not in _TOP_LEVEL_PAYLOAD_KEYS},
+        "extra": {
+            k: v for k, v in kwargs.items()
+            if k not in _TOP_LEVEL_PAYLOAD_KEYS and k not in _SKIP_EXTRA_KEYS
+        },
     }
 
 
