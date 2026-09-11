@@ -72,9 +72,22 @@ POLICIES: Dict[str, Dict[str, Any]] = {
             "importance_biased_prune_enabled": True,
         },
     },
-    # Classifier-routed arm: starts from lean baseline, then auto-selects fork profile
+    # Classifier-routed arm: starts from mixed/lean knobs, then auto-selects fork profile
     # based on session_classifier heuristic. Tests end-to-end classifier routing benefit.
     "classified": {
+        "ctor": {"threshold_percent": 0.50, "protect_last_n": 20},
+        "attrs": {
+            "_session_id": "eval-session",
+            "proactive_prune_tokens": 32_000,
+            "importance_biased_prune_enabled": True,
+            "use_classifier": True,
+        },
+    },
+    # Same routing as `classified`, but the scorecard policy label is rewritten to
+    # classified(<detected_profile>) so the arm is scored against the profile the
+    # classifier actually chose — not the lineage domain tag (which often disagrees
+    # with the 500K-token cap-window content type).
+    "classified_oracle": {
         "ctor": {"threshold_percent": 0.50, "protect_last_n": 20},
         "attrs": {
             "_session_id": "eval-session",

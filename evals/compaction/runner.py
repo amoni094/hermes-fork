@@ -430,29 +430,67 @@ def _annotate_result_entry(entry: dict, qa: dict) -> dict:
     return entry
 
 
+def classifier_decision_from_compressor(comp) -> dict:
+    """What the session-type classifier chose, for the eval scorecard.
+
+    Reads ``comp.routing_hint`` (preferred) and ``comp._session_type``. Empty
+    when the classifier did not run.
+    """
+    hint = getattr(comp, "routing_hint", None)
+    if not isinstance(hint, dict):
+        hint = {}
+    session_type = hint.get("session_type")
+    if session_type is None:
+        session_type = getattr(comp, "_session_type", None)
+    return {
+        "session_type": session_type,
+        "confidence": hint.get("confidence"),
+        "compression_profile": hint.get("compression_profile"),
+    }
+
+
+def policy_label_for_arm(name: str, spec: dict, comp, with_recovery: bool = False) -> str:
+    """Scorecard policy name; classifier arms include the detected profile."""
+    label = name
+    if (spec.get("attrs") or {}).get("use_classifier"):
+        profile = None
+        hint = getattr(comp, "routing_hint", None)
+        if isinstance(hint, dict):
+            profile = hint.get("compression_profile")
+        if profile:
+            label = f"{name}({profile})"
+    if with_recovery:
+        label = f"{label}+recovery"
+    return label
+
+
 def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
                with_recovery: bool = False) -> dict:
     from agent.context_compressor import ContextCompressor
 
     before = copy.deepcopy(messages)
+    # Keep a pristine copy of the original messages so that archive computation
+    # and before_tokens always reflect unmodified history (F13).
+    _original = copy.deepcopy(messages)
 
     # Telegraphic pre-pass: compact tool_result messages before the context
     # compressor sees them, reducing context size entering the compressor.
     if spec.get("pre_telegraphic"):
         import importlib.util as _ilu
-        import pathlib as _pl
         _lt_path = REPO_ROOT / "plugins" / "user" / "lambda-tuner" / "complexity.py"
         _spec = _ilu.spec_from_file_location("lambda_tuner_complexity", _lt_path)
         if _spec is not None and _spec.loader is not None:
             _lt = _ilu.module_from_spec(_spec)
             _spec.loader.exec_module(_lt)  # type: ignore[union-attr]
             _tc = _lt.TelegraphicCompressor()
-            before = [
-                {**m, "content": _tc.compress(m["content"])
-                 if _tc.should_compress(m.get("role", ""), m.get("content", ""))
-                 else m.get("content")}
-                for m in before
-            ]
+            def _apply_telegraphic(m: dict) -> dict:
+                role = m.get("role", "")
+                content = m.get("content")
+                # Only compress string tool-result content (F3: guard against None/list).
+                if isinstance(content, str) and _tc.should_compress(role, content):
+                    return {**m, "content": _tc.compress(content)}
+                return m
+            before = [_apply_telegraphic(m) for m in before]
     comp = apply_policy(ContextCompressor(model=EVAL_MODEL, quiet_mode=True), spec)
     for key, value in (spec.get("ctor") or {}).items():
         setattr(comp, key, value)
@@ -463,20 +501,23 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
         try:
             comp._maybe_route_session_profile(messages)
         except Exception:
-            pass  # fall through to lean baseline on any error
+            pass  # fall through to lean/mixed baseline on any error
+    classifier_decision = classifier_decision_from_compressor(comp)
     t0 = time.time()
     # Use `before` (which may be telegraphic-preprocessed) as the input.
     compressed = comp.compress(copy.deepcopy(before), current_tokens=total_tokens(before), force=True)
     elapsed = time.time() - t0
 
     # The archived region = original messages that did not survive verbatim.
+    # Use _original (pre-telegraphic) so archive content matches raw session_search
+    # and before_tokens reflects unmodified history (F13).
     surviving = set()
     for m in compressed:
         c = m.get("content")
         if isinstance(c, str) and c:
             surviving.add(c[:200])
     archive = [
-        m for m in before
+        m for m in _original
         if isinstance(m.get("content"), str) and (m.get("content") or "")[:200] not in surviving
     ]
 
@@ -522,12 +563,12 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
     recall_pct, n_primary, by_difficulty, by_signal_type, _primary = (
         score_by_signal_and_difficulty(results, questions)
     )
-    label = f"{name}+recovery" if with_recovery else name
+    label = policy_label_for_arm(name, spec, comp, with_recovery=with_recovery)
     summary_head = extract_compacted_summary_head(compressed)
     hit_rate = compute_head_hit_rate(questions, summary_head)
     summary = {
         "policy": label,
-        "before_tokens": total_tokens(before),
+        "before_tokens": total_tokens(_original),
         "after_tokens": total_tokens(compressed),
         "after_msgs": len(compressed),
         "compress_seconds": round(elapsed, 1),
@@ -537,6 +578,8 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
         "by_signal_type": by_signal_type,
         "summary_error": getattr(comp, "_last_summary_error", None),
         "head_hit_rate": hit_rate,
+        "classifier_decision": classifier_decision,
+        "classified_info": classifier_decision,
     }
     decorate_arm_metrics(summary, n_primary, head_hit_rate=hit_rate)
     out_dir.mkdir(parents=True, exist_ok=True)

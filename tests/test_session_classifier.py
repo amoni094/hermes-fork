@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from agent.session_classifier import WINDOW_SIZE, classify
+from agent.session_classifier import WINDOW_SIZE, classify, classify_with_scores, get_routing_hint
 from agent.context_compressor import ContextCompressor
 
 
@@ -76,6 +76,39 @@ class TestMixedFallback:
         assert confidence == 0.0
 
 
+class TestAdversarialClassify:
+    def test_empty_message_list_returns_mixed_zero(self):
+        label, confidence = classify([])
+        assert (label, confidence) == ("mixed", 0.0)
+
+    def test_single_message_no_signals_returns_mixed_low_conf(self):
+        label, confidence = classify([_msg("just chatting about the weather tomorrow")])
+        assert label == "mixed"
+        assert confidence < 0.4
+
+    def test_mixed_research_and_code_signals(self):
+        messages = [
+            _msg("arxiv:2401.12345 paper"),
+            _msg("def foo(): pass\napp.py"),
+        ]
+        label, confidence, scores = classify_with_scores(messages)
+        assert scores["research"] > 0
+        assert scores["code"] > 0
+        assert label in ("mixed", "research", "code")
+        if scores["research"] == scores["code"]:
+            assert label == "mixed"
+
+    def test_get_routing_hint_has_required_keys(self):
+        hint = get_routing_hint([_msg("hello")])
+        assert set(hint) >= {
+            "session_type",
+            "confidence",
+            "compression_profile",
+            "reasoning_effort_bias",
+            "model_tier_hint",
+        }
+
+
 class TestCompressorRouting:
     def _compressor(self):
         with patch("agent.context_compressor.get_model_context_length", return_value=1_000_000):
@@ -122,3 +155,43 @@ class TestCompressorRouting:
         assert c._active_compression_profile is None
         assert c.protect_last_n == original_n
         assert c.threshold_percent == original_pct
+
+
+class TestClassifierEvalObservability:
+    def test_classified_oracle_policy_mirrors_classified(self):
+        from evals.compaction.policies import POLICIES
+
+        classified = POLICIES["classified"]
+        oracle = POLICIES["classified_oracle"]
+        assert classified["ctor"] == {"threshold_percent": 0.50, "protect_last_n": 20}
+        assert classified["attrs"]["use_classifier"] is True
+        assert oracle["ctor"] == classified["ctor"]
+        assert oracle["attrs"]["use_classifier"] is True
+        assert oracle["attrs"]["proactive_prune_tokens"] == 32_000
+
+    def test_policy_label_includes_detected_profile(self):
+        from evals.compaction.runner import (
+            classifier_decision_from_compressor,
+            policy_label_for_arm,
+        )
+
+        class _Comp:
+            routing_hint = {
+                "session_type": "code",
+                "confidence": 0.9,
+                "compression_profile": "fork_code",
+            }
+            _session_type = "code"
+
+        spec = {"attrs": {"use_classifier": True}}
+        assert policy_label_for_arm("classified", spec, _Comp()) == "classified(fork_code)"
+        assert (
+            policy_label_for_arm("classified_oracle", spec, _Comp())
+            == "classified_oracle(fork_code)"
+        )
+        decision = classifier_decision_from_compressor(_Comp())
+        assert decision == {
+            "session_type": "code",
+            "confidence": 0.9,
+            "compression_profile": "fork_code",
+        }

@@ -2861,10 +2861,6 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         Stores the full routing hint on ``_routing_hint`` whenever the classifier runs.
         """
         try:
-            if getattr(self, "_profile_source", None) == "explicit":
-                return
-            if not self._fork_policy_set_exists():
-                return
             from agent.session_classifier import CONFIDENCE_FLOOR, get_routing_hint
 
             window = messages[-self._CLASSIFIER_MESSAGE_WINDOW :] if messages else []
@@ -2874,7 +2870,13 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
             confidence = hint.get("confidence") or 0.0
             if session_type not in self._FORK_SESSION_PROFILES:
                 session_type = "mixed"
+            # Always record the hint for eval observability. Do not clobber an
+            # explicit profile (or its _session_type) even if the classifier disagrees.
+            if getattr(self, "_profile_source", None) == "explicit":
+                return
             self._session_type = session_type
+            if not self._fork_policy_set_exists():
+                return
             # why: mixed + low confidence means "no type signal" — keep constructor
             # knobs (protect_last_n / threshold) instead of clobbering with fork_mixed.
             if session_type == "mixed" and float(confidence) < CONFIDENCE_FLOOR:

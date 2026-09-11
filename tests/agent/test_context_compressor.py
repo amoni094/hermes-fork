@@ -3796,3 +3796,16 @@ class TestFactLedgerBeforeSummaryPrefix:
         body = "FACT LEDGER\n2608.24569\n" + SUMMARY_PREFIX + "\nbody"
         assert ContextCompressor.classify_summary_content(body) == "standalone"
 
+    def test_prepend_fact_ledger_is_idempotent(self):
+        c = ContextCompressor.__new__(ContextCompressor)
+        c.tail_mode = "lean"
+        sample_turns = [
+            {"role": "assistant", "content": "arXiv:2608.24569 working-memory.py 1569 lines"},
+        ]
+        first = c._prepend_fact_ledger(SUMMARY_PREFIX + "body text here", sample_turns)
+        second = c._prepend_fact_ledger(first, sample_turns)
+        assert first == second
+        assert first.lstrip().startswith("FACT LEDGER")
+        assert ContextCompressor._starts_with_summary_prefix(first)
+        assert first.find("FACT LEDGER") < first.find(SUMMARY_PREFIX)
+

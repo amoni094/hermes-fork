@@ -88,3 +88,30 @@ class TestCompressorStoresRoutingHint:
         assert hint["reasoning_effort_bias"] == "high"
         assert hint["model_tier_hint"] == "frontier"
         assert hint["compression_profile"] == "fork_research"
+
+    def test_stores_hint_even_when_explicit(self):
+        c = self._compressor()
+        c.set_compression_profile("code", _source="explicit")
+        c._maybe_route_session_profile(_research_messages())
+        assert c._active_compression_profile == "code"
+        assert c._profile_source == "explicit"
+        hint = c._routing_hint
+        assert hint is not None
+        assert hint["session_type"] == "research"
+        assert set(hint) >= {
+            "session_type",
+            "confidence",
+            "compression_profile",
+            "reasoning_effort_bias",
+            "model_tier_hint",
+        }
+
+    def test_stores_hint_when_fork_policies_missing(self):
+        c = self._compressor()
+        c.set_compression_profile("mixed", _source="plugin")
+        with patch.object(c, "COMPRESSION_PROFILES", {"entropy-adaptive": {}}):
+            c._maybe_route_session_profile(_research_messages())
+        assert c._active_compression_profile == "mixed"
+        hint = c._routing_hint
+        assert hint is not None
+        assert hint["session_type"] == "research"
