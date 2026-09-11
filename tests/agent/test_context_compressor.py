@@ -9,6 +9,7 @@ from unittest.mock import patch, MagicMock
 
 from agent.context_compressor import (
     ContextCompressor,
+    EntropyEstimator,
     HISTORICAL_TASK_HEADING,
     SUMMARY_PREFIX,
     COMPRESSED_SUMMARY_METADATA_KEY,
@@ -3700,3 +3701,79 @@ class TestSanitizeToolPairsWhitespace:
         tool_call_ids = [m.get("tool_call_id") for m in out if m.get("role") == "tool"]
         assert "call_orphan" not in tool_call_ids, "genuinely orphaned result must be removed"
         assert " call_orphan " not in tool_call_ids, "original whitespace form must also be gone"
+
+
+class TestEntropyEstimator:
+    def test_uniform_two_tokens_is_one_bit(self):
+        est = EntropyEstimator()
+        est.update("a b a b a b a b")
+        assert abs(est.entropy_rate() - 1.0) < 1e-9
+
+    def test_empty_is_zero(self):
+        est = EntropyEstimator()
+        assert est.entropy_rate() == 0.0
+        assert est.min_retain_tokens(10) == 0
+
+    def test_min_retain_tokens_aep_floor(self):
+        est = EntropyEstimator()
+        est.update("a b a b")
+        assert est.min_retain_tokens(10) == 10
+
+    def test_sliding_window_evicts_old_turns(self):
+        est = EntropyEstimator(window_turns=1)
+        est.update("unique_alpha unique_beta unique_gamma unique_delta")
+        high = est.entropy_rate()
+        est.update("x x x x")
+        assert est.entropy_rate() < high
+        assert est.entropy_rate() == 0.0  # single token type
+
+
+class TestEntropyAdaptiveProfile:
+    def _large_ctx(self):
+        with patch("agent.context_compressor.get_model_context_length", return_value=1_000_000):
+            c = ContextCompressor(model="test/model", threshold_percent=0.50, quiet_mode=True)
+            _ = c.context_length
+            return c
+
+    def test_profile_is_registered(self):
+        assert "entropy-adaptive" in ContextCompressor.COMPRESSION_PROFILES
+
+    def test_empty_estimator_keeps_midpoint(self):
+        c = self._large_ctx()
+        c.set_compression_profile("entropy-adaptive")
+        assert c.threshold_percent == 0.50
+
+    def test_high_entropy_uses_research_threshold(self):
+        c = self._large_ctx()
+        # Many unique tokens → H > 4 bits/token
+        vocab = " ".join(f"tok{i}" for i in range(64))
+        c.feed_turn(vocab)
+        c.set_compression_profile("entropy-adaptive")
+        assert c.threshold_percent == 0.45
+        assert c._entropy_estimator.entropy_rate() > 4.0
+
+    def test_low_entropy_uses_code_threshold(self):
+        c = self._large_ctx()
+        c.feed_turn("foo " * 40)
+        c.set_compression_profile("entropy-adaptive")
+        assert c.threshold_percent == 0.55
+        assert c._entropy_estimator.entropy_rate() < 2.5
+
+    def test_feed_turn_and_intent_checkpoint(self, caplog):
+        import logging
+        c = self._large_ctx()
+        c.feed_turn("hello world")
+        c.current_intent = "implement feature X"
+        with caplog.at_level(logging.INFO, logger="agent.context_compressor"):
+            c._pre_compress_checkpoint(trigger_reason="threshold", context_tokens=1234)
+        text = caplog.text
+        assert "pre_compress_checkpoint" in text
+        assert "implement feature X" in text
+        assert "threshold" in text
+
+    def test_on_turn_complete_feeds_new_messages(self):
+        c = self._large_ctx()
+        c.on_turn_complete([{"role": "user", "content": "alpha beta gamma"}])
+        assert c._entropy_estimator.entropy_rate() > 0
+        assert c._entropy_fed_count == 1
+
