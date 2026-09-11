@@ -101,8 +101,8 @@ SUMMARY_PREAMBLE_MARKERS = (
     "handoff summary",
     "[CONTEXT COMPACTION",
 )
-MIN_VALID_PER_TIER = 3  # 5/5/5 fast-mode; raise to 9 for ship-gate N=30 runs
-HEAD_HIT_CHARS = 5000  # summary header ~1-2K, ledger follows; need enough room
+MIN_VALID_PER_TIER = 9  # ship-gate N=30 (10/10/10); use 3 for 5/5/5 fast-mode
+HEAD_HIT_CHARS = 5000  # ledger at position 0, then ~1-2K summary prefix
 OUTPUT_TOKENS_PER_RECALL_POINT_TARGET = 1200
 
 
@@ -405,7 +405,7 @@ def generate_questions(messages, n: int, cache_path: Path) -> list:
 
     region = summarized_region(cc, messages)
     text = serialize_for_exam(region)
-    raw = _call(QUESTION_PROMPT.format(n=n, transcript=text), max_tokens=4000)
+    raw = _call(QUESTION_PROMPT.format(n=n, transcript=text), max_tokens=8000)
     questions = _extract_json(raw)[:n]
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps(questions, indent=1), encoding="utf-8")
@@ -567,7 +567,7 @@ def main():
     ap.add_argument("--transcript", required=True)
     ap.add_argument("--cap-tokens", type=int, default=500_000)
     ap.add_argument("--policies", default="current,tail25k,codex_style")
-    ap.add_argument("--questions", type=int, default=15)
+    ap.add_argument("--questions", type=int, default=30)
     ap.add_argument("--out", required=True)
     ap.add_argument("--also-uncompacted", action="store_true")
     ap.add_argument(

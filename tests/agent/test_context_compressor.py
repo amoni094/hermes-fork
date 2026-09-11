@@ -3777,3 +3777,22 @@ class TestEntropyAdaptiveProfile:
         assert c._entropy_estimator.entropy_rate() > 0
         assert c._entropy_fed_count == 1
 
+
+class TestFactLedgerBeforeSummaryPrefix:
+    """Ledger must occupy position 0 so eval head_hit_rate sees named facts."""
+
+    def test_prepend_fact_ledger_puts_ledger_before_existing_prefix(self):
+        c = ContextCompressor.__new__(ContextCompressor)
+        c.tail_mode = "lean"
+        sample_turns = [
+            {"role": "assistant", "content": "arXiv:2608.24569 working-memory.py 1569 lines"},
+        ]
+        result = c._prepend_fact_ledger(SUMMARY_PREFIX + "body text here", sample_turns)
+        assert result.lstrip().startswith("FACT LEDGER")
+        assert SUMMARY_PREFIX in result
+        assert result.find("FACT LEDGER") < result.find(SUMMARY_PREFIX)
+
+    def test_ledger_first_handoff_still_classifies_standalone(self):
+        body = "FACT LEDGER\n2608.24569\n" + SUMMARY_PREFIX + "\nbody"
+        assert ContextCompressor.classify_summary_content(body) == "standalone"
+
