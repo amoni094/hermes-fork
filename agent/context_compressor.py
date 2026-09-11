@@ -2161,6 +2161,9 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         self._last_compress_entropy = 0.0
         self._last_compress_clock = 0
         self._active_compression_profile = None
+        self._profile_source = None
+        self._session_type = None
+        self._routing_hint = None
         # Reset plugin-set flags so a code session doesn't leak IB prune into a research session.
         self.importance_biased_prune_enabled = False
         est = getattr(self, "_entropy_estimator", None)
@@ -2669,6 +2672,9 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         self._importance_scorer = MessageImportanceScorer()
         self._last_scored_messages: List[Dict[str, Any]] = []
         self._active_compression_profile: str | None = None
+        self._profile_source: str | None = None
+        self._session_type: str | None = None
+        self._routing_hint: dict | None = None
         self.current_intent: str | None = None
         # Opt-in Gallager-style eviction of low-importance non-head/tail messages.
         self.importance_biased_prune_enabled: bool = False
@@ -2764,6 +2770,9 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
             if profile == "entropy-adaptive":
                 settings["threshold_percent"] = self._entropy_adaptive_threshold_percent()
             self._active_compression_profile = profile
+            self._profile_source = str(_source) if _source is not None else "plugin"
+            if profile in ("research", "code", "mixed"):
+                self._session_type = profile
         elif isinstance(profile, dict):
             # Partial update: do not full-replace unspecified keys with defaults.
             settings = {k: profile[k] for k in self._PROFILE_KEYS if k in profile}
@@ -2774,6 +2783,7 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
                 )
                 return
             self._active_compression_profile = "custom"
+            self._profile_source = str(_source) if _source is not None else "plugin"
         else:
             _log.warning(
                 "context_compressor: profile must be str or dict, got %s from %s — ignored",
@@ -2829,6 +2839,54 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
             _source,
             {k: getattr(self, k) for k in self._PROFILE_KEYS},
         )
+
+    _FORK_SESSION_PROFILES = ("research", "code", "mixed")
+    _CLASSIFIER_MESSAGE_WINDOW = 30
+
+    def _fork_policy_set_exists(self) -> bool:
+        """True when named fork profiles (research/code/mixed) are registered."""
+        profiles = getattr(self, "COMPRESSION_PROFILES", None) or {}
+        return all(name in profiles for name in self._FORK_SESSION_PROFILES)
+
+    @property
+    def routing_hint(self) -> dict | None:
+        """Last computed routing hint, or None if the classifier has not run."""
+        return getattr(self, "_routing_hint", None)
+
+    def _maybe_route_session_profile(self, messages: List[Dict[str, Any]]) -> None:
+        """Apply fork compression policy from a heuristic session-type classifier.
+
+        Skipped when the profile was set with ``_source='explicit'``. Fail-open:
+        missing fork policies or any exception leave the current profile in place.
+        Stores the full routing hint on ``_routing_hint`` whenever the classifier runs.
+        """
+        try:
+            if getattr(self, "_profile_source", None) == "explicit":
+                return
+            if not self._fork_policy_set_exists():
+                return
+            from agent.session_classifier import CONFIDENCE_FLOOR, classify, get_routing_hint
+
+            window = messages[-self._CLASSIFIER_MESSAGE_WINDOW :] if messages else []
+            session_type, confidence = classify(window)
+            if session_type not in self._FORK_SESSION_PROFILES:
+                session_type = "mixed"
+            self._session_type = session_type
+            try:
+                self._routing_hint = get_routing_hint(window)
+            except Exception:
+                self._routing_hint = {
+                    "session_type": session_type,
+                    "confidence": float(confidence),
+                    "compression_profile": f"fork_{session_type}",
+                }
+            # why: mixed + low confidence means "no type signal" — keep constructor
+            # knobs (protect_last_n / threshold) instead of clobbering with fork_mixed.
+            if session_type == "mixed" and float(confidence) < CONFIDENCE_FLOOR:
+                return
+            self.set_compression_profile(session_type, _source="session-classifier")
+        except Exception:
+            return
 
     def _entropy_adaptive_threshold_percent(self) -> float:
         """Map empirical entropy rate H to a rate-distortion threshold.
@@ -3067,19 +3125,30 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         return "FACT LEDGER\n" + "\n".join(lines)
 
     def _prepend_fact_ledger(self, summary: str, turns_to_summarize: List[Dict[str, Any]]) -> str:
-        """Put the fact ledger at the summary head so named facts survive Lost-in-the-Middle."""
+        """Put the fact ledger at the summary head so named facts survive Lost-in-the-Middle.
+
+        Order-invariant: if a compaction prefix is already attached, strip it, prepend
+        the ledger, then reattach the prefix *after* the ledger so eval head_hit_rate
+        (first HEAD_HIT_CHARS of content) sees named facts.
+        """
         body = summary or ""
         if body.lstrip().startswith("FACT LEDGER"):
             return body
         ledger = self._extract_fact_ledger(turns_to_summarize)
         if not ledger:
             return body
-        combined = ledger + "\n" + body
-        # Ledger must occupy the head of the summary (first 2000 chars include it).
         if len(ledger) > 2000:
             ledger = ledger[:2000].rstrip()
-            combined = ledger + "\n" + body
-        return combined
+        prefix = ""
+        rest = body
+        for p in (SUMMARY_PREFIX, LEGACY_SUMMARY_PREFIX, *_HISTORICAL_SUMMARY_PREFIXES):
+            if rest.startswith(p):
+                prefix = p
+                rest = rest[len(p):].lstrip("\n")
+                break
+        if prefix:
+            return ledger + "\n" + prefix + ("\n" + rest if rest else "")
+        return ledger + "\n" + body
 
     def _reacquisition_class(self, msg: Any) -> str:
         """CHEAP if the body is bulky tool dump that can be re-fetched; else EXPENSIVE."""
@@ -4193,7 +4262,6 @@ Summary generation was unavailable, so this is a best-effort deterministic fallb
             # See #32106.
             summary = _reinject_pruned_skill_markers(summary, _pruned_skill_names)
             summary = self._ground_historical_task_snapshot(summary, turns_to_summarize)
-            summary = self._augment_summary_lean(summary, turns_to_summarize)
             self._validate_summary_user_provenance(summary, has_user_turn)
             self._previous_summary = summary
             self._clear_compression_failure_cooldown()
@@ -4201,7 +4269,10 @@ Summary generation was unavailable, so this is a best-effort deterministic fallb
             self._last_summary_error = None
             for flag, _class, _msg in _TERMINAL_SUMMARY_FAILURES:
                 setattr(self, flag, False)
-            return self._with_summary_prefix(summary)
+            # Prefix first, then ledger — same order as the fallback path so the
+            # fact ledger occupies position 0 (head_hit_rate / Lost-in-the-Middle).
+            summary = self._with_summary_prefix(summary)
+            return self._augment_summary_lean(summary, turns_to_summarize)
         except Exception as e:
             return self._on_summary_failure(e, turns_to_summarize, focus_topic, memory_context)
 
@@ -4438,8 +4509,19 @@ Write only the summary body. Do not include any preamble or prefix."""
 
     @staticmethod
     def _starts_with_summary_prefix(text: str) -> bool:
-        """Return True if *text* begins with any known handoff prefix."""
-        return text.startswith((SUMMARY_PREFIX, LEGACY_SUMMARY_PREFIX, *_HISTORICAL_SUMMARY_PREFIXES))
+        """Return True if *text* begins with any known handoff prefix.
+
+        A leading FACT LEDGER (placed ahead of the prefix so named facts occupy
+        the summary head) is skipped so ledger-first handoffs still classify.
+        """
+        t = text.lstrip() if text else ""
+        if t.startswith("FACT LEDGER"):
+            for prefix in (SUMMARY_PREFIX, LEGACY_SUMMARY_PREFIX, *_HISTORICAL_SUMMARY_PREFIXES):
+                idx = t.find(prefix)
+                if idx >= 0:
+                    t = t[idx:]
+                    break
+        return t.startswith((SUMMARY_PREFIX, LEGACY_SUMMARY_PREFIX, *_HISTORICAL_SUMMARY_PREFIXES))
 
     @classmethod
     def classify_summary_content(cls, content: Any) -> Optional[str]:
@@ -5526,6 +5608,7 @@ Write only the summary body. Do not include any preamble or prefix."""
             return messages
         display_tokens = current_tokens if current_tokens else self.last_prompt_tokens or estimate_messages_tokens_rough(messages)
         self._feed_messages_for_entropy(messages)
+        self._maybe_route_session_profile(messages)
         # Constraint-weakening hook (arXiv:2608.24569): fire before this full compression so
         # plugins can persist constraint state, inject summary reminders, or retune the profile.
         try:
