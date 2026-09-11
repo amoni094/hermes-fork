@@ -48,6 +48,8 @@ _STDERR_MESSAGE_LIMIT = 400
 _TRUTHY = {"1", "true", "yes", "on"}
 # kwargs promoted to top-level payload keys; everything else lands under ``extra``.
 _TOP_LEVEL_PAYLOAD_KEYS = {"tool_name", "args", "session_id", "parent_session_id"}
+# Live objects that must never be JSON-serialized into stdin/POST extra.
+_SKIP_EXTRA_KEYS = {"agent", "parent_agent"}
 
 # (home, event, matcher, command) wired in this process: matcher in the key (one script may register
 # per-tool under one event), home so multiplexed-gateway profiles can register identical triples.
@@ -91,7 +93,10 @@ def _payload_fields(kwargs: Dict[str, Any]) -> Dict[str, Any]:
         "cwd": cwd,
         # Resolved at fire time: a multiplexed gateway's hook script must know which profile fired it.
         "profile": get_active_profile_name(),
-        "extra": {k: v for k, v in kwargs.items() if k not in _TOP_LEVEL_PAYLOAD_KEYS},
+        "extra": {
+            k: v for k, v in kwargs.items()
+            if k not in _TOP_LEVEL_PAYLOAD_KEYS and k not in _SKIP_EXTRA_KEYS
+        },
     }
 
 
