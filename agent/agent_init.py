@@ -1981,6 +1981,15 @@ def _inject_context_engine_tools(agent):
         except Exception as _ce_err:
             _ra().logger.debug("Context engine on_session_start: %s", _ce_err)
 
+    # Expose agent to PluginManager so ctx.compressor works in pre_llm_call hooks.
+    try:
+        from hermes_cli.plugins import get_plugin_manager
+        _pm = get_plugin_manager()
+        if _pm is not None:
+            _pm._agent = agent
+    except Exception as _pm_err:
+        _ra().logger.debug("plugin manager _agent bind failed (non-fatal): %s", _pm_err)
+
 
 def _configure_ollama_num_ctx(agent, _model_cfg, _config_context_length):
     # Ollama defaults num_ctx to 2048, so detect the max window and send num_ctx per request.
