@@ -2865,21 +2865,16 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
                 return
             if not self._fork_policy_set_exists():
                 return
-            from agent.session_classifier import CONFIDENCE_FLOOR, classify, get_routing_hint
+            from agent.session_classifier import CONFIDENCE_FLOOR, get_routing_hint
 
             window = messages[-self._CLASSIFIER_MESSAGE_WINDOW :] if messages else []
-            session_type, confidence = classify(window)
+            hint = get_routing_hint(window)
+            self._routing_hint = hint
+            session_type = hint.get("session_type") or "mixed"
+            confidence = hint.get("confidence") or 0.0
             if session_type not in self._FORK_SESSION_PROFILES:
                 session_type = "mixed"
             self._session_type = session_type
-            try:
-                self._routing_hint = get_routing_hint(window)
-            except Exception:
-                self._routing_hint = {
-                    "session_type": session_type,
-                    "confidence": float(confidence),
-                    "compression_profile": f"fork_{session_type}",
-                }
             # why: mixed + low confidence means "no type signal" — keep constructor
             # knobs (protect_last_n / threshold) instead of clobbering with fork_mixed.
             if session_type == "mixed" and float(confidence) < CONFIDENCE_FLOOR:
