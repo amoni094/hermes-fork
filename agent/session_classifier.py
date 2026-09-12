@@ -16,7 +16,17 @@ CONFIDENCE_FLOOR = 0.4
 # Weighted hits needed to saturate the strength term of confidence.
 _SATURATION = 4.0
 
+# v4 eval finding: fork_mixed wins or ties on all three content domains.
+# Domain-specific policies (fork_research, fork_code) over-prune the "other"
+# content type and lose even on their home domain. Route all sessions to
+# fork_mixed by default; override explicitly via set_compression_profile().
 _FORK_PROFILE = {
+    "research": "fork_mixed",
+    "code": "fork_mixed",
+    "mixed": "fork_mixed",
+}
+# Legacy mappings preserved for reference / explicit override use.
+_FORK_PROFILE_DOMAIN_SPECIFIC = {
     "research": "fork_research",
     "code": "fork_code",
     "mixed": "fork_mixed",

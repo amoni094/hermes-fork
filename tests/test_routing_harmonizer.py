@@ -44,7 +44,7 @@ class TestResearchRoutingHint:
         assert hint["session_type"] == "research"
         assert hint["reasoning_effort_bias"] == "high"
         assert hint["model_tier_hint"] == "frontier"
-        assert hint["compression_profile"] == "fork_research"
+        assert hint["compression_profile"] == "fork_mixed"  # v4: all types route to fork_mixed
         assert hint["confidence"] >= 0.4
 
 
@@ -52,7 +52,7 @@ class TestCodeRoutingHint:
     def test_code_profile_and_tier(self):
         hint = get_routing_hint(_code_messages())
         assert hint["session_type"] == "code"
-        assert hint["compression_profile"] == "fork_code"
+        assert hint["compression_profile"] == "fork_mixed"  # v4: all types route to fork_mixed
         assert hint["model_tier_hint"] == "balanced"
         assert hint["reasoning_effort_bias"] == "medium"
         assert hint["confidence"] >= 0.4
@@ -87,7 +87,7 @@ class TestCompressorStoresRoutingHint:
         assert hint["session_type"] == "research"
         assert hint["reasoning_effort_bias"] == "high"
         assert hint["model_tier_hint"] == "frontier"
-        assert hint["compression_profile"] == "fork_research"
+        assert hint["compression_profile"] == "fork_mixed"  # v4: all types route to fork_mixed
 
     def test_stores_hint_even_when_explicit(self):
         c = self._compressor()
