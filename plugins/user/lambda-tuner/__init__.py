@@ -220,7 +220,12 @@ def _weighted_score(text: str) -> dict[str, float]:
 
 
 def _classify(messages: list[str]) -> tuple[str, float, dict[str, float]]:
-    """Classify accumulated user messages → (session_type, confidence, scores)."""
+    """Classify accumulated user messages → (session_type, confidence, scores).
+
+    Pre: ``messages`` is a list of strings (may be empty).
+    Post: type ∈ {research, code, mixed}; confidence ∈ [0, 1]; scores has
+    research and code floats. Greeting-only or empty input → mixed/0.0.
+    """
     real_messages = [m for m in messages if not _GREETING_RE.match(m.strip())]
     if not real_messages:
         return "mixed", 0.0, {"research": 0.0, "code": 0.0}
@@ -304,6 +309,17 @@ def _maybe_reclassify_on_entropy_decay(
         _fired[session_id] = rec
         _fired.move_to_end(session_id)
         _apply_profile(ctx, agent, session_type, session_id, confidence, len(bucket))
+        try:
+            compressor = _resolve_compressor(ctx, agent)
+            try:
+                complexity_now = float(rec.get("complexity") or 0.0)
+            except (TypeError, ValueError):
+                complexity_now = 0.0
+            overlay = _complexity_overlay_from_knobs(complexity_now, compressor)
+            rec["overlay"] = overlay
+            _apply_complexity_overlay(compressor, overlay)
+        except Exception as exc:
+            logger.debug("lambda-tuner: reclassify overlay failed (fail-open): %s", exc)
         # why: mid-session hint writes from multiple sessions would race on one global path; write only at finalize
         logger.debug(
             "lambda-tuner: reclassified sid=%s %s -> %s conf=%.2f",
@@ -411,7 +427,14 @@ def _fired_type(session_id: str) -> str | None:
 
 
 def _touch_session(session_id: str) -> None:
-    """LRU-touch and evict oldest sessions (and their _fired entries) over cap."""
+    """LRU-touch and evict oldest sessions (and their _fired entries) over cap.
+
+    Loop invariant: after each while-iteration, len(map being trimmed) ≤ _MAX_SESSIONS.
+    Each map (_session_messages, _fired, _pending_intent) is trimmed independently;
+    a key evicted from one map is NOT guaranteed to be absent from the others.
+    Stopping criterion: declared before the loops — evict until each map
+    has at most _MAX_SESSIONS keys.
+    """
     if session_id in _session_messages:
         _session_messages.move_to_end(session_id)
     if session_id in _fired:
@@ -490,6 +513,10 @@ def _apply_session_bias(effort: str, session_type: str) -> str:
 
 
 def _ema(scores: list[float], alpha: float = _EMA_ALPHA) -> float:
+    """Exponential moving average of ``scores``. Empty → 0.0.
+
+    Loop invariant: after i steps, e is the EMA of scores[:i+1].
+    """
     if not scores:
         return 0.0
     e = float(scores[0])
@@ -672,21 +699,27 @@ def _apply_routing_coherence(ctx: Any, agent: Any, session_id: str) -> None:
     """
     try:
         compressor = _resolve_compressor(ctx, agent)
-        profile = getattr(compressor, "_active_compression_profile", None) if compressor is not None else None
-        ratio = getattr(compressor, "_last_ratio", None) if compressor is not None else None
+        profile = None
+        ratio = None
+        if compressor is not None:
+            profile = getattr(compressor, "_active_compression_profile", None)
+            ratio = getattr(compressor, "last_compression_ratio", None)
         if profile and ratio is not None:
             try:
                 ratio_f = float(ratio)
             except (TypeError, ValueError):
                 ratio_f = None
-            if ratio_f is not None:
+            # Remaining-token ratio is uncalibrated (Jaynes): only act on (0, 1].
+            if ratio_f is not None and 0.0 < ratio_f <= 1.0:
                 if ratio_f > 0.12:
                     ctx.set_model_preference("sonnet")
                 elif ratio_f < 0.09:
                     ctx.set_model_preference("haiku")
         complexity = None
         if compressor is not None:
-            complexity = getattr(compressor, "_last_complexity_score", None)
+            complexity = getattr(compressor, "last_complexity_score", None)
+            if complexity is None:
+                complexity = getattr(compressor, "_last_complexity_score", None)
         if complexity is None:
             rec = _fired.get(session_id) or {}
             if isinstance(rec, dict):
@@ -701,6 +734,44 @@ def _apply_routing_coherence(ctx: Any, agent: Any, session_id: str) -> None:
         logger.debug("lambda-tuner: routing coherence failed (fail-open): %s", exc)
 
 
+def _complexity_overlay_from_knobs(complexity: float, compressor: Any) -> dict[str, int] | None:
+    """Snapshot complexity knobs to reapply after named-profile reset.
+
+    Pre: compressor may be None. Post: overlay dict or None. Never enables
+    prune from 0 (totality: disabled prune stays disabled).
+    """
+    if compressor is None:
+        return None
+    try:
+        score = float(complexity)
+    except (TypeError, ValueError):
+        return None
+    if score > 0.7:
+        try:
+            protect = int(getattr(compressor, "protect_last_n", 20) or 20) + 5
+        except (TypeError, ValueError):
+            protect = 25
+        return {"protect_last_n": min(protect, 40)}
+    if score < 0.3:
+        try:
+            current = int(getattr(compressor, "proactive_prune_tokens", 0) or 0)
+        except (TypeError, ValueError):
+            current = 0
+        if current <= 0:
+            return None
+        return {"proactive_prune_tokens": max(current - 8000, 8000)}
+    return None
+
+
+def _apply_complexity_overlay(compressor: Any, overlay: Any) -> None:
+    """Reapply a stored overlay dict. Fail-open. Idempotent."""
+    if compressor is None or not isinstance(overlay, dict) or not overlay:
+        return
+    if not hasattr(compressor, "set_compression_profile"):
+        return
+    compressor.set_compression_profile(overlay, _source="lambda-tuner-complexity")
+
+
 def _classify_and_commit(
     ctx: Any,
     agent: Any,
@@ -709,6 +780,11 @@ def _classify_and_commit(
     bucket: list[str],
 ) -> str:
     """Classify session type from accumulated messages and commit on lock.
+
+    Pre: bucket is the per-session message list (already capped).
+    Post: if locked or commit, _fired[session_id] has type/confidence/overlay;
+    named profile then stored overlay are applied in that order so complexity
+    knobs survive the next turn's named-profile reset.
 
     Reapplies the locked profile on every subsequent turn (idempotent, guards
     against compressor rebuilds). Returns session_type string. Fail-open.
@@ -731,6 +807,12 @@ def _classify_and_commit(
                 _maybe_reclassify_on_entropy_decay(
                     ctx, agent, session_id, bucket, rec, locked,
                 )
+                rec = _fired.get(session_id) or rec
+                overlay = rec.get("overlay") if isinstance(rec, dict) else None
+                try:
+                    _apply_complexity_overlay(_resolve_compressor(ctx, agent), overlay)
+                except Exception as exc:
+                    logger.debug("lambda-tuner: overlay reapply failed (fail-open): %s", exc)
             session_type = locked
             try:
                 _apply_adaptive_effort(ctx, session_id, user_message, session_type, agent)
@@ -757,7 +839,10 @@ def _classify_and_commit(
             try:
                 compressor = _resolve_compressor(ctx, agent)
                 if compressor is not None:
-                    compressor._last_complexity_score = complexity
+                    try:
+                        compressor.last_complexity_score = complexity
+                    except Exception:
+                        compressor._last_complexity_score = complexity
             except Exception:
                 compressor = None
 
@@ -773,29 +858,12 @@ def _classify_and_commit(
             except Exception as exc:
                 logger.debug("lambda-tuner: set_reasoning_mode failed (fail-open): %s", exc)
 
+            overlay = None
             compressor = None
-            if agent is not None:
-                compressor = getattr(agent, "context_compressor", None)
-            if compressor is None:
-                try:
-                    compressor = ctx.compressor
-                except Exception:
-                    compressor = None
-
             try:
-                if compressor is not None and hasattr(compressor, "set_compression_profile"):
-                    if complexity > 0.7:
-                        protect = int(getattr(compressor, "protect_last_n", 20) or 20) + 5
-                        compressor.set_compression_profile(
-                            {"protect_last_n": min(protect, 40)},
-                            _source="lambda-tuner-complexity",
-                        )
-                    elif complexity < 0.3:
-                        prune = int(getattr(compressor, "proactive_prune_tokens", 16000) or 0) - 8000
-                        compressor.set_compression_profile(
-                            {"proactive_prune_tokens": max(prune, 8000)},
-                            _source="lambda-tuner-complexity",
-                        )
+                compressor = _resolve_compressor(ctx, agent)
+                overlay = _complexity_overlay_from_knobs(complexity, compressor)
+                _apply_complexity_overlay(compressor, overlay)
             except Exception as exc:
                 logger.debug("lambda-tuner: complexity profile adjust failed (fail-open): %s", exc)
 
@@ -808,6 +876,7 @@ def _classify_and_commit(
                 "lock_turn": len(bucket),
                 "_reclassification_count": 0,
                 "reclassified": False,
+                "overlay": overlay,
             }
             _fired.move_to_end(session_id)
             logger.debug(
@@ -965,6 +1034,10 @@ def register(ctx: Any) -> None:
             _fired.pop(session_id, None)
             _intent_applied.pop(session_id, None)
             _complexity_buffers.pop(session_id, None)
+            try:
+                DEFAULT_SCORER.reset()
+            except Exception:
+                pass
         except Exception as exc:
             logger.debug("lambda-tuner: on_session_end cleanup failed (fail-open): %s", exc)
 
@@ -983,10 +1056,20 @@ def register(ctx: Any) -> None:
         """
         try:
             fired_entry = _fired.get(session_id)
+            if isinstance(fired_entry, str):
+                fired_entry = {"type": fired_entry, "confidence": 0.0}
+            if not isinstance(fired_entry, dict):
+                fired_entry = None
             if fired_entry is not None:
                 # Reaffirm the locked session type profile (idempotent; guards against resets).
                 session_type = fired_entry.get("type", "mixed")
                 _apply_profile(ctx, agent, session_type, session_id, fired_entry.get("confidence", 0.0), 0)
+                try:
+                    _apply_complexity_overlay(
+                        _resolve_compressor(ctx, agent), fired_entry.get("overlay"),
+                    )
+                except Exception as exc:
+                    logger.debug("lambda-tuner: pre_compress overlay failed (fail-open): %s", exc)
                 # IB prune is only beneficial for code sessions (evicts ack/boilerplate turns).
                 # Research sessions must keep unique mid-conversation turns; tool stubs
                 # already handled by _prune_old_tool_results.

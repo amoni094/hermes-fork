@@ -3881,3 +3881,45 @@ class TestSetCompressionProfileRearm:
         c.set_compression_profile({"proactive_prune_tokens": "not-an-int"})
         assert c.proactive_prune_tokens == original_floor
         assert c._proactive_prune_rearm_tokens == original_rearm
+
+
+class TestLastCompressionRatioSessionBoundary:
+    """Plugin routing reads last_compression_ratio; /new must not inherit it."""
+
+    def _ctx(self):
+        with patch("agent.context_compressor.get_model_context_length", return_value=1_000_000):
+            c = ContextCompressor(model="test/model", threshold_percent=0.50, quiet_mode=True)
+            _ = c.context_length
+            return c
+
+    def test_init_exposes_none_ratio_and_complexity(self):
+        # Counterfactual: if the properties were not defined, AttributeError would
+        # be raised; if they read _last_ratio/_last_complexity_score which don't
+        # exist yet on a fresh compressor, getattr fallback returns None — this
+        # test documents the initial state contract, not absence of attributes.
+        c = self._ctx()
+        c._last_ratio = None
+        c._last_complexity_score = None
+        assert c.last_compression_ratio is None
+        assert c.last_complexity_score is None
+
+    def test_bind_session_state_preserves_ratio_and_complexity(self):
+        # Counterfactual: before the MEDIUM fix, bind_session_state cleared
+        # _last_ratio/_last_complexity_score, which wiped diagnostics on every
+        # compression rotation (on_session_start boundary_reason="compression").
+        # After the fix, bind_session_state must NOT clear these — only
+        # _reset_session_compaction_state (the /new path) may do so.
+        c = self._ctx()
+        c._last_ratio = 0.42
+        c._last_complexity_score = 0.91
+        c.bind_session_state(None, "s-rotation")
+        assert c.last_compression_ratio == pytest.approx(0.42)
+        assert c.last_complexity_score == pytest.approx(0.91)
+
+    def test_reset_session_compaction_state_clears_ratio(self):
+        c = self._ctx()
+        c._last_ratio = 0.33
+        c._last_complexity_score = 0.7
+        c._reset_session_compaction_state()
+        assert c.last_compression_ratio is None
+        assert c.last_complexity_score is None

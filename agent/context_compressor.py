@@ -2125,6 +2125,10 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         self._reset_real_usage_pairing()
         self._last_compression_telemetry = self._active_compression_telemetry = None
         self._compression_telemetry_seed = None
+        # Plugin-visible diagnostics: remaining-token ratio and last complexity.
+        # Must not leak across /new — lambda-tuner routes model preference off these.
+        self._last_ratio = None
+        self._last_complexity_score = None
         self._reset_proactive_prune_rearm()
         estimator = getattr(self, "_entropy_estimator", None)
         if estimator is not None:
@@ -2730,6 +2734,10 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
     ) -> None:
         """Apply a named or custom compression profile between turns.
 
+        Pre: not mid-pass; ``profile`` is a COMPRESSION_PROFILES key or a dict
+        of known knobs. Post: on success, threshold/prune/protect_last_n match
+        the applied settings; unknown names leave state unchanged (fail-open).
+
         Safe to call from ``pre_llm_call`` hooks: each compression pass re-reads
         these attributes from scratch, so a change takes effect on the next
         compression event that starts *after* this hook returns.
@@ -2863,6 +2871,37 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
     def routing_hint(self) -> dict | None:
         """Last computed routing hint, or None if the classifier has not run."""
         return getattr(self, "_routing_hint", None)
+
+    @property
+    def last_compression_ratio(self) -> float | None:
+        """Remaining-token ratio (after/pre) from the last successful compress.
+
+        Returns a positive float; typically in (0, 1] but may exceed 1.0 if the
+        compressor expanded context (e.g. long summaries). Returns None if this
+        session has not completed a successful compress, or if the stored value
+        is non-positive or non-numeric. Plugins must read this, not ``_last_ratio``.
+        """
+        value = getattr(self, "_last_ratio", None)
+        try:
+            ratio = float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+        if ratio is None or ratio <= 0.0:
+            return None
+        return ratio
+
+    @property
+    def last_complexity_score(self) -> float | None:
+        """Last plugin-written complexity score in [0, 1], or None."""
+        value = getattr(self, "_last_complexity_score", None)
+        try:
+            return float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @last_complexity_score.setter
+    def last_complexity_score(self, value: float | None) -> None:
+        self._last_complexity_score = value
 
     def _maybe_route_session_profile(self, messages: List[Dict[str, Any]]) -> None:
         """Apply fork compression policy from a heuristic session-type classifier.
@@ -3187,6 +3226,7 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
             if start > n:
                 self._entropy_fed_count = n
                 return
+            # Invariant: messages[:start] already fed; _entropy_fed_count == start.
             for msg in messages[start:]:
                 text = _message_text_for_entropy(msg)
                 if text:

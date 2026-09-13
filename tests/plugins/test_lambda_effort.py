@@ -128,3 +128,75 @@ def test_predicates_turn_complexity_score(plugin, monkeypatch):
     hook(session_id="pred-1", user_message="what is the capital of France?")
     assert plugin.predicates.turn_complexity_score(ctx) == pytest.approx(0.42)
     assert plugin.predicates.recommended_effort(ctx) == "medium"
+
+
+class _FakeCompressor:
+    """Named profiles reset knobs; dict overlays must be reapplied after that."""
+
+    def __init__(self) -> None:
+        self.protect_last_n = 20
+        self.proactive_prune_tokens = 0
+        self.applied: list = []
+        self._last_ratio = None
+        self._last_complexity_score = None
+        self.last_compression_ratio = None
+        self.last_complexity_score = None
+
+    def set_compression_profile(self, profile, **kwargs):
+        self.applied.append(profile)
+        if profile == "code":
+            self.protect_last_n = 28
+            self.proactive_prune_tokens = 28_000
+        elif profile == "research":
+            self.protect_last_n = 22
+            self.proactive_prune_tokens = 40_000
+        elif profile == "mixed":
+            self.protect_last_n = 20
+            self.proactive_prune_tokens = 32_000
+        elif isinstance(profile, dict):
+            if "protect_last_n" in profile:
+                self.protect_last_n = int(profile["protect_last_n"])
+            if "proactive_prune_tokens" in profile:
+                self.proactive_prune_tokens = int(profile["proactive_prune_tokens"])
+
+
+def test_high_complexity_overlay_survives_next_turn(plugin, monkeypatch):
+    """Counterfactual: without overlay reapply, turn 2 resets protect_last_n to 28."""
+    monkeypatch.setattr(plugin.DEFAULT_SCORER, "score", lambda text: 0.85)
+    ctx, hook = _register(plugin)
+    compressor = _FakeCompressor()
+    agent = SimpleNamespace(context_compressor=compressor)
+    hook(
+        session_id="ov-1",
+        user_message="fix the bug in the failing test then implement the parser",
+        agent=agent,
+    )
+    assert compressor.protect_last_n == min(28 + 5, 40)
+    hook(
+        session_id="ov-1",
+        user_message="write a new function for the handler",
+        agent=agent,
+    )
+    assert compressor.protect_last_n == min(28 + 5, 40)
+
+
+def test_disabled_prune_stays_disabled_on_low_complexity(plugin, monkeypatch):
+    """Totality: prune_tokens=0 must not be turned on by the low-complexity overlay."""
+    monkeypatch.setattr(plugin.DEFAULT_SCORER, "score", lambda text: 0.1)
+
+    class _NoProfileCompressor(_FakeCompressor):
+        def set_compression_profile(self, profile, **kwargs):
+            self.applied.append(profile)
+            if isinstance(profile, dict) and "proactive_prune_tokens" in profile:
+                self.proactive_prune_tokens = int(profile["proactive_prune_tokens"])
+
+    ctx, hook = _register(plugin)
+    compressor = _NoProfileCompressor()
+    compressor.proactive_prune_tokens = 0
+    agent = SimpleNamespace(context_compressor=compressor)
+    hook(
+        session_id="prune-0",
+        user_message="fix the bug in the failing test",
+        agent=agent,
+    )
+    assert compressor.proactive_prune_tokens == 0

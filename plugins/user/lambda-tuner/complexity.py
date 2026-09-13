@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import zlib
+from collections import OrderedDict
 from typing import Optional
 
 
@@ -66,10 +67,17 @@ class TaskComplexityScorer:
     _CODE_CHARS_RE = re.compile(r"[`{}[\]();=<>#\\]")
 
     def __init__(self) -> None:
-        self._recent_tokens: set[str] = set()
+        self._recent_tokens: OrderedDict[str, None] = OrderedDict()
+
+    def reset(self) -> None:
+        """Drop novelty history. Call at session boundary (Markov: next session starts fresh)."""
+        self._recent_tokens.clear()
 
     def score(self, text: str, recent_tokens: Optional[set] = None) -> float:
-        """Inverse-entropy weighted mean of 9 sub-scores in [0, 1]. Empty text → 0.0."""
+        """Inverse-entropy weighted mean of 9 sub-scores in [0, 1]. Empty text → 0.0.
+
+        Pre: text is a string. Post: return ∈ [0, 1].
+        """
         if not text:
             return 0.0
         n = len(text)
@@ -88,14 +96,15 @@ class TaskComplexityScorer:
         description_complexity = min(description_compression_ratio(text), 1.0)
 
         recent = recent_tokens if recent_tokens is not None else self._recent_tokens
+        recent_set = set(recent) if recent is not None else set()
         if not tokens:
             novelty = 0.0
-        elif not recent:
+        elif not recent_set:
             # why: empty recent at first lock caused novelty=1.0, inflating
             # complexity and triggering deep reasoning mode unnecessarily
             novelty = 0.5
         else:
-            novelty = len(set(tokens) - recent) / max(len(tokens), 1)
+            novelty = len(set(tokens) - recent_set) / max(len(tokens), 1)
 
         signals = {
             "length_score": length_score,
@@ -112,15 +121,22 @@ class TaskComplexityScorer:
         return float(numer / WEIGHT_SUM)
 
     def update_recent(self, text: str) -> None:
-        """Ingest tokens into the novelty set, capped at 2000."""
+        """Ingest tokens into the novelty LRU, capped at 2000.
+
+        Loop invariant: 0 ≤ len(_recent_tokens) ≤ 2000; oldest key is first.
+        Stopping criterion: evict until len ≤ 2000.
+        Amortized: each token insert/move is O(1); eviction is O(overflow).
+        """
         if not text:
             return
         tokens = str(text).split()
-        self._recent_tokens.update(tokens)
-        overflow = len(self._recent_tokens) - 2000
-        if overflow > 0:
-            for tok in list(self._recent_tokens)[:overflow]:
-                self._recent_tokens.discard(tok)
+        for tok in tokens:
+            if tok in self._recent_tokens:
+                self._recent_tokens.move_to_end(tok)
+            else:
+                self._recent_tokens[tok] = None
+        while len(self._recent_tokens) > 2000:
+            self._recent_tokens.popitem(last=False)
 
 
 DEFAULT_SCORER = TaskComplexityScorer()
