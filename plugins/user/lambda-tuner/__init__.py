@@ -563,6 +563,10 @@ def _apply_adaptive_effort(ctx: Any, session_id: str, user_message: str, session
             del buf[:-_EMA_WINDOW]
         if session_id in _complexity_buffers:
             _complexity_buffers.move_to_end(session_id)
+        # Post-insert cap: setdefault may have added a new key after _touch_session
+        # already ran its pre-insert eviction, so enforce the cap here too.
+        while len(_complexity_buffers) > _MAX_SESSIONS:
+            _complexity_buffers.popitem(last=False)
         map_score = _ema(buf)
         effort = _apply_session_bias(_score_to_base_effort(map_score), session_type or "mixed")
         mode = _reasoning_mode_for_score(map_score)
