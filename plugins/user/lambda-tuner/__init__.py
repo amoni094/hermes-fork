@@ -2,6 +2,11 @@
 
 # See FORK_README.md § lambda-tuner
 """
+# NOTE: This plugin directory uses a hyphen in its name (lambda-tuner) per Hermes user-plugin
+# convention. Standard Python imports will fail with ModuleNotFoundError. Use importlib:
+#   import importlib.util
+#   spec = importlib.util.spec_from_file_location('lambda_tuner', '<path>/__init__.py')
+# The eval runner (evals/compaction/runner.py) uses this pattern already.
 from __future__ import annotations
 
 import json
@@ -129,8 +134,8 @@ def _write_hint(session_type: str, confidence: float, scores: dict[str, float]) 
     except Exception:
         try:
             os.unlink(tmp)
-        except OSError:
-            pass
+        except OSError as exc:  # fail-open
+            logger.debug("lambda-tuner: [_write_hint unlink] suppressed: %s", exc, exc_info=True)
         raise
 
 
@@ -288,8 +293,8 @@ def _maybe_reclassify_on_entropy_decay(
         rec["reclassified"] = True
         try:
             rec["complexity"] = float(DEFAULT_SCORER.score(" ".join(bucket)))
-        except Exception:
-            pass
+        except Exception as exc:  # fail-open
+            logger.debug("lambda-tuner: [_maybe_reclassify_on_entropy_decay complexity] suppressed: %s", exc, exc_info=True)
         _fired[session_id] = rec
         _fired.move_to_end(session_id)
         _apply_profile(ctx, agent, session_type, session_id, confidence, len(bucket))
@@ -304,8 +309,8 @@ def _maybe_reclassify_on_entropy_decay(
                 f"confidence={confidence}",
                 tags=["classification", "lambda-tuner", "reclassify"],
             )
-        except Exception:
-            pass
+        except Exception as exc:  # fail-open
+            logger.debug("lambda-tuner: [_maybe_reclassify_on_entropy_decay emit_episode] suppressed: %s", exc, exc_info=True)
     except Exception as exc:
         logger.debug("lambda-tuner: reclassify failed (fail-open): %s", exc)
 
@@ -377,8 +382,8 @@ def _write_warm_start_cache(session_id: str, rec: dict[str, Any], turn_count: in
         except Exception:
             try:
                 os.unlink(tmp)
-            except OSError:
-                pass
+            except OSError as exc:  # fail-open
+                logger.debug("lambda-tuner: [_write_warm_start_cache unlink] suppressed: %s", exc, exc_info=True)
             raise
     except Exception as exc:
         logger.warning("lambda-tuner: warm-start cache write failed (fail-open): %s", exc)
@@ -393,6 +398,8 @@ _MAX_MESSAGES_PER_SESSION = 32
 # session_id -> {"type": str, "confidence": float, "ts": float}
 _fired: OrderedDict[str, dict[str, Any]] = OrderedDict()
 _session_messages: OrderedDict[str, list[str]] = OrderedDict()
+# session_id -> last 3 raw turn complexity scores (EMA input)
+_complexity_buffers: OrderedDict[str, list[float]] = OrderedDict()
 
 
 def _fired_type(session_id: str) -> str | None:
@@ -415,10 +422,13 @@ def _touch_session(session_id: str) -> None:
         _fired.move_to_end(session_id)
     if session_id in _intent_applied:
         _intent_applied.move_to_end(session_id)
+    if session_id in _complexity_buffers:
+        _complexity_buffers.move_to_end(session_id)
     while len(_session_messages) > _MAX_SESSIONS:
         evicted, _ = _session_messages.popitem(last=False)
         _fired.pop(evicted, None)
         _intent_applied.pop(evicted, None)
+        _complexity_buffers.pop(evicted, None)
     while len(_fired) > _MAX_SESSIONS:
         evicted, _ = _fired.popitem(last=False)
         _intent_applied.pop(evicted, None)
@@ -450,6 +460,144 @@ def _apply_profile(ctx: Any, agent: Any, session_type: str, session_id: str, con
         except Exception as exc:
             logger.debug("lambda-tuner: set_compression_profile failed: %s", exc)
     _apply_summary_template(compressor, session_type)
+
+
+# ---------------------------------------------------------------------------
+# Adaptive reasoning effort — per-turn complexity + EMA smoothing
+# ---------------------------------------------------------------------------
+
+_EFFORT_FROM_SCORE = ("low", "medium", "high", "xhigh")
+_EMA_ALPHA = 0.5  # 3-sample EMA; more weight on the latest turn
+_EMA_WINDOW = 3
+
+
+def _score_to_base_effort(score: float) -> str:
+    if score < 0.25:
+        return "low"
+    if score < 0.50:
+        return "medium"
+    if score <= 0.75:
+        return "high"
+    return "xhigh"
+
+
+def _apply_session_bias(effort: str, session_type: str) -> str:
+    if session_type != "research":
+        return effort
+    try:
+        idx = _EFFORT_FROM_SCORE.index(effort)
+    except ValueError:
+        return effort
+    return _EFFORT_FROM_SCORE[min(idx + 1, len(_EFFORT_FROM_SCORE) - 1)]
+
+
+def _ema(scores: list[float], alpha: float = _EMA_ALPHA) -> float:
+    if not scores:
+        return 0.0
+    e = float(scores[0])
+    for s in scores[1:]:
+        e = alpha * float(s) + (1.0 - alpha) * e
+    return e
+
+
+def _reasoning_mode_for_score(score: float) -> str:
+    if score < 0.25:
+        return "fast"
+    if score <= 0.75:
+        return "default"
+    return "deep"
+
+
+def _verbosity_mode_for(score: float, effort: str) -> str:
+    """Map complexity score + effort onto full/compact/suppress."""
+    effort = (effort or "").strip().lower()
+    if score > 0.50:
+        return "full"
+    if score < 0.25 and effort in ("none", "off", "disabled"):
+        return "suppress"
+    return "compact"
+
+
+def _apply_reasoning_verbosity(ctx: Any, agent: Any, score: float, effort: str) -> None:
+    mode = _verbosity_mode_for(float(score or 0.0), effort)
+    try:
+        setter = getattr(ctx, "set_verbosity_mode", None)
+        if callable(setter):
+            setter(mode)
+    except Exception as exc:
+        logger.debug("lambda-tuner: set_verbosity_mode failed (fail-open): %s", exc)
+    try:
+        agent_setter = getattr(agent, "set_reasoning_verbosity", None) if agent is not None else None
+        if callable(agent_setter):
+            agent_setter(mode)
+    except Exception as exc:
+        logger.debug("lambda-tuner: set_reasoning_verbosity failed (fail-open): %s", exc)
+
+
+def _apply_adaptive_effort(ctx: Any, session_id: str, user_message: str, session_type: str, agent: Any = None) -> None:
+    """Score this turn, EMA-smooth, map to effort, fail-open on ctx APIs."""
+    from .predicates import is_greeter_turn
+
+    greeter = False
+    try:
+        greeter = bool(is_greeter_turn(user_message))
+    except Exception:
+        greeter = False
+
+    raw = 0.0
+    if not greeter:
+        try:
+            raw = float(DEFAULT_SCORER.score(user_message))
+            DEFAULT_SCORER.update_recent(user_message)
+        except Exception as exc:
+            logger.debug("lambda-tuner: turn complexity score failed (fail-open): %s", exc)
+            raw = 0.0
+
+    if greeter:
+        effort = "low"
+        mode = "fast"
+        stored_score = 0.0
+        map_score = 0.0
+    else:
+        buf = _complexity_buffers.setdefault(session_id, [])
+        buf.append(raw)
+        if len(buf) > _EMA_WINDOW:
+            del buf[:-_EMA_WINDOW]
+        if session_id in _complexity_buffers:
+            _complexity_buffers.move_to_end(session_id)
+        while len(_complexity_buffers) > _MAX_SESSIONS:
+            _complexity_buffers.popitem(last=False)
+        map_score = _ema(buf)
+        effort = _apply_session_bias(_score_to_base_effort(map_score), session_type or "mixed")
+        mode = _reasoning_mode_for_score(map_score)
+        stored_score = raw
+
+    try:
+        ctx._turn_complexity_score = stored_score
+        ctx._recommended_effort = effort
+    except Exception as exc:  # fail-open
+        logger.debug("lambda-tuner: [_apply_adaptive_effort] suppressed: %s", exc, exc_info=True)
+
+    try:
+        setter = getattr(ctx, "set_adaptive_effort", None)
+        if callable(setter):
+            try:
+                setter(effort, confidence=1.0, priority=10)
+            except TypeError:
+                setter(effort)
+    except Exception as exc:
+        logger.debug("lambda-tuner: set_adaptive_effort failed (fail-open): %s", exc)
+
+    try:
+        ctx.set_reasoning_mode(mode)
+    except Exception as exc:
+        logger.debug("lambda-tuner: set_reasoning_mode failed (fail-open): %s", exc)
+
+    try:
+        verbosity_score = 0.0 if greeter else map_score
+        _apply_reasoning_verbosity(ctx, agent, verbosity_score, effort)
+    except Exception as exc:
+        logger.debug("lambda-tuner: verbosity apply failed (fail-open): %s", exc)
 
 
 _SUMMARY_FOCUS = {
@@ -512,8 +660,8 @@ def _maybe_apply_hint_intent(session_id: str, agent: Any) -> None:
         _intent_applied.move_to_end(session_id)
         while len(_intent_applied) > _MAX_SESSIONS:
             _intent_applied.popitem(last=False)
-    except Exception:
-        pass
+    except Exception as exc:  # fail-open
+        logger.debug("lambda-tuner: [_maybe_apply_hint_intent] suppressed: %s", exc, exc_info=True)
 
 
 def register(ctx: Any) -> None:
@@ -529,8 +677,8 @@ def register(ctx: Any) -> None:
             #      needs it to call predicates.session_type(session_id).
             try:
                 ctx._session_id = session_id
-            except Exception:
-                pass
+            except Exception as exc:  # fail-open
+                logger.debug("lambda-tuner: [on_session_start] suppressed: %s", exc, exc_info=True)
             _maybe_apply_hint_intent(session_id, agent)
             if agent is None:
                 # on_session_start may not receive agent; try ctx.compressor.
@@ -564,8 +712,8 @@ def register(ctx: Any) -> None:
     ) -> None:
         try:
             _maybe_apply_hint_intent(session_id, agent)
-        except Exception:
-            pass
+        except Exception as exc:  # fail-open
+            logger.debug("lambda-tuner: [pre_llm_call] suppressed: %s", exc, exc_info=True)
 
         try:
             compressor = _resolve_compressor(ctx, agent)
@@ -608,6 +756,7 @@ def register(ctx: Any) -> None:
             del bucket[:-_MAX_MESSAGES_PER_SESSION]
         _touch_session(session_id)
 
+        session_type = "mixed"
         try:
             locked = _fired_type(session_id)
             if locked is not None:
@@ -625,6 +774,11 @@ def register(ctx: Any) -> None:
                     _maybe_reclassify_on_entropy_decay(
                         ctx, agent, session_id, bucket, rec, locked,
                     )
+                session_type = locked
+                try:
+                    _apply_adaptive_effort(ctx, session_id, user_message, session_type, agent)
+                except Exception as exc:
+                    logger.debug("lambda-tuner: adaptive effort failed (fail-open): %s", exc)
                 return
 
             session_type, confidence, scores = _classify(bucket)
@@ -746,12 +900,17 @@ def register(ctx: Any) -> None:
         except Exception as exc:
             logger.debug("lambda-tuner: classify failed (fail-open): %s", exc)
 
+        try:
+            _apply_adaptive_effort(ctx, session_id, user_message, session_type, agent)
+        except Exception as exc:
+            logger.debug("lambda-tuner: adaptive effort failed (fail-open): %s", exc)
+
     def on_session_end(*, session_id: str = "", **_kwargs: Any) -> None:  # registered as on_session_finalize
         # Clear ctx._session_id so compact_tool_result doesn't use a stale session_id.
         try:
             ctx._session_id = None
-        except Exception:
-            pass
+        except Exception as exc:  # fail-open
+            logger.debug("lambda-tuner: [on_session_end] suppressed: %s", exc, exc_info=True)
         """Drop per-session classifier state so long-running gateways cannot leak it."""
         try:
             rec = _fired.get(session_id) or {}
@@ -769,17 +928,18 @@ def register(ctx: Any) -> None:
                             "High-complexity code session; consider raising code profile protect_last_n",
                             "medium",
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:  # fail-open
+                        logger.debug("lambda-tuner: [on_session_end suggest_skill_update] suppressed: %s", exc, exc_info=True)
             try:
                 suggestions = ctx.get_skill_suggestions()
                 if suggestions:
                     logger.info("lambda-tuner skill suggestions: %s", suggestions)
-            except Exception:
-                pass
+            except Exception as exc:  # fail-open
+                logger.debug("lambda-tuner: [on_session_end get_skill_suggestions] suppressed: %s", exc, exc_info=True)
             _session_messages.pop(session_id, None)
             _fired.pop(session_id, None)
             _intent_applied.pop(session_id, None)
+            _complexity_buffers.pop(session_id, None)
         except Exception as exc:
             logger.debug("lambda-tuner: on_session_end cleanup failed (fail-open): %s", exc)
 
@@ -812,16 +972,16 @@ def register(ctx: Any) -> None:
                         compressor = getattr(agent, "context_compressor", None) if agent is not None else None
                         if compressor is not None:
                             compressor.importance_biased_prune_enabled = True
-                    except Exception:
-                        pass
+                    except Exception as exc:  # fail-open
+                        logger.debug("lambda-tuner: [pre_compress ib_prune_code] suppressed: %s", exc, exc_info=True)
                 elif session_type == "research":
                     # Ensure IB prune is off for research (may have been set by an earlier /new leak).
                     try:
                         compressor = getattr(agent, "context_compressor", None) if agent is not None else None
                         if compressor is not None:
                             compressor.importance_biased_prune_enabled = False
-                    except Exception:
-                        pass
+                    except Exception as exc:  # fail-open
+                        logger.debug("lambda-tuner: [pre_compress ib_prune_research] suppressed: %s", exc, exc_info=True)
             elif context_tokens > 60_000:
                 # VERIFIED: entropy-adaptive guard is correctly wired.
                 # Session type is None (not in _fired) AND context_tokens > 60000
@@ -861,17 +1021,20 @@ def register(ctx: Any) -> None:
         hooks = ctx._manager._hooks.get("pre_llm_call")
         if hooks and hooks[-1] is on_pre_llm_call:
             hooks.insert(0, hooks.pop())
-    except Exception:
-        pass  # fail-open: registration order stays as-is
+    except Exception as exc:  # fail-open
+        logger.debug("lambda-tuner: [register hook_order] suppressed: %s", exc, exc_info=True)
 
 
 # Export predicates for other plugins (lazy-read `_fired` at call time).
 from .predicates import (  # noqa: E402
     is_code_session,
+    is_greeter_turn,
     is_high_confidence,
     is_research_session,
+    recommended_effort,
     session_complexity,
     session_type,
+    turn_complexity_score,
     was_reclassified,
 )
 
@@ -880,8 +1043,11 @@ __all__ = [
     "is_research_session",
     "is_code_session",
     "is_high_confidence",
+    "is_greeter_turn",
     "session_type",
     "session_complexity",
+    "turn_complexity_score",
+    "recommended_effort",
     "was_reclassified",
     "TaskComplexityScorer",
 ]

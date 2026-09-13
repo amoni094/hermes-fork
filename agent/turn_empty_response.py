@@ -226,7 +226,7 @@ def recover_empty_response(
         or getattr(assistant_message, "reasoning_details", None)
         or _has_inline_thinking
     )
-    if _has_structured and agent._thinking_prefill_retries < 2:
+    if _has_structured and agent._thinking_prefill_retries < 2 and not getattr(agent, "_suppress_thinking_prefill", False):
         agent._thinking_prefill_retries += 1
         logger.info(
             "Thinking-only response (no visible content) — prefilling to continue (%d/2)",

@@ -1609,6 +1609,12 @@ def run_conversation(
         moa_config=moa_config,
         turn_author=turn_author,
     )
+    try:
+        if callable(getattr(agent, "_should_compact_thinking", None)) and agent._should_compact_thinking():
+            from agent.reasoning_verbosity import compact_thinking_history
+            compact_thinking_history(agent)
+    except Exception:
+        pass
     return export_current_turn_boundary(agent, result, user_message)
 
 

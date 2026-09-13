@@ -578,6 +578,8 @@ _TURN_STATE: Dict[str, Any] = {
 # Session persistence state.
 _SESSION_STATE: Dict[str, Any] = {
     "_session_messages": list,
+    "_reasoning_verbosity_mode": "full",
+    "_suppress_thinking_prefill": False,
     # Responses encrypted-reasoning replay: routes that 400 with ``invalid_encrypted_content``
     # make the loop disable it for the session (stateless continuity).
     "_codex_reasoning_replay_enabled": True,

@@ -10,7 +10,16 @@ Reads ``_fired`` from the parent package. After classify/lock it stores:
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
+
+# Whole-message greeter/ack — effort bypass (narrower than the classifier greeting filter).
+_GREETER_RE = re.compile(
+    r"^[\s!.,?]*("
+    r"hey|hi|ok(?:ay)?|sure|thanks|thank\s+you|continue|go\s+ahead"
+    r")[\s!.,?]*$",
+    re.IGNORECASE,
+)
 
 
 def _records() -> Any:
@@ -113,3 +122,26 @@ def was_reclassified(sid: str) -> bool:
         return int(rec.get("_reclassification_count", 0) or 0) >= 1
     except (TypeError, ValueError):
         return False
+
+
+def is_greeter_turn(message: str) -> bool:
+    """True for whole-message greetings/acks that should force effort=low."""
+    if not isinstance(message, str):
+        return False
+    return bool(_GREETER_RE.match(message.strip()))
+
+
+def turn_complexity_score(ctx) -> float:
+    """Last raw turn complexity stored on *ctx*, or 0.0."""
+    try:
+        return float(getattr(ctx, "_turn_complexity_score", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def recommended_effort(ctx) -> str:
+    """Effort level set on the last scored turn, or empty string."""
+    try:
+        return str(getattr(ctx, "_recommended_effort", "") or "")
+    except Exception:
+        return ""
