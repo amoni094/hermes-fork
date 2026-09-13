@@ -19,6 +19,7 @@ import argparse
 import copy
 import hashlib
 import json
+import logging
 import math
 import re
 import sys
@@ -39,6 +40,8 @@ from evals.compaction.policies import (  # noqa: E402
     POLICIES,
     apply_policy,
 )
+
+logger = logging.getLogger(__name__)
 
 QUESTION_PROMPT = """You are building a factual recall exam from an AI-agent work session transcript.
 
@@ -500,8 +503,8 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
     if (spec.get("attrs") or {}).get("use_classifier"):
         try:
             comp._maybe_route_session_profile(messages)
-        except Exception:
-            pass  # fall through to lean/mixed baseline on any error
+        except Exception as exc:
+            logger.warning("eval runner: scoring suppressed: %s", exc)
     classifier_decision = classifier_decision_from_compressor(comp)
     t0 = time.time()
     # Use `before` (which may be telegraphic-preprocessed) as the input.
@@ -551,7 +554,8 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
         verdict_raw = _call(JUDGE_PROMPT.format(question=qa["q"], gold=qa["gold"], answer=answer), max_tokens=300)
         try:
             verdict = _extract_json(verdict_raw)
-        except Exception:
+        except Exception as exc:
+            logger.warning("eval runner: scoring suppressed: %s", exc)
             verdict = {"score": 0, "why": f"judge parse failure: {verdict_raw[:100]}"}
         entry = {"q": qa["q"], "gold": qa["gold"], "answer": answer, **verdict}
         if query is not None:
@@ -598,7 +602,8 @@ def uncompacted_control(messages, questions, out_dir: Path) -> dict:
         verdict_raw = _call(JUDGE_PROMPT.format(question=qa["q"], gold=qa["gold"], answer=answer), max_tokens=300)
         try:
             verdict = _extract_json(verdict_raw)
-        except Exception:
+        except Exception as exc:
+            logger.warning("eval runner: scoring suppressed: %s", exc)
             verdict = {"score": 0, "why": "judge parse failure"}
         entry = {"q": qa["q"], **verdict, "answer": answer}
         _annotate_result_entry(entry, qa)

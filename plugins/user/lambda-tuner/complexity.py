@@ -7,8 +7,15 @@ from typing import Optional
 
 
 def description_compression_ratio(text: str) -> float:
-    """MDL proxy: compressed_len / raw_len. High ratio = low compressibility = high complexity."""
-    return len(zlib.compress(text.encode())) / max(len(text), 1)
+    """MDL proxy: compressed_len / raw_len. High ratio = low compressibility = high complexity.
+
+    Returns a value clamped to [0, 1]. Empty input returns 0.0 (no information = no complexity).
+    Without clamping, zlib header overhead causes empty strings to return ~8.0, which would
+    distort the weighted mean in TaskComplexityScorer.score().
+    """
+    if not text:
+        return 0.0
+    return min(1.0, len(zlib.compress(text.encode())) / len(text))
 
 
 # Inverse-entropy prior weights (higher = more type-discriminative).

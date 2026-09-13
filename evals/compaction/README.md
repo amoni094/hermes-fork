@@ -80,3 +80,28 @@ name.
   does not.
 - `--also-uncompacted` adds a control arm that answers from the full
   original transcript — the recall ceiling.
+
+## Reproducing Lineage Files
+
+The lineage .jsonl files used in ship-gate evaluations (research_v2, code_v2, mixed_v2)
+are not committed — they are too large (~several hundred MB each).
+
+They were derived from full session history exports using:
+
+```
+python evals/compaction/scripts/reconstruct_lineage.py \
+  --session-dir ~/.hermes/sessions/ \
+  --output evals/compaction/fixtures/
+```
+
+To reproduce domain-matched lineages (see runner.py find_cap_start):
+1. Export your Hermes sessions to a .jsonl file
+2. Use reconstruct_lineage.py to build the full message list
+3. Truncate to domain-matched windows per the skill doc:
+   - research_v2: msgs[:1400] (cap window strongly research-domain)
+   - code_v2:     msgs[1500:] (cap window strongly code-domain)
+   - mixed_v2:    msgs[700:1700] (genuinely mixed cap window)
+4. Verify R/C ratio of each cap window before running the eval harness
+
+See the hermes-fork skill (autonomous-ai-agents/hermes-fork) for detailed instructions
+on cap-window domain verification and find_cap_start() usage.
