@@ -2149,7 +2149,8 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         _config_pct = getattr(self, "_config_threshold_percent", None)
         if _config_pct is not None:
             self._base_threshold_percent = resolve_model_threshold(
-                self.model, getattr(self, "model_thresholds", {}), _config_pct
+                self.model, getattr(self, "model_thresholds", {}), _config_pct,
+                getattr(self, "provider", ""),
             )
         self.threshold_percent = self._effective_threshold_percent(
             self._resolve_context_length(),
