@@ -3809,3 +3809,57 @@ class TestFactLedgerBeforeSummaryPrefix:
         assert ContextCompressor._starts_with_summary_prefix(first)
         assert first.find("FACT LEDGER") < first.find(SUMMARY_PREFIX)
 
+
+
+class TestSetCompressionProfileRearm:
+    """set_compression_profile() with a tighter proactive_prune_tokens should
+    lower the rearm mark so the next prune fires at the new floor, not the old
+    (higher) mark.  The rearm must not be zeroed (that would cache-break
+    immediately)."""
+
+    def _ctx(self):
+        with patch("agent.context_compressor.get_model_context_length", return_value=1_000_000):
+            c = ContextCompressor(model="test/model", threshold_percent=0.50, quiet_mode=True)
+            _ = c.context_length
+            return c
+
+    def test_rearm_lowered_when_new_floor_is_tighter(self):
+        c = self._ctx()
+        # Simulate: prune fired and left the rearm mark at 50 000.
+        c._proactive_prune_rearm_tokens = 50_000
+        # Apply a tighter floor (research profile: 40 000 < 50 000).
+        c.set_compression_profile({"proactive_prune_tokens": 40_000})
+        assert c.proactive_prune_tokens == 40_000
+        # Rearm must drop to new_floor + 1, not stay at the old 50 000.
+        assert c._proactive_prune_rearm_tokens == 40_001
+
+    def test_rearm_not_raised_when_new_floor_is_looser(self):
+        c = self._ctx()
+        c._proactive_prune_rearm_tokens = 20_000
+        # Apply a looser floor (code profile: 28 000 > 20 000).
+        c.set_compression_profile({"proactive_prune_tokens": 28_000})
+        assert c.proactive_prune_tokens == 28_000
+        # Rearm must not increase — it stays at 20 000 (already tighter).
+        assert c._proactive_prune_rearm_tokens == 20_000
+
+    def test_rearm_unchanged_when_floor_equals_rearm(self):
+        c = self._ctx()
+        c._proactive_prune_rearm_tokens = 32_000
+        c.set_compression_profile({"proactive_prune_tokens": 32_000})
+        # Equal: new_floor is not < current_rearm, so rearm stays.
+        assert c._proactive_prune_rearm_tokens == 32_000
+
+    def test_rearm_not_zeroed_on_tighter_floor(self):
+        c = self._ctx()
+        c._proactive_prune_rearm_tokens = 50_000
+        c.set_compression_profile({"proactive_prune_tokens": 0})
+        # Floor=0 → rearm should be max(0+1, 0)=1, not 0 (no cache-break).
+        assert c._proactive_prune_rearm_tokens == 1
+
+    def test_floor_set_correctly_on_invalid_value(self):
+        c = self._ctx()
+        original_rearm = 30_000
+        c._proactive_prune_rearm_tokens = original_rearm
+        # Invalid value: rearm must not change.
+        c.set_compression_profile({"proactive_prune_tokens": "not-an-int"})
+        assert c._proactive_prune_rearm_tokens == original_rearm

@@ -2815,15 +2815,22 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
                 self._tail_token_budget = None
         if "proactive_prune_tokens" in settings:
             try:
-                self.proactive_prune_tokens = max(0, int(settings["proactive_prune_tokens"]))
+                new_floor = max(0, int(settings["proactive_prune_tokens"]))
             except (TypeError, ValueError):
                 _log.warning(
                     "context_compressor: invalid proactive_prune_tokens %r from %s — skipped",
                     settings["proactive_prune_tokens"], _source,
                 )
-            # Rearm is left intact on purpose: resetting it would cache-break
-            # immediately. Next prune still uses the new floor.
-            # TODO: consider lowering rearm if the new floor is more aggressive.
+            else:
+                self.proactive_prune_tokens = new_floor
+                # If the new floor is more aggressive (lower) than the current rearm mark,
+                # pull the rearm mark down so the next pass fires at the new floor rather
+                # than waiting until the old (higher) rearm token count is reached.
+                # We do NOT reset to 0 (that would cache-break immediately); instead we
+                # clamp to max(new_floor + 1, current_rearm) so the rearm can only decrease.
+                current_rearm = getattr(self, "_proactive_prune_rearm_tokens", 0) or 0
+                if new_floor < current_rearm:
+                    self._proactive_prune_rearm_tokens = max(new_floor + 1, 0)
         if "protect_last_n" in settings:
             try:
                 n = int(settings["protect_last_n"])

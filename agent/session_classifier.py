@@ -78,7 +78,8 @@ _STACK_RE = re.compile(
     r"|\bat\s+\S+\.\S+\("
 )
 _GIT_RE = re.compile(
-    r"(?i)\bgit\s+(?:commit|push|pull|merge|branch|diff|log|rebase|stash|status|checkout|add|clone)\b"
+    r"(?i)\bgit\s+(?:commit|push|pull|merge|branch|diff"
+    r"|log|rebase|stash|status|checkout|add|clone)\b"
 )
 _TEST_RE = re.compile(
     r"(?i)\b(?:passed|failed|failure|assert(?:ion|Equal|True|False)?|pytest|jest"

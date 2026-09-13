@@ -42,7 +42,8 @@ _RAW_SIGNAL_WEIGHTS = {
 }
 _RAW_WEIGHT_SUM = sum(_RAW_SIGNAL_WEIGHTS.values())
 SIGNAL_WEIGHTS = {
-    name: raw * (8.0 / _RAW_WEIGHT_SUM) for name, raw in _RAW_SIGNAL_WEIGHTS.items()
+    name: raw * (8.0 / _RAW_WEIGHT_SUM)
+    for name, raw in _RAW_SIGNAL_WEIGHTS.items()
 }
 # why: th-decomp2 — description complexity (MDL proxy via zlib) discriminates ambiguous from clear tasks
 SIGNAL_WEIGHTS["description_complexity"] = 1.0
@@ -50,10 +51,18 @@ WEIGHT_SUM = sum(SIGNAL_WEIGHTS.values())
 
 
 class TaskComplexityScorer:
-    AMBIGUITY_RE = re.compile(r"(maybe|could|unclear|possibly|not sure|might)", re.IGNORECASE)
-    CONSTRAINT_RE = re.compile(r"(must|never|always|only|required|forbidden)", re.IGNORECASE)
-    MULTISTEP_RE = re.compile(r"(then|after that|next|finally|step [0-9]|first.*then)", re.IGNORECASE)
-    TOOL_RE = re.compile(r"(terminal|file|search|deploy|build|install|run|execute)", re.IGNORECASE)
+    AMBIGUITY_RE = re.compile(
+        r"(maybe|could|unclear|possibly|not sure|might)", re.IGNORECASE
+    )
+    CONSTRAINT_RE = re.compile(
+        r"(must|never|always|only|required|forbidden)", re.IGNORECASE
+    )
+    MULTISTEP_RE = re.compile(
+        r"(then|after that|next|finally|step [0-9]|first.*then)", re.IGNORECASE
+    )
+    TOOL_RE = re.compile(
+        r"(terminal|file|search|deploy|build|install|run|execute)", re.IGNORECASE
+    )
     _CODE_CHARS_RE = re.compile(r"[`{}[\]();=<>#\\]")
 
     def __init__(self) -> None:
@@ -82,7 +91,8 @@ class TaskComplexityScorer:
         if not tokens:
             novelty = 0.0
         elif not recent:
-            # why: empty recent at first lock caused novelty=1.0, inflating complexity and triggering deep reasoning mode unnecessarily
+            # why: empty recent at first lock caused novelty=1.0, inflating
+            # complexity and triggering deep reasoning mode unnecessarily
             novelty = 0.5
         else:
             novelty = len(set(tokens) - recent) / max(len(tokens), 1)
@@ -188,7 +198,7 @@ class TelegraphicCompressor:
     def _normalize_whitespace(self, text: str) -> str:
         lines = text.splitlines()
         # Strip trailing whitespace per line.
-        lines = [l.rstrip() for l in lines]
+        lines = [ln.rstrip() for ln in lines]
         # Collapse runs of blank lines to a single blank.
         out: list[str] = []
         prev_blank = False
@@ -218,7 +228,7 @@ class TelegraphicCompressor:
 
     def _remove_boilerplate(self, text: str) -> str:
         lines = text.splitlines(keepends=True)
-        return "".join(l for l in lines if not self._BOILERPLATE_RE.match(l))
+        return "".join(ln for ln in lines if not self._BOILERPLATE_RE.match(ln))
 
     def _skeleton_json_values(self, text: str) -> str:
         """Replace long JSON string/array/object values with a length stub."""
@@ -231,13 +241,26 @@ class TelegraphicCompressor:
         return self._JSON_VALUE_RE.sub(_stub, text)
 
     def _head_tail(self, text: str, max_chars: int) -> str:
-        chunk = max(max_chars // 3, 1)  # guard: chunk=0 when max_chars<3 makes text[-0:] = full text
+        """Head+tail window guaranteed to fit within max_chars.
+
+        The marker itself consumes chars, so chunk is computed as:
+            chunk = (max_chars - marker_len) // 2
+        to ensure head + marker + tail <= max_chars for any max_chars >= 1.
+        Falls back to head-only when max_chars is too small for any tail.
+        """
+        _MARKER_TEMPLATE = "\n[...{} chars omitted by lambda-tuner telegraphic compressor...]\n"
+        # Estimate marker length using the actual omitted count (worst-case is
+        # a 10-digit number; use 15 digits as a safe overestimate for the budget).
+        _MARKER_OVERHEAD = len(_MARKER_TEMPLATE.format(10 ** 15))
+        budget = max(max_chars - _MARKER_OVERHEAD, 0)
+        chunk = max(budget // 2, 1)
         head = text[:chunk]
-        tail = text[-chunk:]
-        omitted = len(text) - 2 * chunk
-        return (
-            head + "\n[...{} chars omitted by lambda-tuner telegraphic compressor...]\n".format(omitted) + tail
-        )
+        tail = text[-chunk:] if chunk > 0 and len(text) > chunk else ""
+        omitted = max(len(text) - len(head) - len(tail), 0)
+        marker = _MARKER_TEMPLATE.format(omitted)
+        result = head + marker + tail
+        # Hard clamp: truncate if the estimate was still off (e.g. max_chars < overhead).
+        return result[:max_chars] if len(result) > max_chars else result
 
     def compress(self, content: str, max_chars: int = 4000) -> str:
         """Apply telegraphic passes in order; fall back to head+tail if still over budget."""
