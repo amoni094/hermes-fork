@@ -300,6 +300,29 @@ May 2026). PyPI: `>=floor,<next_major` (`"httpx>=0.28.1,<1"`); pre-1.0: `<0.(min
 pip: `==exact`. A bare `>=X.Y.Z` is rejected by CI and reviewers. Run `uv lock` after
 changing `pyproject.toml`. Reference: #2810 (bounds), #9801 (SHA pinning + audit CI).
 
+## Development Commands
+
+Run these before pushing. They are NOT run by `scripts/run_tests.sh` (which is CI parity only).
+
+```bash
+ruff format .              # auto-format Python (canonical formatter)
+ruff check --fix .         # lint + auto-fix safe violations
+scripts/run_tests.sh       # full test suite (always use this, never bare pytest)
+```
+
+## Code Shape Rules (additions to the area AGENTS.md files)
+
+- **Commit title:** `type(scope): imperative description` — aim for ≤50 chars.
+  Types: `fix` / `feat` / `docs` / `test` / `refactor` / `chore`.
+  See `CONTRIBUTING.md` §"Commit messages" for examples and scope list.
+- **No secrets in source.** API keys, tokens, and passwords must never appear in source
+  files, tests, evals, or log output. Configuration goes in `config.yaml`; credentials go in
+  `.env` (see the `.env` rule above). Harden setup wizards: generate random passwords with
+  `secrets.token_urlsafe` rather than shipping a constant default.
+- **Prefer concrete types.** Use `str | None`, `list[str]`, `dict[str, Any]` over
+  `Optional[str]`, `List[str]`, `Dict`. When `Any` is genuinely needed (plugin interfaces,
+  FFI boundaries), add a brief inline comment explaining why.
+
 ## Commits, Merges, PRs
 
 - **Squash merges from stale branches silently revert recent fixes.** Before squash-merging,

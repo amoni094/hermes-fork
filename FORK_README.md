@@ -68,7 +68,8 @@ compression profile live.
 - Fail-open: errors are debug-logged, never raised
 - Hooks: `pre_llm_call` (classify + live profile + hint intent), `on_session_start`
   (apply hint `intent` → `compressor.current_intent`), `pre_compress` (re-apply
-  before a full compression pass), `on_session_end` (drop LRU/`_fired`)
+  before a full compression pass), `on_session_finalize` (handler: `on_session_end` —
+  drops LRU/`_fired`)
 - Registers at the front of the `pre_llm_call` list so the profile is set before
   other hooks in the same wave that might read compression state
 
@@ -76,8 +77,8 @@ compression profile live.
 
 | Profile    | threshold_percent | proactive_prune_tokens | protect_last_n |
 |------------|:-----------------:|:----------------------:|:--------------:|
-| `research` | 0.45              | 40 000                 | 15             |
-| `code`     | 0.55              | 28 000                 | 25             |
+| `research` | 0.45              | 40 000                 | 22             |
+| `code`     | 0.55              | 28 000                 | 28             |
 | `mixed`    | 0.50              | 32 000                 | 20             |
 | `entropy-adaptive` | R(D) from message entropy (placeholder 0.50) | 32 000 | 20 |
 

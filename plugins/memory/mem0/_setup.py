@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import getpass
 import json
+import secrets
 from contextlib import suppress
 import os
 import shutil
@@ -21,7 +22,10 @@ from hermes_constants import get_hermes_home  # noqa: F401 — patched by tests
 from ._oss_providers import EMBEDDER_PROVIDERS, KNOWN_DIMS, LLM_PROVIDERS, SECTION_REGISTRIES, VECTOR_PROVIDERS, validate_oss_config
 
 _OLLAMA_URL = "http://localhost:11434"
-_PGVECTOR_CONTAINER, _PGVECTOR_IMAGE, _PGVECTOR_PASSWORD = "hermes-pgvector", "pgvector/pgvector:pg17", "hermes"
+_PGVECTOR_CONTAINER, _PGVECTOR_IMAGE = "hermes-pgvector", "pgvector/pgvector:pg17"
+# Local-only Docker default. A fresh random password is generated per-setup (see _ensure_pgvector)
+# and saved to the plugin config — do not rely on this fallback in production.
+_PGVECTOR_PASSWORD_DEFAULT = "hermes"
 
 
 def _curses_select(title: str, items: list[tuple[str, str]], default: int = 0) -> int:
@@ -302,13 +306,15 @@ def _ensure_pgvector(host: str = "localhost", port: int = 5432) -> dict | None:
         print(f"  Pulling {_PGVECTOR_IMAGE}...")
         _docker("pull", _PGVECTOR_IMAGE, timeout=120)
         _docker("rm", "-f", _PGVECTOR_CONTAINER, timeout=10)  # remove existing container if present
+        # Generate a fresh random password each time we create the container.
+        pg_password = secrets.token_urlsafe(16)
         print(f"  Starting container '{_PGVECTOR_CONTAINER}' on port {port}...")
-        _docker("run", "-d", "--name", _PGVECTOR_CONTAINER, "-e", f"POSTGRES_PASSWORD={_PGVECTOR_PASSWORD}", "-p", f"{port}:5432", _PGVECTOR_IMAGE, timeout=30, check=True)
+        _docker("run", "-d", "--name", _PGVECTOR_CONTAINER, "-e", f"POSTGRES_PASSWORD={pg_password}", "-p", f"{port}:5432", _PGVECTOR_IMAGE, timeout=30, check=True)
         if _pg_ready(host, port, 20):
             print(f"  ✓ pgvector running on {host}:{port}")
         else:
             print("  Warning: Container started but PostgreSQL not yet accepting connections.\n  It may need a few more seconds. Config will be saved; retry later.")
-        return {"host": host, "port": port, "user": "postgres", "password": _PGVECTOR_PASSWORD, "dbname": "postgres"}
+        return {"host": host, "port": port, "user": "postgres", "password": pg_password, "dbname": "postgres"}
     except subprocess.CalledProcessError as e:
         print(f"  Failed to start Docker container: {e}")
     except Exception as e:

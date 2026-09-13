@@ -92,7 +92,7 @@ def _fire_post_api_request_hook(
                 moa_references=_moa_reference_metrics_for_hook(agent),
             )
     except Exception:
-        pass
+        logger.debug("turn_response_intake: post_api_request hook raised", exc_info=True)
 
 
 def _relay_thinking(agent: Any, content: str) -> None:
@@ -104,12 +104,12 @@ def _relay_thinking(agent: Any, content: str) -> None:
         try:
             agent.tool_progress_callback("_thinking", first_line)
         except Exception:
-            pass
+            logger.debug("turn_response_intake: _thinking callback raised", exc_info=True)
     elif _think_text:
         try:
             agent.tool_progress_callback("reasoning.available", "_thinking", _think_text[:500], None)
         except Exception:
-            pass
+            logger.debug("turn_response_intake: reasoning.available callback raised", exc_info=True)
 
 
 def normalize_model_response(

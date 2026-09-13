@@ -123,12 +123,35 @@ def load_plugin_module(module_name: str, plugin_dir: Path, *, parents: Tuple[str
 
 
 class NoopPluginContext:
-    """Base for fake ``register(ctx)`` contexts: no-op registrations except the one a subclass overrides."""
+    """Base for fake ``register(ctx)`` contexts: no-op registrations except the one a subclass overrides.
 
-    def _noop(self, *args, **kwargs):
+    Covers all hook names a platform or memory plugin may call on ``ctx`` so that
+    platform plugins do not AttributeError in the ABC-fallback loader path.
+    """
+
+    def _noop(self, *args: Any, **kwargs: Any) -> None:
         pass
 
-    register_tool = register_hook = register_cli_command = register_memory_provider = _noop
+    # Core
+    register_tool = _noop
+    register_hook = _noop
+    register_cli_command = _noop
+    register_memory_provider = _noop
+    # Platform / gateway
+    register_platform = _noop
+    register_platform_handler = _noop
+    register_command = _noop
+    # Provider extensions
+    register_provider = _noop
+    register_context_engine = _noop
+    register_browser_provider = _noop
+    register_image_gen_provider = _noop
+    register_video_gen_provider = _noop
+    register_web_search_provider = _noop
+    register_dashboard_auth_provider = _noop
+    # Scheduler / platform-specific
+    register_cron_scheduler = _noop
+    register_slack_action_handler = _noop
 
 
 def instance_from_module(mod: Any, *, collector: Any, collected_attr: str, base_cls: type, name: str,

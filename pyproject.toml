@@ -604,6 +604,15 @@ redundant-cast = "ignore"
 
 [tool.ruff]
 preview = true  # required for PLW1514 (unspecified-encoding) — preview rule
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.format]
+# Canonical formatter config so `ruff format .` is reproducible.
+# Space indent (not tab) to match the .editorconfig default for Python.
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
 
 [tool.ruff.lint]
 # All other lints are intentionally disabled (see comment history on this

@@ -65,6 +65,12 @@ def _rule_matches(entry: Dict[str, Any], path: str, content: str) -> bool:
         if entry["path_filter"] is not None and not entry["path_filter"](path):
             return False
     except Exception:
+        # Fail-open by design: a crashing predicate is a non-match (see docstring).
+        # Log so predicate bugs are visible without blocking writes.
+        logger.debug(
+            "security-guidance: predicate raised for rule %r path %r",
+            entry.get("ruleName"), path, exc_info=True,
+        )
         return False
     return any(sub in content for sub in entry["substrings"]) or (entry["regex"] is not None and bool(entry["regex"].search(content)))
 

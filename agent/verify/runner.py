@@ -164,7 +164,8 @@ def _terminate_process_group(proc: subprocess.Popen) -> None:
 def _run_start_phase(
     recipe: Recipe, root: Path, ready_timeout: float, port_override: int | None = None
 ) -> ReadinessResult:
-    assert recipe.start is not None
+    if recipe.start is None:
+        raise ValueError("recipe.start is required for the start phase")
     port = port_override or recipe.port or 8000
     url = f"http://127.0.0.1:{port}{recipe.readiness_path}"
     started = time.monotonic()

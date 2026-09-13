@@ -112,7 +112,8 @@ class RealtimeSession:
             return False
 
     def _send_json(self, payload: dict) -> None:
-        assert self._ws is not None
+        if self._ws is None:
+            raise RuntimeError("cannot send: websocket not connected")
         with self._send_lock:
             self._ws.send(json.dumps(payload))
 

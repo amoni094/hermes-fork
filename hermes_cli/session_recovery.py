@@ -1118,7 +1118,8 @@ def recover_session_database(
     if chunk_size <= 0:
         raise SessionRecoverySafetyError("chunk_size must be greater than zero")
     source, output, work_root = _validate_paths(source_path, output_path=output_path, work_dir=work_dir)
-    assert output is not None
+    if output is None:
+        raise SessionRecoverySafetyError("output path could not be resolved by _validate_paths")
     disk_space = _disk_space_preflight(source, work_root, output.parent)
     temp_dir, snapshot_source, inspection = _snapshot_and_inspect(source, work_root)
     try:

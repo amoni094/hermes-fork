@@ -90,18 +90,21 @@ They were derived from full session history exports using:
 
 ```
 python evals/compaction/scripts/reconstruct_lineage.py \
-  --session-dir ~/.hermes/sessions/ \
-  --output evals/compaction/fixtures/
+  <path/to/state_db_copy.db> \
+  <root_session_id> \
+  evals/compaction/fixtures/<lineage_name>.jsonl
 ```
 
-To reproduce domain-matched lineages (see runner.py find_cap_start):
-1. Export your Hermes sessions to a .jsonl file
-2. Use reconstruct_lineage.py to build the full message list
-3. Truncate to domain-matched windows per the skill doc:
-   - research_v2: msgs[:1400] (cap window strongly research-domain)
-   - code_v2:     msgs[1500:] (cap window strongly code-domain)
-   - mixed_v2:    msgs[700:1700] (genuinely mixed cap window)
-4. Verify R/C ratio of each cap window before running the eval harness
+To reproduce domain-matched lineages:
+1. Export your Hermes sessions to a .jsonl file via reconstruct_lineage.py (see above).
+2. The cap window is a **500K-token suffix** of the lineage (implemented in fixtures.py:
+   reverse-accumulate from the end until 500K tokens). It is NOT a fixed message-index slice.
+3. Check R/C ratio of the actual cap window (not a percentage approximation):
+   - Strongly research: R/C ratio >> 1
+   - Strongly code:     R/C ratio << 1
+   - Mixed:             R/C ratio ≈ 0.4–0.6
+4. Adjust the lineage truncation until the 500K-token suffix lands in the correct domain,
+   then run the eval harness. Use `--cap-tokens` to control the window size.
 
 See the hermes-fork skill (autonomous-ai-agents/hermes-fork) for detailed instructions
-on cap-window domain verification and find_cap_start() usage.
+on cap-window domain verification.

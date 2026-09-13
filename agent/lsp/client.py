@@ -341,7 +341,8 @@ class LSPClient:
     # ---- request / notification plumbing ----
 
     async def _write(self, msg: dict) -> None:
-        assert self._proc is not None and self._proc.stdin is not None
+        if self._proc is None or self._proc.stdin is None:
+            raise LSPProtocolError("cannot write: LSP process or stdin not open")
         self._proc.stdin.write(encode_message(msg))
         await self._proc.stdin.drain()
 

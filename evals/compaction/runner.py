@@ -181,6 +181,7 @@ def _call(prompt: str, max_tokens: int = 2000) -> str:
         messages=[{"role": "user", "content": prompt}],
         task="compression",
         max_tokens=max_tokens,
+        temperature=0.0,  # deterministic: same questions/answers across runs
     )
     if hasattr(resp, "choices"):
         return resp.choices[0].message.content or ""
@@ -654,7 +655,13 @@ def main():
 
     messages = load_transcript(args.transcript, cap_tokens=args.cap_tokens)
     out_dir = Path(args.out)
-    tid = hashlib.md5(args.transcript.encode()).hexdigest()[:10]
+    # Key on file mtime+size + question count + cap — O(1), no re-read of potentially 500MB file.
+    # A content-identical rename would reuse the cache; an in-place replacement (different mtime)
+    # correctly busts it.
+    _tstat = Path(args.transcript).stat()
+    tid = hashlib.md5(
+        f"{args.transcript}|mtime={_tstat.st_mtime}|size={_tstat.st_size}|n={args.questions}|cap={args.cap_tokens}".encode()
+    ).hexdigest()[:10]
     qcache = out_dir / f"questions-{tid}.json"
     questions = generate_questions(messages, args.questions, qcache)
     print(f"{len(questions)} questions ready ({qcache})")

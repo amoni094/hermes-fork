@@ -295,8 +295,15 @@ class SubagentLifecycleService:
                 record.future.result(timeout=timeout_seconds)
         except TimeoutError:
             return SubagentTerminalState(record.handle, record.state, False, True)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Child raised: record failure under lock so status() sees FAILED state.
+            diagnostic = str(exc)[:500]
+            with _REGISTRY.lock:
+                record.state = SubagentState.FAILED
+                record.updated_at = time.time()
+            return SubagentTerminalState(
+                record.handle, SubagentState.FAILED, completed=True, diagnostic=diagnostic
+            )
         with _REGISTRY.lock:
             return SubagentTerminalState(record.handle, record.state, record.result is not None)
 
