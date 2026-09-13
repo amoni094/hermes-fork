@@ -246,8 +246,11 @@ class TelegraphicCompressor:
         The marker itself consumes chars, so chunk is computed as:
             chunk = (max_chars - marker_len) // 2
         to ensure head + marker + tail <= max_chars for any max_chars >= 1.
-        Falls back to head-only when max_chars is too small for any tail.
+        Falls back to head-only (text[:max_chars]) when max_chars is too small
+        for any tail, or when max_chars <= 0.
         """
+        if max_chars <= 0:
+            return ""
         _MARKER_TEMPLATE = "\n[...{} chars omitted by lambda-tuner telegraphic compressor...]\n"
         # Estimate marker length using the actual omitted count (worst-case is
         # a 10-digit number; use 15 digits as a safe overestimate for the budget).
@@ -259,8 +262,12 @@ class TelegraphicCompressor:
         omitted = max(len(text) - len(head) - len(tail), 0)
         marker = _MARKER_TEMPLATE.format(omitted)
         result = head + marker + tail
-        # Hard clamp: truncate if the estimate was still off (e.g. max_chars < overhead).
-        return result[:max_chars] if len(result) > max_chars else result
+        # Hard clamp: when the marker overhead exceeds the budget the result
+        # is garbage (marker truncated mid-string, no tail). Fall back to a
+        # clean head-only slice so the output is always valid content.
+        if len(result) > max_chars:
+            return text[:max_chars]
+        return result
 
     def compress(self, content: str, max_chars: int = 4000) -> str:
         """Apply telegraphic passes in order; fall back to head+tail if still over budget."""

@@ -2822,14 +2822,17 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
                     settings["proactive_prune_tokens"], _source,
                 )
             else:
+                old_floor = self.proactive_prune_tokens
                 self.proactive_prune_tokens = new_floor
-                # If the new floor is more aggressive (lower) than the current rearm mark,
-                # pull the rearm mark down so the next pass fires at the new floor rather
-                # than waiting until the old (higher) rearm token count is reached.
+                # Only lower the rearm mark when the floor is genuinely tightening
+                # (new_floor < old_floor). Loosening — even if still below the current
+                # rearm — must NOT touch the rearm: the old mark already represents a
+                # meaningful hysteresis boundary and smashing it to new_floor+1 would
+                # force an immediate cache-breaking prune on the next pass.
                 # We do NOT reset to 0 (that would cache-break immediately); instead we
-                # clamp to max(new_floor + 1, current_rearm) so the rearm can only decrease.
+                # clamp to max(new_floor + 1, 0) so rearm tracks the new floor.
                 current_rearm = getattr(self, "_proactive_prune_rearm_tokens", 0) or 0
-                if new_floor < current_rearm:
+                if new_floor < old_floor and new_floor < current_rearm:
                     self._proactive_prune_rearm_tokens = max(new_floor + 1, 0)
         if "protect_last_n" in settings:
             try:
