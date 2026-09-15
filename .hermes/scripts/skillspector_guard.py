@@ -17,6 +17,7 @@ SECURITY_ROOT = Path(os.environ.get("HERMES_SKILLS_SECURITY_ROOT", os.path.expan
 REPORTS_ROOT = SECURITY_ROOT / "reports"
 STATE_PATH = SECURITY_ROOT / "state.json"
 ALLOWLIST_PATH = SECURITY_ROOT / "allowlist.json"
+PENDING_PATH = SECURITY_ROOT / "pending_quarantine.json"
 QUARANTINE_ROOT = Path(os.environ.get("HERMES_SKILLS_QUARANTINE_ROOT", os.path.expanduser("~/.hermes/skills-quarantine")))
 SKILLSPECTOR_BIN = os.environ.get("SKILLSPECTOR_BIN", os.path.expanduser("~/.local/bin/skillspector"))
 DEFAULT_THRESHOLD = int(os.environ.get("HERMES_SKILLS_QUARANTINE_SCORE", "60"))
@@ -39,6 +40,7 @@ class SkillResult:
     quarantined_to: str | None = None
     baseline_trusted: bool = False
     allowlisted: bool = False
+    quarantine_proposed: bool = False
 
 
 def now_iso() -> str:
@@ -148,6 +150,19 @@ def save_allowlist(allowlist: dict[str, Any]) -> None:
     ALLOWLIST_PATH.write_text(json.dumps(allowlist, indent=2, sort_keys=True) + "\n")
 
 
+def load_pending() -> dict[str, Any]:
+    if PENDING_PATH.exists():
+        data = json.loads(PENDING_PATH.read_text())
+        if isinstance(data, dict):
+            return data
+    return {"version": 1, "updated_at": now_iso(), "proposals": {}}
+
+
+def save_pending(pending: dict[str, Any]) -> None:
+    pending["updated_at"] = now_iso()
+    PENDING_PATH.write_text(json.dumps(pending, indent=2, sort_keys=True) + "\n")
+
+
 def is_allowlisted(result: SkillResult, allowlist: dict[str, Any]) -> bool:
     skill_entry = allowlist.get("skills", {}).get(result.rel)
     if not isinstance(skill_entry, dict):
@@ -244,6 +259,84 @@ def quarantine_skill(result: SkillResult) -> str:
     return str(dest)
 
 
+def propose_quarantine(result: SkillResult, pending: dict[str, Any]) -> None:
+    """Stage a quarantine proposal WITHOUT moving anything. A true-positive
+    verdict (e.g. from an adversarial-review pass) must confirm via
+    --confirm-quarantine before quarantine_skill() actually runs."""
+    proposals = pending.setdefault("proposals", {})
+    proposals[result.rel] = {
+        "hash": result.hash,
+        "score": result.score,
+        "severity": result.severity,
+        "recommendation": result.recommendation,
+        "report": str(result.stdout_path),
+        "path": str(result.path),
+        "proposed_at": now_iso(),
+    }
+
+
+def prune_stale_pending(pending: dict[str, Any], results: list[SkillResult]) -> None:
+    """Drop pending proposals whose skill vanished or whose hash changed
+    since the proposal was staged (the file was edited/replaced, so the old
+    proposal no longer describes what's on disk)."""
+    proposals = pending.setdefault("proposals", {})
+    current_hashes = {r.rel: r.hash for r in results}
+    for rel in list(proposals.keys()):
+        if rel not in current_hashes or current_hashes[rel] != proposals[rel].get("hash"):
+            proposals.pop(rel, None)
+
+
+def confirm_quarantine(rel_paths: list[str], pending: dict[str, Any], results: list[SkillResult]) -> list[dict[str, Any]]:
+    """Actually move skill(s) into quarantine, but ONLY if there is a matching
+    pending proposal whose hash still matches the file on disk. This is the
+    step that should run only after an adversarial scan has confirmed the
+    flag is a true positive, not a false positive."""
+    proposals = pending.setdefault("proposals", {})
+    by_rel = {r.rel: r for r in results}
+    outcomes = []
+    for rel in rel_paths:
+        proposal = proposals.get(rel)
+        result = by_rel.get(rel)
+        if proposal is None:
+            outcomes.append({"skill": rel, "status": "error", "reason": "no pending proposal for this skill"})
+            continue
+        if result is None or result.hash != proposal.get("hash"):
+            outcomes.append({"skill": rel, "status": "error", "reason": "hash mismatch or skill missing; re-run scan before confirming"})
+            continue
+        dest = quarantine_skill(result)
+        result.quarantined_to = dest
+        proposals.pop(rel, None)
+        outcomes.append({"skill": rel, "status": "quarantined", "to": dest})
+    return outcomes
+
+
+def reject_quarantine(rel_paths: list[str], pending: dict[str, Any], results: list[SkillResult], allowlist: dict[str, Any], reason: str) -> list[dict[str, Any]]:
+    """Mark pending proposal(s) as false positives: add to the allowlist so
+    they won't be re-proposed on future runs, and clear the pending entry."""
+    proposals = pending.setdefault("proposals", {})
+    by_rel = {r.rel: r for r in results}
+    skills = allowlist.setdefault("skills", {})
+    outcomes = []
+    for rel in rel_paths:
+        proposal = proposals.get(rel)
+        result = by_rel.get(rel)
+        if proposal is None and result is None:
+            outcomes.append({"skill": rel, "status": "error", "reason": "no pending proposal and skill not found"})
+            continue
+        h = (proposal or {}).get("hash") or (result.hash if result else None)
+        entry = skills.setdefault(rel, {})
+        entry["hashes"] = sorted(set(entry.get("hashes", [])) | ({h} if h else set()))
+        entry["reason"] = reason
+        if result is not None:
+            entry["last_score"] = result.score
+            entry["last_severity"] = result.severity
+            entry["recommendation"] = result.recommendation
+            entry["report"] = str(result.stdout_path)
+        proposals.pop(rel, None)
+        outcomes.append({"skill": rel, "status": "allowlisted"})
+    return outcomes
+
+
 def summarize(results: list[SkillResult], threshold: int) -> dict[str, Any]:
     return {
         "skills": len(results),
@@ -262,6 +355,10 @@ def summarize(results: list[SkillResult], threshold: int) -> dict[str, Any]:
         "quarantined": [
             {"skill": r.rel, "score": r.score, "severity": r.severity, "to": r.quarantined_to}
             for r in results if r.quarantined_to
+        ],
+        "pending_quarantine": [
+            {"skill": r.rel, "score": r.score, "severity": r.severity, "report": str(r.stdout_path)}
+            for r in results if r.quarantine_proposed
         ],
         "flagged": [
             {
@@ -282,14 +379,18 @@ def summarize(results: list[SkillResult], threshold: int) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Scan Hermes skills with SkillSpector and optionally quarantine risky future additions.")
     parser.add_argument("--refresh-baseline", action="store_true", help="Trust the current hashes of all existing skills and reset approved baseline.")
-    parser.add_argument("--enforce", action="store_true", help="Quarantine new or changed non-bundled skills whose score meets the threshold.")
+    parser.add_argument("--enforce", action="store_true", help="Stage new or changed non-bundled skills whose score meets the threshold as quarantine PROPOSALS (does not move files). A confirm step is required before anything is actually quarantined.")
     parser.add_argument("--threshold", type=int, default=DEFAULT_THRESHOLD, help="Score threshold for quarantine in enforce mode.")
     parser.add_argument("--sync-allowlist-from-flagged", action="store_true", help="Write current flagged non-bundled skills into the explicit allowlist and remove them from baseline trust.")
+    parser.add_argument("--confirm-quarantine", nargs="+", metavar="REL_PATH", help="After an adversarial scan has confirmed a pending proposal is a true positive, actually move the given skill(s) (by rel path, e.g. software-development/foo) from skills/ into quarantine. Fails if the skill has no matching pending proposal or its hash has changed since proposal.")
+    parser.add_argument("--reject-quarantine", nargs="+", metavar="REL_PATH", help="Mark pending proposal(s) as false positives: add to the allowlist (so they are not re-proposed) and clear the pending entry. Use --reject-reason to record why.")
+    parser.add_argument("--reject-reason", default="Adversarial review: false positive", help="Reason recorded in the allowlist for --reject-quarantine entries.")
     args = parser.parse_args()
 
     ensure_dirs()
     state = load_state()
     allowlist = load_allowlist()
+    pending = load_pending()
     bundled_names = load_bundled_names()
     skill_dirs = find_skill_dirs()
     previous_approved = state.get("approved_hashes", {})
@@ -329,10 +430,42 @@ def main() -> int:
     for r in results:
         r.allowlisted = is_allowlisted(r, allowlist)
 
+    prune_stale_pending(pending, results)
+
+    confirm_outcomes: list[dict[str, Any]] = []
+    reject_outcomes: list[dict[str, Any]] = []
+
+    if args.confirm_quarantine:
+        confirm_outcomes = confirm_quarantine(args.confirm_quarantine, pending, results)
+
+    if args.reject_quarantine:
+        reject_outcomes = reject_quarantine(args.reject_quarantine, pending, results, allowlist, args.reject_reason)
+        save_allowlist(allowlist)
+
     if args.enforce:
+        newly_proposed = []
         for r in results:
             if should_quarantine(r, state, allowlist, args.threshold):
-                r.quarantined_to = quarantine_skill(r)
+                r.quarantine_proposed = True
+                propose_quarantine(r, pending)
+                newly_proposed.append(r.rel)
+        # Automatically run adversarial review on all pending proposals so
+        # cron output surfaces FP verdicts without requiring a manual step.
+        if newly_proposed:
+            import subprocess as _sp
+            _adv = Path(__file__).parent / "adversarial_quarantine_review.py"
+            if _adv.exists():
+                _res = _sp.run(
+                    ["python3", str(_adv), "--all-pending"],
+                    capture_output=True, text=True, timeout=120,
+                )
+                if _res.stdout.strip():
+                    print("\n--- Adversarial review of new quarantine proposals ---")
+                    print(_res.stdout.strip())
+                if _res.returncode not in (0, 1):
+                    print(f"WARN: adversarial_quarantine_review.py exited {_res.returncode}: {_res.stderr[:200]}")
+
+    save_pending(pending)
 
     state["last_results"] = {
         r.rel: {
@@ -360,27 +493,49 @@ def main() -> int:
         f"severity_counts={json.dumps(summary['severity_counts'], sort_keys=True)}",
         f"allowlisted={len(summary['allowlisted'])}",
         f"quarantined={len(summary['quarantined'])}",
+        f"pending_quarantine={len(summary['pending_quarantine'])}",
         f"flagged={len(summary['flagged'])}",
         f"summary={summary_path}",
         f"allowlist={ALLOWLIST_PATH}",
+        f"pending={PENDING_PATH}",
     ]
+    if confirm_outcomes:
+        for o in confirm_outcomes:
+            if o["status"] == "quarantined":
+                lines.append(f"CONFIRMED+QUARANTINED {o['skill']} -> {o['to']}")
+            else:
+                lines.append(f"CONFIRM FAILED {o['skill']}: {o['reason']}")
+    if reject_outcomes:
+        for o in reject_outcomes:
+            if o["status"] == "allowlisted":
+                lines.append(f"REJECTED (false positive, allowlisted) {o['skill']}")
+            else:
+                lines.append(f"REJECT FAILED {o['skill']}: {o['reason']}")
     if summary["quarantined"]:
         for item in summary["quarantined"]:
             lines.append(f"QUARANTINED {item['skill']} score={item['score']} severity={item['severity']} -> {item['to']}")
-    elif args.sync_allowlist_from_flagged:
-        lines.append("Explicit allowlist synced from current flagged non-bundled skills and removed from baseline trust.")
-    elif args.refresh_baseline:
-        lines.append("Baseline refreshed; current skills trusted by hash for future drift detection.")
-    else:
-        changed_high_risk = [
-            r for r in results
-            if not r.baseline_trusted and not r.allowlisted and (r.score or 0) >= args.threshold and not r.bundled
-        ]
-        if changed_high_risk:
-            for r in changed_high_risk:
-                lines.append(f"FLAGGED {r.rel} score={r.score} severity={r.severity} report={r.stdout_path}")
+    if summary["pending_quarantine"]:
+        for item in summary["pending_quarantine"]:
+            lines.append(
+                f"PENDING QUARANTINE (not moved yet) {item['skill']} score={item['score']} severity={item['severity']} "
+                f"report={item['report']} -- run an adversarial scan against this report before deciding; then "
+                f"--confirm-quarantine {item['skill']} (true positive) or --reject-quarantine {item['skill']} (false positive)"
+            )
+    if not (args.enforce or args.confirm_quarantine or args.reject_quarantine):
+        if args.sync_allowlist_from_flagged:
+            lines.append("Explicit allowlist synced from current flagged non-bundled skills and removed from baseline trust.")
+        elif args.refresh_baseline:
+            lines.append("Baseline refreshed; current skills trusted by hash for future drift detection.")
         else:
-            lines = []
+            changed_high_risk = [
+                r for r in results
+                if not r.baseline_trusted and not r.allowlisted and (r.score or 0) >= args.threshold and not r.bundled
+            ]
+            if changed_high_risk:
+                for r in changed_high_risk:
+                    lines.append(f"FLAGGED {r.rel} score={r.score} severity={r.severity} report={r.stdout_path}")
+            else:
+                lines = []
     if lines:
         print("\n".join(lines))
     return 0

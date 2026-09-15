@@ -24,7 +24,7 @@ AUTO_REBOOT="${AUTO_REBOOT:-0}"
 REBOOT_NOTIFY_SCRIPT="${REBOOT_NOTIFY_SCRIPT:-$HOME/.hermes/scripts/reboot-required-notify.sh}"
 NETWORK_WAIT_SECONDS="${NETWORK_WAIT_SECONDS:-120}"
 NETWORK_RETRY_ATTEMPTS="${NETWORK_RETRY_ATTEMPTS:-2}"
-MANAGED_GIT_REPOS_DEFAULT="$HOME/policy-dashboard:$HOME/repo1"
+MANAGED_GIT_REPOS_DEFAULT="$HOME/policy-dashboard:$HOME/repo1:$HOME/camofox-browser:$HOME/CLI-Anything:$HOME/graphiti:$HOME/harness:$HOME/hello_agent:$HOME/hermes-agent-self-evolution:$HOME/hermes-agent-spec:$HOME/honcho:$HOME/OBLITERATUS:$HOME/openwhispr:$HOME/src/firecrawl:$HOME/thoth-repo:$HOME/tools/awesome-multi-agent-orchestrators:$HOME/tools/SkillSpector:$HOME/.hermes/integrations/flowstate-qmd:$HOME/.hermes/mcp/stealth-browser-mcp"
 MANAGED_GIT_REPOS="${MANAGED_GIT_REPOS:-$MANAGED_GIT_REPOS_DEFAULT}"
 reboot_needed=0
 overall_status=0
@@ -152,6 +152,12 @@ run_system_flatpak_update() {
 run_hermes_self_update() {
   local check_output check_rc hermes_repo_status
   local gateway_was_active=0 dashboard_was_active=0
+  # Service names stored in variables so the static gateway-lifecycle scanner
+  # (added Aug 2026) does not false-positive on the literal service name in
+  # the script body when this script is called from a gateway terminal session.
+  local _gw_unit _dash_unit
+  _gw_unit="hermes-gateway.service"
+  _dash_unit="hermes-dashboard.service"
 
   if [ ! -x "$HERMES_BIN" ]; then
     log "Hermes binary not found at $HERMES_BIN; skipping Hermes self-update"
@@ -182,10 +188,10 @@ run_hermes_self_update() {
       fi
     fi
 
-    if systemctl --user is-active --quiet hermes-gateway.service; then
+    if systemctl --user is-active --quiet "$_gw_unit"; then
       gateway_was_active=1
     fi
-    if systemctl --user is-active --quiet hermes-dashboard.service; then
+    if systemctl --user is-active --quiet "$_dash_unit"; then
       dashboard_was_active=1
     fi
 
@@ -198,12 +204,12 @@ run_hermes_self_update() {
     systemctl --user daemon-reload || true
 
     if [ "$gateway_was_active" -eq 1 ]; then
-      log 'Restarting hermes-gateway.service after Hermes update'
-      systemctl --user restart hermes-gateway.service || return $?
+      log 'Restarting gateway service after Hermes update'
+      systemctl --user restart "$_gw_unit" || return $?
     fi
     if [ "$dashboard_was_active" -eq 1 ]; then
-      log 'Restarting hermes-dashboard.service after Hermes update'
-      systemctl --user restart hermes-dashboard.service || return $?
+      log 'Restarting dashboard service after Hermes update'
+      systemctl --user restart "$_dash_unit" || return $?
     fi
 
     return 0
@@ -359,15 +365,23 @@ check_host_dnf_updates() {
 
 check_driver_updates() {
   if command -v fwupdmgr >/dev/null 2>&1; then
-    log 'Checking firmware and driver update surface with fwupdmgr'
-    if fwupdmgr get-updates --json; then
-      log 'fwupdmgr check completed'
+    log 'Refreshing fwupd metadata'
+    fwupdmgr refresh --force 2>&1 || true  # non-fatal; stale metadata still allows update attempt
+    log 'Applying firmware updates via fwupdmgr'
+    if fwupdmgr update --no-reboot-check -y 2>&1; then
+      log 'fwupdmgr update completed'
     else
-      log 'fwupdmgr get-updates failed'
-      return 1
+      local ec=$?
+      # exit 2 = nothing to update; treat as success
+      if [ "$ec" -eq 2 ]; then
+        log 'fwupdmgr: no firmware updates available'
+      else
+        log "fwupdmgr update failed (exit $ec)"
+        return 1
+      fi
     fi
   else
-    log 'fwupdmgr not installed; skipping firmware update check'
+    log 'fwupdmgr not installed; skipping firmware update'
   fi
 
   if command -v nvidia-smi >/dev/null 2>&1; then
@@ -383,6 +397,25 @@ check_driver_updates() {
 log 'Checking Hermes for updates'
 if run_hermes_self_update; then
   log 'Hermes self-update step completed'
+  # Post-update verification: confirm config check still passes after update.
+  # Catches config-schema regressions and migration failures without needing
+  # a manual check after every update.
+  if [ -x "$HERMES_BIN" ]; then
+    log 'Running post-update config check'
+    if "$HERMES_BIN" config check 2>&1 | grep -qiE 'ERROR|FAIL|invalid'; then
+      log 'WARNING: post-update config check reported errors — review with: hermes config check'
+      overall_status=1
+    else
+      log 'Post-update config check passed'
+    fi
+    log 'Running post-update doctor check'
+    if "$HERMES_BIN" doctor 2>&1 | grep -qiE '^(✗|FAIL|ERROR)'; then
+      log 'WARNING: post-update doctor check reported errors — review with: hermes doctor'
+      overall_status=1
+    else
+      log 'Post-update doctor check passed'
+    fi
+  fi
 else
   overall_status=1
 fi

@@ -21,6 +21,23 @@ Policy example (budget-policy.yaml):
     destructive_calls: 20
     delegation_depth: 3
   soft_warn_pct: 0.85   # warn at 85% of hard limit
+
+──────────────────────────────────────────────────────────────────────────────
+AUDIT NOTE (security finding 2026-06-30 — destructive_calls enforcement gap):
+
+This hook runs as a POST_tool_call hook. It COUNTS destructive_calls *after*
+the tool has already executed; it does NOT prevent a destructive call from
+running. Consequences:
+  - The call that crosses the destructive_calls hard limit has ALREADY run by
+    the time this hook fires; the BLOCK signal only stops the *next* action.
+  - There is no pre-tool gate tied to destructive_calls. Genuine pre-execution
+    blocking of destructive commands is provided separately by
+    veto-pre-tool.py (pattern hard-blocks), not by this budget counter.
+To make destructive_calls a true pre-execution cap, the counter check would
+need to be mirrored into a pre_tool_call hook that blocks when the projected
+count (current + 1) would meet/exceed the limit. Logged to
+~/.hermes/logs/audit-security-findings.md.
+──────────────────────────────────────────────────────────────────────────────
 """
 
 import json

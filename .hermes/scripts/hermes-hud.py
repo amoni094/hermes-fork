@@ -68,6 +68,28 @@ def show_hud():
     else:
         lines.append("\n  No active subagents.")
 
+    # --- FLEET METRICS (Little's Law occupancy, numerical_optimization primer) ---
+    try:
+        import yaml as _yaml
+        _cfg_path = Path("/var/home/rainbow/.hermes/config.yaml")
+        _max_children = 10
+        if _cfg_path.exists():
+            _cfg = _yaml.safe_load(_cfg_path.read_text()) or {}
+            _max_children = (_cfg.get("delegation") or {}).get("max_concurrent_children", 10)
+    except Exception:
+        _max_children = 10
+    _n_running = len(running)
+    _rho = _n_running / max(_max_children, 1)
+    _durations = []
+    for _a in running:
+        try:
+            _start = datetime.fromisoformat(_a.get("started_at", ""))
+            _durations.append((datetime.now(timezone.utc) - _start).total_seconds())
+        except Exception:
+            pass
+    _mean_dur = sum(_durations) / len(_durations) if _durations else 0.0
+    lines.append(f"\n  FLEET: rho={_rho:.2f} ({_n_running}/{_max_children} slots)  mean_dur={_mean_dur:.0f}s")
+
     if done:
         lines.append(f"\n  RECENT:")
         for a in done[-5:]:

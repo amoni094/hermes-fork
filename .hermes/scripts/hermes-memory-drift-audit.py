@@ -7,6 +7,16 @@ import re
 import sys
 from difflib import SequenceMatcher
 
+# OT utilities (shared; OT-11)
+_OT_UTILS_PATH = pathlib.Path(__file__).parent / "ot_utils.py"
+if _OT_UTILS_PATH.exists():
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("ot_utils", _OT_UTILS_PATH)
+    _ot_utils = _ilu.module_from_spec(_spec)  # type: ignore[arg-type]
+    _spec.loader.exec_module(_ot_utils)  # type: ignore[union-attr]
+else:
+    _ot_utils = None  # type: ignore[assignment]
+
 HERMES_MEMORY = pathlib.Path('/var/home/rainbow/.hermes/memories/MEMORY.md')
 VAULT_ROOT = pathlib.Path('/var/home/rainbow/Documents/SecondBrain')
 VAULT_MEMORY = VAULT_ROOT / 'MEMORY.md'
@@ -168,6 +178,75 @@ def evaluate_overgrowth() -> list[str]:
     return findings
 
 
+def evaluate_mandatory_rule_leakage() -> list[str]:
+    """
+    Check whether mandatory system rules (safety, scope, routing) have leaked into
+    the Hindsight retrieval path instead of living in MEMORY.md / config.yaml.
+
+    Mandatory rules in probabilistic retrieval are unreliable — they may not surface
+    when needed (Habr/RU practitioner finding, Aug 2026; corroborated by sweep 22
+    'mandatory rules must NOT be in probabilistic retrieval' pattern).
+
+    Strategy: query Hindsight for known mandatory-rule keywords and flag any hits
+    that are exact duplicates of what already lives in MEMORY.md.
+    This is a best-effort offline check; if Hindsight is down, skip silently.
+    """
+    import urllib.request
+    import urllib.error
+    import json
+
+    HINDSIGHT_BASE = "http://127.0.0.1:9177"
+    HINDSIGHT_BANK = "hermes-default"
+
+    # Keywords that indicate a mandatory rule (should live in MEMORY.md, not Hindsight)
+    MANDATORY_KEYWORDS = [
+        "no autonomous loops",
+        "never use local llm",
+        "ollama uninstalled",
+        "read-before-write",
+        "escalation: default",
+        "routing is cloud-only",
+        "safety: no autonomous",
+        "irreversible side effects",
+    ]
+
+    findings: list[str] = []
+
+    # Load MEMORY.md content for cross-check
+    try:
+        memory_text = HERMES_MEMORY.read_text().lower()
+    except Exception:
+        return findings
+
+    for keyword in MANDATORY_KEYWORDS:
+        if keyword.lower() not in memory_text:
+            continue  # Not a mandatory rule we track — skip
+        try:
+            payload = json.dumps({"query": keyword, "top_k": 5}).encode()
+            req = urllib.request.Request(
+                f"{HINDSIGHT_BASE}/v1/default/banks/{HINDSIGHT_BANK}/memories/recall",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                data = json.loads(resp.read())
+            results = data if isinstance(data, list) else data.get("results", [])
+            for mem in results:
+                text = mem.get("text", mem.get("content", "")).lower()
+                if keyword.lower() in text:
+                    findings.append(
+                        f"Mandatory rule leaked into Hindsight retrieval path: "
+                        f"keyword '{keyword}' found in memory id={mem.get('id', '?')[:16]}. "
+                        f"Mandatory rules belong in MEMORY.md, not probabilistic retrieval."
+                    )
+                    break  # One flag per keyword is enough
+        except (urllib.error.URLError, Exception):
+            pass  # Hindsight unavailable — skip silently
+
+    return findings
+
+
 def evaluate_stale_references() -> list[str]:
     findings: list[str] = []
     for note_path, replacements in STALE_REFERENCE_RULES.items():
@@ -257,7 +336,8 @@ def main() -> int:
     exact, near = classify_overlap(hermes_lines, vault_lines)
     overgrowth = evaluate_overgrowth()
     stale_refs = evaluate_stale_references()
-    write_audit_note(exact, near, overgrowth, stale_refs)
+    rule_leakage = evaluate_mandatory_rule_leakage()
+    write_audit_note(exact, near, overgrowth, stale_refs + rule_leakage)
 
     post_write_overgrowth = evaluate_overgrowth()
     if post_write_overgrowth != overgrowth:
@@ -288,5 +368,106 @@ def main() -> int:
     return 0
 
 
+def run_memory_staleness() -> None:
+    """Run memory-staleness.py as a subprocess and print its output if STALE sections found."""
+    import subprocess
+    staleness_script = pathlib.Path(__file__).parent / 'memory-staleness.py'
+    if not staleness_script.exists():
+        return
+    try:
+        result = subprocess.run(
+            ['python3', str(staleness_script)],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode == 0 and '✗ STALE' in result.stdout:
+            print('\n--- memory-staleness.py report ---')
+            print(result.stdout)
+    except Exception as e:
+        print(f'memory-staleness.py skipped: {e}')
+
+
 if __name__ == '__main__':
+    import argparse as _ap
+
+    _parser = _ap.ArgumentParser(
+        description="Hermes memory drift audit",
+        formatter_class=_ap.RawDescriptionHelpFormatter,
+    )
+    _parser.add_argument(
+        "--w1-drift", action="store_true", dest="w1_drift",
+        help=(
+            "OT-11: compute W1 distance between current and previous memory checkpoint. "
+            "High value = memory vocabulary has shifted significantly."
+        ),
+    )
+    _args, _remaining = _parser.parse_known_args()
+
+    # === OT-11: --w1-drift ===
+    if _args.w1_drift:
+        if _ot_utils is None:
+            print("[OT-11] ot_utils not available — cannot compute W1 drift.")
+            sys.exit(1)
+
+        # Current memory
+        if not HERMES_MEMORY.exists():
+            print(f"[OT-11] MEMORY.md not found at {HERMES_MEMORY}")
+            sys.exit(1)
+        current_text = HERMES_MEMORY.read_text(errors="replace")
+        tf_current = _ot_utils.build_tf(current_text)
+
+        # Previous checkpoint — look for a dated backup or snapshot
+        # Convention: ~/.hermes/memories/MEMORY.md.prev or MEMORY-YYYY-MM-DD.md
+        prev_candidates = [
+            HERMES_MEMORY.parent / "MEMORY.md.prev",
+            HERMES_MEMORY.parent / "MEMORY.md.bak",
+        ]
+        # Also look for yesterday's dated snapshot
+        yesterday = (dt.datetime.now().astimezone().date() - dt.timedelta(days=1))
+        prev_candidates.insert(
+            0,
+            HERMES_MEMORY.parent / f"MEMORY-{yesterday.isoformat()}.md",
+        )
+        prev_path = next((p for p in prev_candidates if p.exists()), None)
+
+        if prev_path is None:
+            # Fallback: use vault MEMORY.md as a proxy "previous" snapshot
+            if VAULT_MEMORY.exists():
+                prev_path = VAULT_MEMORY
+                print(f"[OT-11] No checkpoint found; using vault MEMORY.md ({VAULT_MEMORY}) as proxy.")
+            else:
+                print("[OT-11] No previous memory checkpoint found. Cannot compute W1 drift.")
+                sys.exit(1)
+        else:
+            print(f"[OT-11] Previous checkpoint: {prev_path}")
+
+        prev_text = prev_path.read_text(errors="replace")
+        tf_prev = _ot_utils.build_tf(prev_text)
+
+        w1 = _ot_utils.w1_distance(tf_current, tf_prev)
+        print(f"W1_drift = {w1:.6f}  (lower = stable; higher = significant memory vocabulary shift)")
+        if w1 < 0.05:
+            print("Interpretation: stable — memory vocabulary essentially unchanged.")
+        elif w1 < 0.15:
+            print("Interpretation: minor drift — small vocabulary additions/removals.")
+        elif w1 < 0.30:
+            print("Interpretation: moderate drift — review recent memory writes for consistency.")
+        else:
+            print("Interpretation: HIGH drift — memory vocabulary has shifted significantly; audit recommended.")
+        sys.exit(0)
+
+    run_memory_staleness()
+    # AM-Sentry: passive memory poisoning scan (Sweep 21)
+    import subprocess as _sp
+    _sentry = pathlib.Path(__file__).parent / 'am-sentry.py'
+    if _sentry.exists():
+        try:
+            _r = _sp.run(['python3', str(_sentry), '--since', '1'], capture_output=True, text=True, timeout=15)
+            if _r.returncode == 1:
+                print('\n--- AM-Sentry: HIGH-severity flags detected ---')
+                print(_r.stdout)
+            elif 'LOW' in _r.stdout:
+                print('\n--- AM-Sentry: LOW flags (review advised) ---')
+                print(_r.stdout)
+        except Exception as _e:
+            print(f'am-sentry.py skipped: {_e}')
     sys.exit(main())

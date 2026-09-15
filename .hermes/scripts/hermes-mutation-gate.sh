@@ -20,7 +20,11 @@ print('metrics gate ok')
 PY
 fi
 if [ -f "$OUTDIR/evolved_skill.md" ]; then
-  check "$LINTLANG" scan "$OUTDIR/evolved_skill.md"
+  if [ -x "$LINTLANG" ]; then
+    check "$LINTLANG" scan "$OUTDIR/evolved_skill.md"
+  else
+    echo "==> WARN: lintlang not found at $LINTLANG; skipping SKILL.md lint (install lintlang to enable)"
+  fi
 fi
 check hermes config check
 check "$QMD" doctor --json

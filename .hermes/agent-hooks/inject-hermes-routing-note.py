@@ -144,6 +144,23 @@ if score >= 10:
         "verification agent writes a final observation confirming correctness."
     )
 
+# AgentAtlas Ask hint (arXiv:2605.20530, sweep 22): ambiguous but not highly complex tasks
+# benefit from clarification rather than delegation — reduces unnecessary subagent spawning.
+if a >= 2 and score < 7:
+    context_parts.append(
+        "Ambiguity signal: this task scores high on ambiguity but is not highly complex. "
+        "Prefer Ask (clarify with the user) over Act or Delegate — resolve the ambiguity first "
+        "rather than assuming an interpretation and delegating work that may be wrong."
+    )
+
+# Tool-Count Fallacy (Zenn/JP, sweep 22): simple tasks degrade with too many tools loaded.
+# For low-complexity tasks, hint that targeted tool use outperforms broad tool fan-out.
+if score <= 3:
+    context_parts.append(
+        "Simple task: use the minimal set of tools needed. Avoid broad fan-out or pre-emptive "
+        "research calls — targeted direct answers outperform multi-tool pipelines here."
+    )
+
 if context_parts:
     json.dump({"context": " | ".join(context_parts)}, sys.stdout)
 else:

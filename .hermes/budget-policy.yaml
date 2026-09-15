@@ -3,6 +3,11 @@
 hard_limits:
   tool_calls: 500          # total tool invocations per session
   destructive_calls: 30    # rm/DROP/DELETE/write ops per session
-  delegation_depth: 4      # max subagent nesting depth
+  delegation_depth: 1      # max subagent nesting depth
+                           # NOTE: Must match delegation.max_spawn_depth in config.yaml.
+                           # Currently max_spawn_depth=1 (parent -> leaf only; grandchildren
+                           # are blocked at runtime). Setting this higher than max_spawn_depth
+                           # creates a misleading budget that can never be reached.
+                           # To enable grandchild delegation, raise both values together.
 
 soft_warn_pct: 0.85        # warn at 85% of each hard limit

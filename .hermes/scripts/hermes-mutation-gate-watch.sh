@@ -2,7 +2,10 @@
 set -euo pipefail
 ROOT=/var/home/rainbow/.hermes/integrations/hermes-agent-self-evolution/output
 GATE=/var/home/rainbow/.hermes/scripts/hermes-mutation-gate.sh
-[ -d "$ROOT" ] || exit 0
+if [ ! -d "$ROOT" ]; then
+  echo "SKIP: evolution output dir absent ($ROOT) — mutation gate inactive"
+  exit 0
+fi
 found=0
 while IFS= read -r -d '' dir; do
   found=1

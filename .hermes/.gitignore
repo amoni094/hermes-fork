@@ -43,3 +43,14 @@ config.yaml.agent-reach-*
 # Large binary/data dirs
 backups/
 checkpoints/
+.env
+.env.*
+.hermes_history
+.install_method
+.update_check
+shell-hooks-allowlist.json*
+channel_directory.json
+skills-quarantine/
+skills-security/
+backup-broken/
+hermes-agent/
