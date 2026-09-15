@@ -58,6 +58,8 @@ monitors = [
     "prediction-tradeoff-monitor.py",
     "proportionality-monitor.py",
     "performative-stability-monitor.py",
+    "context-budget-potential-monitor.py",
+    "adaptive-key-leakage-monitor.py",
     "retrieval-saturation-monitor.py",
     "consensus-convergence-monitor.py",
     "entropy-fidelity-stability-monitor.py",
