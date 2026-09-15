@@ -36,6 +36,8 @@ from pathlib import Path
 
 HOME      = Path.home()
 SESSIONS  = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+
 CACHE_DIR = HOME / ".hermes/cache/monitors"
 STATE_DB  = HOME / ".hermes/memory-facts/stability.db"
 ALARM_FILE = CACHE_DIR / "quantization-divergence-alarm.json"
@@ -103,7 +105,7 @@ def analyse_session(path: Path) -> dict | None:
 
 def run(dry_run: bool = False) -> None:
     now = datetime.now(timezone.utc).isoformat()
-    session_files = sorted(SESSIONS.glob("*.jsonl"))
+    session_files = sorted([f for d in [SESSIONS, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")])
 
     results: list[dict] = []
     alarms:  list[dict] = []

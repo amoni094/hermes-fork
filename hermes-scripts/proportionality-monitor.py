@@ -29,6 +29,8 @@ from collections import Counter
 
 HOME         = Path.home()
 SESSIONS_DIR = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+
 CACHE_DIR    = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE     = CACHE_DIR / "proportionality.json"
@@ -87,7 +89,7 @@ def run() -> int:
         print("ALARM: no — no sessions directory")
         return 0
 
-    sessions = sorted(SESSIONS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime)
+    sessions = sorted([f for d in [SESSIONS_DIR, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")], key=lambda p: p.stat().st_mtime)
     if not sessions:
         print("ALARM: no — no sessions found")
         return 0

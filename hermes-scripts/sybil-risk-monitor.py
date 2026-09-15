@@ -32,6 +32,8 @@ from pathlib import Path
 
 HOME      = Path.home()
 SESSIONS  = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+
 CACHE_DIR = HOME / ".hermes/cache/monitors"
 ALARM_FILE = CACHE_DIR / "sybil-risk-alarm.json"
 OUT_FILE   = CACHE_DIR / "sybil-risk.json"
@@ -71,7 +73,7 @@ def _count_delegations(text: str) -> int:
 
 def run(dry_run: bool = False) -> None:
     now = datetime.now(timezone.utc).isoformat()
-    session_files = sorted(SESSIONS.glob("*.jsonl"))
+    session_files = sorted([f for d in [SESSIONS, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")])
 
     fan_out: dict[str, int] = {}
     for sf in session_files:

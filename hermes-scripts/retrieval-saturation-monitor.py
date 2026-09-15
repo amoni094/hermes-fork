@@ -39,6 +39,8 @@ import numpy as np
 
 HOME = Path.home()
 SESSIONS_DIR = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+
 OUTPUT = HOME / ".hermes/cache/retrieval-saturation.json"
 ALARM = HOME / ".hermes/cache/retrieval-saturation-alarm.json"
 
@@ -184,7 +186,7 @@ def main():
     parser.add_argument("--report", action="store_true")
     args = parser.parse_args()
 
-    files = sorted(SESSIONS_DIR.glob("*.jsonl"))[-50:]
+    files = sorted([f for d in [SESSIONS_DIR, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")])[-50:]
     all_events = []
     for f in files:
         all_events.extend(extract_retrieval_events(f))

@@ -32,6 +32,8 @@ import numpy as np
 # ── Paths ──────────────────────────────────────────────────────────────────────
 HOME = Path.home()
 SESSIONS_DIR = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+
 CIRCUIT_SCORES = HOME / ".hermes/cache/circuit-scores.json"
 STABILITY_DB = HOME / ".hermes/memory-facts/stability.db"
 ALARM_PATH = HOME / ".hermes/cache/stability-alarm.json"
@@ -62,7 +64,7 @@ def load_session_turns(session_id: str | None, window: int) -> tuple[str, list[l
     """Load last `window` turns from the most recent (or specified) session.
     Returns (session_id, list_of_tool_name_lists) — one list per turn.
     """
-    jsonl_files = sorted(SESSIONS_DIR.glob("*.jsonl"))
+    jsonl_files = sorted([f for d in [SESSIONS_DIR, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")])
     if not jsonl_files:
         return ("none", [])
 
