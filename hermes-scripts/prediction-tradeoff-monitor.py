@@ -37,7 +37,7 @@ CACHE_DIR    = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE     = CACHE_DIR / "prediction-tradeoff.json"
 
-TRADEOFF_CEILING = 2.5   # C + R should be >= 2; alarm if both > CEILING (impossible)
+TRADEOFF_CEILING = 0.75  # alarm if BOTH C and R exceed this (both high = well-calibrated)
 MIN_SESSIONS     = 3
 WINDOW           = 10    # sessions to look back
 
@@ -119,9 +119,10 @@ def run() -> int:
 
     alarm = t["C"] > TRADEOFF_CEILING and t["R"] > TRADEOFF_CEILING
     if alarm:
-        print(f"\nALARM: yes — both C={t['C']} and R={t['R']} > {TRADEOFF_CEILING} (impossible tradeoff)")
+        print(f"\nALARM: yes — both C={t['C']:.3f} and R={t['R']:.3f} > {TRADEOFF_CEILING}; "
+              f"routing is both over-reliant on skill predictions AND frequently bypassing them")
     else:
-        print("\nALARM: no — prediction tradeoff within feasible region")
+        print(f"\nALARM: no — prediction tradeoff balanced (C={t['C']:.3f}, R={t['R']:.3f})")
 
     OUT_FILE.write_text(json.dumps({"ts": now, **t}, indent=2))
     return 1 if alarm else 0

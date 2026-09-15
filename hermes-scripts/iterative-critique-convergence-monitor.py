@@ -41,25 +41,12 @@ def _load_history() -> list[dict]:
 
 def _infer_from_suite_cache() -> list[dict]:
     """
-    Fall back: infer critique rounds from adversarial-monitor cache files.
-    Each time an adversarial subagent writes a result, it increments issue count.
+    Fallback for when no critique-history.json exists.
+    Returns empty — do NOT infer critique rounds from unrelated monitor cache files
+    (alarm counts from e.g. leakage-monitor or budget-monitor are not critique issue counts).
+    Real critique history is written by adversarial subagents to critique-history.json.
     """
-    history = []
-    # Look for any cache files with "issues" or "alarm" counts
-    for f in sorted(CACHE_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime):
-        if f.name in ("iterative-critique-convergence.json", "critique-history.json"):
-            continue
-        try:
-            d = json.loads(f.read_text())
-            if isinstance(d, dict) and "ts" in d:
-                # Count alarms/issues as a proxy for critique severity
-                issues = d.get("issue_count", d.get("alarm_count",
-                          d.get("low_productivity_count", d.get("leaking_count", 0))))
-                if isinstance(issues, (int, float)):
-                    history.append({"ts": d["ts"], "issues": int(issues), "source": f.name})
-        except Exception:
-            continue
-    return sorted(history, key=lambda x: x["ts"])
+    return []
 
 
 def run() -> int:

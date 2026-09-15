@@ -3,15 +3,19 @@
 online-threshold-skill-router.py
 
 Competitive-ratio guaranteed skill routing under adversarial request sequences.
-Uses a 1/4-approximation threshold strategy: accept the first option
-that scores above (best_seen * THRESHOLD) to guarantee competitive ratio
-even when future options are unknown.
+Uses a threshold strategy based on the secretary problem: observe first k=ceil(n/e)
+candidates as a probe phase, then accept the first option that exceeds
+THETA × best_probe_score.
 
-Math basis: Online threshold selection (competitive ratio 1/4 guarantee).
-  Secretary problem variant: observe first k = n/e candidates, then
-  accept first that beats the best seen so far.
-  For adversarial sequences: static threshold = THETA * max_theoretical_score
-  achieves competitive ratio THETA (at the cost of THETA < 1).
+Math basis: Online threshold selection (static-threshold variant).
+  Secretary problem variant: observe first k = n/e candidates (probe phase),
+  then accept the first skill in the selection phase that beats threshold.
+  Actual competitive ratio for static threshold THETA:
+    CR = THETA × (1 − THETA)   [maximised at THETA=0.5, CR=0.25]
+  At THETA=0.75: CR = 0.75 × 0.25 = 0.1875  (i.e. ~19% approximation).
+  Classic 1/e secretary strategy (probe k=n/e, accept first to beat probe max)
+  achieves CR ≈ 1/e ≈ 0.37 — better than static threshold at any THETA.
+  THETA=0.75 chosen for high precision (fewer false accepts) at cost of lower CR.
 
 Run on-demand: /usr/bin/python3 online-threshold-skill-router.py <task>
 """
@@ -47,7 +51,7 @@ def route(task: str, verbose: bool = True) -> str:
     if verbose:
         print(f"\n=== Online Threshold Skill Router ===")
         print(f"Task:      {task[:70]}")
-        print(f"Threshold: {THETA} (competitive ratio guarantee)\n")
+        print(f"Threshold: {THETA} (CR = {THETA*(1-THETA):.4f} for static-threshold strategy)\n")
         print(f"  {'Skill':<40} {'Score':>7}  Decision")
         print("  " + "-"*60)
 

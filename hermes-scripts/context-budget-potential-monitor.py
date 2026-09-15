@@ -65,10 +65,10 @@ def _parse_session(path: Path) -> dict:
         return {}
 
     tool_calls   = 0
-    useful_calls = 0   # proxy: tool calls that aren't retries or no-ops
+    useful_calls = 0   # proxy: tool calls that aren't immediate consecutive repeats
     char_total   = 0
 
-    prev_tools: set[str] = set()
+    prev_tool: str = ""   # track only the immediately previous tool (not all seen)
     for msg in messages:
         if not isinstance(msg, dict):
             continue
@@ -82,10 +82,10 @@ def _parse_session(path: Path) -> dict:
                     if b.get("type") == "tool_use":
                         tool_calls += 1
                         name = b.get("name", "")
-                        # Non-repeated tool calls are "useful" proxy
-                        if name not in prev_tools:
+                        # Count as useful unless it's an immediate consecutive repeat
+                        if name != prev_tool:
                             useful_calls += 1
-                        prev_tools.add(name)
+                        prev_tool = name
 
     return {
         "session":      path.stem,
@@ -95,6 +95,7 @@ def _parse_session(path: Path) -> dict:
         "productivity": useful_calls / max(tool_calls, 1),
         # Token proxy: chars / 4
         "token_proxy":  char_total // 4,
+        # Note: productivity = non-consecutive-repeat tool calls / total tool calls
     }
 
 

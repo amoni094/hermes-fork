@@ -45,23 +45,31 @@ def _extract_delegations(path: Path) -> list[dict]:
         return []
     delegations = []
     pending: dict[str, str] = {}  # tool_use_id -> subagent label
+
     for msg in msgs:
         if not isinstance(msg, dict):
             continue
-        for b in (msg.get("content", []) if isinstance(msg.get("content"), list) else []):
-            if not isinstance(b, dict):
-                continue
-            if b.get("type") == "tool_use" and b.get("name") == "delegate_task":
-                tid = b.get("id", "?")
-                tasks = b.get("input", {}).get("tasks", [{}])
-                label = tasks[0].get("goal", "subagent")[:30] if tasks else "subagent"
-                pending[tid] = label
-            elif b.get("type") == "tool_result":
-                tid = b.get("tool_use_id", "?")
-                if tid in pending:
-                    content = str(b.get("content", ""))
-                    useful  = len(content) > 200 and "error" not in content.lower()
-                    delegations.append({"agent": pending.pop(tid), "useful": useful})
+        role = msg.get("role", "")
+
+        # Collect delegate_task calls from assistant messages
+        if role == "assistant":
+            for b in (msg.get("content", []) if isinstance(msg.get("content"), list) else []):
+                if not isinstance(b, dict):
+                    continue
+                if b.get("type") == "tool_use" and b.get("name") == "delegate_task":
+                    tid = b.get("id", "?")
+                    tasks = b.get("input", {}).get("tasks", [{}])
+                    label = tasks[0].get("goal", "subagent")[:30] if tasks else "subagent"
+                    pending[tid] = label
+
+        # Tool results arrive as role='tool' messages in Hermes session format
+        elif role == "tool":
+            tid = msg.get("tool_use_id", "?")
+            if tid in pending:
+                content = str(msg.get("content", ""))
+                useful  = len(content) > 200 and "error" not in content.lower()
+                delegations.append({"agent": pending.pop(tid), "useful": useful})
+
     return delegations
 
 

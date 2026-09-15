@@ -89,6 +89,11 @@ def run() -> int:
     opt_n       = total_value / n
     max_item    = max(t["value"] for t in all_tasks)
     prop1_floor = opt_n - max_item - PROP1_SLACK * opt_n
+    # Guard: floor must be positive to be meaningful; if negative the check is trivially true
+    if prop1_floor <= 0:
+        print(f"PROP1 floor non-positive ({prop1_floor:.3f}) — max_item dominates; skipping fairness check")
+        print("ALARM: no — PROP1 floor degenerate (single large item dominates allocation)")
+        return 0
 
     print(f"Tasks: {len(all_tasks)}, Agents: {n}, Total value: {total_value:.2f}")
     print(f"OPT/n: {opt_n:.3f}, Max item: {max_item:.3f}, PROP1 floor: {prop1_floor:.3f}\n")

@@ -52,9 +52,10 @@ def _parse(path: Path) -> list[dict]:
                 if isinstance(b, dict) and b.get("type") == "tool_use":
                     events.append({"turn": turn, "tool": b.get("name", "?"), "success": None})
         elif role == "tool":
-            # Mark last pending call as success/fail based on content
+            # Tool results: role='tool' in Hermes session format
             content = str(msg.get("content", ""))
-            ok = not any(w in content.lower() for w in ["error", "exception", "traceback", "failed", "exit_code\": 1"])
+            ok = not any(w in content.lower() for w in
+                         ["error", "exception", "traceback", "failed", "exit_code: 1"])
             for e in reversed(events):
                 if e["success"] is None:
                     e["success"] = ok
