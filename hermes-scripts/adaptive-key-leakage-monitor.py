@@ -55,7 +55,7 @@ def _load_tool_sequence(path: Path) -> list[str]:
     for msg in messages:
         if not isinstance(msg, dict) or msg.get("role") != "assistant":
             continue
-        for b in (msg.get("content", []) if isinstance(msg.get("content"), list) else []):
+        for b in ((msg.get("api_content") or msg.get("content") or []) if isinstance((msg.get("api_content") or msg.get("content")), list) else []):
             if isinstance(b, dict) and b.get("type") == "tool_use":
                 seq.append(b.get("name", "unknown"))
     return seq

@@ -78,10 +78,10 @@ def route(task: str, verbose: bool = True) -> str:
         accepted = scores[0][0]   # fallback: take best overall
         if verbose:
             print(f"\nFallback to best: {accepted}")
-
     if verbose:
         print(f"\nSelected: {accepted}")
         print(f"Probe phase: {k}/{n} skills, threshold={threshold:.4f}")
+    print("ALARM: no — skill selected via threshold router")
 
     return accepted
 

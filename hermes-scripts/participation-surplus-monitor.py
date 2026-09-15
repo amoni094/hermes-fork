@@ -53,18 +53,32 @@ def _extract_delegations(path: Path) -> list[dict]:
 
         # Collect delegate_task calls from assistant messages
         if role == "assistant":
-            for b in (msg.get("content", []) if isinstance(msg.get("content"), list) else []):
-                if not isinstance(b, dict):
-                    continue
-                if b.get("type") == "tool_use" and b.get("name") == "delegate_task":
-                    tid = b.get("id", "?")
-                    tasks = b.get("input", {}).get("tasks", [{}])
-                    label = tasks[0].get("goal", "subagent")[:30] if tasks else "subagent"
+            # Check api_content (Anthropic tool_use blocks) and tool_calls (OpenAI format)
+            for source in [msg.get("api_content"), msg.get("content")]:
+                if isinstance(source, list):
+                    for b in source:
+                        if not isinstance(b, dict):
+                            continue
+                        if b.get("type") == "tool_use" and b.get("name") == "delegate_task":
+                            tid = b.get("id", "?")
+                            tasks = b.get("input", {}).get("tasks", [{}])
+                            label = tasks[0].get("goal", "subagent")[:30] if tasks else "subagent"
+                            pending[tid] = label
+            # OpenAI tool_calls format
+            for tc in (msg.get("tool_calls") or []):
+                if isinstance(tc, dict) and tc.get("function", {}).get("name") == "delegate_task":
+                    tid = tc.get("id", "?")
+                    try:
+                        inp = json.loads(tc["function"].get("arguments", "{}"))
+                        tasks = inp.get("tasks", [{}])
+                        label = tasks[0].get("goal", "subagent")[:30] if tasks else "subagent"
+                    except Exception:
+                        label = "subagent"
                     pending[tid] = label
 
         # Tool results arrive as role='tool' messages in Hermes session format
         elif role == "tool":
-            tid = msg.get("tool_use_id", "?")
+            tid = msg.get("tool_call_id", msg.get("tool_use_id", "?"))
             if tid in pending:
                 content = str(msg.get("content", ""))
                 useful  = len(content) > 200 and "error" not in content.lower()

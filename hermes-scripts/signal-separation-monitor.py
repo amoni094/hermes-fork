@@ -48,7 +48,7 @@ def _parse(path: Path) -> list[dict]:
     for msg in msgs:
         role = msg.get("role", "")
         if role == "assistant":
-            for b in (msg.get("content", []) if isinstance(msg.get("content"), list) else []):
+            for b in ((msg.get("api_content") or msg.get("content") or []) if isinstance((msg.get("api_content") or msg.get("content")), list) else []):
                 if isinstance(b, dict) and b.get("type") == "tool_use":
                     events.append({"turn": turn, "tool": b.get("name", "?"), "success": None})
         elif role == "tool":

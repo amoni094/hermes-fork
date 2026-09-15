@@ -58,7 +58,7 @@ def _jaccard(a: str, b: str) -> float:
 def fuse(query: str) -> list[dict]:
     pool_a = _backend_a(query)
     pool_b = _backend_b(query)
-    all_results = {r["id"]: r for r in pool_a + pool_b}.values()
+    all_results = list({r["id"]: r for r in pool_a + pool_b}.values())
 
     selected: list[dict] = []
     remaining = list(all_results)

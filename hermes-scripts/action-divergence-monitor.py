@@ -48,7 +48,7 @@ def _tool_dist(path: Path) -> Counter:
         return Counter()
     c: Counter = Counter()
     for msg in msgs:
-        for b in (msg.get("content", []) if isinstance(msg.get("content"), list) else []):
+        for b in ((msg.get("api_content") or msg.get("content") or []) if isinstance((msg.get("api_content") or msg.get("content")), list) else []):
             if isinstance(b, dict) and b.get("type") == "tool_use":
                 c[b.get("name", "unknown")] += 1
     return c

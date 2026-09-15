@@ -44,7 +44,7 @@ def _extract_tasks(path: Path) -> list[dict]:
     for msg in msgs:
         if not isinstance(msg, dict):
             continue
-        for b in (msg.get("content", []) if isinstance(msg.get("content"), list) else []):
+        for b in ((msg.get("api_content") or msg.get("content") or []) if isinstance((msg.get("api_content") or msg.get("content")), list) else []):
             if isinstance(b, dict) and b.get("type") == "tool_use":
                 name = b.get("name", "")
                 inp  = b.get("input", {})
@@ -94,7 +94,6 @@ def run() -> int:
         print(f"PROP1 floor non-positive ({prop1_floor:.3f}) — max_item dominates; skipping fairness check")
         print("ALARM: no — PROP1 floor degenerate (single large item dominates allocation)")
         return 0
-
     print(f"Tasks: {len(all_tasks)}, Agents: {n}, Total value: {total_value:.2f}")
     print(f"OPT/n: {opt_n:.3f}, Max item: {max_item:.3f}, PROP1 floor: {prop1_floor:.3f}\n")
     print(f"  {'Agent':<15} {'Value':>8}  {'vs Floor':>10}  Status")
