@@ -16,6 +16,104 @@ from agent.model_metadata import estimate_messages_tokens_rough, estimate_tokens
 # Log name parity with the origin module.
 logger = logging.getLogger("agent.context_compressor")
 
+# ---------------------------------------------------------------------------
+# MemForest EventTree partitioning (R1)
+# ---------------------------------------------------------------------------
+
+#: Prune weights per event type: lower value = higher pruning priority.
+PARTITION_PRUNE_WEIGHTS: Dict[str, float] = {
+    "tool_call": 0.8,
+    "tool_result": 0.4,
+    "reasoning": 0.6,
+    "user": 1.0,
+    "assistant_prose": 0.7,
+}
+
+
+def _classify_message(msg: Any) -> str:
+    """Return the event-type label for a single message dict."""
+    if not isinstance(msg, dict):
+        return "assistant_prose"
+    role = msg.get("role", "")
+    content = msg.get("content")
+
+    if role == "user":
+        return "user"
+
+    if role == "tool":
+        return "tool_result"
+
+    if role == "assistant":
+        # Detect a tool-call turn: list content containing tool_use blocks, or
+        # a top-level tool_calls field (OpenAI-style).
+        if msg.get("tool_calls"):
+            return "tool_call"
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") in ("tool_use", "tool_call"):
+                    return "tool_call"
+        # Detect extended thinking / reasoning blocks.
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") in ("thinking", "reasoning"):
+                    return "reasoning"
+        return "assistant_prose"
+
+    return "assistant_prose"
+
+
+def partition_messages_by_event(messages: List[Any]) -> Dict[str, List[int]]:
+    """Classify every message in *messages* into an event-type bucket.
+
+    Returns a dict mapping each event-type label to a list of message indices
+    that belong to it.  Every index in ``range(len(messages))`` appears in
+    exactly one bucket.
+
+    Event types
+    -----------
+    tool_call       Assistant turn whose content is a tool-use request.
+    tool_result     Tool-role response to a prior tool call.
+    reasoning       Assistant turn whose content is a thinking/reasoning block.
+    user            User-role turn (never pruned).
+    assistant_prose Ordinary assistant prose turn (catch-all).
+    """
+    buckets: Dict[str, List[int]] = {k: [] for k in PARTITION_PRUNE_WEIGHTS}
+    for idx, msg in enumerate(messages):
+        label = _classify_message(msg)
+        buckets.setdefault(label, []).append(idx)
+    return buckets
+
+
+def apply_partition_prune_order(
+    messages: List[Any],
+    protect_last_n: int = 10,
+) -> List[int]:
+    """Return indices recommended for pruning, ordered by ascending prune weight.
+
+    Rules
+    -----
+    * The last *protect_last_n* messages are never included.
+    * User messages are never included (weight 1.0 is the ceiling, but the
+      function enforces it explicitly so callers don't need to).
+    * Within each weight tier messages are ordered by ascending index (oldest
+      first).
+    * The returned list contains no duplicates.
+    """
+    if not messages:
+        return []
+    cutoff = max(0, len(messages) - protect_last_n)
+    buckets = partition_messages_by_event(messages)
+
+    result: List[int] = []
+    # Sort event types by ascending weight so cheapest-to-lose come first.
+    for label in sorted(PARTITION_PRUNE_WEIGHTS, key=lambda k: PARTITION_PRUNE_WEIGHTS[k]):
+        if label == "user":
+            continue  # user messages are never pruned
+        for idx in sorted(buckets.get(label, [])):
+            if idx < cutoff:
+                result.append(idx)
+    return result
+
 
 def _cc():
     """The origin module, resolved lazily: avoids the import cycle and keeps tests that patch

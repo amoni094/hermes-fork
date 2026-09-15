@@ -26,7 +26,7 @@ from agent.auxiliary_client import (
 from agent.context_engine import ContextEngine, sanitize_memory_context
 from agent.context_compressor_summary import SummaryDispatchMixin
 from agent.error_classifier import FailoverReason, classify_api_error
-from agent.micro_compaction import MicroCompactionMixin
+from agent.micro_compaction import MicroCompactionMixin, apply_partition_prune_order
 from agent.prompt_builder import STEER_DISPLAY_KIND
 from agent.model_metadata import (
     MINIMUM_CONTEXT_LENGTH, get_model_context_length, estimate_messages_tokens_rough, estimate_tokens_rough,
@@ -426,6 +426,10 @@ def salvage_grown_transcript(
         return None
 
     out = [dict(msg) if isinstance(msg, dict) else msg for msg in candidate]
+    # MemForest EventTree: prune by event-type priority order (tool_result lowest, user never).
+    # apply_partition_prune_order returns indices sorted cheapest-to-lose first, respecting
+    # protect_last_n (don't prune the most recent 10 messages).
+    priority_prune_indices = set(apply_partition_prune_order(out, protect_last_n=10))
     tool_indices = [i for i, msg in enumerate(out) if isinstance(msg, dict) and msg.get("role") == "tool"]
     last_assistant_idx = _last_index_with_role(out, "assistant")
     salvage_reasoning_keys = _NEWEST_TURN_ONLY_BUDGET_KEYS + ("reasoning_details",)
@@ -436,7 +440,9 @@ def salvage_grown_transcript(
         if msg.get("role") == "assistant" and index != last_assistant_idx:
             for key in salvage_reasoning_keys:
                 msg.pop(key, None)
-        if msg.get("role") == "tool" and index not in keep_tools:
+        # Use MemForest priority order: prune messages in priority_prune_indices first.
+        # Fall back to role=="tool" for messages not captured by event-type classification.
+        if index in priority_prune_indices or (msg.get("role") == "tool" and index not in keep_tools):
             content = msg.get("content")
             if isinstance(content, str) and len(content) > _PRUNE_MIN_CHARS:
                 msg["content"] = _PRUNED_TOOL_PLACEHOLDER
