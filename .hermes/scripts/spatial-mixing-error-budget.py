@@ -78,7 +78,7 @@ def _spectral_gap(P: np.ndarray) -> float:
     """Estimate spectral gap from transition matrix eigenvalues."""
     try:
         eigs = np.linalg.eigvals(P)
-        eigs_real = sorted(abs(eigs.real), reverse=True)
+        eigs_real = sorted(abs(eigs), reverse=True)  # use modulus, not real part (handles complex eigs)
         if len(eigs_real) < 2:
             return 1.0
         return float(max(1e-6, 1.0 - eigs_real[1]))

@@ -7,6 +7,9 @@ description: |
   `computer_use` tool is available.
 version: 1.0.0
 platforms: [macos]
+related_skills:
+  - computer-use
+  - browser-agent-ops
 metadata:
   hermes:
     tags: [computer-use, macos, desktop, automation, gui]

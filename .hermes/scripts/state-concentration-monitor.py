@@ -32,6 +32,8 @@ import math
 
 HOME         = Path.home()
 SESSIONS_DIR = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+
 CACHE_DIR    = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE     = CACHE_DIR / "state-concentration.json"
@@ -53,12 +55,16 @@ def _tool_entropy(tool_calls: list[str]) -> float:
 
 def _load_recent_tools(session_path: Path) -> list[str]:
     try:
-        data = json.loads(session_path.read_text())
+        lines = session_path.read_text().strip().splitlines()
+        # Support both JSONL (one message per line) and single-object JSON
+        if lines and lines[0].startswith("{") and lines[0].strip().endswith("}") and len(lines) > 1:
+            messages = [json.loads(l) for l in lines if l.strip()]
+        else:
+            data = json.loads(session_path.read_text())
+            messages = data if isinstance(data, list) else data.get("messages", [])
     except Exception:
         return []
-
     tools = []
-    messages = data if isinstance(data, list) else data.get("messages", [])
     for msg in messages:
         if isinstance(msg, dict) and msg.get("role") == "assistant":
             content = msg.get("content", [])
@@ -78,7 +84,7 @@ def run() -> int:
         print("ALARM: no — insufficient data")
         return 0
 
-    sessions = sorted(SESSIONS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    sessions = sorted([f for d in [SESSIONS_DIR, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")], key=lambda p: p.stat().st_mtime, reverse=True)
     if not sessions:
         print("[state-concentration] No session files found")
         print("ALARM: no — insufficient data")

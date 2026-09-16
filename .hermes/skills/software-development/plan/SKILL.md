@@ -1,6 +1,23 @@
 ---
 name: plan
-description: "Plan mode: write an actionable markdown plan to .hermes/plans/, no execution. Bite-sized tasks, exact paths, complete code."
+related_skills:
+  - workflow-map
+  - complexity-gated-planning
+  - isolated-workspace-preflight
+  - subagent-driven-development
+  - test-driven-development
+  - requesting-code-review
+  - verification-before-completion
+
+tier: global
+provides: [planning]
+triggers:
+  - User says 'write a plan', 'plan this out', or 'make a plan before we start'
+  - Need to produce an actionable markdown plan in .hermes/plans/ before any execution
+  - Need to write bite-sized steps, exact paths, and completion criteria into a plan file before acting
+  - Want to separate planning from execution — plan first, execute later
+description: >
+  Use when writing a markdown plan to .hermes/plans/ with no execution. Bite-sized tasks, exact paths, complete code. Not for deciding whether to plan (use complexity-gated-planning). Not for five-stage task routing (use problem-solving-router).
 version: 2.0.0
 author: Hermes Agent (writing-craft adapted from obra/superpowers)
 license: MIT
@@ -9,6 +26,29 @@ metadata:
   hermes:
     tags: [planning, plan-mode, implementation, workflow, design, documentation]
     related_skills: [workflow-map, complexity-gated-planning, isolated-workspace-preflight, subagent-driven-development, test-driven-development, requesting-code-review, verification-before-completion]
+ssl_scheduling:
+  triggers:
+    - User says 'write a plan', 'plan this out', or 'make a plan before we start'
+    - Task is large enough to require bite-sized steps, exact paths, and completion criteria
+    - Need to separate planning from execution — plan first, execute later
+  preconditions:
+    - User has not yet asked for execution (plan mode only)
+    - Sufficient context about the task goal and constraints exists
+  estimated_steps: 6
+ssl_structural:
+  tools_used: [write_file, read_file, search_files, terminal]
+  subtasks:
+    - Clarify scope, constraints, and success criteria
+    - Break task into bite-sized numbered steps with exact paths
+    - Specify completion criteria per step
+    - Write plan to .hermes/plans/<slug>.md
+    - Present plan for user approval before any execution
+ssl_logical:
+  side_effects:
+    - Creates a markdown plan file in .hermes/plans/
+  resources:
+    - .hermes/plans/ directory
+  risk_level: low
 ---
 
 # Plan Mode
@@ -289,6 +329,24 @@ git add [files]
 git commit -m "type: description"
 ```
 
+## /wayfinder — Fog-of-War Planning Pattern (Latent Space, Aug 20 2026, Sweep 20) <!-- why: upfront comprehensive plans are brittle on greenfield tasks; incremental fog-of-war exploration with a map document scales to overnight multi-agent runs -->
+
+"Skills ARE context management" (Matt Pocock, 220k GitHub stars). A skill defines what context the agent needs — every skill design decision is a context management decision.
+
+**Fog-of-war**: don't plan everything upfront. Agent explores like an RTS map — each decision reveals the next. Plan only for the current visible area.
+
+**Map document**: a persistent markdown file tracking explored territory, decisions made (not to re-explore), current frontier, and open decisions. This IS the session handoff artifact for AFK/overnight runs.
+
+**Ticket types** (spawn from the map):
+- `grill` → clarify before building (use `grill-me` skill)
+- `prototype` → throwaway spike to push the fog (use `spike` skill)
+- `research` → information gather (use `domain-research-synthesis`)
+- `task` → concrete build item once fog is clear (use `complexity-gated-planning`)
+
+**Ubiquitous language**: define domain terms precisely in the map document once. Consistent leading words reduce hallucination — the map's terminology becomes the domain language for the entire task.
+
+Hermes: the map document lives in `.hermes/plans/` and persists to Obsidian for multi-session AFK runs.
+
 ## Common Mistakes
 
 ### Vague Tasks
@@ -312,6 +370,24 @@ git commit -m "type: description"
 **Good:** "Create: `src/models/user.py`"
 
 ## Integration with Other Skills
+
+After plan is written and before implementation starts:
+  - Run select-frameworks to determine reasoning gates for the implementation phase:
+    ```
+    python3 ~/.hermes/scripts/reasoning-complexity-classifier.py select-frameworks \
+      --task "<plan goal>" --level <L>
+    ```
+    Embed the primary framework list in each subagent context packet.
+  - For multi-phase plans, embed subplan-verify checkpoints at phase boundaries.
+    `--plan` / `--subplan` MUST be a JSON list of step strings or objects with a
+    `text`/`step`/`name` field. Example:
+    ```
+    python3 ~/.hermes/scripts/working-memory.py subplan-verify \
+      --session SESSION --subplan '["implement parser","run tests","write report"]' \
+      --current-step "run tests"
+    ```
+    Invalid JSON or a non-list that cannot be wrapped → exit 2 BLOCK.
+    Constraint violation = do not advance to next phase; re-plan the current step.
 
 **complexity-gated-planning:** Use this first to decide whether a full written plan is warranted, or whether a lightweight checklist / direct execution is enough. Reserve this full plan format for medium-to-high complexity work.
 

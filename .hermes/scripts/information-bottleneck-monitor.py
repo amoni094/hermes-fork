@@ -49,9 +49,7 @@ TASK_CONCEPTS = {
 
 
 def _extract_concepts(text: str) -> set[str]:
-    return set(re.findall(r"[a-z]{4,}", text.lower())) & (
-        set(re.findall(r"[a-z]{4,}", text.lower()))
-    )
+    return set(re.findall(r"[a-z]{4,}", text.lower()))
 
 
 def _extract_messages(session_path: Path) -> list[dict]:
@@ -76,12 +74,16 @@ def _extract_messages(session_path: Path) -> list[dict]:
 
 def analyse_session(session_path: Path) -> dict:
     messages = _extract_messages(session_path)
-    if len(messages) < 2:
+    if len(messages) < 4:
         return {"session": session_path.stem, "note": "insufficient messages", "alarm": False}
 
-    # Simulate bottleneck: early messages = full context X, last message = compressed T
-    early_text = " ".join(m["text"] for m in messages[:-1])
-    last_text  = messages[-1]["text"]
+    # Compare first 25% of messages vs last 25% (equal-width windows, not all-vs-one)
+    window = max(1, len(messages) // 4)
+    early_msgs = messages[:window]
+    late_msgs  = messages[-window:]
+
+    early_text = " ".join(m["text"] for m in early_msgs)
+    last_text  = " ".join(m["text"] for m in late_msgs)
 
     early_concepts = _extract_concepts(early_text)
     last_concepts  = _extract_concepts(last_text)

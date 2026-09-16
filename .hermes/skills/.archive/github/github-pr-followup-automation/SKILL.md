@@ -1,6 +1,10 @@
 ---
 name: github-pr-followup-automation
 description: "Create a PR, report its identifier, and optionally set up recurring follow-up checks with cron-driven fix/verify/push loops."
+related_skills:
+  - github-pr-workflow
+  - github-issue-to-pr
+  - verification-before-completion
 version: 1.0.0
 author: Hermes Agent
 license: MIT

@@ -1,6 +1,12 @@
 ---
 name: node-inspect-debugger
-description: "Debug Node.js via --inspect + Chrome DevTools Protocol CLI."
+triggers:
+  - Debugging a Node.js process via --inspect flag and Chrome DevTools Protocol
+  - Node.js process is behaving unexpectedly and needs a debugger attached
+  - User wants to set breakpoints, inspect heap, or profile a Node.js app via CDP CLI
+  - Remote debugging a Node.js server or CLI tool without a browser IDE
+description: >
+  Use when debugging Node.js via --inspect + Chrome DevTools Protocol CLI.
 version: 1.0.0
 author: Hermes Agent
 license: MIT
@@ -8,7 +14,10 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [debugging, nodejs, node-inspect, cdp, breakpoints, ui-tui]
-    related_skills: [systematic-debugging, python-debugpy]
+related_skills:
+  - python-debugpy
+  - systematic-debugging
+  - verification-before-completion
 ---
 
 # Node.js Inspect Debugger

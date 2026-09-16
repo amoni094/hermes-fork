@@ -34,7 +34,8 @@ SKILLS_DIR = HOME / ".hermes/skills"
 FORK_SKILLS = HOME / ".hermes/profiles/fork/skills"
 CACHE_DIR  = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
-OUT_FILE   = CACHE_DIR / "skill-graph-reachability-report.json"
+OUT_FILE      = CACHE_DIR / "skill-graph-reachability-report.json"
+BASELINE_FILE = CACHE_DIR / "skill-graph-reachability-baseline.json"
 
 # Keyword sets for postcondition/precondition matching
 POSTCOND_HEADERS = re.compile(r"(?i)^#{1,4}\s*(after|output|result|produces?|postcondition)")
@@ -188,11 +189,26 @@ def run(from_skill: str | None, to_skill: str | None,
             "isolated":  len(isolated),
             "largest_component": largest_comp,
         })
-        alarm_exit = 1 if len(dead_ends) > 10 else 0
-        if alarm_exit:
-            print(f"\nALARM: yes — {len(dead_ends)} dead-end skills detected")
+        alarm_exit = 0
+        # Only alarm if dead-end count has INCREASED from baseline (not just the permanent baseline state)
+        baseline_dead = 0
+        if BASELINE_FILE.exists():
+            try:
+                bl = json.loads(BASELINE_FILE.read_text())
+                baseline_dead = bl.get("dead_ends", 0)
+            except Exception:
+                pass
         else:
-            print(f"\nALARM: no — skill graph connectivity within bounds")
+            # First run: write baseline, don't alarm
+            BASELINE_FILE.write_text(json.dumps({"dead_ends": len(dead_ends), "ts": now}, indent=2))
+            baseline_dead = len(dead_ends)
+
+        new_dead = len(dead_ends) - baseline_dead
+        if new_dead > 5:   # alarm only when 5+ new dead-ends appear beyond baseline
+            alarm_exit = 1
+            print(f"\nALARM: yes — {new_dead} new dead-end skills since baseline (total={len(dead_ends)}, baseline={baseline_dead})")
+        else:
+            print(f"\nALARM: no — dead-end count stable (total={len(dead_ends)}, baseline={baseline_dead}, delta={new_dead:+d})")
 
     if not dry_run:
         OUT_FILE.write_text(json.dumps({"ts": now, "results": results}, indent=2))

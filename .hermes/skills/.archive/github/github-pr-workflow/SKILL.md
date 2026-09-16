@@ -1,6 +1,10 @@
 ---
 name: github-pr-workflow
 description: "GitHub PR lifecycle: branch, commit, open, CI, merge."
+related_skills:
+  - github-operations
+  - github-issue-to-pr
+  - finishing-a-development-branch
 version: 1.1.0
 author: Hermes Agent
 license: MIT

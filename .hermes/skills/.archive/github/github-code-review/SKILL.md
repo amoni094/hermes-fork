@@ -1,6 +1,10 @@
 ---
 name: github-code-review
 description: "Review PRs: diffs, inline comments via gh or REST."
+related_skills:
+  - requesting-code-review
+  - github-operations
+  - github-pr-workflow
 version: 1.1.0
 author: Hermes Agent
 license: MIT

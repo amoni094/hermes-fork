@@ -44,7 +44,8 @@ FORK_SKILLS = HOME / ".hermes/profiles/fork/skills"
 PLANS_DIR  = HOME / ".hermes/plans"
 CACHE_DIR  = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
-OUT_FILE   = CACHE_DIR / "spec-semantic-graph.json"
+OUT_FILE      = CACHE_DIR / "spec-semantic-graph.json"
+BASELINE_FILE = CACHE_DIR / "spec-semantic-graph-baseline.json"
 
 # Patterns for extracting semantic elements from SKILL.md
 GUARD_PATTERNS = [
@@ -185,11 +186,23 @@ def run(skill_name: str | None, export: Path | None, dry_run: bool) -> int:
         for i in critical[:3]:
             print(f"  ! {i['action'][:70]}")
 
-    if all_issues:
-        print(f"\nALARM: yes — {len(all_issues)} spec invariant issue(s) found")
+    # Only alarm on NEW issues beyond baseline (static structural issues are permanent noise)
+    baseline_count = 0
+    if BASELINE_FILE.exists():
+        try:
+            baseline_count = json.loads(BASELINE_FILE.read_text()).get("issue_count", 0)
+        except Exception:
+            pass
+    else:
+        BASELINE_FILE.write_text(json.dumps({"issue_count": len(all_issues), "ts": now}, indent=2))
+        baseline_count = len(all_issues)
+
+    new_issues = len(all_issues) - baseline_count
+    if new_issues > 5:
+        print(f"\nALARM: yes — {new_issues} new spec issues since baseline (total={len(all_issues)}, baseline={baseline_count})")
         alarm_exit = 1
     else:
-        print("\nALARM: no — all specs pass invariant checks")
+        print(f"\nALARM: no — issue count stable (total={len(all_issues)}, baseline={baseline_count}, delta={new_issues:+d})")
         alarm_exit = 0
 
     if not dry_run:

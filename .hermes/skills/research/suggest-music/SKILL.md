@@ -1,9 +1,19 @@
 ---
 name: suggest-music
-description: Suggest a few songs using the user's local music-taste seed data, recent YouTube/browser history, and Music-Map neighbor checks.
-version: 1.0.0
+triggers:
+  - User asks for music recommendations or says 'suggest some songs'
+  - Using the local music-taste seed data and Music-Map to find similar artists
+  - User wants personalized song suggestions based on listening history or taste profile
+  - Browsing recent YouTube or browser history for music signals to feed a recommendation
+description: >
+  Use when: Suggest a few songs using the user's local music-taste seed data, recent YouTube/browser history, and Music-Map neighbor checks.
+version: 1.0.1
 author: Hermes Agent
 license: MIT
+related_skills:
+  - agent-reach-discovery
+  - stay-in
+  - gold-class
 ---
 
 # suggest-music
@@ -37,6 +47,11 @@ If the recommendations are being surfaced in a UI/dashboard rather than plain ch
 - make the song title clickable
 - default to a YouTube search URL for `Artist + Song` when you do not already have a canonical watch URL
 - prefer a simple, reliable outbound link over leaving the item unlinked
+
+## Related skills
+- `agent-reach-discovery` — for social/YouTube/community signal (Reddit music threads, Bilibili, X) to augment seed data
+- `stay-in` — companion recommendation skill for movies/TV
+- `gold-class` — companion skill for cinema outing recommendations
 
 ## Workflow
 1. Read `references/music_taste_seeds.yaml`.

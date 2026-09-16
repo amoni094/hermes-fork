@@ -1,5 +1,10 @@
 ---
 name: split-ci-workflow-change-and-draft-pr
+triggers:
+  - a mixed CI/workflow/docs change needs to be split into separate PRs
+  - CI pipeline change is bundled with feature code and must be separated
+  - creating a draft PR that contains only infrastructure or workflow changes
+  - a single commit accidentally mixed examples, docs, and live CI workflow changes
 description: Use when a mixed CI/workflow/docs change needs to be split into scoped git commits, verified locally, drafted as a PR, and optionally saved as reusable process knowledge.
 version: 1.0.0
 author: Hermes Agent
@@ -8,6 +13,10 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [git, github, ci, workflows, docs, verification, skills]
+related_skills:
+  - github-operations
+  - github-issue-to-pr
+  - scoped-pr-fix-and-verification
 ---
 
 # Split CI workflow change and draft PR

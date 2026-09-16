@@ -84,7 +84,7 @@ def calibrate(query: str, skills: list[dict]) -> list[dict]:
         cal_prob = _sigmoid(PLATT_A * raw_sim + PLATT_B)
         # Ground-truth proxy: keyword overlap fraction
         gt_prob  = min(len(q_tok & s["tokens"]) / max(len(q_tok), 1), 1.0)
-        error    = abs(raw_sim - cal_prob)
+        error    = abs(gt_prob - cal_prob)
 
         results.append({
             "name":     s["name"],

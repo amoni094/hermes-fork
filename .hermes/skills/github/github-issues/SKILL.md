@@ -1,6 +1,13 @@
 ---
 name: github-issues
-description: "Create, triage, label, assign GitHub issues via gh or REST."
+provides: [git_ops]
+triggers:
+  - User wants to create, triage, label, or assign GitHub issues
+  - Need to open a new GitHub issue via gh CLI or REST API
+  - Bulk-triaging, labeling, or closing a set of GitHub issues
+  - Linking a PR to an issue or managing issue metadata
+description: >
+  Use when: Create, triage, label, assign GitHub issues via gh or REST.
 version: 1.1.0
 author: Hermes Agent
 license: MIT
@@ -8,7 +15,14 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [GitHub, Issues, Project-Management, Bug-Tracking, Triage]
-    related_skills: [github-auth, github-pr-workflow]
+    related_skills: [github-operations, github-issue-agent]
+related_skills:
+  - github-operations
+  - verification-before-completion
+  - plan
+  - github-issue-to-pr
+  - github-issue-agent
+handoff_note: "Once an issue is ready for implementation use github-issue-to-pr; for bulk subagent dispatch use github-issue-agent."
 ---
 
 # GitHub Issues Management
@@ -17,7 +31,7 @@ Create, search, triage, and manage GitHub issues. Each section shows `gh` first,
 
 ## Prerequisites
 
-- Authenticated with GitHub (see `github-auth` skill)
+- Authenticated with GitHub (see `github-operations` skill for auth setup — `github-auth` was archived and merged there)
 - Inside a git repo with a GitHub remote, or specify the repo explicitly
 
 ### Setup
@@ -134,7 +148,9 @@ curl -s -X POST \
   https://api.github.com/repos/$OWNER/$REPO/issues \
   -d '{
     "title": "Login redirect ignores ?next= parameter",
-    "body": "## Description\nAfter logging in, users always land on /dashboard.\n\n## Steps to Reproduce\n1. Navigate to /settings while logged out\n2. Get redirected to /login?next=/settings\n3. Log in\n4. Actual: redirected to /dashboard\n\n## Expected Behavior\nRespect the ?next= query parameter.",
+    "body": "## Description\nAfter logging in, users always land on /dashboard.\n
+## Steps to Reproduce\n1. Navigate to /settings while logged out\n2. Get redirected to /login?next=/settings\n3. Log in\n4. Actual: redirected to /dashboard\n
+## Expected Behavior\nRespect the ?next= query parameter.",
     "labels": ["bug", "backend"],
     "assignees": ["username"]
   }'
@@ -368,3 +384,7 @@ curl -s \
 | Comment | `gh issue comment N --body ...` | `POST /repos/{o}/{r}/issues/N/comments` |
 | Close | `gh issue close N` | `PATCH /repos/{o}/{r}/issues/N` |
 | Search | `gh issue list --search "..."` | `GET /search/issues?q=...` |
+## Reference files
+
+- `templates/bug-report.md` — Bug Description
+- `templates/feature-request.md` — Feature Description

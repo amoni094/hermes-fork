@@ -5,6 +5,9 @@ version: 1.0.0
 author: Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
+related_skills:
+  - hermes-agent
+  - local-personal-dashboard
 metadata:
   hermes:
     tags: [petdex, mascot, display, cli, tui, desktop]

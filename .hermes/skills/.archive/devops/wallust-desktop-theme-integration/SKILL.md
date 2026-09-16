@@ -1,6 +1,10 @@
 ---
 name: wallust-desktop-theme-integration
 description: Integrate wallust into multi-app Linux desktop ricing stacks safely, especially Hyprland/Waybar/Rofi/SwayNC/Cava setups on Fedora Atomic/Silverblue.
+related_skills:
+  - fedora-atomic-dotfiles-adaptation
+  - wayland-session-management
+  - waybar-popup-menu-debugging
 ---
 
 # Wallust desktop theme integration

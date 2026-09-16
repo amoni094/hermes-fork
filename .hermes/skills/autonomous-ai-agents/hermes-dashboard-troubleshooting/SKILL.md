@@ -1,10 +1,23 @@
 ---
 name: hermes-dashboard-troubleshooting
-description: Troubleshoot Hermes dashboard/WebUI startup, chat sidebar, and event-feed issues with build-first and websocket verification steps.
+triggers:
+  - Hermes dashboard or WebUI fails to start or shows a blank page
+  - Chat sidebar is missing, broken, or not showing conversations
+  - Event feed websocket errors appearing in the dashboard
+  - Troubleshooting the Hermes web UI after a config change or update
+  - DeletedWalGenerationError or session_search WAL conflict after gateway restart
+  - Dashboard not starting after gateway restart
+  - lsof shows stale state.db-wal holders after gateway stop
+description: >
+  Use when troubleshooting Hermes dashboard/WebUI startup, chat sidebar, and event-feed issues with build-first and websocket verification steps.
 version: 1.0.0
 author: Hermes Agent
 license: CC0-1.0
 created_by: agent
+related_skills:
+  - hermes-agent
+  - hermes-session-hygiene
+  - wayland-session-management
 ---
 
 # Hermes Dashboard Troubleshooting
@@ -76,6 +89,34 @@ Do not stop after reading code or logs. Restore a working dashboard and verify t
      - confirm the subscriber receives the same frame
    - This proves the sidebar transport is healthy even if the visual UI is lagging or the session is idle.
 
+## WAL conflict: dashboard surviving gateway restart
+
+Symptom: `session_search` (and any DB consumer) throws `DeletedWalGenerationError` after a gateway restart. `lsof ~/.hermes/state.db-wal` shows a surviving process — usually the dashboard.
+
+Root cause: `hermes-dashboard.service` runs in its own cgroup. `KillMode=control-group` on the gateway only kills the gateway cgroup; the dashboard survives, keeping its old-generation WAL/SHM file handles open. The new gateway opens a fresh WAL generation and detects the inode mismatch.
+
+There are two classes of stale holder:
+1. Process holds a `(deleted)` WAL inode — WAL was unlinked while the process had it open.
+2. Process holds a WAL inode whose number doesn't match the current on-disk WAL — old-generation WAL open after a rotation (common when dashboard survives a gateway restart).
+
+Emergency recovery:
+```
+kill -9 <dashboard-pid> <gateway-pid>
+# Wait: lsof ~/.hermes/state.db-wal  (should return empty)
+hermes gateway restart
+# Dashboard auto-starts via gateway Wants= (see Durable fix below)
+```
+
+Durable fix — three components working together:
+1. `hermes-dashboard.service`: add `BindsTo=hermes-gateway.service` and `After=hermes-gateway.service`. Dashboard stops when gateway stops (BindsTo), releases WAL FDs before new gateway opens DB.
+2. Gateway drop-in `~/.config/systemd/user/hermes-gateway.service.d/dashboard-wants.conf`: add `Wants=hermes-dashboard.service`. Dashboard auto-starts when gateway starts. (Required because BindsTo propagates stop but suppresses `Restart=` — dashboard stays dead after gateway restart without this.)
+3. `wal-guard.sh` (ExecStartPre on gateway): run two lsof passes before each gateway start — Pass 1 kills `(deleted)` holders, Pass 2 kills wrong-generation (inode-mismatch) holders. See `references/wal-guard-design.md` for full implementation details.
+
+Pitfalls:
+- `BindsTo=` + `Restart=always` on the dashboard does NOT cause a restart loop — systemd suppresses `Restart=` when a unit is stopped by dependency propagation (BindsTo stop path). Empirically confirmed: NRestarts stays 0 after gateway stop.
+- The gateway `Wants=` drop-in is required; without it the dashboard stays inactive after gateway restart, silently.
+- `systemd-analyze verify --user` must pass cleanly after any unit file change.
+
 ## Pitfalls
 
 - A user systemd autostart unit can keep re-triggering the same unnecessary npm-install path at every boot. When built dashboard/TUI assets already exist, patch the unit's `ExecStart=` to add `--skip-build`, then `systemctl --user daemon-reload && systemctl --user restart hermes-dashboard.service`.
@@ -105,6 +146,7 @@ Do not stop after reading code or logs. Restore a working dashboard and verify t
 - `references/systemd-autostart-skip-build.md` — user-systemd recovery pattern for dashboard autostart when prebuilt assets exist and rebuilds are unnecessary.
 - `references/dashboard-skip-build-with-prebuilt-assets.md` — recovery pattern when startup prints npm-install failure even though existing dashboard/TUI assets are usable.
 - `references/port-separation-hermes-vs-sidecar-apps.md` — how to distinguish the Hermes dashboard port from a separate local sidecar app and keep both available.
+- `references/wal-guard-design.md` — wal-guard.sh two-pass structure, column layout assumptions, empty-inode race fix, lsof -n -P flags, and systemd coupling pattern.
 
 ## Verification checklist
 

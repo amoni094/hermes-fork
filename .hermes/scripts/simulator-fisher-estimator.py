@@ -82,6 +82,20 @@ def estimate_fisher(query: str, skills: list[dict]) -> dict:
         for s in skills
     ])  # shape (n,)
 
+    # Guard: if all features are zero, query has no overlap with any skill
+    # This is a skill-coverage gap, not a routing uncertainty problem
+    if feat_vec.max() < 1e-9:
+        return {
+            "query":      query[:60],
+            "n_skills":   n,
+            "best_skill": None,
+            "avg_fisher": 0.0,
+            "max_fisher": 0.0,
+            "uncertain":  False,
+            "no_coverage": True,
+            "top5_fisher": [],
+        }
+
     # Initial routing weights: uniform
     theta     = np.ones(n) / n   # shape (n,)
     # Target: best-matching skill
@@ -140,20 +154,27 @@ def run(query: str, dry_run: bool) -> int:
 
     all_results = []
     uncertain   = 0
+    no_coverage = 0
 
     for q in demo_queries:
         r = estimate_fisher(q, skills)
-        icon = "⚠" if r["uncertain"] else "✓"
-        print(f"  {icon} \"{r['query']}\"")
-        print(f"      best={r['best_skill']}  "
-              f"avg_fisher={r['avg_fisher']:.6f}  "
-              f"max={r['max_fisher']:.6f}  "
-              f"{'UNCERTAIN' if r['uncertain'] else 'confident'}")
+        if r.get("no_coverage"):
+            icon = "○"
+            print(f"  {icon} \"{r['query']}\"")
+            print(f"      no_coverage — query has no overlap with loaded skills (coverage gap)")
+            no_coverage += 1
+        else:
+            icon = "⚠" if r["uncertain"] else "✓"
+            print(f"  {icon} \"{r['query']}\"")
+            print(f"      best={r['best_skill']}  "
+                  f"avg_fisher={r['avg_fisher']:.6f}  "
+                  f"max={r['max_fisher']:.6f}  "
+                  f"{'UNCERTAIN' if r['uncertain'] else 'confident'}")
+            if r["uncertain"]:
+                uncertain += 1
         all_results.append(r)
-        if r["uncertain"]:
-            uncertain += 1
 
-    print(f"\nUncertain queries: {uncertain}/{len(demo_queries)}")
+    print(f"\nUncertain queries: {uncertain}/{len(demo_queries)}  No-coverage: {no_coverage}/{len(demo_queries)}")
     if uncertain:
         print("ALARM: yes — routing Fisher information too low for confident decisions")
     else:

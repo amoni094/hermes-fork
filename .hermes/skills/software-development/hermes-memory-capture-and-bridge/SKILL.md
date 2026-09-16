@@ -1,5 +1,10 @@
 ---
 name: hermes-memory-capture-and-bridge
+triggers:
+  - want automatic durable knowledge capture after a research or investigation session
+  - bridging session findings to long-term memory surfaces (Graphiti, Hindsight, Obsidian) — QMD disabled
+  - about to spawn a coding sub-agent and need to inject relevant memory context into it upfront
+  - post-task memory consolidation before a session compacts or the context is lost
 description: "Use when you want automatic durable knowledge capture after sessions and preflight memory injection before spawning coding agents."
 version: 1.0.0
 author: Hermes Agent
@@ -7,7 +12,14 @@ license: MIT
 metadata:
   hermes:
     tags: [hermes, memory, capture, bridge, hooks, knowledge, agents]
-    related_skills: [hermes-agent, hermes-workflow-optimization, hermes-cron-and-agents, hermes-coding-review-loop, hermes-observability-and-task-ledger]
+    related_skills: [hermes-obsidian-sync, hermes-cron-and-agents, hermes-coding-review-loop, hermes-observability-and-task-ledger]
+related_skills:
+  - verification-before-completion
+  - plan
+  - hermes-obsidian-sync
+  - hermes-cron-and-agents
+  - hermes-coding-review-loop
+  - hermes-observability-and-task-ledger
 ---
 
 # Hermes Memory Capture and Bridge
@@ -40,11 +52,19 @@ The pattern has two parts:
 
 ## Hook Pattern
 
-Use Hermes shell hooks when you want this behavior to run automatically instead of as a manual end-of-session ritual.
+**IMPORTANT (2026-08-30 audit): `hooks:` is NOT wired in the current Hermes runtime config.
+The hook-based auto-capture described below is aspirational/manual-only until `hooks.on_session_end`
+is added to `~/.hermes/config.yaml`. Treat this section as a design spec, not a live behavior.**
 
-Use `post_llm_call` for compact turn capture, `post_tool_call` for vault-write event logging, and keep each hook script fast and JSON-only so the heavy curation can happen later.
+**Atomix non-atomic tool caveat (arXiv:2602.14849):** tool-return != settlement. hindsight_retain
+after a crash may be partial or duplicated. Before retaining, check if the fact is already
+in the bank (hindsight_recall spot-check). Apply verify-before-retry from trajectory-risk-guardrail.
 
-Use hook or lifecycle events that happen when a session is ending or about to compact.
+Use Hermes shell hooks *when configured* for automatic behavior. Until then, run capture manually
+at session end by calling `hindsight_retain` + `mcp__graphiti__add_triplet` for durable findings.
+
+When hooks are configured: use `post_llm_call` for compact turn capture, `post_tool_call` for
+vault-write event logging; keep each hook script fast and JSON-only.
 
 Good triggers:
 
@@ -92,7 +112,7 @@ Rules:
 - Keep privacy notes explicit when summarizing local chat history.
 - For recurring sync, prefer idempotent rewrites over append-only growth.
 
-See `references/obsidian-chat-live-sync.md` for the concrete pattern used in this workspace.
+For the full canonical Obsidian sync workflow (rewrite policy, durable-item filter, daily-note rules, cron patterns), load `hermes-obsidian-sync`.
 See `references/runtime-hooks.md` for the live Hermes shell-hook wiring pattern that turns this skill into runtime behavior.
 
 ## Good Outputs
@@ -102,6 +122,14 @@ See `references/runtime-hooks.md` for the live Hermes shell-hook wiring pattern 
 - a short checklist of what is known / unknown
 - separate raw-source and distilled-summary artifacts
 - one canonical live-sync note plus a lightweight daily-note mirror when summarizing recent chats into Obsidian
+
+## KG Entity Graphs Outperform Document Retrieval for Latent Relations (arXiv:2608.10679)
+
+ENTLORE benchmark: 30.4% of implicit/latent cross-entity relations remain unanswered by RAG systems even with gold documents, vs. 12.6% for explicit queries. KG traversal dramatically outperforms vector search for relational queries.
+
+Hermes implication: after each significant session, extract entity-relation triplets and store in Graphiti — not just episodic summaries. The session Hindsight memory handles episodic recall; Graphiti triplets handle cross-session relational queries ("what did project X decide about Y?").
+
+Add to post-session capture step: after Hindsight write, call `mcp__graphiti__add_triplet` for any new entity relationships surfaced (person-project-decision triplets, tool-pattern-outcome triplets).
 
 ## Common Pitfalls
 
@@ -117,3 +145,56 @@ See `references/runtime-hooks.md` for the live Hermes shell-hook wiring pattern 
 - [ ] Notes are claim-named and easy to rediscover later.
 - [ ] Coding-agent preflight context was written before the child started.
 - [ ] The child was told how to query memory on demand.
+
+## Runtime hook wiring (from references/runtime-hooks.md)
+
+To turn this skill into live runtime behavior, wire shell hooks under `~/.hermes/agent-hooks/` and register in `config.yaml` under `hooks:`:
+
+```yaml
+hooks:
+  pre_llm_call:
+    - command: "~/.hermes/agent-hooks/inject-hermes-routing-note.py"
+      timeout: 5
+  post_llm_call:
+    - command: "~/.hermes/agent-hooks/capture-turn-memory.py"
+      timeout: 5
+  post_tool_call:
+    - matcher: "write_file|patch"
+      command: "~/.hermes/agent-hooks/track-obsidian-write.py"
+      timeout: 5
+  subagent_stop:
+    - command: "~/.hermes/agent-hooks/log-subagent-stop.py"
+      timeout: 5
+```
+
+**Recommended event mapping**:
+- `pre_llm_call` → inject routing/delegation note when turn mentions agents/cron/long-lived work
+- `post_llm_call` → capture high-signal turn summaries to JSONL inbox
+- `post_tool_call` (write_file|patch matcher) → record Obsidian writes to event log + dirty-path state file
+- `subagent_stop` → append child-run completions to task-ledger JSONL
+
+**Local artifacts** (staging inputs for curation, not the final memory store): `~/.hermes/logs/hermes-memory-capture.jsonl`, `~/.hermes/logs/hermes-obsidian-file-events.jsonl`, `~/.hermes/state/obsidian-dirty-paths.json`, `~/.hermes/logs/hermes-task-ledger.jsonl`
+
+**Activation** (hooks gated by shell-hook allowlist):
+1. Write scripts; mark executable
+2. Register in `config.yaml`
+3. Run one Hermes invocation with hook acceptance enabled to allowlist `(event, command)` pairs
+4. Verify: `hermes hooks list` + `hermes hooks doctor` (checks executable, allowlisted, unchanged since approval, valid JSON output)
+
+**Design rules**: output compact JSON (not prose), append-only JSONL for event streams, tiny JSON map for dirty state, keep hooks fast (expensive work → cron).
+
+## Reference files
+
+- `references/obsidian-chat-live-sync.md` — Obsidian Chat Live Sync
+
+## Kolmogorov Sufficient Statistic for Memory Capture (Li-Vitanyi Ch 4)
+
+**Theory:** A sufficient statistic for a dataset x is a function T(x) that captures all task-relevant information: the posterior P(θ|x) = P(θ|T(x)) for any parameter θ. The Kolmogorov sufficient statistic is the minimal such description — the shortest program that preserves all task-relevant structure.
+
+**Hermes rules:**
+- The sufficient statistic for a session = the minimal description capturing all task-relevant information needed to complete the task.
+- Discard observations that do not change the sufficient statistic: if removing an observation does not change any downstream decision or task completion probability, discard it.
+- Concretely: before capturing a fact to memory, ask "Would removing this fact change how I approach any remaining step?" If no → do not capture it.
+- This operationalizes aggressive memory triage without requiring explicit distortion measurement.
+
+**Citation:** Li & Vitanyi — *An Introduction to Kolmogorov Complexity and Its Applications* (4th ed.), Ch 4 (Algorithmic Complexity and Information — sufficient statistics and minimal descriptions).

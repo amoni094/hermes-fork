@@ -1,5 +1,6 @@
 ---
 name: code-impact-preflight
+related_skills: [risk-based-review, verification-before-completion, adversarial-review, hermes-coding-review-loop, github-operations]
 description: 'Code impact analysis: blast radius, confidence, skill hooks. Use when analyzing git diffs or planning code changes. Triggers on `diff-impact`, `code impact`, `blast radius`, `impact analysis`, `git diff`, `code change`.'
 version: 1.0.0
 author: Hermes Agent

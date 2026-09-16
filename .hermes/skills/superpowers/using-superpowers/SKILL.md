@@ -1,5 +1,21 @@
 ---
 name: using-superpowers
+related_skills:
+  - brainstorming
+  - plan
+  - using-git-worktrees
+  - subagent-driven-development
+  - test-driven-development
+  - requesting-code-review
+  - verification-before-completion
+  - receiving-code-review
+  - finishing-a-development-branch
+
+triggers:
+  - starting non-trivial implementation work
+  - want to know which superpowers skill to load for a complex task
+  - choosing between plan/spike/brainstorm/dispatch/execute workflows at the start of a large task
+  - need to decide whether another Superpowers skill should be invoked before acting
 description: Use when starting non-trivial implementation work, or when you need to decide whether another Superpowers skill should be invoked before acting.
 version: 1.1.0
 author: Hermes Agent (adapted from obra/superpowers)
@@ -8,7 +24,7 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [workflow, superpowers, planning, specs, subagents, tdd, bootstrap]
-    related_skills: [superpowers-bootstrap, brainstorming, plan, using-git-worktrees, subagent-driven-development, test-driven-development, requesting-code-review, verification-before-completion, receiving-code-review, finishing-a-development-branch]
+    related_skills: [brainstorming, plan, using-git-worktrees, subagent-driven-development, test-driven-development, requesting-code-review, verification-before-completion, receiving-code-review, finishing-a-development-branch]
 ---
 
 # Using Superpowers
@@ -92,4 +108,6 @@ This Hermes port intentionally reuses existing Hermes skills where they already 
 See also:
 - `references/hermes-tool-mapping.md`
 - `references/porting-notes.md`
-- `superpowers-bootstrap` for explicit session preload guidance in Hermes
+## Reference files
+
+- `references/hermes-bootstrap-usage.md` — Hermes bootstrap usage for Superpowers

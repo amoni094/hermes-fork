@@ -1,6 +1,15 @@
 ---
 name: ouroboros-setup-and-health-check
-description: Configure, verify, and troubleshoot a local Ouroboros install by separating install state, runtime backend health, CLI integration, and plugin inventory.
+triggers:
+  - User says 'setup Ouroboros' or asks whether it is installed and usable
+  - Need to determine whether Ouroboros is missing, already configured, or only partially wired
+  - Ouroboros health check fails or ooo CLI is not responding as expected
+  - Troubleshooting an Ouroboros install by separating install state from runtime backend health
+description: >
+  Use when: Configure, verify, and troubleshoot a local Ouroboros install by separating install state, runtime backend health, CLI integration, and plugin inventory.
+related_skills:
+  - ouroboros-plugin-development
+  - hermes-agent
 ---
 
 # Ouroboros Setup and Health Check
@@ -103,3 +112,18 @@ Use this when the user asks to set up, enable, verify, or troubleshoot a local O
 - `references/first-pass-cli-checks.md` — minimal probe sequence and interpretation notes for installed-vs-configured-vs-ready states.
 - `references/workflow-smoke-and-plugin-selection.md` — concise setup-time rules for choosing a verifiable plugin and for proving a workflow completed rather than merely started.
 - `references/worktree-output-and-direct-run-pitfalls.md` — notes on worktree-isolated output verification and the direct `run --no-orchestrator` preview/no-op behavior.
+
+## Ouroboros skill capability translation (Hermes runtime)
+
+When Ouroboros skill YAML uses abstract capability names, consult
+`~/.hermes/skills/autonomous-ai-agents/ouroboros/SKILL_CAPABILITY_GUIDE.md`
+for the Hermes-side mapping. Quick reference:
+
+| Ouroboros capability | Hermes equivalent |
+|---|---|
+| `ask_user` | clarify tool or inline question |
+| `inspect_code` | search_files + read_file (repo evidence preferred) |
+| `call_mcp` | tool_call with MCP tool name |
+| `run_lateral_review` | call ouroboros_lateral_think when lateral_review_required=true |
+| `web_research` | web_search + web_extract (cite sources) |
+| `run_shell` | terminal tool (bounded, avoid destructive) |

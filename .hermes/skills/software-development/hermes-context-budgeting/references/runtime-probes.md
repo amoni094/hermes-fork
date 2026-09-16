@@ -23,7 +23,7 @@ For a user optimizing for token discipline with decent usability, `128000` was s
 - stays well above Hermes' 64K minimum,
 - leaves roughly ~100K working headroom after startup overhead,
 - is much smaller than the provider-resolved 272K path,
-- pairs naturally with `compression.enabled: true` and `compression.threshold: 0.5`.
+- pairs naturally with `compression.enabled: true` and `compression.threshold: 0.35` (live default; do not change mid-session).
 
 ## Apply/verify pattern
 1. Probe resolved context before changes.
@@ -31,6 +31,6 @@ For a user optimizing for token discipline with decent usability, `128000` was s
 3. Set:
    - `model.context_length = 128000`
    - `compression.enabled = true`
-   - `compression.threshold = 0.5`
+   - `compression.threshold = 0.35` (live default — 0.5 is stale)
 4. Re-run the runtime probe and verify `resolved_context_length == 128000`.
 5. Remind the user that a fresh session or `/reset` may be needed.

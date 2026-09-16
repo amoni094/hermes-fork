@@ -1,6 +1,10 @@
 ---
 name: findmy
 description: "Track Apple devices/AirTags via FindMy.app on macOS."
+related_skills:
+  - apple-notes
+  - computer-use
+  - macos-computer-use
 version: 1.0.0
 author: Hermes Agent
 license: MIT

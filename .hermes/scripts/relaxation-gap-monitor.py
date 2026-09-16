@@ -39,6 +39,8 @@ import numpy as np
 
 HOME      = Path.home()
 SESSIONS  = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+
 CACHE_DIR = HOME / ".hermes/cache/monitors"
 STATE_DB  = HOME / ".hermes/memory-facts/stability.db"
 OUT_FILE  = CACHE_DIR / "relaxation-gap.json"
@@ -90,7 +92,7 @@ def _fractional_ub(session_skills: list[str], skill_value: dict[str, float]) -> 
 
 def run(dry_run: bool = False) -> None:
     now = datetime.now(timezone.utc).isoformat()
-    session_files = sorted(SESSIONS.glob("*.jsonl"))
+    session_files = sorted([f for d in [SESSIONS, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")])
 
     # Build skill value map: use frequency as proxy for value
     skill_freq: dict[str, int] = defaultdict(int)
@@ -147,7 +149,7 @@ def run(dry_run: bool = False) -> None:
 
     alarm = trend_gap > GAP_ALARM_THRESHOLD
     if alarm:
-        print(f"ALARM: recent gap {trend_gap:.3f} > threshold {GAP_ALARM_THRESHOLD}")
+        print(f"ALARM: yes — recent gap {trend_gap:.3f} > threshold {GAP_ALARM_THRESHOLD}")
         if not dry_run:
             ALARM_FILE.write_text(json.dumps({
                 "ts": now, "mean_gap": round(mean_gap, 4),
@@ -155,7 +157,7 @@ def run(dry_run: bool = False) -> None:
                 "threshold": GAP_ALARM_THRESHOLD,
             }, indent=2))
     else:
-        print("OK — relaxation gap within bounds")
+        print("ALARM: no — relaxation gap within bounds")
 
     if not dry_run:
         out = {

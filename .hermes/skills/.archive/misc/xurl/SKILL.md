@@ -7,6 +7,10 @@ license: MIT
 platforms: [linux, macos]
 prerequisites:
   commands: [xurl]
+related_skills:
+  - reddit-reading
+  - messaging-consent-boundaries
+  - email-compose-and-send
 metadata:
   hermes:
     tags: [twitter, x, social-media, xurl, official-api]

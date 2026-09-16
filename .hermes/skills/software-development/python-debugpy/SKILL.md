@@ -1,6 +1,12 @@
 ---
 name: python-debugpy
-description: "Debug Python: pdb REPL + debugpy remote (DAP)."
+triggers:
+  - Debugging a Python process via pdb REPL or debugpy remote DAP
+  - Python script is raising an unexpected exception and needs interactive debugging
+  - User wants to attach a remote debugger to a running Python process
+  - Setting up a debugpy debug server to connect from VS Code or another DAP client
+description: >
+  Use when debugging Python: pdb REPL + debugpy remote (DAP).
 version: 1.0.0
 author: Hermes Agent
 license: MIT
@@ -8,7 +14,10 @@ platforms: [linux, macos]
 metadata:
   hermes:
     tags: [debugging, python, pdb, debugpy, breakpoints, dap, post-mortem]
-    related_skills: [systematic-debugging, node-inspect-debugger]
+related_skills:
+  - node-inspect-debugger
+  - systematic-debugging
+  - verification-before-completion
 ---
 
 # Python Debugger (pdb + debugpy)

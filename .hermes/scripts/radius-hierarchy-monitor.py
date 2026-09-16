@@ -84,26 +84,23 @@ def run(dry_run: bool) -> int:
         dists = [_jaccard_dist(kw_i, kw_j) for j, (_, kw_j) in enumerate(skills) if j != i]
         nn_dists.append(min(dists) if dists else 0.0)
 
-    r_pack = max(nn_dists)   # largest min-distance (packing)
-    r_cov  = max(nn_dists)   # same proxy (max of NN distances = covering radius proxy)
-    # Refined: r_cov should be the max NN distance (both are the same formula here,
-    # which is correct: packing = covering = max min-dist in this proxy)
-    # The duality alarm fires when the true covering is 2× packing — proxy check:
-    # We check that the spread (max dist between any two skills) ≤ 2×r_pack
+    r_pack = max(nn_dists)   # largest min-distance (packing radius proxy)
+    # r_cov proxy: max pairwise distance / 2 (smallest enclosing ball radius upper bound)
     all_dists = []
     for i in range(n):
         for j in range(i+1, n):
             all_dists.append(_jaccard_dist(skills[i][1], skills[j][1]))
 
     max_dist = max(all_dists) if all_dists else 0.0
-    ratio    = max_dist / r_pack if r_pack > 0 else 0.0
+    r_cov    = max_dist / 2.0  # covering radius ≤ max_pairwise/2
+    ratio    = r_cov / r_pack if r_pack > 0 else 0.0
     alarm    = ratio > DUALITY_SLACK
 
     print(f"\n=== Radius Hierarchy Monitor — {now[:10]} ===")
     print(f"Skills analysed: {n}")
     print(f"Packing radius:  {r_pack:.4f}")
-    print(f"Max pairwise:    {max_dist:.4f}  (covering proxy)")
-    print(f"Duality ratio:   {ratio:.4f}  (threshold ≤ {DUALITY_SLACK})")
+    print(f"Covering radius: {r_cov:.4f}  (max_pairwise/2)")
+    print(f"Duality ratio:   {ratio:.4f}  (r_cov/r_pack, threshold ≤ {DUALITY_SLACK})")
 
     # Most isolated skills
     top_isolated = sorted(zip(nn_dists, [s[0] for s in skills]), reverse=True)[:5]

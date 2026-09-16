@@ -1,6 +1,10 @@
 ---
 name: signal-oriented-research-briefing
 description: Build and extend live research briefings with sharper query packs, popularity-adjacent blindspots, and source-specific trend verification.
+related_skills:
+  - recent-news-briefing
+  - competitor-news-monitor
+  - rss-feeds
 ---
 
 # Signal-Oriented Research Briefing

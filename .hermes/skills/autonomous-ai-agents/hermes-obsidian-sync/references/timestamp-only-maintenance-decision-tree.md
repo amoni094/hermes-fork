@@ -12,7 +12,9 @@ When a cron sync run encounters an already-current live-sync note and daily note
    - If both timestamps match and are recent (within the current sync window), the note is fresh.
 
 3. **Read the 3 most recent sessions** (not all; aim for max 3-5 lines each).
-   - Filter out prior cron sync runs (maintenance context, not primary source).
+   - **Filter out prior cron sync runs strictly** (they are maintenance context, not source material for new durable items).
+   - When session_search returns crowded results, prioritize user/CLI sessions over cron-job sessions.
+   - If the only recent sessions are cron sync runs, that signals "no new user work since last sync" → durable items have not appeared → Path A (timestamp-only refresh).
    - Look for: deployment changes, config state changes, integration additions, verified fixes.
    - If all recent sessions are either cron runs or routine activity refinement, check if they add anything new.
 

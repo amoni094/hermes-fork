@@ -3,6 +3,9 @@ name: yuanbao
 description: "Yuanbao (元宝) groups: @mention users, query info/members."
 version: 1.0.0
 platforms: [linux, macos, windows]
+related_skills:
+  - messaging-consent-boundaries
+  - email-compose-and-send
 metadata:
   hermes:
     tags: [yuanbao, mention, at, group, members, 元宝, 派, 艾特]

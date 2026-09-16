@@ -1,5 +1,16 @@
 ---
 name: executing-plans
+related_skills:
+  - plan
+  - using-git-worktrees
+  - finishing-a-development-branch
+  - subagent-driven-development
+
+triggers:
+  - A written implementation plan already exists and needs to be executed step by step
+  - User says 'execute the plan', 'run the plan', or 'implement per the plan'
+  - Need to follow a .hermes/plans/ markdown plan with explicit verification at each step
+  - Translating a completed plan document into sequential tool calls
 description: Use when you already have a written implementation plan and want to execute it step by step with explicit verification.
 version: 1.0.0
 author: Hermes Agent (adapted from obra/superpowers)

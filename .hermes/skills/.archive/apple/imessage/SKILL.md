@@ -5,6 +5,9 @@ version: 1.0.0
 author: Hermes Agent
 license: MIT
 platforms: [macos]
+related_skills:
+  - messaging-consent-boundaries
+  - email-compose-and-send
 metadata:
   hermes:
     tags: [iMessage, SMS, messaging, macOS, Apple]

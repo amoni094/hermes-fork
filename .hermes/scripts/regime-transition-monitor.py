@@ -34,6 +34,8 @@ from pathlib import Path
 
 HOME      = Path.home()
 SESSIONS  = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+
 CACHE_DIR = HOME / ".hermes/cache/monitors"
 ALARM_FILE = CACHE_DIR / "regime-transition-alarm.json"
 OUT_FILE   = CACHE_DIR / "regime-transitions.json"
@@ -114,7 +116,7 @@ def analyse_session(path: Path) -> dict | None:
 
 def run(dry_run: bool = False) -> None:
     now = datetime.now(timezone.utc).isoformat()
-    session_files = sorted(SESSIONS.glob("*.jsonl"))
+    session_files = sorted([f for d in [SESSIONS, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")])
 
     results: list[dict] = []
     fragmented: list[str] = []
@@ -160,10 +162,10 @@ def run(dry_run: bool = False) -> None:
         OUT_FILE.write_text(json.dumps(out, indent=2))
         print(f"\nWritten: {OUT_FILE}")
         if fragmented:
-            ALARM_FILE.write_text(json.dumps({
-                "ts": now, "fragmented": fragmented
-            }, indent=2))
-            print(f"Alarm: {ALARM_FILE}")
+            ALARM_FILE.write_text(json.dumps({"ts": now, "fragmented": fragmented}, indent=2))
+            print(f"ALARM: yes — {len(fragmented)} fragmented session(s)")
+        else:
+            print("ALARM: no — no fragmented sessions detected")
     elif dry_run:
         print("(dry-run)")
 

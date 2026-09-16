@@ -1,16 +1,17 @@
 ---
 name: github-issue-agent
 description: >
-  Route open GitHub issues to isolated Hermes subagents, one agent per issue,
-  each in its own git worktree. Agents fix the issue, push a branch, open a PR,
-  and comment on the issue. Trigger on "dispatch issues", "route issues to agents",
-  "fix issues automatically", or "issue-to-agent".
+  Use when routing open GitHub issues to isolated Hermes subagents, one agent per issue, each in its own git worktree. Agents fix the issue, push a branch, open a PR, and comment on the issue. Trigger on "dispatch issues", "route issues to agents", "fix issues automatically", or "issue-to-agent".
 triggers:
   - dispatch issues
   - route issues to agents
   - fix issues automatically
   - issue-to-agent
   - assign issues to subagents
+related_skills:
+  - github-issues
+  - github-operations
+  - dispatching-parallel-agents
 ---
 
 # GitHub Issue-to-Agent Routing

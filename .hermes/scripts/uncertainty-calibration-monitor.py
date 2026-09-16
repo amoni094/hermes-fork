@@ -213,9 +213,9 @@ def main():
                 "threshold": args.threshold,
                 "ts": datetime.now(timezone.utc).isoformat(),
             }, indent=2))
-            print(f"\n[calibration] ALARM: {len(flagged)} overconfident skill(s) — written to {ALARM_PATH}")
+            print(f"\nALARM: yes — {len(flagged)} overconfident skill(s) — written to {ALARM_PATH}")
         elif not flagged:
-            print("\n[calibration] No overconfident skills detected.")
+            print("\nALARM: no — no overconfident skills detected.")
 
     conn.close()
     if args.dry_run:

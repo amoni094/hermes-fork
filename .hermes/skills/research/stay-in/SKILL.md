@@ -1,6 +1,12 @@
 ---
 name: stay-in
-description: "Recommend movies and TV series for staying in by finding high-Metascore titles similar to the user's taste database, without restricting results to current streaming catalogs."
+triggers:
+  - User wants movie or TV series recommendations for staying in tonight
+  - User says 'what should I watch', 'recommend something to watch', or 'stay-in pick'
+  - Finding high-Metascore titles similar to the user's taste database for home viewing
+  - User wants personalized watchlist recommendations filtered by unseen content
+description: >
+  Use when: Recommend movies and TV series for staying in by finding high-Metascore titles similar to the user's taste database, without restricting results to current streaming catalogs.
 version: 1.0.0
 author: Hermes Agent
 created_by: agent
@@ -9,6 +15,13 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [movies, tv, recommendations, metascore, similarity, research]
+    related_skills: [gold-class, suggest-music, agent-reach-discovery]
+related_skills:
+  - grounded-citations
+  - firecrawl-research
+  - gold-class
+  - suggest-music
+  - agent-reach-discovery
 ---
 
 # Stay In
@@ -48,6 +61,12 @@ You need these before making strong recommendations:
 
 If the database path or source is not given, first check for a known local taste source already present in the workspace or vault before asking. If a maintained local media database exists, use it as the default taste source and say that you did so. Ask only when no usable local source is available.
 
+Known local media catalog: /var/home/rainbow/media_sample_db/media_items.csv
+Schema key fields: slug, title_display, media_type, release_year, genres, summary, notes.
+DB schema and CHECK constraints: see references/media-db-schema.md before any INSERT.
+Do NOT add seen/rated titles back into this file — it is the recommendation catalog, not a watch history.
+Seen titles and ratings belong in Graphiti memory (mcp__graphiti__add_memory, source='text').
+
 If the user names comp titles directly (for example "like Pirates of the Caribbean / The Mummy / Indiana Jones"), treat those as the primary taste source for this turn even if a broader database exists.
 
 If the user gives exemplar titles in-chat (for example: "more like Pirates of the Caribbean / The Mummy / Indiana Jones"), treat those titles as a valid temporary seed list immediately. In that case, prioritize matching the cited vibe first and do not keep steering back to the stored database unless the user asks for database-driven picks.
@@ -81,9 +100,25 @@ If richer metadata exists, use genre, director, cast, year, language, tags, and 
 5. Remove obvious duplicates, franchise repeats that add little value, and titles already in the database.
 6. If the user says they have seen a pick, immediately ask or infer whether they liked it, disliked it, or rated it, then use that feedback to refine the next batch.
 7. Treat fresh in-session watch feedback as high-priority taste evidence. If the user says something like "I watched X and it was 8/10" or "quite good," explicitly update the recommendation axis it affects before generating the next list. Example axes: historical/samurai appetite, tolerance for brutality, pacing tolerance, appetite for prestige vs pulp, or openness to non-English titles.
+   PROTAGONIST FILTER: this user responds to obsessive pressure applied TO a specific protagonist
+   they are invested in. Two confirmed miss patterns:
+   (a) Cold methodology/ensemble procedurals where craft or case is the hero: Mindhunter 6/10.
+   (b) High-prestige ensemble where no single figure carries the emotional weight: Succession 7/10
+       ("ok, never got into it"). The Wire 8/10 = respected, not loved.
+   Before recommending: ask "who is the ONE protagonist and what could they personally lose?"
+   If the answer is "the family", "the unit", or "the institution" rather than a named person
+   under specific personal pressure, flag as risky and deprioritise.
+   HIGHEST tier confirmed: institutional-world-with-strong-protagonist — Rome 10, Shogun 10,
+   Slow Horses 10. Very high: Whiplash 9, Better Call Saul 9, The Americans 9, Munich 9.
+   Miss: Mindhunter 6, Succession 7.
+
 8. When a fresh rating materially changes the recommendation mix, say so briefly in the output (for example: "your 13 Assassins 8/10 pushes historical power-struggle picks up the list"). This makes the adaptation legible instead of feeling random.
 9. Mix safe bets with a few adjacent discoveries.
 10. Return concise picks with a one-line reason tied to the user's taste.
+11. After the user reports seen/rated titles in-session, store them via mcp__graphiti__add_memory
+    before the session ends. Include title, year, rating, and any taste-axis shift the rating signals
+    (e.g. "Counterpart 8.5/10 — slow-burn psychological intensity confirmed as strong preference").
+    Do not wait to be asked. This keeps the taste model current for the next session.
 
 Conversational recommendation rule:
 - For casual back-and-forth, do not get stuck defending a rigid score floor when the user is clearly steering toward a mood or vibe.
@@ -145,6 +180,23 @@ If the picks are being rendered in a UI/dashboard rather than plain chat:
 - In vibe-first mode, you may include lower-scoring titles when the user explicitly prioritizes fun, pulp, adventure, comedy, trashiness, or a narrow reference vibe over critic quality.
 - If too few close matches exist, say so and broaden carefully.
 
+## Genre exhaustion — deep catalogue pivots
+
+When a broad genre has been exhausted across multiple passes (user has seen all the mainstream titles), do not keep serving the same pool with diminishing returns. Pivot explicitly.
+
+Signals of exhaustion:
+- User confirms seeing 3+ candidates per pass across 2+ passes
+- User says "seen all those" or "anything else?"
+
+Correct response:
+1. Acknowledge the genre is tapped at the mainstream level.
+2. Offer a concrete sub-genre pivot — name it clearly (e.g. "What about dueling films specifically? Samurai cinema?").
+3. Move into deeper catalogue: foreign-language classics, director deep cuts, pre-1980 titles in the same spirit.
+
+Historical/epic action-adventure is a known-exhausted genre for this user (as of 2026-07-20). Do NOT re-serve Rome, Gladiator, Troy, Spartacus, Vikings, Last Kingdom, 300, Ben-Hur, Braveheart, Scorpion King, The Mummy, Barbarians, Band of Brothers, Peaky Blinders, etc. Full seen list in references/user-ratings-log.md.
+
+Samurai/dueling/honor-culture sub-genre is explicitly in scope and welcomed by this user. Top candidates not yet confirmed seen: Seven Samurai, Yojimbo, Harakiri, 13 Assassins, The Duellists, Barry Lyndon, Sanjuro, Sword of Doom. See references/user-ratings-log.md for full queued list.
+
 ## Scarcity handling for tight filters
 
 When the user combines a narrow content filter (for example: medieval only, court-intrigue only, Korean zombie period only) with a hard critic threshold such as 75+ Metascore, do not pad the list with weak or unverified matches.
@@ -162,6 +214,15 @@ Pitfall:
 
 Before finalizing, make sure every recommended item has a verified Metascore >= 75 from live lookup or trusted local data.
 If any score is uncertain, exclude that title.
+
+## Support files
+
+- `references/user-ratings-log.md` — running log of confirmed seen+rated titles with derived taste axes.
+  Check this at the start of every session to avoid re-recommending seen titles and to calibrate vibe match.
+  Update it after any session where new ratings are reported.
+- `references/media-db-schema.md` — SQLite schema for /var/home/rainbow/media_sample_db/verify.db.
+  Contains CHECK constraint values (media_type, preference) and insert pitfalls. Read before writing
+  any new rows to avoid silent OR IGNORE failures.
 
 ## Good final phrasing
 

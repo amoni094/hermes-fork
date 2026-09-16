@@ -1,15 +1,49 @@
 ---
 name: requesting-code-review
-description: "Pre-commit review: security scan, quality gates, auto-fix."
-version: 2.0.0
+related_skills:
+  - workflow-map
+  - subagent-driven-development
+  - risk-based-review
+  - verification-before-completion
+  - plan
+  - test-driven-development
+  - security-hardening-balance-review
+
+depends_on: [verification-before-completion, systematic-debugging]
+provides: [requesting-code-review, pre-merge-verification, security-scan]
 author: Hermes Agent (adapted from obra/superpowers + MorAlekss)
+description: 'Use when: verifying code before commit, push, or after delegated implementation. Pre-commit review: security
+  scan, quality gates, auto-fix. Triggers on ''review'', ''pre-merge'', ''check my code''.'
 license: MIT
-platforms: [linux, macos, windows]
 metadata:
   hermes:
-    tags: [code-review, security, verification, quality, pre-commit, auto-fix]
-    related_skills: [workflow-map, subagent-driven-development, risk-based-review, verification-before-completion, plan, test-driven-development, github-code-review, semgrep, codeql, owasp-security, fp-check, secret-hygiene]
+    related_skills:
+    - workflow-map
+    - subagent-driven-development
+    - risk-based-review
+    - verification-before-completion
+    - plan
+    - test-driven-development
+    - security-hardening-balance-review
+    tags:
+    - code-review
+    - security
+    - verification
+    - quality
+    - pre-commit
+    - auto-fix
+platforms:
+- linux
+- macos
+- windows
+triggers:
+- User is about to commit code and wants a pre-commit review pass
+- Running security scan, quality gates, and auto-fix before opening a PR
+- Need a structured pre-commit review with explicit pass/fail criteria
+- User says 'review my code', 'check before I commit', or 'run the quality gates'
+version: 2.0.0
 ---
+
 
 # Pre-Commit Code Verification
 
@@ -17,6 +51,15 @@ Automated verification pipeline before code lands. Static scans, baseline-aware
 quality gates, an independent reviewer subagent, and an auto-fix loop.
 
 **Core principle:** No agent should verify its own work. Fresh context finds what you miss.
+
+**Deterministic-first architecture for large diffs:** Pure LLM agents reviewing large changesets
+predictably "cut corners" — they selectively skip files, have line-number position drift, and
+quality varies with prompt wording. For changesets over ~500 lines or 10+ files, enforce
+deterministic scoping before invoking the LLM: enumerate all changed files explicitly, group
+related files into review bundles (e.g. `message_en.properties` + `message_zh.properties` together),
+and route each bundle to a focused sub-review rather than dumping the full diff in one prompt.
+This reduces hallucinated line numbers, improves coverage, and cuts token cost by ~9x vs
+one-shot general-agent review. (Source: Alibaba open-code-review, battle-tested at scale, 12.6k stars)
 
 ## When to Use
 
@@ -30,13 +73,25 @@ quality gates, an independent reviewer subagent, and an auto-fix loop.
 **This skill vs github-code-review:** This skill verifies YOUR changes before committing.
 `github-code-review` reviews OTHER people's PRs on GitHub with inline comments.
 
-## Step 1 — Get the diff
+## Step 1 — Get the diff and scope it deterministically
+
+For **small diffs (<~500 lines, <10 files)**: proceed directly.
+
+For **large diffs (>500 lines or >10 files)**: enumerate files first, then bundle related files:
+```bash
+git diff --cached --name-only          # get the file list
+git diff --cached --stat               # see per-file change size
+```
+Group related files into bundles (same module, same i18n locale pair, same feature slice).
+Run each bundle through Steps 2-5 separately with focused context — this prevents the LLM
+from selectively skipping files and produces accurate line-level positions. One large diff
+passed as a single prompt is the root cause of position drift and incomplete coverage.
 
 ```bash
 git diff --cached
 ```
 
-If empty, try `git diff` then `git diff HEAD~1 HEAD`.
+If empty, try `git diff`. For already-committed work, use `git diff BASE_SHA HEAD` where BASE_SHA is recorded before the task starts (see Reviewer Dispatch Contract below). Do not use `git diff HEAD~1 HEAD` as a fallback for multi-commit tasks — it silently drops all but the last commit.
 
 If `git diff --cached` is empty but `git diff` shows changes, tell the user to
 `git add <files>` first. If still empty, run `git status` — nothing to verify.
@@ -72,9 +127,9 @@ git diff --cached | grep "^+" | grep -E "execute\(f\"|\\.format\(.*SELECT|\\.for
 **Deeper scan — escalate when risk warrants it:**
 - Secrets in any file: load `secret-hygiene` skill
 - Full static analysis pass: load `semgrep` skill (installed, uses ToB+0xdea rulesets)
-- Interprocedural taint tracking: load `codeql` skill (needs codeql in PATH)
+- Interprocedural taint tracking: static analysis (e.g. CodeQL — disabled; use semgrep with security rulesets as alternative)
 - OWASP Top 10 / agentic AI threats: load `owasp-security` skill
-- Verify a specific finding is real before acting: load `fp-check` skill
+- Verify a specific finding is real before acting: use `adversarial-review` skill manually (`fp-check` is disabled)
 - Parse SARIF output from any scanner: load `sarif-parsing` skill
 
 ## Step 3 — Baseline tests and linting
@@ -99,11 +154,6 @@ go test ./... 2>&1 | tail -5
 ```
 
 **Linting and type checking** (run only if installed):
-```bash
-# Python
-which ruff && ruff check . 2>&1 | tail -10
-which mypy && mypy . --ignore-missing-imports 2>&1 | tail -10
-```
 
 **When the repo uses `requirements.txt` and local imports are missing:**
 If plain `pytest` fails at collection because the current shell lacks project deps, prefer an ephemeral uv-managed run before concluding verification is blocked:
@@ -132,6 +182,45 @@ which go && go vet ./... 2>&1 | tail -10
 **Baseline comparison:** If baseline was clean and your changes introduce failures,
 that's a regression. If baseline already had failures, only count NEW ones.
 
+### Regression Test Quality Gates (run when test files are changed)
+
+When the diff includes changes to test files or new test additions, run the
+regression quality layer beyond basic pass/fail:
+
+```bash
+# Python: branch coverage gate on new lines only (not legacy debt)
+diff-cover coverage.xml --compare-branch=main --fail-under=80
+
+# Python: mutation testing on changed files (not full suite — too slow)
+CHANGED_PY=$(git diff --name-only HEAD~1 | grep '\.py$' | grep -v 'test_' | tr '\n' ',')
+[ -n "$CHANGED_PY" ] && mutmut run --paths-to-mutate "$CHANGED_PY" && mutmut results
+
+# Python: flaky test check on new/changed tests (5-run repetition)
+# Requires pytest-repeat in dev dependencies (add to requirements-dev.txt or pyproject.toml)
+CHANGED_TESTS=$(git diff --name-only HEAD~1 | grep 'test_.*\.py$')
+if [ -n "$CHANGED_TESTS" ]; then
+  pytest --count=5 $CHANGED_TESTS -q
+fi
+
+# JS/TS: Stryker incremental mutation (changed files only)
+npx stryker run --incremental
+
+# Go: run saved fuzz corpus as deterministic regression
+go test -run=FuzzFoo ./...
+
+# Rust: snapshot review (flags changed snapshots interactively)
+cargo insta review --unreferenced=delete
+```
+
+Quality gates (enforce as blocking, not advisory):
+- Branch coverage >= baseline on changed files
+- Mutation score >= 60% on changed scope (or flag surviving mutants as findings)
+- New tests: 0 flaky runs across 5 repetitions before merge
+
+See `references/regression-testing-and-model-runs.md` for per-language tool
+reference, snapshot discipline, property-based testing review checklist, and
+academic evidence base.
+
 ## Step 4 — Self-review checklist
 
 Quick scan before dispatching the reviewer:
@@ -156,12 +245,52 @@ Quick scan before dispatching the reviewer:
 - [ ] Reset/clear UI actions also clear stale error/success state that would mislead the next interaction
 - [ ] Client API helpers use runtime assertions/shape checks instead of bare type casts on untrusted responses
 
+**Regression test additions** (check when diff touches test files):
+- [ ] Snapshot files (.snap, .yml regressions) have been read — not auto-accepted to pass CI
+- [ ] New snapshot changes have a PR comment explaining WHAT changed and WHY
+- [ ] Property-based tests (`@given`, `@settings`) assert a meaningful INVARIANT, not just "runs without exception"
+- [ ] Property test strategies reflect realistic input ranges, not trivially narrow ones
+- [ ] Fuzz seed corpora (Go/Rust) are committed, not ephemeral
+- [ ] New tests are not flaky (confirmed via 5-run repetition before merge)
+- [ ] Mutation testing survivors (if run) are documented and either fixed or intentionally accepted
+
+**ML / data science additions** (check when diff touches training, evaluation, or data pipeline code):
+- [ ] Scaler/imputer/encoder `.fit()` is called on training data ONLY; `.transform()` applied to test
+- [ ] No `.fillna(df.mean())` or similar using full-dataset statistics before split
+- [ ] Time-series data: split uses `TimeSeriesSplit` or fixed date cutoff; `shuffle=False` unless justified
+- [ ] Group IDs (patient, user, customer) do not appear in both train and test folds
+- [ ] Feature selection (SelectKBest, RFECV) is inside a `Pipeline`, not applied before CV
+- [ ] Test set is touched ONCE at final evaluation, not used for threshold or hyperparameter selection
+- [ ] Three-way split documented: train / validation (tuning) / test (final evaluation)
+- [ ] Shadow deployment code logs predictions with timestamps and has a documented kill-switch
+- [ ] A/B promotion gate has: documented metric threshold, power calculation, and incremental rollout plan
+- [ ] Model prediction and input feature distributions are logged for drift monitoring
+
+See `references/regression-testing-and-model-runs.md` for code patterns,
+per-language tooling, and academic evidence base (arXiv IDs with quantified findings).
+
+### SCOPE Structured Critique (arXiv:2607.05810, 39.4% vs 36.6% Reflexion on LiveCodeBench)
+
+For non-trivial code changes, use this 3-field critique before the independent reviewer:
+
+```
+subgoals: [<what this code must accomplish — one item per logical unit>]
+gap_analysis: [<gap between current code and each subgoal>]
+robustness_checklist:
+  - check: "<edge case or invariant>" | status: pass|fail|unclear
+```
+
+Use `LLMVerifier.scope_critique_prompt(code)` from nesy.py to generate the prompt.
+A clear subgoal list prevents the reviewer hallucinating requirements that aren't there.
+
 ## Step 5 — Independent reviewer subagent
 
 Call `delegate_task` directly — it is NOT available inside execute_code or scripts.
 
 The reviewer gets ONLY the diff and static scan results. No shared context with
 the implementer. Fail-closed: unparseable response = fail.
+
+For adversarial multi-agent review, load adversarial-review skill instead.
 
 ```python
 delegate_task(
@@ -281,6 +410,11 @@ After the fix agent completes, re-run Steps 1-6 (full verification cycle).
 
 Before committing or pushing, check whether the repo defines an additional local preflight wrapper or documented pre-commit/push checklist (for example `scripts/git-preflight.sh`, repo `AGENTS.md`, `CLAUDE.MD`, or `docs/agents/testing-and-quality-gates.md`). If present, treat that repo-local preflight as mandatory and run it explicitly even when hooks would also run it.
 
+**Skill-freshness check (after every non-trivial diff):** ask whether this diff invalidates or should update any existing Hermes skills. Concretely:
+- Did the diff change an API, CLI interface, file layout, or workflow that a skill documents? → patch that skill in the same PR or flag it as a follow-up.
+- Did the diff introduce a pattern, pitfall, or workflow worth capturing as a new skill? → note it for skill authoring.
+- Skills are procedural memory — a diff that silently obsoletes one is a knowledge-rot bug.
+
 If verification passed:
 
 ```bash
@@ -290,6 +424,16 @@ git add -A && git commit -m "[verified] <description>"
 The `[verified]` prefix indicates an independent reviewer approved this change.
 
 If the review uncovered a recurring class of bug (for example boundary validation, idempotency, event-contract mismatch, auth/navigation safety, shared-nav-to-admin-surface regressions, malformed-input 5xx handling, truncation signaling, output sanitization, required-prop contract regressions, dedup-key collisions, invisible inbox-target regressions, pagination-without-cursor, overly-restrictive validation regexes, stale UI error-state resets, upstream error-detail leakage, or unsafe client-side response casts), update the repo's preflight checklist or agent guidance before finishing so the lesson becomes a future gate, not just a one-off fix.
+
+## New-code-only lint gates (gradual hardening)
+When a codebase has legacy lint violations, use ruff in new-code-only mode to enforce only on changed lines:
+```bash
+ruff check --diff .    # exits non-zero only on new violations introduced by the diff
+```
+Add to pyproject.toml: `extend-select = ["E9", "F", "B"]`. This avoids a big-bang cleanup while preventing new violations from accumulating.
+
+## Agent review scratch — gitignore
+Ensure `.review-crops/`, `.review-shots/`, `docs/review-shots/` are in `.gitignore` before any agent review pass that takes screenshots or crops. These are ephemeral, not durable evidence.
 
 ## Reference: Common Patterns to Flag
 
@@ -328,7 +472,53 @@ tests exist, tests pass, no regressions.
 
 **plan:** Validates implementation matches the plan requirements.
 
-## Pitfalls
+**regression-testing-and-model-runs reference:** Load `references/regression-testing-and-model-runs.md` from this skill when the diff touches test files, ML training/evaluation code, or holdout splits. Contains: multilingual regression tool landscape, mutation testing CI gate commands, snapshot review discipline, holdout checklist, temporal leakage code patterns, shadow/A/B deployment checklist, and academic anchors (arXiv IDs with quantified findings).
+
+## Code Smell Baseline (12 Fowler/Beck Smells)
+
+A smell here is a judgement call argued from evidence in the diff — never an automatic finding. One instance is a question; a pattern is a finding. The reviewed repo's own documented standards override this baseline wherever they conflict.
+
+| Smell | What it is | The usual fix |
+|---|---|---|
+| Mysterious name | A name that forces the reader to open the body to learn what it does | Rename to what it does or returns; a long clear name beats a short opaque one |
+| Duplicated code | The same decision encoded in two places, so one edit needs two | Extract the shared decision to one owner; leave lookalikes encoding different decisions alone |
+| Feature envy | A function that reads or writes another module's data more than its own | Move the function to the data it envies, or move the data to the function |
+| Data clumps | The same group of values travelling together through signatures | Introduce the object the clump is trying to be |
+| Primitive obsession | Domain concepts passed as bare strings/ints so nothing checks them | Wrap the concept in a type that validates at the boundary |
+| Repeated switches | The same type/kind dispatch re-implemented at several sites | Centralize the dispatch so a new case is one edit |
+| Shotgun surgery | One conceptual change requiring edits scattered across many files | Move the pieces of the concept into one place before the next change |
+| Divergent change | One module edited for many unrelated reasons | Split the module along its change reasons |
+| Speculative generality | Hooks, parameters, or layers serving only an imagined future caller | Delete until a real second caller exists |
+| Message chains | a.b().c().d() walks a structure the caller should not know | Hand the caller what it actually needs, or hide the walk behind the owner |
+| Middle man | A layer that only forwards to another layer | Collapse it; talk to the real owner |
+| Refused bequest | A subtype that stubs, ignores, or overrides most of what it inherits | Replace inheritance with composition or split the interface |
+
+Report: name the smell, cite evidence (path, line_range, and what shows it), state what the fix would be. Do not report a smell the repo's standards explicitly accept.
+
+## Reviewer Dispatch Contract
+
+Before dispatching a reviewer:
+
+```bash
+BASE_SHA=$(git merge-base origin/main HEAD)
+HEAD_SHA=$(git rev-parse HEAD)
+```
+
+Never HEAD~1 — it silently drops every commit of a multi-commit task except the last. Record BASE before work starts; deriving it afterwards is guesswork the moment a merge or fixup lands. State both SHAs in the request — a review whose range is unstated cannot be re-run.
+
+Pass artifacts not bodies: write the diff, plan section, and failing output to files (e.g. .omh/artifacts/ or /tmp/review-context.txt) and pass the paths. A dispatch describes one unit of work.
+
+Four implementer statuses (returned after code changes — this is coordinator-level status, not the per-check JSON schema used in test/CI steps):
+| Status | Meaning |
+|---|---|
+| DONE | Complete and verified |
+| DONE_WITH_CONCERNS | Complete, with doubts stated — read concerns before review |
+| NEEDS_CONTEXT | Missing information it could not derive — supply exactly what is missing |
+| BLOCKED | Cannot proceed — state the blocker explicitly |
+
+A reviewer's report is a claim, not evidence. "I checked and it is fine" is not a check — the command output is. "Attempted" is not "addressed" — a fix is done when the specific defect no longer reproduces, shown by the same command that showed it.
+
+<!-- why: wrong BASE SHA manufactures a false-clean review; artifact paths not bodies prevent context accumulation from prior tasks polluting reviewer judgment -->
 
 - **Empty diff** — check `git status`, tell user nothing to verify
 - **Not a git repo** — skip and tell user
@@ -338,3 +528,53 @@ tests exist, tests pass, no regressions.
 - **No test framework found** — skip regression check, reviewer verdict still runs
 - **Lint tools not installed** — skip that check silently, don't fail
 - **Auto-fix introduces new issues** — counts as a new failure, cycle continues
+
+**Regression testing pitfalls:**
+- **Snapshot auto-accept anti-pattern** — updating `.snap` / pytest-regression files to make CI pass without reading the diff is the most common regression testing failure. Always read snapshot diffs.
+- **Coverage != quality** — 90% statement coverage with no mutation testing or meaningful assertions provides near-zero protection. Mutation score is the correct quality metric (r=0.77, Just et al. FSE 2014). The oracle gap — coverage minus mutation score — is the actionable per-file signal (arXiv:2309.02395). Even high-coverage, high-kill-score code leaves 17.5% of expected behaviours untested (arXiv:2606.10417).
+- **Mutation testing on full suite in CI** — too slow; run on changed-file scope only. Full-suite mutation belongs in nightly scheduled runs.
+- **Property test without invariant** — a `@given` test that only asserts "no exception" is nearly useless. The invariant must be the thing being tested.
+- **Fuzz corpus not committed** — Go/Rust fuzz seeds committed to the repo make fuzzing deterministic as regression; un-committed corpora mean re-discovery on every run.
+- **New flaky test merged** — empirical studies consistently find 50%+ of projects have flaky tests; 67.73% of rerun CI builds in one large Java study were flaky (arXiv:2602.02307); 75% of flaky tests cluster systemically (arXiv:2504.16777). Gate: 5-run repetition on new tests before merge.
+
+## Async Review Gating and Generated Dashboard Pitfalls (from async-review-gating-and-generated-dashboard-pitfalls.md)
+
+1. **Async reviewer verdicts are non-optional gates.** If an independent reviewer was dispatched with `delegate_task`, commit/push must wait for the verdict. If the verdict arrives after a push and contains real issues, do an immediate follow-up fix and re-run verification.
+2. **Empty states must stay semantically honest.** Do not fill a section titled as one source/type (e.g. social posts) with another source/type (e.g. official announcements) just to avoid an empty state. Prefer the real empty-state message or add a clearly labeled separate fallback section.
+3. **Broader scraping must stay relevance-gated.** Keep expensive scraping limited to entities with current signal (non-zero mention/engagement score). Cap the number of enriched profiles and subprocess-heavy probes.
+4. **Brittle parsed tables should not drive headline summaries without sanity checks.** If upstream tables are position/index-parsed and layout can drift, keep suspicious values out of prominent summary cards until validated. Raw table display can remain; add UI copy warning.
+5. **Good verification order for generated dashboards:** run generator/refresh scripts → run tests → run build → run lint → inspect a sample of generated output for semantic correctness, not just compilation.
+
+**ML holdout pitfalls:**
+
+## Theory-Grounded Review Discipline
+
+### Hoare Triple Frame for Function Review (Huth-Ryan Ch 1)
+
+**Theory:** A Hoare triple {P} C {Q} specifies: if precondition P holds before command C executes, then postcondition Q holds after. This is the standard formal spec for a function or code block.
+
+**Hermes rules:**
+- Frame each function review as a Hoare triple: explicitly state P (what must hold before the call) and Q (what must hold after).
+- Missing P or Q = incomplete specification — flag as a review defect, not just a style issue.
+- Verify: does the implementation satisfy Q whenever P holds? Counterexample = a bug.
+
+**Citation:** Huth & Ryan — *Logic in Computer Science* (2nd ed.), Ch 1 (Propositional Logic) and Ch 4 (Hoare Logic).
+
+### Type Safety: Progress and Preservation (Thompson Ch 5)
+
+**Theory:** Type safety has two components: (1) Progress — a well-typed expression is either a value or can take a step; (2) Preservation — if a well-typed expression takes a step, the result is still well-typed. Together they ensure well-typed programs don't get stuck.
+
+**Hermes rules:**
+- At code review, verify Progress: every call site has a path to a value — no stuck states (e.g. functions that can return without a value on some code path).
+- Verify Preservation: types are maintained through all operations — no silent coercions or runtime type errors on the happy path.
+- Flag any function where return type annotation disagrees with actual returned types as a Preservation violation.
+
+**Citation:** Simon Thompson — *Type Theory and Functional Programming*, Ch 5 (Type Safety).
+
+- **Scaler fit before split** — `scaler.fit(X)` on the full dataset leaks test statistics into training. The fix is inside a `Pipeline` object so CV cannot leak. Empirical studies at ISSTA and MSR consistently find this error in 20-30% of reviewed ML notebooks (community consensus; no single verified arXiv ID — the Kaggle notebook audit finding was generated by a research subagent and not independently verified).
+- **Random shuffle on time-ordered data** — `train_test_split(shuffle=True)` on time-series is temporal leakage. Always flag; require `TimeSeriesSplit` or explicit cutoff date.
+- **Test set used for tuning** — checking test performance during hyperparameter search inflates reported accuracy. Require a separate validation fold for tuning decisions.
+- **`df.fillna(df.mean())` before split** — computing fill values from the full dataset includes test data in the imputation. Compute on `X_train` only, then apply.
+- **Feature engineering outside Pipeline** — any feature transform applied before `cross_val_score` that uses dataset-wide statistics leaks. All transforms must be inside the `Pipeline`.
+- **Shadow deployment without kill-switch** — shadow mode without a documented kill-switch is a liability in production; the new model can produce unexpected side effects (e.g. logging errors) at shadow volume. Always require a kill-switch in the code review.
+- **A/B power calculation post-hoc** — designing the minimum sample size after seeing results is p-hacking. Require a power calculation before the test, not after.

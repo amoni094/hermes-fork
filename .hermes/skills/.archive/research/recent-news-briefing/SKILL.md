@@ -1,6 +1,10 @@
 ---
 name: recent-news-briefing
 description: Produce a concise recent-developments briefing across one or more topics, especially when a dedicated research skill is installed but source coverage is incomplete.
+related_skills:
+  - signal-oriented-research-briefing
+  - competitor-news-monitor
+  - rss-feeds
 ---
 
 # Recent News Briefing

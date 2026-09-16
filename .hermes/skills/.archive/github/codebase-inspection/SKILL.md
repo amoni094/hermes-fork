@@ -1,6 +1,10 @@
 ---
 name: codebase-inspection
 description: "Inspect codebases w/ pygount: LOC, languages, ratios."
+related_skills:
+  - github-operations
+  - github-repo-management
+  - code-impact-preflight
 version: 1.0.0
 author: Hermes Agent
 license: MIT

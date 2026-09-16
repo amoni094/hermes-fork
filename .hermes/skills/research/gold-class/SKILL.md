@@ -1,6 +1,12 @@
 ---
 name: gold-class
-description: "Find Gold Class or premium cinema sessions within the next 24 hours, using the user's taste database plus 75+ Metascore filtering for movie selection."
+triggers:
+  - User wants to find Gold Class or premium cinema sessions today or within the next 24 hours
+  - User asks 'what's on at Gold Class' or 'any good movies at Village Cinemas tonight'
+  - Finding a high-Metascore movie showing at a premium cinema near the user
+  - User wants cinema session times with quality filtering
+description: >
+  Use when finding Gold Class or premium cinema sessions within the next 24 hours, using the user's taste database plus 75+ Metascore filtering for movie selection.
 version: 1.0.0
 author: Hermes Agent
 created_by: agent
@@ -9,6 +15,13 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [movies, cinema, gold-class, session-times, metascore, outings]
+    related_skills: [stay-in, suggest-music, agent-reach-discovery]
+related_skills:
+  - grounded-citations
+  - firecrawl-research
+  - stay-in
+  - suggest-music
+  - agent-reach-discovery
 ---
 
 # Gold Class
@@ -46,6 +59,10 @@ You need:
    - number of options wanted
 
 If the database path or source is missing, ask for it once.
+
+## Relationship to stay-in
+
+`gold-class` is the cinema-session sub-case of the broader `stay-in` skill. If the user wants a home watch recommendation (no session time required), use `stay-in` instead. Both share the same taste database and Metascore methodology.
 
 ## Workflow
 

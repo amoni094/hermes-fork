@@ -1,6 +1,13 @@
 ---
 name: claude-code
-description: "Delegate coding to Claude Code CLI (features, PRs)."
+provides: [code_execute, shell_exec]
+triggers:
+  - One-shot coding task that can be delegated to Claude Code CLI (fix a bug, add a feature, refactor)
+  - CI/CD automation or scripting task suitable for Claude Code
+  - User wants to delegate a bounded coding task to an external agentic coding CLI
+  - Need to open a PR or make a code change without using Hermes's own toolset directly
+description: >
+  Use when delegating coding to Claude Code CLI (features, PRs).
 version: 2.2.0
 author: Hermes Agent + Teknium
 license: MIT
@@ -8,7 +15,11 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [Coding-Agent, Claude, Anthropic, Code-Review, Refactoring, PTY, Automation]
-    related_skills: [codex, hermes-agent, opencode]
+    related_skills: [hermes-agent]
+related_skills:
+  - autonomous-agent-loop-design
+  - verification-before-completion
+  - hermes-agent
 ---
 
 # Claude Code — Hermes Orchestration Guide

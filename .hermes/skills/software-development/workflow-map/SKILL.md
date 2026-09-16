@@ -1,6 +1,12 @@
 ---
 name: workflow-map
-description: "Choose the right Hermes development workflow skill based on task risk, complexity, and verification needs."
+triggers:
+  - Choosing the right Hermes development workflow skill based on task risk and complexity
+  - Unsure whether to use plan, spike, brainstorm, dispatch, or execute for a task
+  - Need a meta-skill to route to the right workflow skill before starting implementation
+  - Task characteristics are known but the correct workflow pattern is unclear
+description: >
+  Use when choosing the right Hermes development workflow skill based on task risk, complexity, and verification needs.
 version: 1.0.0
 author: Hermes Agent
 license: MIT
@@ -8,7 +14,20 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [workflow, planning, verification, review, isolation, triage]
-    related_skills: [complexity-gated-planning, isolated-workspace-preflight, test-driven-development, requesting-code-review, risk-based-review, verification-before-completion, subagent-driven-development, hermes-role-pipelines, hermes-acp-routing]
+    related_skills: [complexity-gated-planning, isolated-workspace-preflight, test-driven-development, requesting-code-review, risk-based-review, verification-before-completion, subagent-driven-development, hermes-role-pipelines, hermes-acp-routing, trajectory-risk-guardrail]
+related_skills:
+  - problem-solving-router
+  - verification-before-completion
+  - plan
+  - complexity-gated-planning
+  - isolated-workspace-preflight
+  - test-driven-development
+  - requesting-code-review
+  - risk-based-review
+  - subagent-driven-development
+  - hermes-role-pipelines
+  - hermes-acp-routing
+  - trajectory-risk-guardrail
 ---
 
 # Workflow Map
@@ -20,6 +39,17 @@ Use this skill to choose which development workflow skills to load for a task in
 Scale ceremony to complexity and risk, but never skip fresh verification before claiming success.
 
 ## Decision Order
+
+### 0. Reasoning type selection (before all other decisions for L2+ tasks)
+
+Run select-frameworks after sizing the task but before routing to any workflow skill:
+  ```
+  python3 ~/.hermes/scripts/reasoning-complexity-classifier.py select-frameworks \
+    --task "<task description>" --level <L>
+  ```
+  L0-L1: skip — proceed directly to complexity decision below.
+  L2-L3: primary framework list determines which metacognitive gates fire during the workflow.
+  Take the output into whichever workflow path you choose below.
 
 ### 1. Complexity
 
@@ -85,15 +115,15 @@ All security tools are opt-in escalations from the grep scan in `requesting-code
 |-----------|------|
 | Secrets / env vars / credentials | `secret-hygiene` |
 | Full static analysis (patterns, rules) | `semgrep` |
-| Interprocedural taint / data flow | `codeql` (needs codeql CLI) |
+| Interprocedural taint / data flow | `codeql` (disabled — needs codeql CLI; skip unless explicitly installed) |
 | OWASP Top 10 / agentic AI threats (ASI01-06) | `owasp-security` |
-| Verify a finding is real before acting | `fp-check` |
+| Verify a finding is real before acting | `fp-check` (disabled — re-enable in config if needed) |
 | Parse SARIF output from any scanner | `sarif-parsing` |
 | GitHub Actions AI prompt injection | `agentic-actions-auditor` |
 | Over-hardening / usability regressions | `security-hardening-balance-review` |
 | Adversarial pass on agent/runtime code | `security-hardening-code-review` |
 
-Default posture: grep scan only. Escalate to semgrep for medium-risk changes; escalate to codeql for high-risk or security-focused work.
+Default posture: grep scan only. Escalate to semgrep for medium-risk changes; use manual static analysis tools for high-risk or security-focused work (codeql skill is disabled — use semgrep with security rulesets as the escalation path).
 
 ## Recommended Paths
 
@@ -143,3 +173,6 @@ Do not:
 ## Minimum Safe Rule
 
 Even when the task is simple, do not skip the final evidence check. The lightweight path still ends with `verification-before-completion`.
+## Reference files
+
+- `references/adoption-notes.md` — Adoption Notes

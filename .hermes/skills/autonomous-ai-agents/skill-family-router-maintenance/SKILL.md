@@ -1,5 +1,10 @@
 ---
 name: skill-family-router-maintenance
+triggers:
+  - a skill family or category is being mistaken for a specific action skill
+  - the router is loading the wrong skill or the umbrella skill is being used as a terminal action
+  - skill routing is producing incorrect or ambiguous matches
+  - a skill family lacks a top-level loadable entry point and needs an umbrella router
 description: "Use when a skill family/category is being mistaken for a non-loadable namespace and you need to add or repair an umbrella router skill plus the surrounding docs/prompts."
 version: 1.0.0
 author: Hermes Agent
@@ -9,6 +14,11 @@ metadata:
   hermes:
     tags: [skills, maintenance, routing, documentation, hermes]
     related_skills: [writing-skills, hermes-agent, verification-before-completion]
+related_skills:
+  - autonomous-agent-loop-design
+  - verification-before-completion
+  - writing-skills
+  - hermes-agent
 ---
 
 # Skill Family Router Maintenance

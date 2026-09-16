@@ -162,7 +162,7 @@ def run(dry_run: bool = False, window: int = 5) -> None:
     print(f"Snapshots stored:  {len(snapshots)}")
 
     if alarm:
-        print(f"\nALARM: {alarm_reason}")
+        print(f"\nALARM: yes — {alarm_reason}")
         alarm_rec = {
             "ts": now,
             "entropy": entropy,
@@ -173,7 +173,7 @@ def run(dry_run: bool = False, window: int = 5) -> None:
             _append_alarm(alarm_rec)
         print(f"Written to: {ALARM_FILE}")
     else:
-        print("\nOK — entropy-fidelity within bounds")
+        print("\nALARM: no — entropy-fidelity within bounds")
 
     if not dry_run:
         state["snapshots"] = snapshots

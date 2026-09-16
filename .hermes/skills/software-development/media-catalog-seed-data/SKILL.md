@@ -1,6 +1,12 @@
 ---
 name: media-catalog-seed-data
-description: Build and evolve curated movie/TV seed datasets with normalized identifiers, schema-aware exports, and verified CSV/SQL artifacts.
+triggers:
+  - Building or evolving a curated movie/TV seed dataset with normalized identifiers
+  - Exporting or importing media catalog data in CSV or SQL format with schema validation
+  - Seeding a media recommendation database from curated sources
+  - Updating the media catalog schema or adding new entries to the seed dataset
+description: >
+  Use when building and evolve curated movie/TV seed datasets with normalized identifiers, schema-aware exports, and verified CSV/SQL artifacts.
 version: 1.0.0
 author: Hermes Agent
 license: MIT
@@ -8,7 +14,11 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [data-modeling, seed-data, csv, sql, sqlite, media, curation, verification]
-    related_skills: [verification-before-completion, signal-oriented-research-briefing, complexity-gated-planning]
+    related_skills: [verification-before-completion, complexity-gated-planning]
+related_skills:
+  - verification-before-completion
+  - plan
+  - complexity-gated-planning
 ---
 
 # Media Catalog Seed Data

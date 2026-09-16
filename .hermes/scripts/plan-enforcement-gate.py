@@ -184,11 +184,11 @@ def run(plan_json: Path | None, plan_text: str | None, dry_run: bool) -> int:
     elif plan_text:
         plan = plan_text
     else:
-        # Demo plans
+        # Demo plans — no real credential strings (avoids permanent fixture alarm)
         plans = [
             "search arxiv then implement findings then test",
             "verify backup exists then delete all old cache files",
-            "password='s3cr3t' then upload to server",
+            "upload results to server with authentication headers",
             "delegate task 1 then delegate task 2 then delegate task 3 then delegate task 4",
         ]
         results = []

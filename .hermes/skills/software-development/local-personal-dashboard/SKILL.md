@@ -1,6 +1,15 @@
 ---
 name: local-personal-dashboard
-description: Build a small local web dashboard that combines live daily updates with personalized recommendation panes, using existing local skill/reference data when possible.
+triggers:
+  - User asks for a web dashboard, start page, or control panel
+  - Dashboard should blend current information (news, weather) with user-specific recommendation panes
+  - Building a small local web dashboard using existing Hermes recommendation pipelines
+  - User wants a personalized browser start page with live daily updates
+description: >
+  Use when building a small local web dashboard that combines live daily updates with personalized recommendation panes, using existing local skill/reference data when possible.
+related_skills:
+  - domain-research-synthesis
+  - grounded-citations
 ---
 
 # Local personal dashboard
@@ -161,6 +170,8 @@ For the smallest first-build boundary, see `references/first-build-boundary.md`.
 - Do not let social-summary panes recycle the same headline-derived text across announcements, quotes, controversies, and "social" sections. If the user notices repetition, tighten normalization/dedup before adding more sources.
 - Do not score social-summary eligibility purely by news mentions when the requested outcome is broader profile coverage; low-news but high-social-link profiles should still be able to surface.
 - Do not launch a fresh server instance blindly on a fixed localhost port. Probe the dashboard's own `/healthz` first and exit cleanly if the intended instance is already serving.
+- Poll chart blank on date-range labels: Date.parse on range labels like '15-21 Jun' returns NaN, collapsing all x-coordinates to zero and leaving the SVG visually blank even when summary cards render correctly. Add a normalizer that converts range labels to a single comparable date (e.g. range end + current year) before sorting or plotting. Verify chart geometry separately from payload presence: confirm x-coordinates are non-zero and first/last dots align with first/last labels.
+- colspan=3 Coalition aggregate rule: When the Wikipedia Coalition column arrives as a single colspan=3 cell, treat that value as the Coalition aggregate directly - do NOT redistribute it to LIB/LNP/NAT sub-columns. Only sum LIB/LNP/NAT when those cells are genuinely separate (no colspan). Send remaining cell-span overflow to trailing 2PP slots. Sample-check at least two generated rows against the literal rendered source rows before trusting the artifact.
 
 ## Verification checklist
 - Server starts cleanly.
@@ -201,3 +212,32 @@ For the smallest first-build boundary, see `references/first-build-boundary.md`.
 - See `references/poll-chart-horizontal-stretch-with-font-compensation.md` for the pattern covering intentional 2.5x-style horizontal widening, first-date indentation, scrollable SVG viewports, and compensating text/stroke sizes so only the plotted geometry appears stretched.
 - See `references/poll-chart-proportional-enlargement-without-distortion.md` for the contrasting pattern where 'make it bigger' means increasing rendered size and inner plot area without widening the SVG coordinate system or stretching axis text.
 - See `references/poll-chart-compact-axis-labels.md` for the follow-up pattern where geometry is already correct and the fix is to reduce x-axis label payload with compact `dd/mm` dates plus a slightly smaller x-axis font.
+
+## Vite Runtime Refresh — Generated JSON Pattern
+
+**When:** a pane needs live client-side refresh without rebuilding the whole app (e.g. polling data, live recommendations).
+
+**Pattern:**
+- Keep the generated TypeScript module (`src/generated/...ts`) for initial render
+- Also emit the same payload to `public/data/live-data.json` in the refresh script
+- Hydrate React state from the imported generated payload first, then refresh from the JSON endpoint on entry + on an interval
+- Scope the interval to the active tab/pane so background tabs don't keep polling
+
+**Implementation notes:**
+- Write both artifacts (TS + JSON) from the same in-memory payload in the refresh script — prevents schema drift between outputs
+- Use `new URL('/data/live-data.json?t='+Date.now(), window.location.origin)` to bust cache
+- In Vitest/jsdom, guard the live-refresh effect with `import.meta.env.MODE === 'test'` to avoid noisy 404/fetch failures in tests
+- Show a refresh-status chip + current payload timestamp so the user can tell if they're seeing a fresh fetch or the last successful payload
+
+**Verification:** run the refresh script and confirm both the TS artifact and `public/data/*.json` were written; run tests; build the app and confirm the production bundle succeeds with the JSON asset present.
+
+See `references/vite-runtime-refresh-generated-json.md` for full pattern.
+
+## Reference files
+
+- `references/news-music-stayin-dashboard.md` — News/music/stay-in dashboard reference
+- `references/policy-dashboard-issue-centric-ux-and-polling-heuristics.md` — Policy dashboard issue-centric UX and polling heuristics
+- `references/poll-graph-and-social-dedup-regression.md` — Poll graph and social dedup regression
+- `references/public-social-post-summaries-without-login.md` — Public social post summaries without login
+- `references/vite-dashboard-url-and-lan-startup.md` — Vite dashboard URL discovery and LAN startup
+- `references/vite-runtime-refresh-generated-json.md` — Vite runtime refresh from generated JSON

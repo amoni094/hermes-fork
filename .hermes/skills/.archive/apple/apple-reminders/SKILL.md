@@ -1,6 +1,10 @@
 ---
 name: apple-reminders
 description: "Apple Reminders via remindctl: add, list, complete."
+related_skills:
+  - apple-notes
+  - weekly-review-planning
+  - meeting-action-items
 version: 1.0.0
 author: Hermes Agent
 license: MIT

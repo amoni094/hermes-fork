@@ -61,7 +61,7 @@ def jsd(distributions: list[np.ndarray]) -> float:
     mean = np.mean(distributions, axis=0)
     h_mean = _entropy(mean)
     h_each = np.mean([_entropy(d) for d in distributions])
-    return float(min(max(0.0, h_mean - h_each), 1.0))
+    return float(min(max(0.0, h_mean - h_each), math.log(max(len(distributions), 2))))
 
 
 def compute_consensus(outputs: list[str]) -> dict:

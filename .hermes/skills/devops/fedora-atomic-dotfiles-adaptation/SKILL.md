@@ -1,6 +1,15 @@
 ---
 name: fedora-atomic-dotfiles-adaptation
-description: Adapt third-party Linux dotfiles and ricing setups to Fedora Atomic desktops (Silverblue/Bazzite/Kinoite/Aurora) by treating upstream repos as config sources, not blind installers.
+triggers:
+  - User asks 'Will this dotfiles repo work on Silverblue?' or 'port these configs to my immutable Fedora setup'
+  - Adapting a third-party dotfiles or ricing setup to Fedora Atomic (Silverblue/Bazzite/Kinoite/Aurora)
+  - A dotfiles install script assumes a mutable root and must be adapted for ostree layering
+  - Porting Hyprland, Waybar, or other config sets to an immutable Fedora desktop
+description: >
+  Use when adapting third-party Linux dotfiles and ricing setups to Fedora Atomic desktops (Silverblue/Bazzite/Kinoite/Aurora) by treating upstream repos as config sources, not blind installers.
+related_skills:
+  - atomic-desktop-app-installation
+  - silverblue-system-update-trigger
 ---
 
 # Fedora Atomic Dotfiles Adaptation
@@ -145,6 +154,33 @@ When done, report:
 - Wallust config exists and matches copied components
 - Wallpapers copied to the intended user path
 - No dangling Waybar symlinks remain
+
+## Hyprland runtime installation on Fedora Atomic (AshBuk COPR)
+
+When host Fedora repos lack Hyprland, use direct RPM artifact staging:
+1. `rpm-ostree install -n <pkg>` to check repo availability first (confirms package names)
+2. Package name ≠ binary name: `swaync` binary comes from package `SwayNotificationCenter`
+3. If `rpm-ostree install https://...rpm` truncates on large files, download first: `curl -fL --retry 5 --retry-delay 2 -O <url>`, then `rpm-ostree install ./hyprland.rpm ./hypridle.rpm ...`
+4. Staged packages require reboot before binaries are usable
+5. If Hyprland disappears post-upgrade: `rpm-ostree status` → check `LocalPackages` — if missing, reinstall from local RPM stash, NOT by name (LocalPackages require `.rpm` files)
+
+**AshBuk packaging** validated for Fedora 44: `hyprland`, `hypridle`, `hyprlock`, `xdg-desktop-portal-hyprland`
+
+Pitfall: `find /usr/share/wayland-sessions -maxdepth 1 -type f | grep -i hypr` — if empty after upgrade, GDM cannot launch Hyprland regardless of config. Stage compositor stack first before debugging config.
+
+## Hyprland desktop rebuild snapshot
+
+Capture before risky theming changes. Include beyond `~/.config/hypr` alone:
+- `~/.config/waybar`, `~/.config/rofi`, `~/.config/swaync`, `~/.config/wallust`
+- terminal/app configs: `~/.config/kitty`, `~/.config/fastfetch`, `~/.config/btop`, `~/.config/cava`
+- wallpapers/assets: `~/Pictures/wallpapers/<theme>`
+- `rpm-ostree status --json`, Flatpak app/runtime lists, sorted file manifest, restore helper script
+
+Store under: `~/backups/hyprland/desktop-rebuild-YYYYmmdd-HHMMSS/`
+
+Restore script must: (1) make pre-restore safety backup, (2) replace only captured dirs, (3) print safety backup path.
+
+Pitfall: `~/.config/hypr`-only archive is insufficient — Waybar/Rofi/SwayNC/Wallust and wallpaper assets are needed for a practical rebuild.
 
 ## Support files
 - `references/jakoolit-hyprland-dots-silverblue-port.md` — concrete example of porting JaKooLit/Hyprland-Dots into a Fedora Silverblue-safe user-space layout.

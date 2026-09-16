@@ -1,6 +1,18 @@
 ---
 name: external-signal-pipeline-recovery
-description: Recover news/social/market signal pipelines when upstream anti-bot, credential gaps, or environment asymmetry break one leg of the feed.
+version: 1.1.0
+related_skills:
+  - competitor-news-monitor
+  - agent-reach-discovery
+  - domain-research-synthesis
+  - firecrawl-research
+triggers:
+  - A monitor or briefing pipeline depends on social/news/vendor feeds and one feed goes EMPTY, SEED_ERROR, or stale
+  - A containerized worker cannot fetch upstream data reliably but the host/browser session may still have access
+  - News, social, or market signal pipeline breaks due to anti-bot, credential gaps, or environment asymmetry
+  - Recovering a broken feed without rebuilding the whole pipeline from scratch
+description: >
+  Use when: Recover news/social/market signal pipelines when upstream anti-bot, credential gaps, or environment asymmetry break one leg of the feed.
 ---
 
 When to use
@@ -37,12 +49,17 @@ Core workflow
    - Say which datasets are recovered, which remain degraded, and why.
    - Do not collapse “partial mitigation” into “fixed”.
 
-Pitfalls
+## Pitfalls
 - Restarting a worker is not verification; inspect the downstream health fields after restart.
 - Anti-bot/verification pages can masquerade as 200 OK HTML. Validate payload shape, not just status code.
 - A host/browser-backed script may succeed where container fetches fail; do not assume parity.
 - Emergency reseeders should restore the canonical key shape, not invent a parallel format.
 - If the fallback yields too little or wrong-category data, mark that dataset degraded instead of padding with junk.
+- **Silverblue/Atomic host: `pip` is not on PATH.** Use `python3 -m pip install --user <pkg>`. The standalone `pip` binary is absent; the module interface works. Applies when installing pipeline deps (yfinance, feedparser, etc.) on the host outside a toolbox.
+- **GDELT Doc API v2 returns empty silently.** Rate limit (1 req/5s) is enforced by returning HTTP 200 with an empty body — not a 429, not an error message. Automated pipelines cannot distinguish this from "no results". Do not use GDELT Doc API. Use geopolitics RSS (Crisis Group, UN, Bellingcat) instead.
+- **HN Algolia `numericFilters=points>N` returns HTTP 400.** The public Algolia HN search API does not expose `points` in `numericAttributesForFiltering`. Filter client-side: `[h for h in hits if (h.get("points") or 0) >= MIN]`. Over-fetch with `hitsPerPage = limit * 3` to compensate.
+- **GNews is the best no-key AU news fallback.** `pip install gnews` (use `python3 -m pip install --user gnews` on Silverblue). `GNews(country='AU').get_top_news()` returns AU Google News edition. Keyword OR syntax works: `gn.get_news("Iran OR Ukraine OR sanctions")`. When a geopolitics or AU-specific news source goes stale, GNews country+keyword routing is the fastest recovery path that requires no API key.
+- **Malformed feed XML is a permanent per-source failure, not transient.** Example: ACLED RSS (https://www.acleddata.com/feed/) has an invalid token at byte 195 — it will never parse. Drop it and note it as dead. Always verify every candidate feed URL with a curl + HTTP status check before adding to a source registry.
 
 Host-vs-container recovery pattern
 - Probe the same source from both environments.

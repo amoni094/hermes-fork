@@ -1,6 +1,10 @@
 ---
 name: wayland-session-troubleshooting
 description: Diagnose Wayland desktop session startup failures on Linux by tracing session-manager integration, systemd user targets, portal dependencies, and compositor launch paths before changing config.
+related_skills:
+  - wayland-session-management
+  - fedora-atomic-dotfiles-adaptation
+  - waybar-popup-menu-debugging
 ---
 
 # Wayland Session Troubleshooting

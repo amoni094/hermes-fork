@@ -5,6 +5,10 @@ version: 1.1.0
 author: Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
+related_skills:
+  - github-operations
+  - github-issues
+  - github-issue-to-pr
 metadata:
   hermes:
     tags: [GitHub, Repositories, Git, Releases, Secrets, Configuration]

@@ -144,7 +144,7 @@ What makes Ollama distinctive is the combination of SF Pro Rounded (Apple's roun
 ### Distinctive Components
 
 **Tab Pills**
-- Pill-shaped tab selectors (e.g., "Coding" | "Hermes")
+- Pill-shaped tab selectors (e.g., "Coding" | "OpenClaw")
 - Active: Light Gray bg; Inactive: transparent
 - All pill-shaped (9999px)
 

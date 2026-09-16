@@ -1,6 +1,15 @@
 ---
 name: security-hardening-balance-review
-description: Review security hardening changes for over-hardening, usability regressions, and checker-policy mistakes; preserve secure-by-default behavior while verifying escape hatches, CI compatibility, and false-positive/false-negative balance.
+triggers:
+  - After a broad hardening pass across scripts, helpers, CI, or validation tooling
+  - Risky defaults were replaced with opt-in toggles and the change needs an over-hardening check
+  - Security hardening change may have introduced usability regressions or checker-policy mistakes
+  - Review a hardening change for balance: preserved security intent without breaking normal use
+description: >
+  Use when: Review security hardening changes for over-hardening, usability regressions, and checker-policy mistakes; preserve secure-by-default behavior while verifying escape hatches, CI compatibility, and false-positive/false-negative balance.
+related_skills:
+  - requesting-code-review
+  - risk-based-review
 ---
 
 # Security hardening balance review
@@ -57,7 +66,6 @@ Reference: `references/repo-export-validator-patterns.md` for config-export repo
 
 See also: `references/private-config-export-hardening.md` for a compact pattern covering sanitized-export repositories, validation scripts, and low-risk script defaults.
 
-## Common over-hardening mistakes
 - Adding a dependency in CI-critical code without updating workflow/install steps.
 - Marking a file safe because a guard token appears anywhere in it.
 - Replacing useful compatibility flags with hidden environment toggles and no user-facing hint.

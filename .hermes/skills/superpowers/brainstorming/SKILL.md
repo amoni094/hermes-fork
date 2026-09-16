@@ -1,5 +1,16 @@
 ---
 name: brainstorming
+provides: [reasoning]
+related_skills:
+  - using-superpowers
+  - plan
+  - complexity-gated-planning
+
+triggers:
+  - user says 'brainstorm', 'think through', 'what are my options', or 'explore ideas'
+  - open-ended divergent thinking task is needed before committing to a plan
+  - problem space is still unclear and 2-4 concrete options need to be surfaced
+  - user wants to surface assumptions, constraints, and tradeoffs before implementation
 description: Use when the user wants exploration, option generation, or requirements convergence before planning or implementation.
 version: 1.0.0
 author: Hermes Agent (adapted from obra/superpowers)
@@ -8,7 +19,7 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [brainstorming, requirements, clarification, ideation]
-    related_skills: [using-superpowers, plan, plan]
+    related_skills: [using-superpowers, plan, complexity-gated-planning]
 ---
 
 # Brainstorming

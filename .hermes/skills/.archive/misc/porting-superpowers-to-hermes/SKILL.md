@@ -5,6 +5,10 @@ version: 1.0.0
 author: Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
+related_skills:
+  - writing-skills
+  - using-superpowers
+  - hermes-agent-skill-authoring
 metadata:
   hermes:
     tags: [superpowers, hermes, porting, skills, harness]

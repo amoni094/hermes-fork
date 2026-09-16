@@ -1,6 +1,12 @@
 ---
 name: isolated-workspace-preflight
-description: "Decide when to use Hermes worktree isolation for code changes, then verify a clean baseline before substantial implementation."
+triggers:
+  - Making non-trivial code changes in a git repo and need worktree isolation
+  - Deciding whether to use a git worktree before substantial implementation work begins
+  - Verifying a clean baseline before starting a large branch or implementation
+  - User asks 'should I use a worktree for this?' before a risky refactor
+description: >
+  Use when: Decide when to use Hermes worktree isolation for code changes, then verify a clean baseline before substantial implementation.
 version: 1.0.0
 author: Hermes Agent
 license: MIT
@@ -9,6 +15,14 @@ metadata:
   hermes:
     tags: [git, worktree, isolation, preflight, safety]
     related_skills: [workflow-map, complexity-gated-planning, hermes-agent, subagent-driven-development, requesting-code-review, verification-before-completion]
+related_skills:
+  - verification-before-completion
+  - plan
+  - workflow-map
+  - complexity-gated-planning
+  - hermes-agent
+  - subagent-driven-development
+  - requesting-code-review
 ---
 
 # Isolated Workspace Preflight

@@ -1,6 +1,15 @@
 ---
 name: silverblue-toolbox-wrapper-bootstrap
-description: Add host-visible wrappers and lightweight user-space tooling on Fedora Silverblue/Atomic without broad host mutation, preferring Podman/Toolbox bridges and real verification.
+triggers:
+  - A tool is installed only inside Toolbox and should behave like a host command
+  - A Flatpak desktop app exists but lacks a convenient CLI launcher
+  - Adding host-visible wrappers for toolbox-internal tools on Fedora Silverblue/Atomic
+  - User wants a CLI shortcut for a Toolbox or Flatpak tool without broad host mutation
+description: >
+  Use when: Add host-visible wrappers and lightweight user-space tooling on Fedora Silverblue/Atomic without broad host mutation, preferring Podman/Toolbox bridges and real verification.
+related_skills:
+  - atomic-desktop-app-installation
+  - silverblue-system-update-trigger
 ---
 
 # When to use

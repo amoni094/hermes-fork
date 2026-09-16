@@ -5,6 +5,10 @@ version: 1.0.0
 author: Hermes Agent (adapted from obra/superpowers)
 license: MIT
 platforms: [linux, macos, windows]
+related_skills:
+  - using-superpowers
+  - writing-skills
+  - executing-plans
 metadata:
   hermes:
     tags: [bootstrap, superpowers, session-start, workflow]

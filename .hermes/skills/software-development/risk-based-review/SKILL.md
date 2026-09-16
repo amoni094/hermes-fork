@@ -1,15 +1,44 @@
 ---
-name: risk-based-review
-description: "Choose review depth based on change risk: self-check for low risk, reviewer for medium risk, and reviewer plus final verifier for high risk."
-version: 1.0.0
 author: Hermes Agent
+depends_on: [requesting-code-review, verification-before-completion]
+provides: [risk-assessment, review-depth-decision, change-classification]
+description: 'Use when: deciding how much review a change deserves before committing. Choose review depth based on change
+  risk: self-check for low risk, reviewer for medium, reviewer plus verifier for high.'
 license: MIT
-platforms: [linux, macos, windows]
 metadata:
   hermes:
-    tags: [review, risk, delegation, verification, quality]
-    related_skills: [workflow-map, requesting-code-review, verification-before-completion, plan, subagent-driven-development]
+    related_skills:
+    - workflow-map
+    - requesting-code-review
+    - verification-before-completion
+    - plan
+    - subagent-driven-development
+    tags:
+    - review
+    - risk
+    - delegation
+    - verification
+    - quality
+name: risk-based-review
+related_skills:
+  - workflow-map
+  - requesting-code-review
+  - verification-before-completion
+  - plan
+  - subagent-driven-development
+
+platforms:
+- linux
+- macos
+- windows
+triggers:
+- Choosing review depth based on change risk (self-check vs reviewer vs full verification)
+- Change is small and local — deciding if a full review is warranted or a self-check suffices
+- Change has external side effects — escalating to a deeper review tier
+- Need to calibrate review investment proportional to the reversibility and blast radius of a change
+version: 1.0.0
 ---
+
 
 # Risk-Based Review
 
@@ -20,6 +49,7 @@ Core rule: review depth should scale with risk, not habit.
 ## Step 1: Score the change
 
 Assess these factors:
+- **Code impact**: run `diff-impact.py` to estimate blast radius and confidence. Use the output to guide risk scoring.
 - External side effects: deploys, messages, writes to third-party services
 - Security/auth impact: secrets, permissions, identity, network exposure
 - Data risk: migrations, deletes, irreversible updates, billing, user data
@@ -28,6 +58,8 @@ Assess these factors:
 - Novelty: unfamiliar codepath or unclear requirements
 - User visibility: output sent to users/customers, dashboards, alerts
 - Delegation: substantial work performed by subagents or background workers
+- **ML/data risk**: changes to training pipelines, holdout splits, feature engineering, model evaluation, or shadow/A/B deployment code — these carry high data-leakage risk regardless of code size (see Kapoor & Narayanan 2023, arXiv:2207.07048: 69% of ML papers had leakage)
+- **Test quality risk**: changes to test files that add/update snapshots, property tests, or mutation configuration — require regression quality gate (branch coverage + mutation scope + flaky test check)
 
 ### Repository-type calibration for security reviews
 
@@ -62,6 +94,7 @@ Do not treat the subject matter itself as the flaw. In offensive-security or sec
 
 ### Depth 0 — Inline verification only
 Use when:
+- `diff-impact.py` reports `blast_radius: local` and `confidence: high`
 - small, local, reversible change
 - no external side effects
 - low security/data risk
@@ -74,6 +107,7 @@ Required actions:
 
 ### Depth 1 — One independent reviewer
 Use when any of these are true:
+- `diff-impact.py` reports `blast_radius: module`
 - 2+ files changed
 - logic changed in a meaningful way
 - moderate user impact
@@ -87,6 +121,7 @@ Required actions:
 
 ### Depth 2 — Reviewer plus final verifier
 Use when any of these are true:
+- `diff-impact.py` reports `blast_radius: project`
 - auth/security-sensitive changes
 - production-facing automation
 - migrations or destructive operations
@@ -142,6 +177,7 @@ Default downward when:
 ## Output guidance
 
 When reporting status, include:
+- `diff-impact.py` output (blast radius, confidence, hooks)
 - chosen review depth
 - why that depth was chosen
 - what evidence closed the loop
@@ -155,3 +191,5 @@ Example:
 - skipping review because the diff is small even when the blast radius is high
 - mistaking a reviewer summary for verification
 - giving reviewers the whole chat instead of a compact task packet
+- **treating ML evaluation code as low-risk because the diff is small** — a one-line change from `train_test_split(X, y)` to `train_test_split(X, y, shuffle=True)` on time-series data introduces severe temporal leakage; always apply Depth 2 minimum for ML training/evaluation changes
+- **treating test file changes as low-risk** — snapshot updates, property test changes, and mutation configuration changes each carry distinct regression quality risks; apply the regression gate (Step 3 of requesting-code-review) regardless of diff size

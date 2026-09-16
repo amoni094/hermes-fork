@@ -1,9 +1,21 @@
 ---
 name: agent-reach-discovery
-description: Use locally installed Agent Reach as a sidecar for news, social/community, movie, and music discovery workflows in Hermes.
+triggers:
+  - User wants richer news or source coverage than generic web search snippets
+  - User wants Reddit, X, Bilibili, Xiaohongshu, or community signal alongside news
+  - Running Agent Reach as a sidecar for news, movie, or music discovery
+  - Augmenting a news briefing or research pipeline with social/community sources
+description: >
+  Use when: Use locally installed Agent Reach as a sidecar for news, social/community, movie, and music discovery workflows in Hermes.
 version: 1.0.1
 license: MIT
 platforms: [linux]
+related_skills:
+  - competitor-news-monitor
+  - stay-in
+  - gold-class
+  - suggest-music
+  - domain-research-synthesis
 created_by: agent
 metadata:
   tags: [research, news, movies, music, social, retrieval, hermes, agent-reach]
@@ -113,6 +125,44 @@ Only install these when the user wants them and accepts the auth/config burden:
 4. If the task depends on reading text inside attached images, ask the user for the screenshot or image directly; search snippets are not enough.
 5. Still extract value: summarize the likely lessons/themes from the recovered snippets, but label confidence and missing coverage plainly.
 6. Do not pretend you read the full comment tree when you only have snippet-level evidence.
+
+## Handoff points
+- For named-company news watching (recurring, cited): hand off to `competitor-news-monitor`
+- For movie/TV home-viewing recommendations: hand off to `stay-in` (no cinema session required)
+- For Gold Class / premium cinema session times: hand off to `gold-class` (within next 24h, specific venues)
+- For music suggestions: hand off to `suggest-music`
+- For structured domain research with file output: hand off to `domain-research-synthesis`
+- For academic paper discovery on arXiv: hand off to `arxiv`
+- For formal multi-source literature surveys: hand off to `academic-literature-review`
+
+## News briefing format (when the user asks for a news update)
+
+Use domain-sectioned plain-text output. On CLI there is no markdown rendering — use ALL CAPS section headers, not bold or #. Proven structure:
+
+  DOMAIN NAME
+
+  2-4 bullet points. Each: one crisp fact + why it matters.
+  Sub-bullets for related detail where density justifies it.
+
+  BLIND SPOTS TODAY
+
+  Explicit list of what was not covered and why (channels unavailable,
+  markets closed, no AU signal surfaced, etc.).
+
+Domains to include when present: US/AU politics, geopolitics (Ukraine/Russia,
+Iran/Middle East), AI/tech, markets/finance.
+Always end with a BLIND SPOTS block — the user values knowing the gaps
+as much as the signal itself.
+
+Load this skill even for simple news requests: the channel status informs
+which sources to weight and what belongs in the blind spots block.
+
+## Parallel search batching for news sweeps
+
+Batch all independent web_search calls in a single turn (one call per
+domain cluster). Then batch web_extract calls on the best URLs from those
+results. Avoids serial round-trips and keeps the session compact. Two-wave
+pattern: search wave -> extract wave -> synthesize.
 
 ## Output expectations
 Report:

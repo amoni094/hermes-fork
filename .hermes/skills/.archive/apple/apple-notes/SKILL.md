@@ -1,6 +1,10 @@
 ---
 name: apple-notes
 description: "Manage Apple Notes via memo CLI: create, search, edit."
+related_skills:
+  - obsidian
+  - apple-reminders
+  - obsidian-research-ingestion
 version: 1.0.0
 author: Hermes Agent
 license: MIT

@@ -1,5 +1,15 @@
 ---
 name: receiving-code-review
+related_skills:
+  - requesting-code-review
+  - verification-before-completion
+  - systematic-debugging
+
+triggers:
+  - Review feedback arrives from a human reviewer or CI check and needs rigorous evaluation
+  - User says 'I got a review back', 'process the review comments', or 'what do I need to fix'
+  - Need to evaluate review feedback before blindly implementing all suggested changes
+  - Deciding which review comments to accept, push back on, or partially apply
 description: Use when review feedback arrives and you need to evaluate it rigorously before implementing changes.
 version: 1.0.0
 author: Hermes Agent (adapted from obra/superpowers)

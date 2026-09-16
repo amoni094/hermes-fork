@@ -1,6 +1,15 @@
 ---
 name: rootless-podman-compose-adaptation
-description: Adapt Docker Compose self-host projects to rootless Podman on Fedora Atomic or similar Linux systems, with verification-first startup and container-specific compatibility fixes.
+triggers:
+  - Docker is unavailable or undesirable, but podman is available on a Fedora system
+  - A project documents 'docker compose up' and the same stack is needed locally with podman
+  - Adapting a Docker Compose self-host project to rootless Podman on Fedora Atomic
+  - Podman compose is failing or behaving differently from Docker and needs adaptation
+description: >
+  Use when adapting Docker Compose self-host projects to rootless Podman on Fedora Atomic or similar Linux systems, with verification-first startup and container-specific compatibility fixes.
+related_skills:
+  - hermes-agent
+  - atomic-desktop-app-installation
 ---
 
 # When to use
@@ -52,6 +61,18 @@ Get the service actually running under Podman with small, verifiable changes. Pr
 
 # Pitfalls
 
+## RabbitMQ 4.x: env vars removed (hard failure since 4.0)
+
+RabbitMQ 4.x exits with code 1 if any `RABBITMQ_VM_MEMORY_*` env vars are set.
+Switch to a mounted config file. See `references/firecrawl-selfhost.md` for the full recipe.
+Diagnostic: `podman logs <rabbitmq>` shows the rejected var just before exit.
+
+## Redis eviction policy: must be `noeviction` for BullMQ queues
+
+`volatile-lru` silently evicts BullMQ jobs without TTLs. Always set
+`--maxmemory-policy noeviction`. Firecrawl logs `IMPORTANT! Eviction policy is volatile-lru`
+as a warning — that IS the problem. Fix it.
+
 ## RabbitMQ under rootless Podman
 
 The official RabbitMQ management image can fail under rootless Podman with `.erlang.cookie` permission errors. A durable workaround is to run the service as the rabbitmq UID/GID already expected inside the image:
@@ -87,6 +108,41 @@ Prefer to leave:
 - an adaptation directory with `docker-compose.yaml` and `.env`
 - exact start/stop/test commands
 - one reference note under `references/` for project-specific quirks discovered during bring-up
+
+## Updating a source-build compose project (firecrawl pattern)
+
+Some projects ship a `docker-compose.yaml` with `build:` directives (builds from local source) instead of pre-pulled `image:` references. Running `podman-compose up -d` on these triggers a full compilation (Rust + Node, 10+ minutes). Do NOT run compose directly for routine updates.
+
+**Correct update pattern when compose builds from source:**
+
+1. `cd ~/src/<project> && git pull`
+2. Identify the `build:` line (e.g. `build: apps/api`) and the commented-out `image:` alternative above it in the compose file
+3. Temporarily swap: `cp docker-compose.yaml docker-compose.yaml.bak && sed -i 's|build: apps/api|image: ghcr.io/firecrawl/firecrawl:latest|' docker-compose.yaml`
+4. Restart: `podman-compose up -d --no-recreate api`
+5. Restore original: `mv docker-compose.yaml.bak docker-compose.yaml`
+6. Verify: `podman ps --filter name=<project>_api_1` then `curl -s -o /dev/null -w '%{http_code}' http://localhost:3002/v1/scrape` => 404 = healthy (endpoint needs POST body; connection refused = actually down)
+
+**Pitfall:** `podman-compose up -d` on a source-build compose file triggers compilation, not image pull. Always detect `build:` in the compose file before running a routine update.
+
+**Pitfall:** 404 on `POST /v1/scrape` with no body is correct/healthy. Don't mistake this for a container failure.
+
+## Firecrawl self-host on rootless Podman (verified pattern)
+
+Layout: clone at `~/src/firecrawl`, adaptation at `~/firecrawl-selfhost`, runner at `~/.local/bin/podman-compose`.
+
+Key adaptations:
+1. Use fully-qualified image names: `docker.io/library/redis:alpine`, `docker.io/library/rabbitmq:4-management`
+2. RabbitMQ rootless fix: `user: "999:999"`, healthcheck: `rabbitmq-diagnostics -q ping`
+3. API dependency ordering: wait for RabbitMQ `service_healthy` AND PostgreSQL `service_healthy`
+4. PostgreSQL healthcheck: `pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres}`
+5. Queue URL needs credentials: `NUQ_RABBITMQ_URL=amqp://guest:***@rabbitmq:5672`
+
+Verification sequence:
+1. `podman ps` — all `firecrawl_*` containers up
+2. `GET /` on port 3002 — returns Firecrawl API JSON banner
+3. `POST /v1/scrape` with `https://example.com` — returns markdown
+
+Pitfall: `/v1/health` returns 404 on the tested image. Use root endpoint + one real scrape as verification instead.
 
 # Support files
 

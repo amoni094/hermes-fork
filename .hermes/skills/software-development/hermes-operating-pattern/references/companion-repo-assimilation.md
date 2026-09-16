@@ -27,7 +27,7 @@ If custom-endpoint setup starts with a blank base URL, probe common local server
 
 Concrete endpoints used in this session:
 
-- Ollama — `http://127.0.0.1:11434/v1`
+- ~~Ollama — `http://127.0.0.1:11434/v1`~~ (REMOVED Jul 2026 — uninstalled)
 - LM Studio — `http://127.0.0.1:1234/v1`
 - Atomic Chat — `http://127.0.0.1:1337/v1`
 - vLLM / generic OpenAI server — `http://127.0.0.1:8000/v1`

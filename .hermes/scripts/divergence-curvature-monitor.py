@@ -94,18 +94,27 @@ def _kl_curvature(p: np.ndarray, q: np.ndarray, eps: float = EPS) -> float:
     """
     Finite-difference estimate of KL curvature along p→q direction.
     C = (KL(p+ε·d || q) - 2·KL(p||q) + KL(p-ε·d || q)) / ε²
-    where d = q - p (perturbation direction).
+    where d = (q-p)/||q-p|| (unit perturbation direction).
+
+    Note: this is a directional KL curvature proxy, not Fisher information.
+    Negative values (can occur near boundaries after clipping) are kept as-is
+    and indicate the distribution pair is at a flat or non-convex region.
     """
-    d  = q - p
-    pp = p + eps * d; pp = np.clip(pp, 1e-10, None); pp /= pp.sum()
-    pm = p - eps * d; pm = np.clip(pm, 1e-10, None); pm /= pm.sum()
+    d_raw = q - p
+    norm  = np.linalg.norm(d_raw)
+    if norm < 1e-12:
+        return 0.0
+    d  = d_raw / norm                                          # unit direction
+
+    pp = np.clip(p + eps * d, 1e-10, None); pp /= pp.sum()
+    pm = np.clip(p - eps * d, 1e-10, None); pm /= pm.sum()
     q_ = np.clip(q, 1e-10, None); q_ /= q_.sum()
 
     kl_0  = _kl(p,  q_)
     kl_pp = _kl(pp, q_)
     kl_pm = _kl(pm, q_)
     curv  = (kl_pp - 2 * kl_0 + kl_pm) / (eps ** 2)
-    return max(0.0, curv)
+    return float(curv)   # keep sign — negative = flat/boundary region
 
 
 def run(top_n: int = 10) -> int:

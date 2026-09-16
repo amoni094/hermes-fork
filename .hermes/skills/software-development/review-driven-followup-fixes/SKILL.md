@@ -1,7 +1,42 @@
 ---
+author: Hermes Agent
+depends_on: [requesting-code-review, adversarial-review, verification-before-completion]
+provides: [pr-followup, targeted-fixes, reviewer-signal-mining]
+description: 'Use when: PR feedback has arrived and a targeted fix-and-re-verify cycle is needed. Mine reviewer signal, inspect
+  nearby risks, verify surgically, commit only after fresh evidence.'
+license: MIT
+metadata:
+  hermes:
+    related_skills:
+    - requesting-code-review
+    - adversarial-review
+    - risk-based-review
+    - verification-before-completion
+    tags:
+    - review
+    - followup
+    - verification
+    - pr
+    - code-quality
 name: review-driven-followup-fixes
-description: "Handle follow-up passes on reviewed code changes: mine reviewer signal, inspect nearby risks, verify surgically, and commit only after fresh evidence."
+related_skills:
+  - requesting-code-review
+  - adversarial-review
+  - risk-based-review
+  - verification-before-completion
+
+platforms:
+- linux
+- macos
+- windows
+triggers:
+- User says 'do another pass', 'check the PR comments and fix everything relevant'
+- Need to mine reviewer signal from PR comments and apply targeted fixes
+- Handling follow-up passes on already-reviewed code changes
+- Inspecting nearby risks after a review and verifying surgically before closing
+version: 1.0.0
 ---
+
 
 # Review-Driven Follow-Up Fixes
 
@@ -49,6 +84,7 @@ Use this when a user asks for another pass after PR feedback, review comments, o
    - Stage only the intended files.
    - Use a commit message that describes the follow-up fix, not the investigation.
    - Push and then verify branch/head state.
+   - **Skill-freshness:** before pushing, check if this fix touches any API, CLI, or workflow a Hermes skill documents. If so, patch that skill immediately (use `skill_manage(action='patch')`) or add a follow-up task — a fix that silently obsoletes documented procedure is a knowledge-rot bug.
 
 ## Pitfalls
 - Do not assume an empty review-thread API means there is no remaining work; merged PRs often require branch-based follow-up inspection.
@@ -68,3 +104,6 @@ Use this when a user asks for another pass after PR feedback, review comments, o
 
 ## References
 - Add session-specific notes under `references/` when a repo exposes unusual PR/comment behavior or a recurring verification quirk.
+## Reference files
+
+- `references/merged-pr-followup-and-popup-blocked-ux.md` — Session note: merged-PR follow-up review and popup-blocked UX

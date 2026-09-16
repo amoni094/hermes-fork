@@ -1,6 +1,15 @@
 ---
 name: ouroboros-plugin-development
-description: Build, patch, install, and verify local Ouroboros plugins with collision checks, workspace-safe artifact paths, and dispatcher-vs-direct execution comparison.
+triggers:
+  - A plugin command needs to be added, renamed, patched, or inspected in Ouroboros
+  - A plugin works when run directly but behaves differently through ooo dispatch
+  - Building, installing, or verifying a local Ouroboros plugin with collision checks
+  - Plugin workspace paths, artifact paths, or dispatcher trust need adjustment
+description: >
+  Use when: Build, patch, install, and verify local Ouroboros plugins with collision checks, workspace-safe artifact paths, and dispatcher-vs-direct execution comparison.
+related_skills:
+  - autonomous-agent-loop-design
+  - verification-before-completion
 ---
 
 # Ouroboros Plugin Development
@@ -223,6 +232,25 @@ When `ooo <plugin> ...` fails but the plugin appears to have run:
 - Do not stop after reinstall; verify both direct execution and dispatched execution.
 - Do not treat a dirty-checkout worktree failure as evidence the prepared seed/handoff is bad; first separate artifact storage from the clean repo used for workflow execution.
 - Do not keep validating a dispatched plugin from an installed tree that is being mutated by its own runtime artifacts; move artifacts out of the installed tree and reinstall before drawing conclusions about trust drift.
+
+## Superpowers Seed YAML Contract (from superpowers-seed-yaml-contract.md)
+
+**Problem pattern:** A plugin prepares artifacts and recommends a workflow run, but the runner fails immediately with a YAML parse error because the seed artifact is markdown prose (`seed.md`) rather than structured YAML.
+
+**Fix pattern for workflow-runner handoff:**
+- Emit `seed.yaml`, not markdown `seed.md`.
+- Generate a structured Seed document with contract fields expected by the installed Ouroboros version.
+- Recommend: `ooo run workflow <seed.yaml>` explicitly.
+
+**Minimum seed checks before claiming handoff is correct:**
+1. Open the generated seed artifact and confirm it is actual YAML (not prose).
+2. Verify the seed contains required contract fields for the installed Ouroboros version.
+3. Run the workflow command once and confirm it gets past the seed-load phase.
+4. Only then investigate runtime/backend/provider failures.
+
+**Dispatch/trust follow-up after local plugin edits:**
+- Symptom: `plugin 'superpowers' bytes have changed since installation; refusing to invoke`.
+- Fix: reinstall from the edited local path, re-grant declared trust scopes, then retest dispatched invocation.
 
 ## Support files
 - `references/dispatcher-and-collision-pitfalls.md` — concrete reproduction notes for command collisions, workspace artifact routing, and dispatch-vs-direct verification.

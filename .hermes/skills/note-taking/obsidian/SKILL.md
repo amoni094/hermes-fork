@@ -1,18 +1,31 @@
 ---
 name: obsidian
-description: Read, search, create, and edit notes in the Obsidian vault.
+provides: [file_read, file_write]
+version: 1.1.0
+triggers:
+  - Reading, searching, creating, or editing notes in the Obsidian vault
+  - User asks to 'open a note', 'find a note', 'create a note in Obsidian'
+  - Need to read or write Markdown files in the Obsidian vault directory
+  - Linking or querying existing Obsidian notes as part of a research or planning task
+description: >
+  Use when: Read, search, create, and edit notes in the Obsidian vault.
 platforms: [linux, macos, windows]
+related_skills:
+  - obsidian-research-ingestion
+  - hermes-obsidian-sync
 ---
 
 # Obsidian Vault
 
 Use this skill for filesystem-first Obsidian vault work: reading notes, listing notes, searching note files, creating notes, appending content, and adding wikilinks.
 
+> **Graphiti integration:** When ingesting research articles, papers, or structured knowledge into the vault, also load `obsidian-research-ingestion` — it adds a Graphiti episode write step (via `mcp__graphiti__add_memory`) so the content lands in the knowledge graph. Plain note edits using this skill alone do NOT write to Graphiti.
+
 ## Vault path
 
 Use a known or resolved vault path before calling file tools.
 
-The documented vault-path convention is the `OBSIDIAN_VAULT_PATH` environment variable, for example from `~/.hermes/.env`. If it is unset, use `~/Documents/Obsidian Vault`.
+The documented vault-path convention is the `OBSIDIAN_VAULT_PATH` environment variable, for example from `~/.hermes/.env`. If it is unset, use `/var/home/rainbow/Documents/SecondBrain` (the confirmed local vault path — `~/Documents/Obsidian Vault` is the upstream default but does NOT exist here).
 
 File tools do not expand shell variables. Do not pass paths containing `$OBSIDIAN_VAULT_PATH` to `read_file`, `write_file`, `patch`, or `search_files`; resolve the vault path first and pass a concrete absolute path. Vault paths may contain spaces, which is another reason to prefer file tools over shell commands.
 
@@ -60,6 +73,14 @@ Use `patch` for focused note changes when the current content gives you stable c
 
 Obsidian links notes with `[[Note Name]]` syntax. When creating notes, use these to link related content.
 
+## Obsidian-Flavored Markdown syntax
+
+For Obsidian-specific syntax beyond standard markdown, load these references:
+
+- `references/PROPERTIES.md` — frontmatter property types (text, number, checkbox, date, list, links)
+- `references/CALLOUTS.md` — callout types, foldable callouts, nested callouts
+- `references/EMBEDS.md` — embedding notes, images, PDFs, audio, bases, search results
+
 ## Hermes Memory Wiki reconnaissance
 
 If the vault includes an Hermes Memory Wiki or another generated knowledge layer, use a short orientation pass before diving into individual notes:
@@ -74,3 +95,12 @@ If the vault includes an Hermes Memory Wiki or another generated knowledge layer
 For this workspace, the live vault and routing notes are documented in `references/hermes-second-brain-orientation.md`.
 
 See `references/hermes-memory-wiki-recon.md` for the compact orientation playbook.
+
+## Pitfalls
+
+- **Shell variable paths fail in file tools** — `read_file`/`write_file`/`patch`/`search_files` do not expand `$OBSIDIAN_VAULT_PATH`. Always resolve to a concrete absolute path first.
+- **Wrong fallback path** — the upstream default `~/Documents/Obsidian Vault` does not exist on this host. Fallback is `/var/home/rainbow/Documents/SecondBrain`.
+- **Spaces in vault path** — prefer file tools over shell commands for paths containing spaces; shell quoting is fragile.
+- **Editing inside managed marker blocks** — generated blocks (Hermes Memory Wiki sections) are inside managed markers. Edit human-authored content only; preserve the markers and the generated block contents.
+- **Wiki-to-wiki citation loops** — always prefer source-backed claims over notes that cite other generated notes. Read the primary source, not the wiki's summary of it.
+- **Overwriting without reading first** — use `patch` for targeted edits; only use `write_file` when rewriting the whole note is intentional and you have the full current content.

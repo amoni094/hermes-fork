@@ -10,7 +10,7 @@ Only `SKILL.md` was modified. All 45 reference files are verbatim copies.
 
 | Change | Upstream | Hermes |
 |--------|----------|--------|
-| Metadata namespace | `hermes` | `hermes` |
+| Metadata namespace | `openclaw` | `hermes` |
 | Trigger | `/baoyu-infographic` slash command | Natural language skill matching |
 | User config | EXTEND.md file (project/user/XDG paths) | Removed — not part of Hermes infra |
 | User prompts | `AskUserQuestion` (batched) | `clarify` tool (one at a time) |

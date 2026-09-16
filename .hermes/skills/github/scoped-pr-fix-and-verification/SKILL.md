@@ -1,6 +1,18 @@
 ---
 name: scoped-pr-fix-and-verification
-description: Fix a PR branch under repo-specific quality gates, separate branch regressions from baseline failures, then commit and push only verified scoped changes.
+provides: [git_ops, shell_exec]
+triggers:
+  - An existing GitHub PR branch needs verification and fixes before merge
+  - Repo has custom quality gates beyond a single test command
+  - Need to separate branch regressions from baseline failures before committing
+  - PR is failing CI and needs targeted fixes with branch-scoped diff verification
+description: >
+  Use when fixing a PR branch under repo-specific quality gates, separate branch regressions from baseline failures, then commit and push only verified scoped changes.
+related_skills:
+  - github-issue-to-pr
+  - github-operations
+  - split-ci-workflow-change-and-draft-pr
+  - verification-before-completion
 ---
 
 # Scoped PR fix and verification

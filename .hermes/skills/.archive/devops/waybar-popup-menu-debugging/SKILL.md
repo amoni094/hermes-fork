@@ -5,6 +5,10 @@ version: 1.0.0
 author: Hermes Agent
 license: MIT
 platforms: [linux]
+related_skills:
+  - wallust-desktop-theme-integration
+  - wayland-session-management
+  - fedora-atomic-dotfiles-adaptation
 metadata:
   hermes:
     tags: [waybar, gtk, hyprland, css, popup-menu, debugging]

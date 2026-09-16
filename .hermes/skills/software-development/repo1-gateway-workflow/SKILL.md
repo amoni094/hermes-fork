@@ -1,6 +1,7 @@
 ---
 name: repo1-gateway-workflow
-description: "Work effectively in /var/home/rainbow/repo1: API, policy, optimizer, router, providers, cache, telemetry, and control UI."
+description: >
+  Use when: Work effectively in /var/home/rainbow/repo1: API, policy, optimizer, router, providers, cache, telemetry, and control UI.
 version: 1.0.0
 author: Hermes Agent
 license: MIT
@@ -9,11 +10,22 @@ metadata:
   hermes:
     tags: [gateway, fastapi, routing, llm, policy, cache, telemetry]
     related_skills: [verification-before-completion, requesting-code-review, subagent-driven-development]
+triggers:
+  - Task involves working in or modifying the repo1 gateway project at /var/home/rainbow/repo1
+  - User asks to change routing, policy, optimizer, cache, or telemetry in the local LLM gateway
+  - Work touches the FastAPI gateway, provider config, or control UI in repo1
+related_skills:
+  - verification-before-completion
+  - plan
+  - requesting-code-review
+  - subagent-driven-development
 ---
 
 # Repo1 Gateway Workflow
 
 Use this skill when working in `/var/home/rainbow/repo1`.
+
+Before running commands or inspecting logs, read `/var/home/rainbow/repo1/docs/onboarding-agent-checklist.md` — it has environment setup, key contracts, pitfalls, and definition of done.
 
 ## What this repo is
 

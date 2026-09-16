@@ -1,12 +1,23 @@
 ---
 name: messaging-consent-boundaries
-description: Prevent accidental contact with the user's real-world contacts when configuring or troubleshooting Hermes messaging platforms.
+triggers:
+  - Configuring or troubleshooting a Hermes messaging platform (WhatsApp, Signal, Telegram)
+  - Risk of accidentally contacting real-world contacts during platform setup or testing
+  - Need to verify messaging configuration without sending live messages to contacts
+  - Platform setup requires status/config/log inspection before any live chat tests
+description: >
+  Use when preventing accidental contact with the user's real-world contacts when configuring or troubleshooting Hermes messaging platforms.
 version: 1.0.0
 author: Hermes Agent
 license: MIT
 metadata:
   hermes:
-    tags: [messaging, whatsapp, consent, privacy, safety, gateway]
+    tags: [messaging, whatsapp, consent, privacy, safety, gateway, email]
+related_skills:
+  - email-compose-and-send
+  - computer-use
+  - autonomous-agent-loop-design
+  - verification-before-completion
 ---
 
 # Messaging Consent Boundaries
@@ -73,6 +84,19 @@ Pairing Hermes to WhatsApp via QR usually attaches Hermes to the full WhatsApp a
 - do not use existing chats as a test surface without express consent
 - prefer a dedicated number/account for Hermes if separation matters
 
+## Desktop WhatsApp Web clients (ZapZap / Flatpak) — stability without chat access
+
+When the user asks to fix a **personal** WhatsApp desktop wrapper (e.g. Flatpak ZapZap logout, crash, QR again):
+
+- This is still a live personal account surface. Do not open chats, dump IndexedDB/Local Storage message payloads, scrape conversation lists, or restore purged personal session content.
+- Allowed work: app config, process/flatpak health, crash dumps, storage **sizes**/cookie **counts**, account-tab enable flags, GPU/tray/session settings, Linked-devices hygiene advice.
+- "Make it more stable" is not consent to read or message contacts.
+- Full profile wipes that force re-pair need an explicit user OK; prefer config + single-tab + GPU-safe settings first.
+
+See devops skill `atomic-desktop-app-installation` → `references/flatpak-messaging-clients.md` for the operational stability checklist (logout hardening, permanent/tray/boot start, phone-primary limits).
+
+Explaining architecture is allowed and expected: phone app is primary, ZapZap is companion-only, uninstalling the phone app or Linked-devices logout ends the desktop link. That is product fact, not chat access — still do not open threads or dump session message stores while answering.
+
 ## Response pattern after a user correction
 
 When the user says some form of 'do not talk to my contacts without my express consent', reply with all of the following:
@@ -81,14 +105,39 @@ When the user says some form of 'do not talk to my contacts without my express c
 3. a concrete operational rule ('no sending, no entering chats, no replying without express consent')
 4. an offer to disable or isolate the integration
 
+## Platform-specific: Telegram phone number → chat ID resolution
+
+When the user provides a contact's phone number for Telegram outreach, you **cannot** resolve it to a Telegram chat ID via the API. Telegram does not expose a phone-number lookup endpoint. The contact must already be in the gateway account's contact list.
+
+**Workarounds (offer in this order):**
+1. **Ask for their Telegram username** (`@handle`) — works directly without a chat ID
+2. **Ask the contact to message first** — once they initiate, the chat ID appears in gateway logs
+3. **Ask the user to find the chat ID** — visible in the web.telegram.org URL when a chat is open (numeric ID for DMs)
+
+Do not claim you can resolve a phone number to a Telegram chat ID. State the gap plainly and offer the above workarounds.
+
 ## Pitfalls
 
 - Treating 'pair the account' as permission to use real chats
 - Using an existing contact thread as the easiest test target
 - Failing to distinguish a dedicated bot number from a personal account
 - Explaining the system before acknowledging the user's boundary breach
+- Claiming you can look up a Telegram user by phone number — you cannot without the contact already being present in the gateway account
 
-## Reference
+## WhatsApp Personal Account Pitfall (from whatsapp-personal-account-pitfall.md)
+
+- When Hermes is paired to WhatsApp through the **QR bridge on a personal account**, the connection should be treated as access to the user's live WhatsApp account — not an isolated test bot.
+- A successful pair/restart can make Hermes able to see or act within existing chats on that account.
+- **Do not use any existing chat as a test target** without express consent.
+- If the user wants a "separate bot number", recommend a dedicated number/account or WhatsApp Cloud/business setup rather than attaching Hermes to the personal account.
+- If the user objects after pairing, the safest next action is to **disable the current integration** until isolation is in place.
+
+Preferred phrasing after an accidental contact:
+- Apologize directly.
+- Confirm "I will not contact any of your contacts without your express consent."
+- Offer to disable the integration now.
+
+## Reference files
 
 See `references/whatsapp-personal-account-pitfall.md` for the session-specific lesson that motivated this skill.
 See `references/email-recipient-authorization-and-tooling.md` for the distinction between exact-recipient consent and actual outbound delivery capability.

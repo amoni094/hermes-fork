@@ -1,5 +1,15 @@
 ---
 name: using-git-worktrees
+related_skills:
+  - using-superpowers
+  - isolated-workspace-preflight
+  - finishing-a-development-branch
+
+triggers:
+  - Making non-trivial changes in a git repo and want isolation from the main checkout
+  - User says 'use a worktree', 'isolate this branch', or 'keep main clean while I work'
+  - Need a separate working tree for a risky refactor or long-running feature branch
+  - Switching between multiple branches simultaneously without stashing
 description: Use when making non-trivial changes in a git repository and you want isolation from the user's main checkout.
 version: 1.0.0
 author: Hermes Agent (adapted from obra/superpowers)

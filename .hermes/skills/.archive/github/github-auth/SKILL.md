@@ -1,6 +1,10 @@
 ---
 name: github-auth
 description: "GitHub auth setup: HTTPS tokens, SSH keys, gh CLI login."
+related_skills:
+  - github-operations
+  - github-pr-workflow
+  - github-issues
 version: 1.1.0
 author: Hermes Agent
 license: MIT

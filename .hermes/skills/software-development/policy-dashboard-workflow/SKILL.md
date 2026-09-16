@@ -1,6 +1,7 @@
 ---
 name: policy-dashboard-workflow
-description: "Work effectively in the local-first policy-dashboard repo: refresh pipeline, generated data, UI, and portability verification."
+description: >
+  Use when: Work effectively in the local-first policy-dashboard repo: refresh pipeline, generated data, UI, and portability verification.
 version: 1.0.0
 author: Hermes Agent
 license: MIT
@@ -9,6 +10,15 @@ metadata:
   hermes:
     tags: [policy-dashboard, react, vite, data-refresh, generated-data, dashboard]
     related_skills: [verification-before-completion, requesting-code-review, subagent-driven-development]
+triggers:
+  - Task involves the local-first policy-dashboard repo (React/Vite, generated data, portability verification)
+  - User asks to refresh, update, or debug the policy dashboard UI or its data pipeline
+  - Work touches generated data, the dashboard refresh pipeline, or its UI components
+related_skills:
+  - verification-before-completion
+  - plan
+  - requesting-code-review
+  - subagent-driven-development
 ---
 
 # Policy Dashboard Workflow
@@ -79,6 +89,21 @@ Use this order whenever generated data may affect the UI:
 5. Run `npm run build`.
 6. Inspect a sample of `src/generated/*.ts` or `public/data/*.json` before claiming success.
 7. Check `git status --short` before commit so unrelated tracked or untracked files do not get swept into the change.
+
+## Blocked Source Fallbacks (from blocked-source-fallbacks.md)
+
+**Durable pattern:** When a monitored lane hits anti-bot / WAF protections, prefer compliant fallback lanes:
+- Search-indexed RSS/results pages or official newsroom pages.
+- Explicit profile link-out when post-body capture is not appropriate.
+- Reflect the fallback honestly in UI copy (`fallback lane`, `link-out only`, `search-indexed`).
+- Keep generated artifacts and UI labels aligned: if only profile links are present, do not surface them as `latest posts`.
+
+**Per-source notes:**
+- **Reuters** — direct extraction may be blocked; fallback to Google News RSS scoped `site:reuters.com` with explanatory copy.
+- **Instagram / X / Facebook** — treat as link-out-only in this dashboard when access requires anti-bot-sensitive rendering or authenticated surfaces. Safe pattern: profile pills + explanatory note, not scraped post bodies.
+- **Cloudflare / WAF-blocked pages** — use search-indexed or official-feed monitoring lanes; keep `sourceHealth` notes explicit about retrieval mode.
+
+**Commit hygiene:** When introducing fallback behavior, stage only the scoped script/UI/generated files that belong to the change. Leave unrelated repo diffs out of the commit.
 
 ## Commands
 
