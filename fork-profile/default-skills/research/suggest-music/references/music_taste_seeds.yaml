@@ -1,0 +1,200 @@
+source: pasted_windows_music_library
+normalized_on: 2026-06-10
+notes:
+  - Normalized from a pasted Windows music-library directory listing.
+  - Focus is taste modeling, not full forensic inventory.
+  - Seed tracks favor explicitly visible song files and repeat-presence artists.
+clusters:
+  classic_hard_rock:
+    artists:
+      - Black Sabbath
+      - Ronnie James Dio
+      - Rainbow
+      - UFO
+      - Uriah Heep
+      - Scorpions
+      - Van Halen
+      - Ozzy Osbourne
+      - Blue Oyster Cult
+      - Foreigner
+      - Boston
+      - Quiet Riot
+      - Wolfmother
+      - Clutch
+    seed_tracks:
+      - Black Sabbath — War Pigs
+      - Black Sabbath — Paranoid
+      - Ronnie James Dio — Holy Diver
+      - Ronnie James Dio — Rainbow in the Dark
+      - Rainbow — Man on the Silver Mountain
+      - UFO — Doctor Doctor
+      - UFO — Rock Bottom
+      - Uriah Heep — Easy Livin'
+      - Scorpions — Rock You Like a Hurricane
+      - Van Halen — Panama
+      - Ozzy Osbourne — Crazy Train
+      - Blue Oyster Cult — (Don't Fear) The Reaper
+      - Boston — More Than a Feeling
+      - Clutch — Electric Worry
+      - Wolfmother — Joker & the Thief
+  metal_and_power_metal:
+    artists:
+      - Iron Maiden
+      - Metallica
+      - Demons and Wizards
+      - Nightwish
+      - Danzig
+    seed_tracks:
+      - Iron Maiden — Fear of the Dark
+      - Metallica — Master of Puppets
+      - Metallica — Enter Sandman
+      - Demons and Wizards — Fiddler on the Green
+      - Nightwish — Nemo
+      - Nightwish — Wish I Had an Angel
+      - Danzig — Mother
+      - Danzig — Twist of Cain
+  prog_psych_and_art_rock:
+    artists:
+      - King Gizzard & The Lizard Wizard
+      - Pink Floyd
+      - Jethro Tull
+      - The Alan Parsons Project
+      - Supertramp
+      - Talking Heads
+      - Cream
+      - Jimi Hendrix
+      - Dire Straits
+    seed_tracks:
+      - King Gizzard & The Lizard Wizard — Ice V
+      - King Gizzard & The Lizard Wizard — Magma
+      - Pink Floyd — Time
+      - Pink Floyd — Money
+      - Jethro Tull — Aqualung
+      - Jethro Tull — Locomotive Breath
+      - The Alan Parsons Project — Eye in the Sky
+      - Supertramp — logical/song-level presence inferred from greatest-hits discography
+      - Talking Heads — Psycho Killer
+      - Talking Heads — Once in a Lifetime
+      - Cream — White Room
+      - Jimi Hendrix — Purple Haze
+      - Dire Straits — Sultans of Swing
+      - Dire Straits — Romeo and Juliet
+  blues_roots_and_guitar:
+    artists:
+      - B.B. King
+      - Otis Rush
+      - Rory Gallagher
+      - Eric Clapton
+      - The Black Keys
+      - The Dead South
+      - The Handsome Family
+      - The Animals
+      - Mary Hopkin
+    seed_tracks:
+      - B.B. King — The Thrill Is Gone
+      - B.B. King — Paying the Cost to Be the Boss
+      - Otis Rush — All Your Love (I Miss Loving)
+      - Rory Gallagher — taste presence from Big Guns compilation
+      - Eric Clapton — Layla
+      - Eric Clapton — Crossroads
+      - The Black Keys — Gold on the Ceiling
+      - The Dead South — In Hell I'll Be in Good Company
+      - The Handsome Family — Far From Any Road
+      - The Animals — House of the Rising Sun
+      - Mary Hopkin — Those Were the Days
+  goth_darkwave_and_synth:
+    artists:
+      - The Sisters of Mercy
+      - The Cruxshadows
+      - Visage
+    seed_tracks:
+      - The Sisters of Mercy — Lucretia My Reflection
+      - The Sisters of Mercy — More
+      - The Cruxshadows — Winter Born (This Sacrifice)
+      - The Cruxshadows — Marilyn, My Bitterness
+      - Visage — Fade to Grey
+  synth_and_new_wave:
+    artists:
+      - Blondie
+      - Kajagoogoo
+      - Talking Heads
+    seed_tracks:
+      - Blondie — Heart of Glass
+      - Blondie — Atomic
+      - Kajagoogoo — Too Shy
+      - Talking Heads — Psycho Killer
+      - Talking Heads — Once in a Lifetime
+  classic_pop_rock:
+    artists:
+      - Suzi Quatro
+      - Shakin' Stevens
+      - The Animals
+      - Fleetwood Mac
+      - Duffy
+    seed_tracks:
+      - Suzi Quatro — Can the Can
+      - Shakin' Stevens — Green Door
+      - The Animals — House of the Rising Sun
+      - Fleetwood Mac — Gypsy
+      - Duffy — Mercy
+  alt_pop_indie_and_modern:
+    artists:
+      - Metric
+      - Coldplay
+      - Red Hot Chili Peppers
+      - AMH
+      - MitiS
+      - Eminem
+      - Nicki Minaj
+    seed_tracks:
+      - Metric — Help I'm Alive
+      - Metric — Gimme Sympathy
+      - Coldplay — Viva La Vida
+      - Red Hot Chili Peppers — Californication
+      - Red Hot Chili Peppers — Soul to Squeeze
+      - AMH — Backwards
+      - AMH — Wastin’ Time
+      - MitiS — Open Window
+      - Eminem — Stan
+      - Nicki Minaj — Super Bass
+browser_history_boosts:
+  recent_music_signals:
+    - Suzi Quatro
+    - Kajagoogoo
+    - Duffy
+    - The Animals
+    - Shakin' Stevens
+    - AMH
+  recent_query_examples:
+    - can the can
+    - too shy
+    - mercy duffy
+    - green door shakin stevens
+    - amh
+artist_priority:
+  high_confidence_library_artists:
+    - Black Sabbath
+    - Dire Straits
+    - Pink Floyd
+    - Iron Maiden
+    - Jimi Hendrix
+    - Nightwish
+    - Talking Heads
+    - The Sisters of Mercy
+    - Rainbow
+    - Wolfmother
+    - Metric
+    - Fleetwood Mac
+    - B.B. King
+    - King Gizzard & The Lizard Wizard
+  exploratory_from_history:
+    - Suzi Quatro
+    - Kajagoogoo
+    - Duffy
+    - Shakin' Stevens
+    - AMH
+exclusions:
+  - binaural beats
+  - isochronic tones
+  - generic meditation audio
+  - non-music utility files

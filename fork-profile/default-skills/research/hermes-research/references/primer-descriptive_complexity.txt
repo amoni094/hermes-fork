@@ -1,0 +1,70 @@
+PRIMER: Descriptive Complexity and Circuit Complexity
+
+CORE CONCEPTS
+
+Descriptive complexity asks: which logical languages exactly characterise computational complexity classes? The answer is often cleaner than the circuit or Turing-machine definition.
+
+Fagin's Theorem (1974): A property of finite structures is in NP if and only if it is definable in existential second-order logic (ESO). Formally, NP = ESO, where ESO sentences have the form (exists R1...Rk)(phi) with phi a first-order formula over the expanded signature. No resource bounds or machine models appear in the statement -- the characterisation is purely logical.
+
+Immerman-Vardi Theorem: PTIME (over ordered structures) = least fixed-point logic (LFP). This extends first-order logic with a fixed-point operator; queries expressible in LFP are exactly those computable in polynomial time.
+
+Circuit complexity classes: AC0 is the class of properties decidable by constant-depth, polynomial-size Boolean circuits with unbounded fan-in AND/OR gates. TC0 adds majority gates. NC1 is log-depth, bounded fan-in. Key containment: AC0 subset TC0 subset NC1 subset NC subset PTIME.
+
+Hastad's Theorem: PARITY is not in AC0. Constant-depth circuits cannot compute the parity of n bits; any depth-d circuit requires exponential (2^(n^(1/d))) size. This is proved by random restriction / switching lemma. It is the sharpest unconditional lower bound in complexity theory.
+
+Communication complexity (Yao 1979): Two parties Alice and Bob each hold part of an input and exchange messages to compute a function f. The communication complexity of f lower-bounds the circuit complexity of f -- specifically, a circuit of depth d and size s implies a communication protocol of cost O(d log s). So communication lower bounds imply circuit lower bounds, bridging protocol hardness to Boolean circuit hardness.
+
+Descriptive characterisation of AC0: AC0 = FO (first-order logic with built-in arithmetic predicates). TC0 = FO with a numeric counting quantifier. The jump from FO to FO+counting reflects exactly what majority gates add.
+
+
+HERMES COMPONENT ANALYSIS
+
+1. Model routing and skill-selection decisions
+
+(a) The routing decision is a function f: context -> model x skill_subset. Context is a vector of features (task tags, token budget, tool set, session state). The range is an (exponentially large) product space. Logically, this is a first-order query over a relational structure of (session, skill, model, cost) tuples. If the routing policy is expressible in FO with arithmetic, it lies in AC0 and is computable by a constant-depth circuit -- meaning no sequential chain-of-thought is needed to execute it correctly.
+
+(b) Hermes currently applies tag/trigger string-matching against skill descriptions plus heuristic model-tier assignment in config.yaml. This is effectively a depth-2 circuit: one layer of OR over trigger matches, one final selector. AC0, but shallow and brittle.
+
+(c) A principled approach uses LFP (least fixed-point logic) over the skill-tag relation to compute the fixpoint of skill relevance: a skill S is relevant if any trigger of S unifies with a context feature, or if a skill that depends on S is relevant. This is a Datalog program (which is equivalent to LFP on ordered structures), computable in PTIME and expressible without any iterative prompt chain. The formula: Relevant(S) <- Trigger(S, t), Feature(ctx, t); Relevant(S) <- Depends(S, S'), Relevant(S'). This replaces the flat string-match with a closed-form fixed-point computation that is correct, not just fast.
+
+(d) Value: moderate. The existing tag-match works well for shallow retrieval; the LFP extension matters only when skill dependencies span multiple hops (which does happen: skill A invokes skill B which requires skill C). Validate by measuring routing failures (wrong skill loaded, cascading missed context) against the dependency graph depth. Risk: Datalog engines add a dependency; a pure Python implementation of the two-rule program above is trivial.
+
+
+2. Structured output grammars (tool call schemas, JSON schemas, SOUL.md constraints)
+
+(a) Each tool's output schema is a regular tree grammar; tool-call parameters are typed by a context-free grammar (JSON Schema with $ref cycles). The expressiveness question is: can the model, in a single forward pass constrained by the grammar, produce the correct output? Regular and context-free constraints on outputs are in AC0 (recognition) and NC1 (parsing), respectively. If the correct output requires counting (e.g., "emit exactly k items matching criterion C"), that requires TC0, not AC0 -- parity / majority gates are needed.
+
+(b) Hermes enforces grammar via constrained decoding (schema-guided generation). No explicit counting constraints are applied; the model is left to count implicitly in its weights.
+
+(c) A principled approach separates recognition (which the grammar enforces, AC0-level) from counting verification (which requires a TC0 check post-generation). Any output schema that says "at most N items" or "sum of costs under budget" should be verified by a deterministic TC0 circuit (i.e., a simple counter), not left to the model. Formally: let the model generate freely under context-free constraints, then apply a TC0 post-filter that rejects outputs violating numeric invariants. This is provably complete for any TC0-definable property.
+
+(d) Value: high and low-cost. Counting bugs (agent emits 11 results when the limit is 10, or exceeds token budget) are real failure modes. A post-generation numeric verifier is 10 lines of Python and provably catches all TC0-definable violations that the model's AC0-equivalent shallow heuristics miss. Validate by running existing cron outputs through the verifier and counting current violation rate.
+
+
+3. Bounded-turn computation limits (what agents can compute in K turns)
+
+(a) Each turn is one composition of: context read (FO query over history), model inference (approximate), tool call (arbitrary oracle). With K turns and no tool calls, the agent's computation is a K-layer circuit over its context. At fixed K, this is in the AC0 / NC1 hierarchy depending on gate type. Crucially, if a problem requires parity of n session facts to decide correctly, no fixed-depth (fixed-turn) agent without a counting tool can solve it -- Hastad's theorem applies directly. The agent is computationally equivalent to a constant-depth circuit; it cannot compute parity without external state.
+
+(b) Hermes sets max_turns in config.yaml as a hard cap, with context compression when history grows long. No analysis of which problems require how many turns. Some tasks silently fail when the turn budget runs out mid-chain.
+
+(c) A principled approach classifies each task type by the depth of the logical formula that expresses its success condition. FO tasks (routing, lookup, simple filtering) are solvable in O(1) turns. LFP tasks (dependency resolution, recursive skill chains) require O(log n) turns minimum. NP tasks (combinatorial selection, constraint satisfaction over tool outputs) should be delegated to a subagent with oracle access, not squeezed into a bounded loop. The decision rule: compute the quantifier depth of the task's success formula; set min_turns = quantifier_depth, flag tasks whose success condition is not FO-expressible for delegation.
+
+(d) Value: high in principle, moderate in practice. The hard part is annotating task types with their logical depth -- no existing Hermes infrastructure does this. Start with the empirical proxy: tasks that fail within their turn budget are candidates for delegation or restructuring. Validate by correlating turn-budget exhaustion events in lifecycle.db with task type. Risk: over-engineering; many tasks are empirically shallow even if theoretically deep.
+
+
+RANKED IMPLEMENTATION CANDIDATES
+
+Candidate 1: TC0 post-generation numeric verifier for structured outputs.
+What it is: a deterministic counter that rejects any tool-call output or agent response that violates a numeric invariant declared in the schema (item count, token budget, cost ceiling).
+Expected benefit: eliminates a class of silent counting failures in cron agents and subagent outputs with no model changes.
+Implementation cost: one Python module, wired into the existing tool-approval hook; one afternoon.
+
+Candidate 2: Datalog skill-relevance fixed-point over the dependency graph.
+What it is: a two-rule Datalog program replacing the flat trigger-match with a transitive closure over skill-depends-on edges.
+Expected benefit: correctly loads transitively required skills in multi-hop task chains, reducing context gaps that cause cascading routing errors.
+Implementation cost: build the dependency edge table from existing skill frontmatter (one script), run PyDatalog or a hand-rolled BFS; one to two days.
+
+Candidate 3: Turn-budget classifier keyed to logical query depth.
+What it is: a lightweight classifier that estimates the quantifier depth of a task's success condition from its natural-language description, and sets min_turns and delegate flags accordingly.
+Expected benefit: prevents turn-budget exhaustion on structurally deep tasks by routing them to delegation or extended loops before they silently fail.
+Implementation cost: requires labelled data (past exhaustion events from lifecycle.db) and a small classifier; one to two weeks for a reliable version.

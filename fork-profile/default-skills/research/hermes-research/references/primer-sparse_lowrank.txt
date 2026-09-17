@@ -1,0 +1,93 @@
+PRIMER: Sparse and Low-Rank Methods
+
+===============================================================================
+1. FIELD OVERVIEW
+===============================================================================
+
+Sparse and Low-Rank Methods study how to recover, approximate, or work with high-dimensional objects that have hidden low-dimensional structure. The core objects are: sparse vectors (most coordinates zero), low-rank matrices (approximable by few basis vectors), and high-dimensional signals that admit sparse representations under some dictionary.
+
+Mathematically, these methods ask: if an object has intrinsic dimension much smaller than ambient dimension, can we recover it from incomplete or corrupted observations? The field combines convex optimization (LASSO, nuclear norm minimization), random matrix theory (Restricted Isometry Property), and algorithmic information theory.
+
+It matters because many real systems have latent low complexity—neural networks internally compress information, knowledge bases have redundant structure, task dependencies form hierarchies. Exploiting this structure reduces computation, memory, and query complexity from exponential to polynomial in intrinsic dimension.
+
+===============================================================================
+2. KEY RESULTS
+===============================================================================
+
+Restricted Isometry Property (RIP): A measurement matrix Phi satisfies RIP of order k with constant delta_k if for all k-sparse vectors x,
+  (1 - delta_k) ||x||^2 <= ||Phi x||^2 <= (1 + delta_k) ||x||^2
+
+If delta_{2k} < sqrt(2) - 1 ≈ 0.414, then basis pursuit (L1 minimization) recovers any k-sparse vector from measurements y = Phi x exactly, even with noise. This is the foundation of Compressed Sensing.
+
+Nuclear Norm as Convex Relaxation: For a rank-r matrix M of size m x n, minimizing ||M||_* (sum of singular values) is the convex proxy for minimizing rank. If M is incoherent (singular vectors not aligned with standard basis), then nuclear norm minimization recovers M from O(r(m+n)) random linear measurements with high probability.
+
+Incoherence Condition: Singular vectors u, v of low-rank matrix M must satisfy max_i |u_i|^2 <= mu*r/m and max_j |v_j|^2 <= mu*r/n for coherence parameter mu >= 1. Low incoherence means the matrix is "spread out"—not concentrated on few coordinates. It enables matrix completion: if mu*r(m+n) log(m) entries are observed uniformly at random, nuclear norm minimization recovers M.
+
+Greedy Sparse Coding: Matching Pursuit selects dictionary atoms one at a time by largest inner product with residual. In k iterations, if dictionary is incoherent, achieves ||x - x_k||^2 <= (1 - alpha)^k ||x||^2 for alpha depending on dictionary coherence.
+
+===============================================================================
+3. STANDARD PRACTITIONER TOOLS
+===============================================================================
+
+CVXPY, MOSEK, or SciPy for convex solvers: minimize ||y - Ax||_1 (LASSO) or minimize ||M||_* subject to linear constraints (nuclear norm minimization).
+
+Iterative Hard Thresholding (IHT) and Approximate Message Passing (AMP): gradient descent with hard thresholding after each step. Recovers sparse signals in O(log(1/epsilon)) iterations for well-conditioned problems.
+
+Truncated SVD via randomized algorithms (Halko et al.): compute rank-k approximation of m x n matrix in O(mnk) time, much faster than full SVD.
+
+Orthogonal Matching Pursuit (OMP) and Basis Pursuit: greedy and convex approaches to sparse coding. OMP implemented in scikit-learn.
+
+Dictionary Learning (K-SVD, online PCA): iteratively learn sparse code and dictionary to minimize ||X - D alpha||_F^2 + lambda ||alpha||_1.
+
+===============================================================================
+4. HERMES APPLICATIONS
+===============================================================================
+
+APPLICATION A: SPARSE SKILL ACTIVATION
+
+Mathematical Structure:
+Hermes loads skills (procedural knowledge files) per task type. At inference time, only a small subset of skills should be active—a sparse activation vector. This is inherently a sparse coding problem: given task embedding t and skill embeddings s_1, ..., s_N, find sparse weights alpha such that t ≈ sum_j alpha_j s_j, with ||alpha||_0 small.
+
+Current Approach:
+Hermes likely routes tasks via heuristic scoring: compute similarity between task and each skill, then threshold or take top-k. This is greedy and brittle—does not enforce global coherence, doesn't learn a dictionary structure.
+
+Principled Sparse and Low-Rank Approach:
+Formulate as regularized sparse coding. Pre-compute skill embeddings S in R^{d x N} (each column is a skill). At task time, solve:
+  min_alpha ||t - S alpha||_2^2 + lambda ||alpha||_1
+using Iterative Shrinkage-Thresholding Algorithm (ISTA) or OMP. The L1 penalty enforces sparsity. Then activate only skills with alpha_j > threshold.
+
+Why it Works: OMP guarantees that if skills form a nearly incoherent dictionary (computed during offline skill organization phase), then k-sparse activation is stable. If two skills are too correlated, the regularizer will suppress one. You get interpretability: which skills fire for this task?
+
+Value Assessment and Implementation:
+Medium-high value if Hermes processes >100 tasks/hour. Overhead: precompute S once per skill set (cheap), run ISTA k times per task (100-200 matrix-vector products, ~ms). The math transfers cleanly because you already have embeddings.
+
+Risk: if skill embeddings are not well-structured (e.g., learned from random initialization), the incoherence assumption breaks and sparse recovery fails. Mitigation: enforce incoherence during skill embedding training (orthogonal initialization, Gram-Schmidt).
+
+Concrete change: add skill_activation_sparse(task_embedding, skill_matrix, lambda=0.1, max_iter=100) function. Log which skills activate per task. A/B test: sparse vs. top-k routing on task success rate.
+
+APPLICATION B: LOW-RANK COMPRESSION OF SKILL EMBEDDING MATRICES
+
+Mathematical Structure:
+Hermes maintains embedding matrices for skills, models, and tool capabilities. These matrices are often redundant—many skills share similar concepts. A d x N skill embedding matrix S likely has rank r << min(d, N). Instead of storing full S, store low-rank factors U (d x r) and V (r x N) such that S ≈ U V^T.
+
+Current Approach:
+Store full embedding matrices. Attend to all skills equally during routing decisions.
+
+Principled Low-Rank Approach:
+Compute rank-r truncated SVD of S offline: S = U_r Sigma_r V_r^T. Store only U_r and V_r (space: O(r(d+N)) vs. O(dN)). At inference, compute skill scores via (U_r U_r^T) t to project task into skill subspace, then compute similarities. This is fast and memory-efficient.
+
+Beyond storage, low-rank factorization reveals latent skill concepts. The r rows of V_r^T are the principal skill factors; clusters in V_r correspond to skill families. Use for skill discovery and curriculum learning.
+
+Why it Works: if skills genuinely cluster (e.g., "planning" skills, "coding" skills, "retrieval" skills), rank r is small and reconstruction is accurate. Truncation threshold can be set via nuclear norm or scree plot analysis.
+
+Value Assessment and Implementation:
+High value if Hermes models >500 skills. Overhead: one SVD at startup (O(dN^2) but parallelizable). Per-inference cost negligible. Math transfers robustly—SVD is numerically stable and well-understood.
+
+Risk: if skills are uniformly spread (incoherent), truncation loses fidelity. Mitigation: set rank based on cumulative variance explained (e.g., 90%), or monitor reconstruction error on held-out skill-task pairs.
+
+Concrete change: add skill_matrix_lowrank(S, variance_explained=0.95) that returns (U, V). Update routing to use low-rank projections. Measure wall-clock time for 10k routing decisions with full vs. low-rank—should be 5-10x faster at negligible accuracy cost.
+
+APPLICATION C: COMPRESSED SENSING FOR EFFICIENT KNOWLEDGE RETRIEVAL
+
+Mathematical Structure:
+Hermes' memory pipeline (l1-extract, l1-promote, hindsight) must search a large knowledge base to answer task-relevant queries. Full retrieval is expensive. Compressed sensing asks: can

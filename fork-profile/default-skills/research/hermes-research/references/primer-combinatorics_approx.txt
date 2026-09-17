@@ -1,0 +1,69 @@
+PRIMER: Combinatorics and Approximation Algorithms
+
+FIELD OVERVIEW
+
+Combinatorics and Approximation Algorithms study discrete optimization problems where finding optimal solutions is computationally intractable (NP-hard). The field counts, bounds, and allocates finite resources under constraints. Core objects: sets, graphs, sequences, hypergraphs. We enumerate combinatorial structures to understand what's computable, then design polynomial-time algorithms that provably approximate optimality within a factor (e.g., 2x, ln(n)x optimal). Why it matters: most real-world resource allocation—scheduling, routing, packing, selection—is NP-hard. Approximation algorithms formalize the tradeoff between solution quality and computational cost. Rather than search exponentially for perfect answers, we guarantee "good enough" solutions in predictable time, with rigorous performance bounds.
+
+KEY RESULTS
+
+Set Cover (Lovász, Johnson): Input is universe of n elements, m sets covering them. Find minimum sets covering all elements. Greedy algorithm (iteratively pick set covering most uncovered elements) is O(log n)-approximation, tight unless P=NP. Proof uses dual linear program and a potential function over uncovered elements.
+
+Knapsack FPTAS (Ibarra-Kim): 0-1 knapsack is pseudo-polynomial via DP on weight. Scale profits by ε, solve rounded version in time O(n³/ε), recover solution within (1+ε) of optimal. This is Fully Polynomial-Time Approximation Scheme: trade approximation ratio for runtime.
+
+Greedy Matroid Theorem (Edmonds): If ground set + independence structure form a matroid, greedy algorithm (iteratively pick maximum-weight element not violating independence) yields global optimum. Applies to graphic matroids, partition matroids, weighted bases.
+
+Bin Packing (de la Vega-Lueker APTAS): Pack items into minimum bins. First Fit Decreasing is 11/9 OPT + 6. Asymptotic PTAS exists: for any ε > 0, polynomial algorithm achieving (1+ε)OPT + O(1) bins. Proof uses DP + rounding on "large" items, greedy on small.
+
+Lovász Local Lemma: If events in a probability space have bounded dependencies, despite each event having nonzero probability, there exists an outcome avoiding all events simultaneously. Constructive proof gives randomized algorithm. Used in randomized rounding (turn fractional LP solutions to integral via random rounding, ensure constraints hold w.h.p.).
+
+KEY RESULTS (continued)
+
+Chvátal's Set Cover Lower Bound: No polynomial algorithm approximates Set Cover better than (1 - o(1))ln(n) unless NP ⊆ DTIME(n^polylog(n)). Means greedy ln(n) is essentially tight.
+
+STANDARD PRACTITIONER TOOLS
+
+Greedy algorithms: iterate, pick locally best choice, no backtracking. Fast (O(n log n)), often within 2x optimal for packing/covering. Implement via priority queues.
+
+Dynamic Programming: build solutions bottom-up. Knapsack, weighted scheduling, longest common subsequence. Exponential state space truncated by pruning/memoization.
+
+Linear Programming relaxation: formulate as LP (fractional), solve in polynomial time, round result to integral solution. Performance loss quantified via integrality gap.
+
+Randomized rounding: solve LP, use fractional solution as probability distribution, sample integral solution, use concentration inequalities to bound constraint violations.
+
+Flow algorithms: max-flow/min-cost flow model many combinatorial problems (matching, transport, circulation). Polynomial-time solvable, tight dual bounds.
+
+Metaheuristics: simulated annealing, genetic algorithms, tabu search. No performance guarantees, but practical for large instances where approximation algorithms are too slow.
+
+Python libraries: pulp (LP/IP modeling), networkx (graphs), ortools (Google routing/scheduling), cvxpy (convex optimization).
+
+HERMES APPLICATIONS
+
+(1) CONTEXT WINDOW PACKING
+
+Mathematical structure: Variant of bin packing. Items are prior context tokens (past turns, skill descriptions, memory summaries); bin capacity is context window (e.g., 200K tokens for Claude). Goal: fit maximum semantic value into available tokens while preserving task coherence.
+
+Current approach: Hermes truncates or prunes conversation history heuristically—drop oldest turns, then drop lowest-scoring memory items by recency, then summarize. No principled ranking of information value or packing strategy.
+
+Principled approach: Treat each context element (turn, memory chunk, skill) as item with weight (tokens) and value (relevance score from skillopt, recency multiplier, task-dependency). Formulate as 0-1 knapsack. Apply FPTAS: scale values coarsely, solve DP in O(n³/ε), recover packing within (1+ε) of optimal value. Use ε = 0.1 for 10% approximation error, runtime O(n³·10) ≈ 1000n³, acceptable for n ≈ 100 context elements pre-turn.
+
+Value assessment: HIGH, but requires engineering work. Must define value function (non-trivial: task relevance changes per subtask). FPTAS guarantees apply to knapsack exactly; transfer risk is LOW on the algorithm side (FPTAS is standard, proven), MEDIUM on value definition (subjective scoring of token worth). Implementation: maintain priority heap of context elements, compute value scores from skillopt+task embedding similarity, run DP knapsack solver. Cost: ~400 lines, testable against manual pruning baselines.
+
+(2) TOKEN BUDGET ALLOCATION
+
+Mathematical structure: Knapsack-like, but multi-dimensional and dynamic. Hermes has total token budget B across turn (sum of all model calls). Each task i requires tokens t_i for completion (estimated), yields value v_i (quality of output, or likelihood of solving parent goal). Some tasks are dependent (skip task i if task j fails). Allocate budget to maximize expected value.
+
+Current approach: Greedy: delegate tasks in priority order until budget exhausted. No advance reservation, no probabilistic success modeling, no dependency graph analysis.
+
+Principled approach: Build task dependency DAG. For each task, estimate t_i (tokens needed), v_i (value if succeeds), p_i (success probability, function of model choice and token budget). Problem is stochastic knapsack with precedence constraints, NP-hard. Use approximation: (a) solve fractional relaxation via LP: maximize sum(x_i * v_i * p_i) s.t. sum(x_i * t_i) ≤ B, x_i ∈ [0, 1], x_i respects DAG precedence. (b) Round via randomized rounding: set x_i' = 1 with probability x_i, execute tasks with x_i' = 1 in topological order. (c) Use concentration inequalities (Chernoff bounds) to guarantee budget not exceeded w.h.p., or use pessimistic estimator (scale by 1.2).
+
+Value assessment: HIGH for multi-task agents, MEDIUM-HIGH complexity. LP solver readily available (cvxpy + scipy). Main risk: success probabilities p_i are learned heuristics, not ground truth. If p_i estimates are bad, allocation quality degrades. But framework is sound: even with imperfect p_i, better than greedy. Implementable: ~600 lines, needs task value/duration/success model (already half-built in task prioritization). Spike easy: compare LP-rounded allocation vs greedy on historical runs, measure total task success rate and token efficiency.
+
+(3) SKILL SELECTION
+
+Mathematical structure: Set Cover variant. Universe is task requirements (subtasks, reasoning steps, tool calls). Hermes has m skills (knowledge files, procedures). Skill k covers set S_k of requirements, has size (token count) w_k. Goal: select minimum-token skill subset that covers all requirements for a given task.
+
+Current approach: Keyword matching in task description against skill tags, load all matching skills. Wastes context on redundant or marginal skills.
+
+Principled approach: Formulate as weighted Set Cover. Use ε-approximation greedy: iterate, pick skill with best (uncovered requirements / token cost) ratio, repeat until all requirements covered. Greedy is O(ln(n))-approximation where n = |requirements|. For typical Hermes task, n ≈ 5-15, so ln(n) ≈ 2-3x optimal, acceptable.
+
+Value assessment: HIGH value, LOW implementation cost. Greedy Set Cover is trivial to code (~50 lines). Main work: define "requirements" formally (parse task description to feature vector, match

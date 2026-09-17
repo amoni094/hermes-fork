@@ -1,0 +1,80 @@
+PRIMER: Spectral Graph Theory
+
+========================================
+1. FIELD OVERVIEW
+========================================
+
+Spectral graph theory studies graphs through the eigenvalue decomposition of associated matrices, principally the adjacency matrix A and graph Laplacian L = D - A (where D is the degree matrix). The core insight: spectral properties—eigenvalues and eigenvectors—encode structural information invisible in the graph topology alone. The field matters because eigenvalues are algorithmically cheap to compute (via iterative methods) and yield tight bounds on combinatorial properties like graph cuts, random walk mixing, and community structure. For AI engineers, spectral methods provide a principled mathematical language for analyzing connectivity, bottlenecks, and implicit hierarchies in agent dependency graphs and knowledge structures.
+
+========================================
+2. KEY RESULTS
+========================================
+
+Cheeger Inequality (fundamental): For any graph G, the edge expansion h (minimum conductance cut) satisfies λ₂/2 ≤ h ≤ √(2λ₂), where λ₂ is the second-smallest eigenvalue of the normalized Laplacian. This bounds how "well-connected" a graph is and identifies bottleneck regions.
+
+Spectral Gap and Mixing Time: The spectral gap Δ = λ_n - λ₂ (gap between largest and second-smallest normalized Laplacian eigenvalue) inversely controls random walk mixing time: T_mix ∝ 1/Δ. Fast mixing (small T_mix) means information spreads quickly through the graph.
+
+Normalized Cut and Spectral Clustering Optimality: The normalized cut objective min_S (|cut(S,S̄)| / (vol(S) * vol(S̄))) is approximated by partitioning nodes via eigenvectors of the normalized Laplacian. The spectral clustering algorithm (sort nodes by second eigenvector, threshold) gives a 2-approximation to normalized cut in the worst case, often much tighter in practice.
+
+Fiedler Vector (second eigenvector of L): Its values induce a natural ordering and bipartition that minimizes edge cut; nodes with similar Fiedler values are "close" in a diffusion sense.
+
+========================================
+3. STANDARD PRACTITIONER TOOLS
+========================================
+
+scipy.sparse.linalg.eigsh: Compute a small number of eigenvalues/eigenvectors efficiently for large sparse matrices (the standard for million-node graphs). NetworkX spectral_layout, spectral_clustering: High-level wrappers around adjacency/Laplacian eigendecomposition. PyTorch Geometric: Spectral convolutions for graph neural networks via Chebyshev polynomial filters. Manual implementations: construct normalized Laplacian L_norm = I - D^(-1/2) A D^(-1/2), call eigsh, extract eigenvectors for clustering. Key hyperparameter: how many eigenvectors to keep (typically 2-10 depending on community structure resolution).
+
+========================================
+4. HERMES APPLICATIONS
+========================================
+
+----
+APPLICATION 1: SKILL DEPENDENCY GRAPH ANALYSIS
+----
+
+Mathematical structure:
+Hermes maintains a directed skill dependency DAG: nodes are skills (procedural knowledge files), edges represent "skill S1 requires skill S2 to execute safely." This is a weighted, acyclic digraph. Spectral graph theory normally applies to undirected graphs; the remedy is to symmetrize: use A + A^T (undirected version), then compute the Laplacian and its eigenvalues. The second eigenvalue λ₂ measures how "fragmented" the skill dependency structure is.
+
+Current Hermes approach:
+Naive reachability traversal to check if skill S is available given loaded skills. No global analysis of dependency brittleness or critical skills. If a skill is missing, the agent fails and backtracks; no proactive identification of high-risk skill clusters.
+
+Spectral approach (concrete):
+(1) Construct adjacency matrix A where A[i,j] = 1 if skill i depends on skill j (symmetrize as (A+A^T)/2).
+(2) Compute normalized Laplacian L_norm and extract the second eigenvector v₂ (Fiedler vector).
+(3) Partition skills into two clusters using v₂: skills with v₂[i] > median go to cluster C1, others to C2.
+(4) Measure the normalized cut: cut / (vol(C1) * vol(C2)). Low cut = tight community; high cut = bottleneck.
+(5) Recursively partition until clusters stabilize (k=3-5 clusters typical). Each cluster is a "skill module."
+(6) Pre-compute and cache the eigendecomposition. When a new task arrives, route to skill modules that minimize inter-module dependency crossing. For model routing: prefer models with skills in the same cluster to reduce context-switching overhead.
+
+Value assessment:
+Medium-high. The math is clean and the engineering payoff is real: you can identify which skills are "critical connectors" (high betweenness in the Fiedler vector ordering) and load those first. Risk: skill dependencies are often task-context-dependent (a skill needed for research-sweep may not be needed for apply-jobs), so a static spectral clustering may not capture runtime variability. Mitigation: recompute spectral decomposition every 100 new tasks, or track task-skill correlation separately. Effort: 3-4 days (scipy.sparse.linalg integration, clustering loop, caching layer). Probability of real benefit: 60%. If skills are truly modular (which they often are in practice), you'll see a 10-20% reduction in failed skill-load chains.
+
+----
+APPLICATION 2: KNOWLEDGE GRAPH HEALTH METRICS (Memory Pipeline)
+----
+
+Mathematical structure:
+Hermes' memory pipeline (L1-extract -> L1-promote -> hindsight) builds an implicit knowledge graph where nodes are facts/summaries and edges are semantic relationships (coreferent, entailment, temporal sequence). This is a large, dynamic, weighted undirected graph. The Laplacian eigenvalues encode graph "robustness": small λ₂ means the graph is nearly disconnected (fragmented memory); large λ₂ means tightly integrated.
+
+Current Hermes approach:
+Ad-hoc pruning rules (remove summaries older than T days, compress via summarization heuristic). No principled measure of graph health. Memory fragmentation is invisible until retrieval fails on a task.
+
+Spectral approach (concrete):
+(1) At each L1-promote step, construct the adjacency matrix W from the knowledge graph (symmetric, weighted by semantic similarity cosine).
+(2) Compute the normalized Laplacian L_norm and its smallest k eigenvalues (k=5).
+(3) Track λ₂ as a "coherence score": high λ₂ indicates well-integrated knowledge; λ₂ near 0 means fragmented.
+(4) When λ₂ drops below threshold (e.g., 0.1), trigger a re-integration step: merge clusters identified by the first two eigenvectors, re-link dangling facts.
+(5) Use the eigenvector centrality (via power iteration on A) to identify "hub facts" (central nodes), preferentially preserve these during pruning.
+
+Value assessment:
+Medium. The idea is sound: spectral gap is a proxy for knowledge coherence. In practice, memory graphs in Hermes are moderately large (thousands of nodes over days), and recomputing eigendecomposition nightly is cheap. However, the causal claim—"higher λ₂ means better retrieval"—is unproven. Memory quality depends more on semantic quality than graph spectral structure. Effort: 2-3 days (integrate into L1-promote, add monitoring). Risk: computational overhead if knowledge graph grows to 100k+ nodes; eigsh becomes slow. Mitigation: subsample or use Nyström approximation. Benefit if successful: proactive detection of memory fragmentation, fewer null retrievals. Estimate: 5-15% improvement in hindsight recall if graph coherence is indeed the bottleneck (low confidence).
+
+----
+APPLICATION 3: SKILL CLUSTERING FOR MODEL ROUTING
+----
+
+Mathematical structure:
+Hermes routes tasks to models (Claude/GPT/Grok/Mistral) based on task type. Each skill is associated with a model "affinity" (e.g., research skills prefer Claude; code skills prefer GPT). You can model this as a tripartite graph: skills, tasks, models, with weighted edges. Alternatively, project to a bipartite skill-model graph where edge weight = co-occurrence count. Spectral clustering on this projected graph reveals natural skill-model affinities.
+
+Current Hermes approach:
+Hardcoded rules or learned preference weights (e.g., via reinforcement learning on

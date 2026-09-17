@@ -1,0 +1,66 @@
+PRIMER: Dynamical Systems and Fixed-Point Theory
+
+CORE CONCEPTS
+
+A dynamical system is a tuple (X, f) where X is a state space (often a metric or Banach space) and f: X -> X is an evolution rule. A fixed point x* satisfies f(x*) = x*. An attractor is a set A such that trajectories starting near A converge to it; a fixed-point attractor is the degenerate case |A| = 1. A limit cycle is a periodic attractor in continuous systems.
+
+The Banach Fixed-Point Theorem: if (X, d) is a complete metric space and f is a contraction (d(f(x), f(y)) <= k*d(x,y) for k < 1 for all x, y), then f has a unique fixed point x*, and iteration x_{n+1} = f(x_n) converges to x* from any starting point, with error bound d(x_n, x*) <= k^n/(1-k) * d(x_1, x_0). Contraction ratio k determines convergence speed.
+
+Lyapunov stability: a fixed point x* is stable if there exists V: X -> R (the Lyapunov function) with V(x*) = 0, V(x) > 0 near x*, and dV/dt < 0 along trajectories. V acts as an energy proxy; no need to solve the dynamics explicitly. Asymptotic stability adds convergence to x* as t -> inf.
+
+Bifurcation theory studies how qualitative behavior changes as a parameter mu varies. A saddle-node bifurcation creates or destroys fixed points; a Hopf bifurcation converts a fixed point into a limit cycle. The bifurcation point mu_c is where the Jacobian eigenvalue crosses zero (or the imaginary axis). Past mu_c the system's attractor structure changes qualitatively.
+
+Gradient flows: x_dot = -grad V(x) always descend V. Fixed points are minima of V; the system cannot cycle or exhibit chaos. This makes gradient flows provably convergent to local optima, which is the basis for treating iterative optimization as a dynamical system.
+
+
+COMPONENT 1: AGENT LOOP CONVERGENCE
+
+(a) Mathematical structure. The per-turn loop is a discrete dynamical system on a context state space C. At each turn, the map f: C -> C applies one round of tool calls plus LLM response. A productive session converges to a task-completion fixed point c* where the output satisfies the goal and no further tool calls are generated. The convergence question is: is f a contraction, and in what metric?
+
+(b) Current approach. Hermes uses a heuristic loop with a max_turns cap and no formal convergence criterion. The loop terminates when the model stops calling tools or max_turns is hit. No measurement of whether successive outputs are getting closer to a goal.
+
+(c) Principled approach. Define a task-distance metric d(c, c*) as a scoring function (e.g. LLM judge scoring on goal rubric, 0-1 normalized). After each turn, compute delta_n = d(c_n, c*). Apply the contraction test: if delta_n / delta_{n-1} > k_threshold for two consecutive turns, flag the loop as non-contracting and trigger intervention (model swap, context prune, or escalation). Formal rule: terminate early if delta_n < epsilon (success) or if k_empirical = delta_n/delta_{n-1} >= 1 for two turns (divergence detected).
+
+(d) Value assessment. Medium-high. The current max_turns cap is a blunt instrument; empirical contraction checking would catch spinning loops before they exhaust context. Risk: the scoring function is expensive (requires an LLM judge call per turn). Validation needed: run 200 logged sessions, compute retrospective k sequences, confirm that k >= 1 predicts eventual failure. Implementation cost is moderate.
+
+
+COMPONENT 2: CONTEXT COMPRESSION STABILITY
+
+(a) Mathematical structure. Context compression is a map g: C_long -> C_short that projects the context to a lower-dimensional representation. Iterated compression (compression applied multiple times across a long session) is the composition g^n = g o g o ... o g. The stability question: does g^n converge to a fixed point (stable compressed representation) or does it lose critical information monotonically (dissipative drift)?
+
+(b) Current approach. Hermes uses ratio-based truncation (config.yaml compression ratios) with LLM summarization. Applied once per threshold crossing. No measure of information loss across compression rounds; no check that g is idempotent (g(g(c)) approx g(c)).
+
+(c) Principled approach. Define an information Lyapunov function V(c) = I(c; task) (mutual information between compressed context and task-relevant facts, approximated by a retrieval probe score). A stable compressor satisfies V(g(c)) >= V(c) - epsilon for small epsilon, i.e. it does not destroy task-relevant information. Concretely: after each compression, run a fixed probe set (5-10 key facts that should be in context), count recall rate r. Track V_n = r_n. If V_n drops below threshold theta (e.g. 0.8), halt compression and inject a retrieval step from Hindsight instead of compressing further.
+
+(d) Value assessment. High practical value because multi-session compression drift is a real and observed failure mode. Relatively cheap to implement (probe set is static; retrieval fallback already exists via Hindsight). Risk: probe set must be task-specific, which adds per-task setup. Validation: shadow-run probes on 50 long sessions, calibrate theta.
+
+
+COMPONENT 3: MEMORY CONSOLIDATION AS ATTRACTOR DYNAMICS
+
+(a) Mathematical structure. The memory pipeline (l1-extract -> l1-promote -> hindsight) is a multi-stage filter that maps raw session content to a stable long-term memory bank. Viewed as a dynamical system, the memory bank state M_t evolves as M_{t+1} = h(M_t, session_t) where h incorporates extraction, scoring, and decay. Attractors of this system are stable knowledge configurations; a good pipeline should have attractors that represent accurate, non-redundant world models.
+
+(b) Current approach. l1-promote uses scoring thresholds (TTLs, confidence scores) to decide what enters Hindsight. No formal analysis of whether repeated consolidation rounds cause fact drift, redundancy accumulation, or contradictory-fact coexistence.
+
+(c) Principled approach. Model consolidation as a gradient flow on a free-energy-like objective F(M) = accuracy(M) - lambda * redundancy(M). The l1-promote step should approximate a gradient step: M_{t+1} = M_t - eta * grad F(M_t). In practice: after each promote round, compute a redundancy score (embedding cosine similarity across fact pairs; flag pairs > 0.92 for merge), and an accuracy score (probe against ground-truth fixture set). Treat the promote threshold as a step size eta; too large causes fact thrashing, too small causes stale facts to persist. The bifurcation risk: if lambda is tuned too high, the system collapses to a near-empty memory bank (underfitting attractor). If too low, it accumulates contradictory facts (chaotic regime). Target the stable fixed-point regime between.
+
+(d) Value assessment. Moderate. The redundancy-pruning angle is immediately useful and low-risk. The full gradient-flow formulation requires an accuracy ground truth that is expensive to maintain. Start with redundancy metric only. Validation: run 30 consolidation cycles on archived sessions, measure fact count and cosine similarity distribution before/after.
+
+
+COMPONENT 4: SKILL SCORING GRADIENT FLOWS
+
+(a) Mathematical structure. SkillOpt/GEPA assigns each skill a quality score s in [0,1] and mutates skills to maximize s. This is optimization over a skill-parameter space, which maps directly to a gradient flow if s is differentiable, or a stochastic gradient flow if estimated by sampling. Fixed points of the flow are locally optimal skills; bifurcations occur when score landscape changes (new tasks, new models) shift the attractor.
+
+(b) Current approach. GEPA uses genetic/Pareto optimization: mutation + selection, multi-objective scoring. Heuristic crossover and mutation operators. No convergence criterion beyond iteration cap.
+
+(c) Principled approach. Track the score gradient magnitude ||grad s|| across GEPA generations. Declare convergence when ||grad s||_n < epsilon for three consecutive generations (gradient flow fixed-point criterion). On convergence, run a perturbation test: inject controlled mutations of size delta and measure score response. If the score surface is flat (insensitive to perturbation), the skill is at a saddle, not a minimum; flag for re-seeding with diversity injection. Formally: convergence to a true attractor requires the Hessian of s at x* to be negative definite; approximate this via finite differences on 5 perturbed variants.
+
+(d) Value assessment. Low-medium short-term, high long-term. The gradient norm convergence criterion is simple to add and prevents wasted GEPA cycles. The Hessian saddle check is expensive and speculative until GEPA is running reliably on a large skill corpus. Validate gradient norm criterion first on 10 skills with known quality variance.
+
+
+IMPLEMENTATION CANDIDATES (ranked)
+
+1. Compression probe stability check. After each context compression event, score recall against a 10-item fixed probe set; if recall drops below 0.8, trigger Hindsight retrieval instead of further compression. Expected benefit: prevents silent information loss in long sessions with zero new infrastructure. Implementation cost: one static probe file per task class plus a four-line gate in the compression hook.
+
+2. Empirical contraction monitoring in the agent loop. After each turn, score progress toward goal using a lightweight rubric (rule-based or small model); flag k >= 1 for two turns as divergence and swap model or prune context. Expected benefit: catches spinning/regressing loops before max_turns is hit, saving context and cost. Implementation cost: requires a per-session goal rubric definition and one extra scoring call per turn.
+
+3. Memory redundancy gradient step in l1-promote. After each promote round, compute pairwise cosine similarity across new facts; merge or discard pairs above 0.92 threshold. Expected benefit: prevents Hindsight bloat and contradictory-fact accumulation over long operation. Implementation cost: one vectorization pass over new facts using existing embedding infrastructure; no new dependencies.

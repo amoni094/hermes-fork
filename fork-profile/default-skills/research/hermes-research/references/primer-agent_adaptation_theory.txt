@@ -1,0 +1,55 @@
+PRIMER: Agent Adaptation: Meta-Learning, Continual Learning, Curriculum
+
+================================================================================
+1. FIELD OVERVIEW
+================================================================================
+
+Agent Adaptation studies how learning systems acquire and retain knowledge across multiple tasks and time horizons without catastrophic interference. The field encompasses meta-learning (learning to learn), continual learning (sequential task exposure), and curriculum learning (strategic ordering of training examples). Core objects of study: task distributions, parameter initialization, regularization over weight trajectories, and task-specific plasticity. Why it matters mathematically: standard SGD on independent tasks learns task-specific solutions; Agent Adaptation seeks convergence guarantees under task sequences, bounded forgetting rates, and sample-efficient few-shot acquisition. The mathematics connects optimization (meta-gradients), information theory (capacity constraints), and dynamical systems (stability under perturbation).
+
+================================================================================
+2. KEY RESULTS
+================================================================================
+
+MAML (Model-Agnostic Meta-Learning): Given task distribution p(T), compute initialization theta_0 that minimizes expected loss after k inner-loop gradient steps on new tasks. Algorithm: alternate outer loop (meta-gradient over task loss after k steps) with inner loop (single task gradient descent). Convergence: O(1/sqrt(N)) under smoothness and bounded task diversity; initialization favors tasks with similar loss geometry. Practical implication: MAML init requires fewer gradient steps to new tasks than random init.
+
+Elastic Weight Consolidation (EWC): Prevent catastrophic forgetting by penalizing changes to important parameters. For task sequence T1, T2, ..., add penalty (lambda/2) * sum_i F_i * (theta_i - theta_i*)^2, where F is the Fisher Information Matrix (curvature) estimated on task T1. Bound: task 2 loss increase <= (lambda/2) * (theta - theta*)^T * F * (theta - theta*) under quadratic loss approx. Limitation: assumes single-task Hessian structure persists; breaks under rapid task switching.
+
+Curriculum Learning Theory: Order training tasks by complexity (Bengio et al., Graves et al.). Sample complexity reduction: learning task sequence in ascending difficulty order achieves O(log(1/eps)) vs O(1/eps) uniform order under specific assumption classes. No universal curriculum; optimality depends on task geometry. Progressive Neural Networks: task k adds lateral connections from layers k-1, freezing earlier task columns; prevents forgetting by construction (disjoint parameter spaces). Cost: linear parameter growth with tasks.
+
+================================================================================
+3. STANDARD PRACTITIONER TOOLS
+================================================================================
+
+MAML implementation: loop over minibatch of tasks; for each task compute two forward passes (inner on task data, outer on meta-validation split); backprop through both. Libraries: learn2learn (PyTorch), Higher. EWC: compute Fisher diagonal per task (curvature via loss gradients), store, add L2 penalty to new task loss. Curriculum: sort tasks by proxy (model uncertainty, task complexity heuristic, or human label), train in order, checkpoint between stages. Rehearsal/replay: maintain small buffer of old task examples, interleave with new task data (combats forgetting empirically, no convergence guarantee). Replay fraction: typically 10-20% old data per minibatch.
+
+================================================================================
+4. HERMES APPLICATIONS
+================================================================================
+
+COMPONENT A: SKILL GENERALIZATION ACROSS TASK TYPES
+
+Mathematical Structure: Hermes loads procedural skills per task type. This is task-specific parameter specialization. Agent Adaptation frames this as: given a new task type, how should Hermes initialize skill selection and model routing? MAML directly applies: treat each task type (research, apply, monitor) as a task in the meta-training distribution. Compute meta-initialized weights over skill selection logic.
+
+Current Hermes Approach: Per-task-type skills are manually curated. Model routing (Claude/GPT/Grok/Mistral) is heuristic: Claude for writing, GPT for reasoning, Grok for speed. No learned initialization across task types. When a novel task variant arrives, Hermes cold-starts with default skill sequence.
+
+Principled Approach from Agent Adaptation: (1) Collect 50-100 examples of tasks within each existing type (research, apply, monitor). For each task, record (input, chosen_skill_sequence, outcome_reward). (2) Run MAML meta-training: outer loop over task types, inner loop over 5-shot examples within type. Optimize skill router network (small 2-layer MLP: task_embedding -> skill_sequence logits). (3) On novel task type, initialize router from meta-learned weights, fine-tune on 5-10 examples. Expected benefit: faster adaptation to task variants; better model routing for unseen task distributions. Formula: theta_0 = argmin_theta E_T~p(tasks) [ L( grad_theta L_T(theta) ) ], where L_T is loss on 5-shot task type T, and outer loss is meta-validation loss.
+
+Value Assessment: WORTH IMPLEMENTING, medium effort. Requires: task type labeling on ~100 existing runs (1 day manual + labeling script), MAML loop in Hermes training pipeline (2-3 days). Risk: (i) task types in practice are not cleanly separable; meta-training may not discover meaningful structure. (ii) Small meta-training set (3-4 task types) may not justify MAML overhead. Mitigation: start with 2-task meta-training (research vs. apply), measure improvement vs. baseline heuristic routing on held-out tasks. If >10% speedup in first-task accuracy, scale to full curriculum.
+
+COMPONENT B: MEMORY PIPELINE AND CATASTROPHIC FORGETTING
+
+Mathematical Structure: Hermes memory pipeline (l1-extract -> l1-promote -> hindsight) is rehearsal-like. Continual learning theory predicts: if Hermes learns on task sequence (day 1 research, day 2 apply, day 3 monitor, repeat), naive gradient descent will degrade performance on earlier tasks. EWC and progressive networks directly address this.
+
+Current Hermes Approach: L1 memory extracts (summaries, facts). L1 promotion moves high-value items to long-term hindsight store. No explicit forgetting penalty or Fisher weighting. Hindsight is a replay buffer: old summaries interleaved into new conversation context. No principled allocation of how much old memory to include per turn.
+
+Principled Approach from Agent Adaptation: (1) Implement EWC lite: after completing a cron cycle (e.g., research sweep), compute Fisher diagonal on tasks from that cycle. Store as fisher_cycle_N.pkl. (2) When learning on new cycle, add EWC penalty: L_new = L(theta) + (lambda/2) * sum_i F_i * (theta_i - theta_i_old)^2, where lambda starts at 0.1 and decays per cycle. (3) Measure task-specific performance: hold out 10 representative queries from each cron cycle (research, apply, monitor), evaluate accuracy before and after each new cycle. Expected benefit: prevent hindsight quality degradation (e.g., research summaries remain useful after 10 apply cycles).
+
+Alternative: Progressive Memory Network. Maintain separate hindsight stores per cron cycle type (research_hindsight, apply_hindsight, monitor_hindsight). Route queries to task-specific hindsight; avoid mixing. Simpler than EWC, no Fisher computation, but requires explicit task routing (already present in Hermes).
+
+Value Assessment: WORTH IMPLEMENTING, low to medium effort. EWC approach: Fisher computation is 1-2 hours (standard PyTorch). Integration: modify loss function in model training loop (30 mins). Measurement: already have hindsight evaluation infrastructure. Risk: (i) Fisher diagonal assumes quadratic loss near optimum; Hermes uses cross-entropy on language models, which is not fully quadratic. (ii) Lambda hyperparameter is empirically chosen (0.1 is starting point; needs tuning per cycle length). Mitigation: run ablation on lambda in {0.01, 0.1, 1.0}; measure hold-out task accuracy. Progressive Memory is lower-risk, immediate: implement in 1 day if task routing is already deterministic.
+
+COMPONENT C: CURRICULUM FOR CRON AGENT TRAINING
+
+Mathematical Structure: Hermes runs ~25 scheduled cron agents (research sweep, apply, monitoring). Currently they run in fixed order or random. Curriculum learning theory says: order tasks by increasing difficulty/complexity to reduce total sample complexity. For Hermes, "difficulty" could proxy as (i) task diversity (novel domains harder than familiar), (ii) prerequisite dependencies (research must complete before apply), (iii) task uncertainty (queries with high model disagreement are harder).
+
+Current Hermes Approach: C

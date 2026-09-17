@@ -1,0 +1,84 @@
+PRIMER: Generalization Theory
+
+Finite-sample guarantees for agent engineers. Not "it converges." The question is: given n observations, what can you still claim, and when is the claim a lie.
+
+CORE CONCEPTS
+
+PAC (Probably Approximately Correct). An algorithm PAC-learns hypothesis class H if, for any ε, δ ∈ (0,1) and any distribution D, with n ≥ n(ε,δ,H) i.i.d. samples it returns h with R(h) ≤ inf_{h'∈H} R(h') + ε except with probability ≤ δ. "Approximately" is ε; "probably" is 1−δ. The tax is i.i.d. (or a named weakening). Evals that share a prompt template, a model version, and yesterday's web are not i.i.d. draws of true success.
+
+VC dimension. Largest number of points H can shatter (all 2^d labelings). Finite VC ⇒ PAC-learnable. This is complexity of a class, not of one skill. Irrelevant unless you select among a rich family (many skills, prompts, thresholds) on the same data.
+
+Rademacher complexity. Data-dependent: how well H correlates with random ±1 noise on the sample. Tightens VC when data are easy. Still a uniform class bound.
+
+PAC-Bayes. Prior P on hypotheses, data, posterior Q. Bound Q-average risk by empirical risk plus KL(Q‖P). You pay for leaving the prior, not for |H|.
+
+Concentration.
+- Hoeffding: X_i ∈ [0,1] i.i.d., P(|X̄−μ|≥t) ≤ 2 exp(−2 n t²). Distribution-free, variance-blind, loose when p is near 0 or 1.
+- Bernstein: exponent n t² / (2σ² + 2 M t/3). Tighter when variance is small (rare failures).
+- McDiarmid: f of independent inputs, each coordinate changes f by at most c_i, then f concentrates as exp(−2 t² / Σ c_i²). Engine under Rademacher proofs, and under "one eval swings the metric by ≤ 1/n."
+
+Conformal prediction. Assume only exchangeability of calibration and test points. Score each calibration pair; take quantile q̂ at rank k = ⌈(n+1)(1−α)⌉. Set C(x) = {y : s(x,y) ≤ q̂} satisfies P(Y ∈ C(X)) ≥ 1−α, finite-sample, distribution-free. Split conformal is the engineering default. Coverage is marginal, not conditional on x.
+
+OQRC (Occupancy-based Quantile Risk Control; Shi et al., arXiv:2609.03104). Less conservative quantile risk control. Partition loss space by ordered calibration losses (occupancy bins), bound test-loss mass per bin, pick λ so the quantile-risk upper bound is ≤ α with probability 1−δ. Finite-sample valid; gap to optimal O_p(n^{−1/2}). Use for tails (p99 latency, worst-k violation), not the mean.
+
+KEY RESULTS
+
+PAC sample complexity, agnostic binary: n ≳ (VC(H) + log(1/δ)) / ε². Realizable: /ε not /ε². Finite class: replace VC with log|H|.
+
+Hoeffding CI, success rate, probability ≥ 1−δ:
+  |p̂ − p| ≤ √(ln(2/δ) / (2n)).
+At δ=0.05: n=10 → ±0.43; n=30 → ±0.25; n=100 → ±0.14. Clopper–Pearson is the exact binomial interval; use it below n≈50. Rule of three: 0 events in n trials ⇒ 95% upper bound on the rate ≈ 3/n.
+
+McAllester PAC-Bayes: w.p. ≥ 1−δ, for all Q,
+  R(Q) ≤ R̂(Q) + √( (KL(Q‖P) + ln(2√n / δ)) / (2n) ).
+Catoni is tighter at low empirical loss (linear in KL/n rather than sqrt).
+
+Conformal coverage: P(Y_{n+1} ∈ C(X_{n+1})) ≥ 1−α under exchangeability. That is the theorem. No VC, no Gaussian, no "the model is calibrated." Reusing calibration data to tune the score breaks exchangeability.
+
+WHAT YOU GET
+
+Finite-sample validity (the inequality holds at this n). Widths that shrink with n, and with variance if Bernstein. Distribution-free mean bounds (Hoeffding) or coverage (conformal). You do not get causal claims, conditional coverage, shift robustness, or a license to treat dependent confirmations as independent trials.
+
+HERMES APPLICATIONS
+
+1) Agent evaluation confidence
+(a) Hoeffding or Clopper–Pearson on i.i.d. Bernoulli evals. Bernstein if failures are rare.
+(b) After N runs, report p̂ and the one-sided lower bound L = p̂ − √(ln(1/δ)/(2N)) when asking "is it good enough." Prefer Clopper–Pearson: invert the Binomial CDF for k successes in N.
+(c) Current: N=5 or 10, declare ~80% pass.
+(d) Value: high; cheapest genuine upgrade. At N=5, δ=0.05, Hoeffding half-width is ~0.55 — you cannot tell 0.6 from 0.9. Fixed 80% of 5 is theater. Do not invoke VC unless one eval set selected among many skills.
+
+2) Verification gates
+(a) One-sided Hoeffding; anytime-valid sequences (betting / mixture SPRT) if you peek after every test; conformal risk control if the gate is a threshold λ on a score.
+(b) Pass iff L_n(δ) ≥ τ; else collect more or fail. Sequential: stop when L_n ≥ τ or U_n < τ.
+(c) Current: pass at 8/10.
+(d) Value: high when eval budget varies by skill. The point is sample-size-adaptive thresholds, not fancier theory. Peeking invalidates naive Hoeffding — pre-commit n or use an anytime bound.
+
+3) Memory retention given K confirmations
+(a) Clopper–Pearson / Beta-Binomial only if confirmations are independent probes of validity. They almost never are.
+(b) Zero contradictions in n probes: 95% upper bound on contradiction rate ≈ 3/n (rule of three). At n=3 the bound is vacuous (~1). At n=30, ~10%.
+(c) Current: retain after 3 confirmations.
+(d) Value: low for PAC. The failure mode is correlated sources (same page, same session, the model reciting itself), not small n. Spend effort on independence (distinct origin, distinct time). K=3 is an honest workflow rule; wrapping it in a PAC bound is not.
+
+4) Sweep triage HIGH vs MED
+(a) Not PAC. If you have a numeric quality score and a held-out labeled set: split conformal, or OQRC for a quantile of "bad HIGH." Citation counts are not i.i.d. quality samples.
+(b) Calibrate scores s; HIGH iff s ≥ q̂_{1−α} (or iff the conformal label set is {HIGH} only).
+(c) Current: ≥3 citations → HIGH.
+(d) Value: low unless you build a labeled calibration set. Fake PAC on citation counts promotes review articles and popular arXiv IDs. Keep the heuristic; optionally require independent sources.
+
+5) Cron agent safety (PAC-MDP)
+(a) PAC-MDP (Kakade / Strehl et al.): w.p. ≥ 1−δ, the number of ε-suboptimal steps is poly(|S|, |A|, 1/ε, 1/δ, 1/(1−γ)). For LLM crons, use OQRC or conformal risk control on a scalar constraint loss with a calibration set of traces.
+(b) PAC-MDP does not instantiate: language-agent state is not a small tabular S. For OQRC: n traces, ℓ_i = 1{violation} or severity; choose operating λ (max tools, max spend, network allowlist) so the occupancy upper bound on quantile risk ≤ α at 1−δ.
+(c) Current: deny-by-default, sandbox, fixed caps.
+(d) Value: PAC-MDP as a slogan is near zero — you cannot certify an LLM cron as PAC-MDP. Medium value for conformal/OQRC on repeated similar jobs with real calibration traces (nightly eval, same tools). One-off crons: keep hard caps. Historical violation rate + Hoeffding is valid only while traces stay exchangeable; a prompt change destroys that.
+
+WHEN TO BOTHER
+
+Use concentration or conformal when observations are approximately exchangeable, n is large enough that the interval is narrower than your decision gap, and you will change the decision when the bound is wide. Use fixed thresholds when n is tiny, evidence is dependent, or the object is editorial (HIGH/MED), not a statistical functional.
+
+The honest Hermes upgrade is Clopper–Pearson around eval pass rates, sequential gates that refuse to pass on n=3, and conformal/OQRC thresholds only where you will hold out calibration traces. Everything else is costume.
+
+---
+- Wrote 1187-word primer; saved to `/var/home/rainbow/.hermes/research/primer-generalization-theory.txt`
+- Highest-value Hermes uses: Clopper–Pearson on evals, sample-size-adaptive gates
+- Low/zero value: PAC on memory K=3, citation-count triage, PAC-MDP slogans for LLM crons
+- No issues; OQRC grounded to arXiv:2609.03104

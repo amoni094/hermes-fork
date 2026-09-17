@@ -1,0 +1,61 @@
+PRIMER: Lattice Theory and Order Theory
+
+CORE CONCEPTS
+
+A partial order (poset) is a set P with a relation <= that is reflexive, antisymmetric, and transitive. A lattice is a poset where every pair {a,b} has a least upper bound (join, a v b) and greatest lower bound (meet, a ^ b). A complete lattice extends this to arbitrary subsets: every subset S has a supremum (join of S) and infimum (meet of S). The set of all subsets of X ordered by inclusion, and the interval [0,1] ordered numerically, are complete lattices.
+
+Tarski Fixed-Point Theorem: If L is a complete lattice and f: L -> L is monotone (a <= b implies f(a) <= f(b)), then the set of fixed points of f is itself a complete lattice. In particular, f has a least fixed point lfp(f) = inf{x : f(x) <= x} and a greatest fixed point gfp(f) = sup{x : x <= f(x)}.
+
+A Galois connection between posets (P, <=) and (Q, <=) is a pair of monotone maps f: P -> Q and g: Q -> P satisfying f(p) <= q iff p <= g(q) for all p in P, q in Q. f is the left adjoint (lower), g the right adjoint (upper). Key property: g(f(p)) >= p and f(g(q)) <= q; the compositions are closure operators.
+
+Formal Concept Analysis (FCA) takes a binary relation (objects x attributes) called a formal context, and derives formal concepts: pairs (A, B) where A is a set of objects, B is a set of attributes, A is exactly the objects sharing all attributes in B, and B is exactly the attributes shared by all objects in A. These concepts, ordered by subset inclusion on A, form a complete lattice called the concept lattice.
+
+Scott continuity: in domain theory, a poset is a directed-complete partial order (dcpo) if every directed subset has a supremum. A function f is Scott-continuous if it preserves directed suprema: f(sup D) = sup f(D). Scott-continuous functions on dcpos model computable functions over information-theoretic domains.
+
+SKILL DEPENDENCY ORDERING
+
+(a) Skills are a poset under a dependency relation: skill A <= B if A must be loaded before or in place of B, or if A's knowledge is subsumed by B's. The skill library is a DAG, which is a partial order. The concept lattice of (skills x capabilities/tags) gives a formal concept hierarchy: each concept is a maximal group of skills sharing a maximal set of tags.
+
+(b) Currently, Hermes matches skills by tag/trigger string matching. A skill loads if its description prefix matches the task. No explicit dependency graph is maintained; loading order is ad hoc. The skillopt/GEPA loop scores skill quality numerically but does not reason about inter-skill structure.
+
+(c) Build the formal context: skills as objects, trigger-tags as attributes. Compute the concept lattice. Each concept node represents a coherent skill cluster; edges represent specialisation. For skill selection, given a task description mapped to a set of active attributes T, find the most specific concept C = (A, B) where B subsumes T, and load all skills in A. This is the Galois closure: A = T'', where T' = {skills sharing all tags in T} and T'' closes back. Implement via the Next Closure algorithm (Ganter 1984), O(|objects| * |concepts|) time.
+
+(d) Moderate value. The main gain is avoiding redundant skill loads and surfacing latent skill groupings. Validation: measure skill load precision/recall against hand-labelled task-to-skill ground truth on 50 representative sessions. Risk: concept lattice of 120 skills may be too small for statistical benefit; tag vocabulary needs discipline or the lattice degenerates.
+
+MEMORY FACT LATTICE
+
+(a) Memory facts have a natural specificity order: "Claude Sonnet costs $3/Mtok" is more specific than "Claude costs money" which is subsumed by "LLMs have API costs." The fact space is a lattice under logical entailment (or subsumption in a description logic): fact A <= fact B if A entails B. The hindsight memory bank is a subset of this lattice. Promote/demote operations correspond to moving facts up or down the lattice.
+
+(b) The l1-promote stage scores facts by a heuristic (recency, session frequency, explicit retention calls). Hindsight retrieval uses semantic embedding cosine similarity. There is no explicit entailment check: near-duplicate and subsumed facts coexist in the bank, wasting budget and degrading retrieval precision.
+
+(c) Before inserting a new fact f, compute its position in the fact lattice relative to existing facts. If an existing fact g is more specific than f (g entails f), suppress f as redundant. If f is more specific than g, replace g with f and log the promotion. Formally: insert f iff not exists g in Bank such that g <= f (g subsumes f). Use a subsumption oracle (embedding similarity above threshold tau, or a lightweight LLM call) to approximate the lattice relation. The result approximates the antichain of most specific facts, which is the minimal basis for the bank.
+
+(d) High value. Duplicate and subsumed facts are a known problem at 98% memory budget. Validation: compare bank antichain size and retrieval F1 before/after on a fixed fact corpus. Threshold tau needs calibration (start at 0.92 cosine). Risk: subsumption oracle errors cause premature fact eviction; mitigate with conservative tau and audit log.
+
+AGENT CAPABILITY ORDERING
+
+(a) Hermes models form a poset under capability: model A <= B if every task A can handle, B can also handle at least as well (quality-wise). This is a partial not total order: GPT-o3 may dominate Haiku on reasoning but not on cost or latency. The routing problem is: given a task t with requirements R, find the minimal element of {models m : capabilities(m) >= R}. This is the infimum of the upper set of R in the capability lattice.
+
+(b) The claude-routing-hierarchy skill encodes routing as a decision tree: 9-dimensional benchmark matrix, hand-tuned rules. When a new model appears, rules are updated manually. There is no formal monotonicity guarantee: two rules may route the same task differently depending on order of evaluation.
+
+(c) Define capability vectors in R^k (quality, cost, latency, context length, tool support, ...). Define A <= B iff A[i] <= B[i] for all i (product order). For a task with minimum requirement vector r, the feasible set is the upper set U(r) = {m : m >= r}. Route to the antichain minimum of U(r) under a cost objective: argmin_{m in antichain(U(r))} cost(m). The antichain here is the Pareto frontier. Update is O(k * |models|) per task. Tarski guarantees that if the routing function is monotone in task complexity, iterative refinement converges to a fixed routing policy.
+
+(d) Low-to-moderate value now. The current routing is already explicit and manually maintained. The benefit is principled Pareto-frontier routing when model count grows beyond ~10. Validation requires a calibrated multi-dimensional benchmark matrix. Risk: capability vectors are hard to measure reliably; a mismeasured dimension corrupts the entire order.
+
+FORMAL CONCEPT ANALYSIS OF SKILL LIBRARY
+
+(a) This is the direct application of FCA above, but focused on the output product: a concept lattice that serves as a navigable skill ontology. The formal context is (skills, attributes), where attributes include tags, model requirements, domain labels, and output types. Concepts reveal which skill clusters share structural roles.
+
+(b) No skill ontology exists. Skills are a flat list with a description prefix used for trigger matching. Hermes skill-family-router-maintenance is a manual patch attempting to resolve routing ambiguities.
+
+(c) Compute the concept lattice offline after each skill library update. Expose it as a routing index: given active attributes from the task context, traverse the lattice top-down to find the most specific matching concept. This replaces string-matching with a closed, consistent concept membership test. The lattice construction is one-time O(|skills| * 2^|attrs|) worst case, but tractable for |attrs| < 30 with sparse contexts using Lindig's algorithm.
+
+(d) Moderate value, low cost relative to benefit. The concept lattice is computable offline with an FCA library (concepts.py or fcatools in Python). Main gain: eliminates ambiguous multi-skill matches and surfaces unused skill capability clusters. Validation: run on current 120-skill library, inspect lattice for degenerate concepts (too sparse = attribute vocabulary too rich). Risk: requires attribute discipline on skill authoring going forward.
+
+IMPLEMENTATION CANDIDATES (ranked)
+
+1. Memory fact antichain filter. Before each hindsight insert, check subsumption against existing bank entries and suppress dominated facts. Expected benefit: recovers 10-20% of the 98%-full memory budget and improves retrieval precision by eliminating near-duplicates. Implementation cost: one subsumption function using cosine similarity with threshold, integrated into the l1-promote step; one afternoon.
+
+2. Skill FCA concept lattice. Build offline concept lattice over skills x tags using fcatools; replace trigger string-match with lattice traversal for skill selection. Expected benefit: consistent, closed skill routing that handles novel tag combinations without manual router patches. Implementation cost: one-time lattice build script plus a traversal wrapper for skill loading; roughly one day including attribute schema normalisation.
+
+3. Pareto model routing table. Define 4-5 dimensional capability vectors for each model and compute the Pareto frontier per task-type class; route to the cost-minimal Pareto-optimal model. Expected benefit: principled fallback chain when a primary model is unavailable or cost-constrained, without manual rule updates. Implementation cost: requires benchmark matrix calibration before the routing logic is trustworthy; two to three days of measurement work before any routing change is safe.

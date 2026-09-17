@@ -1,0 +1,58 @@
+PRIMER: Federated Learning Theory
+
+
+CORE CONCEPTS
+
+Federated Learning (FL) trains a shared model across distributed clients without centralising raw data. Each client holds a local dataset D_k; the goal is to minimise the global objective F(w) = sum_k (n_k / n) * F_k(w), where F_k is client k's local loss and n_k / n is its data fraction.
+
+FedAvg (McMahan et al., 2017) is the canonical algorithm. In each communication round t: the server broadcasts the current global model w_t; each of K sampled clients runs E local SGD steps producing w_t^k; the server aggregates w_{t+1} = sum_k (n_k / n) * w_t^k. Convergence is guaranteed under bounded gradient dissimilarity: E[||grad F_k(w) - grad F(w)||^2] <= G^2. When this bound is large (non-IID data), client gradients point in conflicting directions, causing "client drift". Convergence rate degrades roughly as O(G^2 * E^2 / T) for T rounds, so more local steps amplify the non-IID penalty.
+
+Differential Privacy in FL (DP-FedAvg, Geyer et al., 2017) clips each client update by L2 norm C and adds Gaussian noise: w^k_clipped + N(0, sigma^2 * C^2 * I). The privacy guarantee is (epsilon, delta)-DP where sigma ~ O(sqrt(T * log(1/delta)) / (epsilon * K)). Privacy cost accumulates across rounds via moments accountant.
+
+Byzantine robustness addresses malicious or faulty clients. If f clients are Byzantine (send arbitrary updates), correct aggregation requires at least 2f+1 honest clients. Robust aggregators replace weighted mean with coordinate-wise median (Yin et al., 2018), Krum (selects the update with minimum sum of distances to its K-f-1 nearest neighbours), or trimmed mean (discard top/bottom f updates before averaging). These come at a statistical cost: robust estimators have higher variance than the mean under honest conditions.
+
+Personalised FL relaxes the single global model assumption. MAML-based pFL trains a global initialisation that fine-tunes quickly per client. APFL mixes local and global: w_k = alpha * w_local_k + (1-alpha) * w_global. Ditto uses a shared model with local adaptors. Relevant when client distributions are irreconcilably heterogeneous.
+
+
+HERMES COMPONENT ANALYSIS
+
+--- Multi-session knowledge aggregation ---
+
+(a) Mathematical structure. Hermes accumulates facts across sessions: each session is a client k with local observations D_k (tool outputs, corrections, code patterns). The memory pipeline (l1-extract -> l1-promote -> hindsight) is a sequential aggregation function A: facts_1, facts_2, ..., facts_T -> unified memory state M_T. In FL terms, this is a single-client online learning problem with temporal distribution shift. If multiple Hermes profiles or agents write to shared memory, it becomes a proper federated setting: heterogeneous local distributions, no raw session data centralised.
+
+(b) Current approach. l1-promote scores facts by frequency and recency heuristics, retains above a threshold, and overwrites stale entries. There is no formal model of inter-session distribution shift or principled conflict resolution when two sessions produce contradictory facts.
+
+(c) Principled approach. Model each session as a local update delta_k = M_k - M_prev. Aggregate via weighted FedAvg: M_{t+1} = M_t + sum_k (n_k / n) * delta_k, where n_k is session length (proxy for data volume). For conflicting facts, apply coordinate-wise trimmed mean over embedding space: project facts into Hindsight's semantic space, cluster conflicting claims, discard outlier clusters (the f most deviant), average the rest. Convergence condition: bounded gradient dissimilarity on the semantic loss function requires sessions to not be maximally contradictory, which holds when Hermes's persona and skill set are stable across sessions.
+
+(d) Value assessment. Low-to-medium value for single-user Hermes. The benefit materialises only if multiple parallel sessions or profiles write to the same memory bank simultaneously, which is the multi-agent cron+delegate_task scenario. Validation requires: a test suite of conflicting facts injected across sessions, measured recall precision before and after aggregation. Risk: over-engineering a problem that heuristic promote-scoring already handles adequately at single-user scale. Implement only if you observe measurable fact corruption across cron agents.
+
+
+--- Privacy-preserving memory ---
+
+(a) Mathematical structure. Hindsight stores semantic embeddings of facts. The privacy question is: does retaining a fact in the memory bank leak information about the session that produced it? Formally, for a fact f extracted from session s, can an adversary with access to M reconstruct information about s beyond what the fact itself conveys? This is a membership inference problem; DP bounds reconstruction via (epsilon, delta) guarantees on the retain operation.
+
+(b) Current approach. No noise addition, no clipping. Facts are retained verbatim with full provenance metadata (session ID, timestamp). Hindsight's semantic search returns top-k matches without access control. An adversary with Hindsight access can reconstruct session content directly from retained facts.
+
+(c) Principled approach. Apply DP at the retain step: clip each fact embedding to norm C (C = 95th percentile of observed embedding norms), add calibrated Gaussian noise N(0, sigma^2 * C^2 * I) before storing. Use moments accountant to track cumulative epsilon across T retain operations per session. Set sigma such that epsilon < 1.0 per session with delta = 1/|memory bank|. For recall, post-process via DP-SGD-style sensitivity bounding: bound the l2 sensitivity of the query function (cosine similarity) and add noise to scores before ranking. The privacy-utility tradeoff: at sigma=1.0, semantic similarity degrades by roughly 15-20% on typical embedding benchmarks; at sigma=0.3, degradation is under 5%.
+
+(d) Value assessment. Medium value if Hermes handles genuinely sensitive data (medical, financial, legal). Low value for typical agentic workflows where the threat model is local and single-user. Validating it requires: a held-out membership inference attack (train a binary classifier to distinguish retained vs non-retained facts from query responses), measuring attack AUC before and after DP. Risk: noise addition will degrade recall quality measurably; the correct sigma requires empirical calibration against your specific embedding model and memory bank size. Implement behind a config flag, off by default.
+
+
+--- Byzantine-robust consensus in hermes-swarm ---
+
+(a) Mathematical structure. hermes-swarm-consensus reduces N subagent outputs to a single verdict. Each subagent k produces output v_k (a structured JSON verdict). The aggregation function A(v_1, ..., v_N) -> v* must be robust to f Byzantine agents (hallucinating, prompt-injected, or model-routing failures) iff N >= 2f+1. The current adversarial-review skill adds one independent reviewer, which handles f=1 Byzantine failure only if the reviewer is honest. With N=2 (primary + adversarial), 2f+1=3 requires f=0: a single Byzantine agent breaks consensus.
+
+(b) Current approach. hermes-swarm-consensus uses a heuristic reducer: majority vote on categorical fields, mean/median on numeric scores, and manual tiebreak rules. adversarial-review is a single second opinion, not a Byzantine-robust protocol. No formal guarantee if the adversarial reviewer is itself hallucinating or if both subagents share a systematic bias (e.g. both routed to the same model).
+
+(c) Principled approach. For N subagents, apply Krum aggregation: score each verdict v_k by sum of squared distances to its N-f-1 nearest neighbours in the embedding space of the output, select the v_k minimising this score. For scalar fields (confidence scores, risk ratings), apply coordinate-wise trimmed mean: sort, drop top and bottom f values, average the remainder. Require N >= 2f+1 (recommended: N=5 with f=1, giving tolerance to one Byzantine agent). For the adversarial-review case, upgrade to a 3-way vote: primary agent, adversarial model, and a tie-breaking lightweight model. Apply Krum over their structured outputs. The Byzantine threshold condition to document in code: assert N >= 2*f + 1 with f as a configurable parameter defaulting to 1.
+
+(d) Value assessment. High value for high-stakes decisions: irreversible file writes, external API calls, security-gate approvals. The benefit is concrete and the failure mode (single hallucinating subagent corrupting a decision) is observed in practice. Validation: inject a deliberately adversarial subagent (returning inverted verdicts) into swarm runs, measure how often the consensus matches ground truth before and after Krum. Risk: Krum requires a meaningful distance metric over structured JSON verdicts; embedding heterogeneous output schemas is non-trivial. Start with a simpler trimmed-mean on numeric confidence fields, add Krum over embeddings as a second phase.
+
+
+RANKED IMPLEMENTATION CANDIDATES
+
+1. Byzantine-robust swarm consensus via trimmed mean + 3-way vote. Upgrade hermes-swarm-consensus to require N>=3 subagents and discard the top and bottom confidence outlier before averaging. Expected benefit: eliminates single-agent hallucination corrupting high-stakes decisions with zero change to subagent code. Implementation cost: two days to extend hermes-swarm-consensus aggregator and add N-enforcement logic in delegate_task call sites.
+
+2. DP-retain in Hindsight behind a config flag. Add norm clipping and calibrated Gaussian noise to the l1-promote retain path, gated by config.yaml memory.dp_enabled and memory.dp_sigma. Expected benefit: provides a defensible privacy boundary if Hermes ever handles sensitive professional data or is extended to multi-user deployments. Implementation cost: three to four days including calibration experiments to find sigma preserving >90% recall quality.
+
+3. FedAvg-style session aggregation for multi-agent memory writes. When cron agents or parallel delegate_task workers write to Hindsight concurrently, route all writes through a single aggregator that computes delta-weighted merges and resolves conflicts via trimmed-mean over embedding distances. Expected benefit: prevents cron agents from overwriting each other's facts with stale or contradictory information during nightly batch runs. Implementation cost: one week, requires a write-lock + merge queue in the l1-promote pipeline and a semantic-distance function over fact embeddings.

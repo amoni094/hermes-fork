@@ -1,0 +1,57 @@
+PRIMER: Diffusion Processes and Score-Based Models
+
+================================================================================
+1. FIELD OVERVIEW
+
+Diffusion Processes and Score-Based Models study the mathematics of gradually adding noise to data (forward diffusion) and learning to reverse that process (reverse diffusion). The core objects are stochastic differential equations that govern how probability distributions evolve in time, the score function (gradient of log-probability), and algorithms for sampling from complex distributions by denoising. This matters mathematically because it unifies three traditions: Langevin dynamics (sampling via noise injection), variational inference (likelihood-free learning), and denoising autoencoders (manifold learning). The field enables generative modeling without explicit likelihood computation, making it applicable to high-dimensional structured data like trajectories, skill embeddings, and memory states that resist standard probabilistic treatment.
+
+================================================================================
+2. KEY RESULTS
+
+ANDERSON'S TIME-REVERSAL THEOREM (1982): Given a forward SDE dX_t = f(X_t,t)dt + g(t)dW_t, the reverse SDE is dX_s = [f(X_s,T-s) - g(T-s)^2 nabla_x log p(X_s|T-s)]d(T-s) + g(T-s)dW_s. Crucially, the reverse process depends on the score function nabla_x log p(x,t), which is unknown. Score-based models learn this function empirically.
+
+SCORE MATCHING EQUIVALENCE (Song et al. 2019): Training a neural network s_theta(x,t) to minimize E_t,x[||s_theta(x,t) - nabla_x log p_t(x)||^2] is equivalent to maximum likelihood under a particular weighting, AND equivalent to training a denoising autoencoder that minimizes E[||x - denoise_theta(x + sigma*noise, sigma)||^2]. This means the score function learned by denoising is the same object that controls reverse-time sampling.
+
+DDPM CONVERGENCE (Ho et al. 2020): Discrete denoising diffusion probabilistic models converge to the data distribution with sample complexity that depends on the number of diffusion steps and the score approximation error. The total variation distance scales as O(K^{-1/2} + epsilon_score) where K is number of steps and epsilon_score is the learned score approximation error. This gives a principled way to trade off speed (fewer steps) against quality (score accuracy).
+
+VARIANCE REDUCTION VIA SCORE SCALING: Using the score function to adaptively weight samples during MCMC (Langevin dynamics) reduces variance by a factor proportional to 1 + ||nabla_x log p(x)||^2. This directly improves mixing time for constrained sampling.
+
+================================================================================
+3. STANDARD PRACTITIONER TOOLS
+
+Practitioners implement: (1) Score networks: U-Net or transformer-based denoisers trained via MSE on noised data. (2) Discretized reverse sampling: iterative application of one-step denoising with noise injection, typically 50-1000 steps depending on quality needs. (3) Likelihood-free training: no explicit density needed; gradient of log p learned implicitly through reconstruction loss. (4) Fast samplers: distillation of diffusion into 1-4 step generators via regression on the reverse trajectory. (5) Libraries: diffusers (Hugging Face), score-based-generative-modeling (Yang Song's repo), and custom SDE solvers in JAX. (6) Computational tricks: importance resampling, continuous-time limits, variance-exploding vs variance-preserving SDEs, and adaptive step sizing.
+
+================================================================================
+4. HERMES APPLICATIONS
+
+APPLICATION 1: SAMPLING FROM LEARNED SKILL DISTRIBUTIONS
+
+Mathematical structure: Skills are procedural policies with implicit structure—they cluster in embedding space but have no closed-form likelihood. Diffusion models can learn p(skill_embedding | task_type, success_rate) as a probability distribution by treating skill embeddings as data points.
+
+Current Hermes approach: Model routing uses hard rules and cached embeddings. When delegate_task spawns subagents, skill selection is deterministic or random within a constrained set. No learned distribution over which skills work well together.
+
+Principled diffusion approach: (1) Collect tuples (skill_embedding_A, skill_embedding_B, task_outcome) from past task execution. (2) Train a score network s_theta(skill_pair, task_context, t) to learn the score of p(skill_pair | successful_on_task). Use denoising loss: for each task, add Gaussian noise to successful skill pairs and train network to predict the score. (3) At delegation time, run reverse diffusion starting from random noise, conditioned on task context, to sample diverse-but-promising skill pairs. (4) Use DDPM with 50 steps; variance-exploding SDE; reuse same score network for all task types via conditioning.
+
+Formula: minimize_theta E_{task, (s_a, s_b) from successful_pairs, sigma} ||s_theta((s_a+sigma*z, s_b+sigma*z), task, sigma) - (-(s_a+sigma*z)+(s_a,s_b))/sigma^2||^2 where z ~ N(0,I).
+
+Value assessment: MODERATE-HIGH value. Why: (1) Skill pairing is a real bottleneck in multi-model routing; ensemble effects are empirically large but not understood. (2) Diffusion gives probabilistic diversity without expensive rejection sampling. (3) Implementation cost is medium—need ~200 lines of score network + reverse loop, plus labeling ~500 successful task traces. (4) Risk: skill embeddings may not have smooth underlying manifold; if skill space is discrete/combinatorial, diffusion may waste capacity on interpolations that are meaningless. Mitigation: start with vision-based task success metric to validate manifold assumption.
+
+---
+
+APPLICATION 2: LANGEVIN MCMC FOR MEMORY CONSOLIDATION
+
+Mathematical structure: Memory consolidation selects which events to promote from L1-extract to hindsight storage. This is inherently a sampling problem: we want to draw from p(memory_state | relevance_to_future_tasks, long_term_goal, rarity). Langevin dynamics with score guidance can sample from this posterior efficiently.
+
+Current Hermes approach: Heuristic scoring via skillopt: assign each memory a "quality" score 0-1 based on task success correlation and recency. Promotion threshold is fixed (e.g., quality > 0.7). No principled posterior inference; treats each memory independently.
+
+Principled diffusion approach: (1) Formulate consolidation as sampling from p(memory_set | constraints) where constraints are budget (max 10GB hindsight), coverage (no repeated learnings), and forward-utility (likelihood of use in future tasks). (2) Learn a score network s_theta(memory_emb, goal_context, t) trained on pairs of (consolidated_memories, task_outcomes). (3) Initialize from current L1 extract; run Langevin MCMC: X_{i+1} = X_i + (step_size/2) * s_theta(X_i, goal, t=0) + sqrt(step_size) * noise. The score function guides the sampler toward memories that explain past successes. (4) Run 500 steps; use adaptive step size based on score magnitude.
+
+Formula (Langevin step): X_{i+1} = X_i + epsilon * nabla_x log p(X_i) + sqrt(2*epsilon) * N(0,I), where epsilon is step size, and nabla_x log p learned as the score network.
+
+Value assessment: MODERATE value. Why: (1) Memory management is real but not the primary bottleneck; most hindsight queries are sparse. (2) Langevin gives principled uncertainty quantification—can estimate p(memory_useful | goal) and set adaptive thresholds. (3) Implementation is manageable: ~150 lines of Langevin loop + score net training. (4) Risk: memory embeddings from (query, response, outcome) may not have a well-defined posterior—consolidation may be fundamentally not a sampling problem but a filtering problem. If true, Langevin will produce high-variance, low-utility samples. Mitigation: A/B test against baseline by measuring hindsight recall rate and time-to-answer on held-out tasks.
+
+---
+
+APPLICATION 3: DIFFUSION-BASED DATA AUGMENTATION FOR ADVERSARIAL EVAL
+
+Mathematical structure: Adversarial review spawns cold subagents that challenge proposed changes. To make these challenges diverse and credible, you need to sample from p(adversarial_objection | proposed_change, system_context). Score-based diffusion

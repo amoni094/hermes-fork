@@ -1,0 +1,59 @@
+PRIMER: Stochastic Processes / MDPs / Causal Inference
+
+An LLM agent loop is not an MDP solver and does not run do-calculus. The math still names objects you already have: hidden state, actions that change the world vs observations that do not, delayed harm from memory writes, and failures that look like bad actions but were bad context. Use the names to choose harness structure. Do not import algorithms whose assumptions (known P, tabular S,A, identifiable graphs, scalar r) Hermes does not satisfy.
+
+CORE CONCEPTS
+
+Markov chain: {S_t} with P(S_{t+1}|S_{0:t})=P(S_{t+1}|S_t). Memorylessness is a modeling choice. Mixing and absorbing states answer "will this loop settle or wander?" not "what should I click next?"
+
+MDP: (S, A, T, R, γ). Observe s, pick a, get r and s'~T(·|s,a). Bellman: V^π(s)=E[r+γ V^π(s')]; Q^π(s,a) likewise. γ encodes horizon: γ≈0 is one-tool greed; γ→1 prices context pollution, memory poisoning, and approval debt. Terminal reward is sparse; per-turn token/risk costs are the dense part of R.
+
+POMDP: observe o~O(s), not s. The sufficient statistic is belief b(s)=P(s|history). Optimal π is a function of b. Sensing actions (health check, hash vs last tick) can have value without changing the world.
+
+Causal DAG / SCM: X_i := f_i(pa_i, U_i). Observational P(Y|X) ≠ interventional P(Y|do(X)). do(X=x) severs arrows into X. Counterfactuals: given we saw Y=y under X=x, what would Y have been under x'? Needs the SCM, not the DAG alone.
+
+Pearl's ladder: L1 association P(Y|X) — logs, correlations, "memory writes co-occur with success." L2 intervention P(Y|do(X)) — what happens if we force write=True. L3 counterfactual P(Y_x | X=x', Y=y') — given this failure, was it the tool or the context. Do-calculus: three rules that reduce some P(Y|do(X),Z) to observables (backdoor, frontdoor, general identification). If the query is unidentified, more of the same logs will not answer it.
+
+KEY RESULTS
+
+Bellman optimality: V*(s)=max_a E[r+γ V*(s')]; greedy π* on Q* is optimal — if T and R are known or well-sampled and S is Markov. Policy gradient: ∇_θ J = E[∇ log π_θ(a|s) Q^π(s,a)]. You can improve a stochastic policy from trajectories without T; you still need a real advantage signal, not vibes.
+
+Identification: Z is backdoor-sufficient if it blocks all backdoor paths X←…→Y and contains no descendants of X. Logged tool traces are L1. Randomizing a write policy, or an approvals A/B, is L2. "This terminal() caused the failure" is L3 and usually unidentified without a graph.
+
+HERMES
+
+1. Agent loop as MDP
+(a) S_t ≈ (context, retrieved memory, task remainder, env). A_t = tool call or stop. R ≈ 0 until verifier/user quality, minus tokens, latency, risk. T unknown and non-stationary. γ should be high: compact, write, and approve early dominate later value. Compression is a state-destroying transition, not bookkeeping.
+(b) Hermes is a prompted ReAct policy: π(a|prompt), max_turns≈90, compression at ~0.5 context, approvals as an action filter, tool-use enforcement, no explicit V. Reward is implicit (user silence, verification skill). No backup; no credit assignment across turns.
+(c) Principled: treat the turn as the decision epoch; log (s,a,o); define cheap rewards (test pass, progress-rate, EASR); treat compression/compact as actions with large negative option-value when they wipe the Markov state. Change prompts/skills only when trajectory advantage is positive — policy-gradient thinking without claiming a theorem.
+(d) Mostly diagnostic. Fitting Q is not worth it. Real delta: explicit stop/progress rewards and not pretending the loop is Bellman-optimal because it "chooses tools."
+
+2. Memory write as intervention
+(a) W∈{0,1}, later retrieval R, action A', outcome Y. Edges: W→R→A'→Y, plus C (task type, user) →W and →Y, plus W→bloat→error. P(Y|W=1) ≠ P(Y|do(W=1)). Counterfactual: would this session have succeeded without the write?
+(b) Hermes already gates: L0 discard, L1 session_search only, L2 persist; 3-axis recency/utility/uniqueness ≥2; MCB PERSIST/CONTEXT-ONLY/VERIFY/ASK; l1-extract/promote/hindsight; cron skip_memory=True. No estimate of E[Y|do(W)].
+(c) Write iff predicted E[Y|do(W=1),C] exceeds E[Y|do(W=0),C] minus pollution (PSE, retrieval harm, context tax). Approximate with the existing utility/uniqueness tests. Only A/B on write policy is L2 evidence.
+(d) The gate is already a crude causal policy. Do-calculus notation adds little. Worth doing: instrument downstream retrieval harm (poisoned facts, contamination via context_from). Not worth: identifying formulas on n=12 writes.
+
+3. Tool side-effects
+(a) terminal() is do(env), not an observation. Filesystem := f(A,U); later S' depends on that. Timeout-after-dispatch: you do not know whether the intervention landed. P(S'|do(A)) ≠ P(S'|A) when A was chosen because S looked safe (confounding). Prefix-risk is P(hazard|do(a_{1:t})), not P(hazard|a_t).
+(b) Hermes executes, reads stdout, reacts. approvals.mode (manual/smart/off) filters some HAZARD actions in-harness. TRG/ATP exist as skills (prefix-risk, verify-before-retry) but are optional prompt discipline, not a broker. Tool-returned-OK ≠ effect settled.
+(c) Mutating tools: interventions with postconditions. Verify-before-retry. Don't update beliefs as if a timed-out command were a no-op. Keep authorization out-of-model (approvals, tool-auth-gate), not in the LLM's justification.
+(d) High value in harness, low value as more prompt poetry. This is one of the few causal distinctions that should change code: unknown completion status after timeout, and prefix-risk vs per-call risk.
+
+4. Cron as POMDP
+(a) Hidden S = disk, services, other jobs, user intent, whether last tick actually progressed. O = job prompt + optional context_from + script stdout + truncated logs. skip_memory=True. Belief should include "exit 0 can be a silent stall." Sensing (hash vs last output, lock, health) has information value.
+(b) Open-loop schedule + LLM on a truncated observation. 3-minute interrupt, .tick.lock, continuity flag, no_agent watchdogs. S9: success-shaped O, zero Δstate. Overlap if tick fires while previous run lives.
+(c) POMDP policy: sense first; act only if belief that work is needed exceeds threshold; emit a terminal observation ("DONE: …"); treat context_from as untrusted O, not S. continuity:true is belief carry; false is amnesia — pick on purpose. Watchdog-then-LLM (no_agent → context_from) is the sensing-then-acting split.
+(d) Framing earns its keep. Belief-state design (probe, overlap guard, hash-change gate) is already the good cron pattern; the math names why open-loop LLM ticks fail.
+
+5. Failure analysis
+(a) Saw A=a, C=c, Y=fail. Want Y under a' vs under c'. Hard tasks confound: they cause both thin context and bad tools. L1: tool correlates with fail. L2: would forcing a different tool fix it? L3: given this fail, action or observation?
+(b) Hermes retries/replans (blame A) more than it audits C (truncated context, injected tool output, skip_memory, parent SIGTERM at stall timeout misread as agent stall). Failure logs exist; counterfactual attribution does not.
+(c) Two-node check: was O corrupted/truncated/killed? Then C, not A. Was A off the skill's prescribed action under intact C? Then A. Localize the breakpoint; don't replay the whole trace. Never treat full failed transcripts as expert data.
+(d) Highest practical value on the ladder. "Retry the tool" vs "the parent killed the child" is a real fork. Formal L3 without a graph is theater; the two-node check is enough.
+
+WHEN IT CHANGES DESIGN VS RELABELS
+
+Changes design: mutating tools as interventions with unknown completion; cron as belief-state (sense then act); failure split action vs observation; memory writes scored by downstream harm, not interestingness.
+
+Relabeling: Bellman optimality of chat, policy gradients on one session, identification theorems on tiny n. Hermes is a finite-horizon, partially observed, non-stationary process with a frozen LLM policy. Improve the harness (reward proxies, verify-before-retry, skip_memory, approvals, stall-timeout). Do not wait for V*.

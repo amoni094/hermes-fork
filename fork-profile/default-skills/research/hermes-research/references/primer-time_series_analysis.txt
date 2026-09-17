@@ -1,0 +1,53 @@
+PRIMER: Time Series Analysis and Forecasting
+
+FIELD OVERVIEW
+
+Time series analysis studies sequences of observations ordered in time, with the core goal of understanding temporal dependencies and forecasting future values. The field concerns itself with three primary objects: observed sequences {y_t}, latent state processes {x_t}, and measurement/evolution noise. Core mathematical structures include autoregressive (AR) models capturing linear feedback from past values, moving average (MA) models capturing shock propagation, state space representations that decouple latent dynamics from observations, and spectral density functions describing frequency-domain variance distribution. The field matters because many real systems exhibit autocorrelation and non-stationarity—naive i.i.d. assumptions fail catastrophically. Change point detection theory gives formal tools to identify regime shifts. Granger causality provides causal inference under observability constraints. Online forecasting bounds quantify the cost of learning in real time, directly relevant to sequential decision systems.
+
+KEY RESULTS
+
+Kalman Filter Optimality (Kalman, 1960): For the linear Gaussian state space model x_t = Ax_{t-1} + w_t, y_t = Cx_t + v_t, with w_t ~ N(0,Q), v_t ~ N(0,R), the Kalman filter produces the minimum mean-squared-error estimator of x_t given y_1:t. Recursively: predict step K_t = AP_{t-1}A^T + Q, innovation s_t = y_t - Cx_pred, gain G_t = K_t C^T(CK_t C^T + R)^{-1}, update x_t = x_pred + G_t s_t, P_t = (I - G_t C)K_t. Error covariance P_t provably monotone decreasing under observability.
+
+CUSUM Change Detection (Page, 1954): To detect a mean shift in i.i.d. Gaussian noise, compute cumulative sum S_n = sum_{i=1}^n (y_i - mu_0 - delta/2), alarm when max_{0<=k<=n}(S_n - S_k) exceeds threshold h. This is optimal in the Neyman-Pearson sense: minimizes false negative rate subject to bounded false positive rate. Expected detection delay ~ (log(1/alpha))/KL(P1||P0) where alpha is false alarm rate and KL is Kullback-Leibler divergence.
+
+Granger Causality F-Test (Granger, 1969): Series x causes y in prediction if the AR model for y using its own history AR(p) has significantly lower residual sum of squares than the unrestricted model using both x and y history. Test statistic: F = (RSS_restricted - RSS_unrestricted) * (T - 2p) / (RSS_unrestricted * p), asymptotically F(p, T-2p). Non-zero Granger causality indicates predictive information transfer, not instantaneous causality.
+
+Online Forecasting Regret (Cesa-Bianchi & Lugosi, 2006): For sequential prediction with expert forecasters, worst-case regret is O(sqrt(T log N)) where T is horizon and N is number of experts. With model switching, regret grows log-linearly in model set size. Algorithm: exponential weights on past forecast losses, predict as mixture of expert forecasts weighted by recent performance.
+
+STANDARD PRACTITIONER TOOLS
+
+Python: statsmodels (ARIMA, state space), pmdarima (auto_arima parameter selection), scipy.signal (spectral analysis). R: forecast (auto.arima, ets), strucchange (breakpoint tests). Core operations: differencing to remove trends (y'_t = y_t - y_{t-1}), ACF/PACF plots to identify AR/MA order, Augmented Dickey-Fuller test for stationarity, Theil-Sen slope for robust trend estimation. Implementation: Kalman filter ~ 20 lines NumPy. CUSUM detector ~ 15 lines. Granger test via statsmodels.tsa.stattools.grangercausalitytests().
+
+HERMES APPLICATIONS
+
+---
+
+APPLICATION 1: CRON JOB PERFORMANCE TRENDING
+
+(a) Mathematical structure: Each cron job produces a time series of execution times {t_1, t_2, ..., t_n}, inter-arrival times, error rates. These are nonstationary (trends, seasonality by time-of-day/day-of-week). State space model: underlying job latency x_t (latent efficiency), observed time y_t = x_t + measurement noise. Regime changes occur during system load spikes, model upgrades, or code changes.
+
+(b) Current Hermes approach: Store raw runtimes in memory, compute rolling 7-day average, alert if average exceeds fixed threshold. No trend direction. No detection of sudden degradation until many data points cross threshold.
+
+(c) Principled approach: Fit a local linear trend state space model: x_t (level) = x_{t-1} + b_{t-1} + w_t, b_t (slope) = b_{t-1} + u_t, y_t = x_t + v_t. Estimate via Kalman filter. Forecast next 5 runtimes with confidence intervals. Overlay CUSUM change detector on residuals y_t - x_t to alarm within 2-3 observations of a 20% latency increase. Use F-test to check if time-of-day covariate (hour) significantly predicts latency; if yes, fit seasonal component.
+
+(d) Value assessment: High value. Cron jobs are mission-critical; early detection of degradation saves token budget and prevents cascading failures. Implementation cost: ~200 lines of code. Main risk: overfitting to noise in short historical windows (< 30 observations per job). Mitigation: use robust loss (Huber) and strong regularization (L2 on state variance). Pilot on 3 highest-cost cron jobs (research sweep, apply, monitoring).
+
+---
+
+APPLICATION 2: RESEARCH PAPER CITATION GROWTH FORECASTING
+
+(a) Mathematical structure: Citation count C_t of a paper over months is a counting process with positive integer values. Growth typically follows logistic or power-law curve early, saturates later. Can model as Poisson or negative binomial with time-varying intensity lambda_t. Alternatively, log(C_t) approximately linear for papers in growth phase, then sublinear. Regime change occurs at saturation point.
+
+(b) Current Hermes approach: None. When Hermes surveys research papers, it ingests static citation counts. No forecasting of future citations. Cannot predict which papers will become influential before Hermes invests time summarizing them.
+
+(c) Principled approach: For papers < 2 years old, fit exponential growth model log(C_t) = alpha + beta * t + epsilon_t via OLS. Test for stationarity of log-differences; if nonstationary (unit root), use differenced model. Estimate doubling time tau_d = log(2)/beta. Use ARIMA(1,1,0) (random walk plus noise) to forecast next 6 months with uncertainty bands. Maintain a change point detector to identify saturation onset; when rate of citation growth decelerates significantly, switch to logistic model S_t = K/(1+exp(-r(t-t_0))), fit via nonlinear least squares.
+
+(d) Value assessment: Medium-high value. Forecasting future influence helps prioritize which papers merit deep analysis now vs. defer. Implementation cost: ~300 lines (curve fitting, regime detection, ensemble forecast). Key risk: citation counts are sparse for young papers, creating high noise. Mitigation: pool information across papers in same venue/topic using hierarchical Bayes (shrinkage). Only forecast papers with >= 5 citations already observed. Expected value: 15-30% reduction in wasted analysis on papers that plateau, if forecasts accurate 6+ months out.
+
+---
+
+APPLICATION 3: AGENT FAILURE RATE CHANGE DETECTION
+
+(a) Mathematical structure: Failure rate r_t (fraction of tasks failed in day t) is a binomial proportion, bounded [0,1]. Model as logit-transformed process: phi_t = log(r_t/(1-r_t)) approximately normal. Latent process phi_t follows a random walk or AR(1) under gradual drift. Sudden failure regime changes (e.g., model crash, dependency breach) cause large jumps in phi_t. This is a discrete change-point detection problem.
+
+(b) Current Hermes approach: Run daily health check, count failures, store in log. Human reviews logs weekly. No automated alarm. Failures accumulate before detection.

@@ -1,0 +1,35 @@
+PRIMER: Online Learning / Bandits
+
+Online learning is sequential choice under partial feedback: each round you pick an action, see a loss/reward for that action only, and update. Multi-armed bandits (MAB) are the discrete-action case. The figure of merit is regret, not accuracy.
+
+Regret. Stochastic MAB: unknown means μ_i, best μ*. Cumulative regret R_T = Σ_t (μ* − μ_{a_t}). Algorithms bound expected regret E[R_T]. Gap Δ_i = μ* − μ_i. Adversarial MAB: no μ; regret is vs the best arm in hindsight, Σ_t ℓ_{t,a_t} − min_i Σ_t ℓ_{t,i}. Sublinear regret (o(T)) ⇒ average performance → the comparator. Linear regret means you never learned.
+
+Exploration vs exploitation. Greedy-on-means locks onto a bad arm with constant probability (linear regret). Explore-then-commit wastes rounds after you already know. Every serious algorithm forces exploration that shrinks with evidence.
+
+UCB. Play argmax_i [μ̂_i + bonus_i]. Bonus is a CI width, classically √(2 log t / n_i) (Hoeffding). Optimism: under-sampled arms look good until data says otherwise. Gap-dependent: ~ Σ_{i:Δ_i>0} (log T)/Δ_i. Minimax: O(√(KT log K)) for tuned/MOSS-style UCB (UCB1 is √(KT log T)). K = arms, T = rounds.
+
+Thompson Sampling. Keep a posterior p(μ | data). Sample θ ~ posterior, play greedy on θ. Bernoulli: Beta(α,β); success α+=1, fail β+=1. Bayesian optimality under the prior; asymptotically matches Lai–Robbins frequentist lower bounds. Handles delayed updates, explores less as posteriors concentrate, priors can encode benchmarks.
+
+EXP3. Adversarial. Weights w_i ∝ exp(−η Ŝ_i) (Hedge). Sample a ~ softmax(w). Importance-weighted loss ℓ̂_i = (ℓ_a / p_a) 1_{i=a}. Regret O(√(KT log K)) vs any sequence, including adaptive adversaries. Mix uniform mass or use EXP3-IX so p_i stays off zero (raw inverse-propensity has huge variance).
+
+Contextual bandits. See x_t, then pick a. E[r | x, a] depends on the query. Implement as one bandit per bucket, or a linear model r ≈ ⟨θ_a, φ(x)⟩ (LinUCB: UCB in parameter space; contextual TS analogously). Right abstraction whenever the best arm is query-dependent.
+
+OCO / FTRL. Action x_t in a convex set; observe gradient g_t of a convex loss. FTRL: x_{t+1} = argmin_x ⟨Σ_{s≤t} g_s, x⟩ + R(x). Entropy regularizer → Hedge/EXP3; ½‖x‖² → online gradient descent. Use this when the decision is a mixture or budget vector, not a single discrete arm.
+
+Key results. UCB/TS stochastic: Õ(√(KT)) minimax, log T / Δ gap-dependent. TS is often better-tuned in practice than UCB. EXP3: same Õ(√(KT)) without i.i.d. Online-to-batch: average the online iterates; excess risk ≤ R_T/T. A no-regret algorithm is a batch learner. One A/B test is not a regret bound.
+
+Standard tools. (1) Regret decomposition: R_T = Σ_i Δ_i n_i(T) — bound how often you play bad arms. (2) CIs: Hoeffding (bounded); Bernstein (variance-aware, tighter when rewards are stable). Bonus too small → linear regret; too large → over-explore. (3) Bayesian updates: conjugate when you can; otherwise Laplace. A wrong prior is not an adversary, but it biases early exploration.
+
+--- Hermes ---
+
+Model routing. (a) Arms = {Sonnet, Grok, Haiku, Mistral-small, Sol, …}. Context = role/task type (orchestrate, worker, compress, aux, review). Reward must be a scalar: quality proxy − λ·$ − ν·latency. Bandit feedback: you only see the model you called. (b) Current heuristic is a skill-encoded table: Sonnet parent, Grok workers, Haiku compression, Mistral aux, Sol for adversarial review. No runtime router; delegate_task has one worker model; smart_model_routing is off. LLMRouterBench: task-type rules beat commercial learned routers; two well-chosen models beat a wide pool. (c) A real bandit would be contextual TS on a tiny per-role arm set, posterior seeded from benchmarks, updated from logged (success, cost, latency). Not UCB over the full catalog mid-session. (d) Mostly overkill. Exploring is a $2–$15 call. Model updates and silent 400/422 fallbacks violate i.i.d. Keep rules. If you log (task_cluster, model, success, cost), a frozen Thompson table for worker-only choice is the one place it might pay. Never explore by putting Sol in the parent fallback chain.
+
+Skill selection. (a) Contextual bandit: context = task text; arms = skills (or top-K subsets); reward = 1 iff a loaded skill was used and the task succeeded — extra skills can hurt (SkillsInjector). Combinatorial: you pick a set. (b) Triggers + embedding/BM25 + domain shortcuts. A 0.6 semantic + 0.4 success-rate blend is proposed, not implemented. (c) Textbook: LinUCB/TS on skill embeddings. Practical: Beta posterior per (task_category, skill) blended with cosine. FTRL on inclusion weights only if you pick sets. (d) Worth the success-rate table. Not worth LinUCB at 170 skills with sparse, delayed, subjective labels. Retrieval error (vocabulary gap, distractors) dominates estimation error — fix descriptions and negative triggers first.
+
+Tool selection. (a) Arms = interchangeable tools (web_extract vs browser; brave-free vs SearXNG). Context = URL / error class. Reward = success, with browser ≫ extract in cost. (b) Deterministic fallback plus competing-tool framing in skills. (c) EXP3 on provider quality if the world is adversarial (CAPTCHA, 429); else “3 failures → switch” is a CI test without the library. (d) Overkill in-turn. Failures are structured (don’t retry 400; back off 429), not i.i.d. noise. Keep the 3-fail switch.
+
+Cron scheduling. (a) Restless / budgeted bandits: arms = jobs; a pull spends compute; rewards drift (useful research vs silent stall). Continuous allocation is FTRL on a simplex of token/CPU budget. (b) Fixed crontab, pinned --model/--provider, overlap guards, named terminal states. (c) Spend more ticks where recent Δ-utility / $ is high. (d) Not worth it until jobs contend for a hard budget. Priority + SLA + kill-on-overlap first.
+
+Adversarial setting. Prompt injections, malicious pages, poisoned tool output, silent provider fallback: losses are chosen against you. UCB/TS can be driven onto a bad arm (“this URL looks informative”). (a) Adversarial bandit, or a constrained game. (b) Deny-by-default, fail-closed, classify 400 vs 429, don’t retry schema errors. (c) EXP3/FTRL only for non-safety choices (which search backend given 429s). Safety actions are not arms. (d) Do not “learn” on injections. Hard constraints; EXP3 at the provider-quality layer only.
+
+Rule of thumb: bandits win when you log a scalar reward, exploration is cheap relative to T, i.i.d. holds or you use EXP3/FTRL, and K is small. Hermes fails the first two for model/skill/tool in the main loop. Log outcomes; keep rules; add Beta-TS only where K≤5 and the call is already happening.
