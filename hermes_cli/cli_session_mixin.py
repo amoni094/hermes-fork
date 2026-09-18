@@ -443,8 +443,8 @@ class CLISessionMixin:
 
     def _notify_session_boundary(self, event_type: str) -> None:
         """Fire a session-boundary plugin hook (on_session_finalize / on_session_reset).
-        Non-blocking; errors swallowed. Safe from shutdown, /new, /reset."""
-        with contextlib.suppress(Exception):
+        Non-blocking; errors logged. Safe from shutdown, /new, /reset."""
+        try:
             from hermes_cli.lifecycle import finalize_session, invoke_hook
 
             context = {
@@ -455,6 +455,9 @@ class CLISessionMixin:
                 finalize_session(**context)
             else:
                 invoke_hook(event_type, **context)
+        except Exception as exc:
+            from cli import logger
+            logger.warning("on_session_finalize hook failed: %s", exc, exc_info=True)
 
     def _discard_session_if_empty(self, session_id: Optional[str]) -> bool:
         """Drop a just-ended session row that never gained content (quit-immediately, /new,

@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import collections
 import contextlib
 import contextvars
+import hashlib
 import json
 import logging
 import os
@@ -50,6 +52,12 @@ logger = logging.getLogger(__name__)
 
 _LOCAL_MODES = {"local", "local_embedded"}
 _RETAIN_CONTEXT_DEFAULT = "conversation between Hermes Agent and the User"
+
+# M-1 dedup gate: LRU fingerprint set — blocks double-write when both
+# notify_memory_tool_write() and sync_turn() deliver the same fact.
+# OrderedDict used as an ordered set; values are sentinel True.
+_recent_memory_writes: collections.OrderedDict = collections.OrderedDict()
+_RECENT_MEMORY_WRITES_MAX = 20
 
 
 def _ensure_client_dependency() -> None:
@@ -954,6 +962,13 @@ class HindsightMemoryProvider(MemoryProvider):
         with self._prefetch_lock:
             self._prefetch_session_id = session_id
 
+        # Capture session_id for the thread closure so it can re-validate
+        # before writing — without this capture, a concurrent queue_prefetch("B")
+        # would update _prefetch_session_id to "B" while thread-A is still running,
+        # causing thread-A's result to pass the stamp check and corrupt session B.
+        # (MEDIUM-2 cold-review fix.)
+        _captured_sid = session_id
+
         def _run():
             # Wait (bounded, off the reply path) for the just-completed turn's
             # retain to be recall-visible so the warmed context includes it.
@@ -962,7 +977,10 @@ class HindsightMemoryProvider(MemoryProvider):
             text, count = self._do_recall(query)
             if text:
                 with self._prefetch_lock:
-                    self._prefetch_result, self._prefetch_count = text, count
+                    # Re-validate: discard if another session claimed the slot while
+                    # this thread was doing I/O.
+                    if self._prefetch_session_id == _captured_sid:
+                        self._prefetch_result, self._prefetch_count = text, count
 
         self._prefetch_thread = _context_thread(_run, "hindsight-prefetch")
         self._prefetch_thread.start()
@@ -1135,6 +1153,39 @@ class HindsightMemoryProvider(MemoryProvider):
             return tool_error(f"{failure}: {e}")
 
     # -- session lifecycle -------------------------------------------------------
+
+    def on_memory_write(self, action: str, target: str, content: str,
+                        metadata: Optional[Dict[str, Any]] = None, **kwargs) -> None:
+        """Mirror explicit builtin memory-tool writes to Hindsight as a one-shot retain.
+
+        M-1 dedup gate: both notify_memory_tool_write() → on_memory_write AND
+        sync_turn() can carry the same fact (the memory-tool result is included in the
+        assistant turn that sync_turn() later retains).  We fingerprint the first 500
+        chars of content and skip the retain if we've seen this fingerprint within the
+        last _RECENT_MEMORY_WRITES_MAX writes.
+        """
+        if action != "add" or not content or self._shutting_down.is_set():
+            return
+
+        # --- M-1 dedup gate ---
+        fingerprint = hashlib.sha256(content[:500].encode("utf-8", errors="replace")).hexdigest()[:16]
+        if fingerprint in _recent_memory_writes:
+            logger.debug("hindsight on_memory_write: dedup: skipping duplicate memory write (fp=%s)", fingerprint)
+            return
+        _recent_memory_writes[fingerprint] = True
+        if len(_recent_memory_writes) > _RECENT_MEMORY_WRITES_MAX:
+            _recent_memory_writes.popitem(last=False)  # evict LRU (oldest)
+        # --- end dedup gate ---
+
+        context = (metadata or {}).get("context") or _RETAIN_CONTEXT_DEFAULT
+        item = self._build_retain_kwargs(content, context=context)
+        logger.debug("hindsight on_memory_write: retaining memory-tool write (action=%s, target=%s, fp=%s)",
+                     action, target, fingerprint)
+        bank_id = self._bank_id
+        job = self._make_turn_retain_job([json.dumps({"role": "tool", "content": content}, ensure_ascii=False)],
+                                         document_id=self._document_id or "",
+                                         update_mode="append", label="on_memory_write", track_ops=False)
+        self._enqueue_retain(job)
 
     def on_session_switch(self, new_session_id: str, *, parent_session_id: str = "",
                           reset: bool = False, **kwargs) -> None:

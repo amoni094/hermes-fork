@@ -60,4 +60,11 @@ def finalize_session(**kwargs: Any) -> List[Any]:
         except Exception:
             logger.warning("Core Relay session finalization failed", exc_info=True)
 
+        # Clean up per-session weakref registry so the agent object can be GC'd.
+        try:
+            from hermes_cli.plugins import unregister_session_agent
+            unregister_session_agent(session_id)
+        except Exception:
+            logger.debug("unregister_session_agent failed (non-fatal)", exc_info=True)
+
     return _plugin_hooks("on_session_finalize", **kwargs)

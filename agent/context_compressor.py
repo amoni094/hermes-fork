@@ -2155,6 +2155,9 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         self.proactive_prune_tokens = getattr(self, "_config_proactive_prune_tokens", self.proactive_prune_tokens)
         # F03 fix: summary_target_ratio and protect_first_n are mutated by set_compression_profile
         # but had no _config_ snapshot; session 2 would inherit session 1's profile values.
+        # NOTE: protect_first_n is NOT in _PROFILE_KEYS and is not mutated by set_compression_profile;
+        # the restore here is a defensive no-op belt-and-suspenders guard in case a future profile
+        # key adds it. The snapshot at __init__ time makes it safe regardless.
         self.summary_target_ratio = getattr(self, "_config_summary_target_ratio", self.summary_target_ratio)
         self.protect_first_n = getattr(self, "_config_protect_first_n", self.protect_first_n)
         # MEDIUM-A: restore threshold from _config_ (not mutated _base_threshold_percent).
@@ -5678,13 +5681,8 @@ Write only the summary body. Do not include any preamble or prefix."""
             from hermes_cli.lifecycle import invoke_hook as _invoke_hook
             _agent = None
             try:
-                from hermes_cli.plugins import get_plugin_manager as _gpm
-                pm = _gpm()
-                # why: _agent is last-bound via plugin_manager; correct for single-session CLI.
-                # In multi-session gateway, hook receives the last agent that bound, not
-                # necessarily the one owning this compressor. Known limitation: tracked in
-                # FORK_README. Plugins should prefer the agent= kwarg from pre_llm_call.
-                _agent = getattr(pm, "_agent", None)
+                from hermes_cli.plugins import get_session_agent as _gsa
+                _agent = _gsa(self._session_id or "")
             except Exception:
                 _agent = None
             _invoke_hook(

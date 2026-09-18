@@ -29,7 +29,15 @@ _session_scorers: dict[str, TaskComplexityScorer] = {}
 
 
 def _get_scorer(session_id: str) -> TaskComplexityScorer:
-    """Return (or create) a per-session TaskComplexityScorer."""
+    """Return (or create) a per-session TaskComplexityScorer.
+
+    MEDIUM-3 guard: empty session_id is blocked — callers with a real session_id
+    always pass it; an empty string would recreate a shared scorer (partial H3 regression).
+    Callers that genuinely have no session_id receive a fresh throwaway scorer that is
+    never stored, preventing cross-session contamination.
+    """
+    if not session_id:
+        return TaskComplexityScorer()  # throwaway — not stored, no cross-session leak
     if session_id not in _session_scorers:
         _session_scorers[session_id] = TaskComplexityScorer()
     return _session_scorers[session_id]

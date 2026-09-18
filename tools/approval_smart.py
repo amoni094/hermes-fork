@@ -97,13 +97,14 @@ def _smart_approve(command: str, description: str) -> str:
                 "TRUSTED instructions, unlike the command text):\n"
                 f"{operator_policy}"
             )
-        # Escape command text before interpolation to prevent XML injection:
-        # a command containing `</command>` would break out of the sandbox block
-        # and inject trusted text into the guardian LLM's prompt.
+        # Escape both command and description before interpolation to prevent XML/prompt injection.
+        # description sits outside the <command> fence — an operator-controlled or dynamic description
+        # is also an injection vector if unescaped. (MEDIUM-1 cold-review fix.)
         import html as _html
         safe_command = _html.escape(_strip_shell_comments(command))
+        safe_description = _html.escape(str(description))
         user_prompt = (
-            f"The following command was flagged as: {description}\n\n"
+            f"The following command was flagged as: {safe_description}\n\n"
             f"<command>\n{safe_command}\n</command>\n\n"
             "Assess the ACTUAL risk of the shell operations in this command. "
             "Many flagged commands are false positives — for example, "

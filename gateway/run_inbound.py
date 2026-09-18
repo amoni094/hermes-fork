@@ -1340,7 +1340,8 @@ class GatewayInboundMixin:
             message_text = f"[{_safe_user_name}] {message_text}"
         # After the sender-prefix so the prefix applies only to the trigger message, not the backfill.
         if getattr(event, "channel_context", None):
-            message_text = f"{event.channel_context}\n\n[New message]\n{message_text}"
+            from gateway.input_sanitizer import sanitize_inbound_text
+            message_text = f"{sanitize_inbound_text(event.channel_context)}\n\n[New message]\n{message_text}"
         return message_text
 
     @staticmethod
@@ -1617,6 +1618,9 @@ class GatewayInboundMixin:
         model supports native vision; the caller consumes that buffer at ``run_conversation``."""
         _pending_stt_prepared = hasattr(event, "_gateway_pending_stt_text")
         message_text = (event._gateway_pending_stt_text if _pending_stt_prepared else event.text) or ""
+        # Sanitize inbound text to neutralise prompt-injection markers before any further processing.
+        from gateway.input_sanitizer import sanitize_inbound_text
+        message_text = sanitize_inbound_text(message_text)
         # Prefer the caller's resolved session key so this write key matches the consume key at the
         # run_conversation site; derive it here only for tests and legacy standalone callers.
         session_key = session_key or self._session_key_for_source(source)

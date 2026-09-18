@@ -1884,6 +1884,38 @@ _plugin_manager: Optional[PluginManager] = None
 _plugin_managers_by_home: Dict[Path, PluginManager] = {}
 _plugin_managers_lock = threading.RLock()
 
+# Per-session weakref registry — replaces process-global _pm._agent for multi-session safety.
+# Keys are session_id strings; values are weakref.ref(agent).  Access via
+# register_session_agent() / get_session_agent() / unregister_session_agent().
+_SESSION_AGENTS: Dict[str, "weakref.ref[Any]"] = {}
+_SESSION_AGENTS_LOCK = threading.Lock()
+
+
+def register_session_agent(session_id: str, agent: Any) -> None:
+    """Store a weak reference to *agent* keyed on *session_id*.
+
+    Called by agent_init after the agent object is fully constructed so that
+    plugins can retrieve it via get_session_agent() without creating a
+    process-global reference that leaks across concurrent sessions.
+    """
+    with _SESSION_AGENTS_LOCK:
+        _SESSION_AGENTS[session_id] = weakref.ref(agent)
+
+
+def get_session_agent(session_id: str) -> "Optional[Any]":
+    """Return the live agent for *session_id*, or None if it has been GC'd or is unknown."""
+    with _SESSION_AGENTS_LOCK:
+        ref = _SESSION_AGENTS.get(session_id)
+    if ref is None:
+        return None
+    return ref()  # None when the referent has been collected
+
+
+def unregister_session_agent(session_id: str) -> None:
+    """Remove the weak-reference entry for *session_id* at session teardown."""
+    with _SESSION_AGENTS_LOCK:
+        _SESSION_AGENTS.pop(session_id, None)
+
 
 def _plugin_home_key() -> Path:
     """Resolved active Hermes home — the key for per-profile plugin managers (plugins capture the

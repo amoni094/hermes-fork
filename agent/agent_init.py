@@ -2001,14 +2001,13 @@ def _inject_context_engine_tools(agent):
         except Exception as _ce_err:
             _ra().logger.debug("Context engine on_session_start: %s", _ce_err)
 
-    # Expose agent to PluginManager so ctx.compressor works in pre_llm_call hooks.
+    # Expose agent to per-session weakref registry so ctx.compressor works in
+    # pre_llm_call hooks without leaking process-global state across sessions.
     try:
-        from hermes_cli.plugins import get_plugin_manager
-        _pm = get_plugin_manager()
-        if _pm is not None:
-            _pm._agent = agent
+        from hermes_cli.plugins import register_session_agent
+        register_session_agent(agent.session_id, agent)
     except Exception as _pm_err:
-        _ra().logger.debug("plugin manager _agent bind failed (non-fatal): %s", _pm_err)
+        _ra().logger.debug("plugin manager session agent register failed (non-fatal): %s", _pm_err)
 
 
 def _configure_ollama_num_ctx(agent, _model_cfg, _config_context_length):

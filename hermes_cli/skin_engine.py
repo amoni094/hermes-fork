@@ -424,10 +424,15 @@ def load_skin(name: str) -> SkinConfig:
     # Sanitise name: strip path components and null bytes to prevent traversal
     # via a malicious display.skin config value.
     safe_name = Path(name).name.replace("\x00", "")
-    user_file = _skins_dir() / f"{safe_name}.yaml"
-    # Confirm resolved path stays inside skins_dir (defence-in-depth)
+    # Cache the skins dir once to avoid TOCTOU between resolve() and is_file().
+    skins_dir = _skins_dir()
+    user_file = skins_dir / f"{safe_name}.yaml"
+    # Confirm resolved path stays inside skins_dir (defence-in-depth).
+    # Use skins_dir.resolve() once; mkdir=True so resolve() returns the real path
+    # even when the directory doesn't exist yet.
     try:
-        user_file.resolve().relative_to(_skins_dir().resolve())
+        skins_dir_resolved = skins_dir.resolve()
+        user_file.resolve().relative_to(skins_dir_resolved)
     except ValueError:
         logger.warning("Skin name '%s' resolves outside skins directory; using default", name)
         return _build_skin_config(_BUILTIN_SKINS["default"])
