@@ -192,9 +192,17 @@ def _is_blocked_device_path(path: str) -> bool:
         return True
     # Catch symlink-traversal tricks: /proc/self -> /proc/<pid>; also catches
     # /proc/*/environ and /proc/*/mem regardless of pid segment.
+    # P3-H2 fix: also block /proc/<pid>/fd/<N> for any pid (arbitrary-pid fd exfil).
     if normalized.startswith("/proc/"):
         tail = normalized[len("/proc/"):]
         if "environ" in tail or "/mem" in tail:
+            return True
+        # /proc/<pid>/fd/... or /proc/self/fd/... (covers any numeric pid)
+        _parts = tail.split("/", 2)
+        if len(_parts) >= 2 and _parts[1] == "fd":
+            return True
+        # Other high-value paths by suffix regardless of pid
+        if tail.endswith(("/exe", "/maps", "/status", "/syscall", "/loginuid")):
             return True
     return False
 

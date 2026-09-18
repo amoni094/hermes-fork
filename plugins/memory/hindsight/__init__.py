@@ -949,7 +949,10 @@ class HindsightMemoryProvider(MemoryProvider):
                 self._prefetch_session_id = session_id
             elif not session_id or not self._prefetch_session_id:
                 # Either side is empty — can't safely validate ownership; discard.
+                # P3-M3 fix: also clear _prefetch_session_id so a future queue_prefetch
+                # with a real session_id starts from a clean slate (not a stale key).
                 self._prefetch_result, self._prefetch_count = "", 0
+                self._prefetch_session_id = ""
             result, count = self._prefetch_result, self._prefetch_count
             self._prefetch_result, self._prefetch_count = "", 0
         return self._finish_prefetch(result, count)

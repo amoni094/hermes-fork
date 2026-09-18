@@ -3699,6 +3699,13 @@ class GatewayTurnMixin:
             return
         _final = response.get("final_response") or ""
         _is_empty_sentinel = not _final or _final == "(empty)"
+        # Record the last reply for the self-echo bot-loop heuristic (P3-H1 fix).
+        # This runs on every completed turn regardless of delivery path (streamed, queued, normal).
+        if source and _final and not _is_empty_sentinel:
+            try:
+                self._record_last_reply(source, _final)
+            except Exception:
+                pass
         # response_previewed: only suppress if that EXACT text was delivered, not unrelated commentary.
         # Unrelated commentary/progress must not be mistaken for the final response (#14238).
         _previewed = bool(response.get("response_previewed"))

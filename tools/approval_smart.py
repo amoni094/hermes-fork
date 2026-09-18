@@ -103,9 +103,12 @@ def _smart_approve(command: str, description: str) -> str:
         # (e.g. "rm -rf /tmp/&lt;dir&gt;" looks safer than "rm -rf /tmp/<dir>").
         # Instead, replace the closing </command> tag literal inside the content —
         # this is the only vector that can break out of the fence, and the replacement
-        # is still readable by the LLM. (P2-M6 fix.)
+        # is still readable by the LLM. (P2-M6 fix; P3-L2 fix: extended to all approval_smart tags.)
         def _neutralise_cmd_delimiters(s: str) -> str:
-            return str(s).replace("</command>", "[/command]").replace("<command>", "[command]")
+            s = str(s)
+            for tag in ("command", "description", "instruction", "system", "function_calls"):
+                s = s.replace(f"</{tag}>", f"[/{tag}]").replace(f"<{tag}>", f"[{tag}]")
+            return s
         safe_command = _neutralise_cmd_delimiters(_strip_shell_comments(command))
         safe_description = _neutralise_cmd_delimiters(description)
         user_prompt = (

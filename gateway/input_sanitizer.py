@@ -31,7 +31,10 @@ _XML_PROMPT = re.compile(r'<(/?)prompt\b', re.IGNORECASE)
 _XML_INSTRUCTION = re.compile(r'<(/?)instruction\b', re.IGNORECASE)
 
 # OpenAI JSON role injection: {"role": "system"} embedded in message body.
-_JSON_ROLE = re.compile(r'\{[^}]{0,60}"role"\s*:\s*"(system|user|assistant)"', re.IGNORECASE)
+# P3-M1 fix: [^}]{0,60} is bypassed by a } inside a string value (e.g. {"x": "}", "role": "system"}).
+# Use a simpler approach: match "role" followed by "system/user/assistant" anywhere in reasonable proximity,
+# regardless of surrounding structure. False-positive rate is acceptably low for a sanitiser.
+_JSON_ROLE = re.compile(r'"role"\s*:\s*"(system|user|assistant)"', re.IGNORECASE)
 
 # Hermes slash commands at the start of a line — catch-all pattern since the command
 # registry is plugin-extensible (any /word could be a real command). Restrict to
