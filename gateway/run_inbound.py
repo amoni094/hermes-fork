@@ -204,7 +204,9 @@ class GatewayInboundMixin:
                 await self._hm_offer_pairing_code(source)
             return None
         # The busy path charged this event on arrival; a drained follow-up must not pay twice.
-        if not getattr(event, "_bot_loop_admitted", False) and not self._admit_bot_message_for_source(source):
+        if not getattr(event, "_bot_loop_admitted", False) and not self._admit_bot_message_for_source(
+            source, text=event.text or ""
+        ):
             return None
         return event, source, False
 
@@ -1341,7 +1343,7 @@ class GatewayInboundMixin:
         # After the sender-prefix so the prefix applies only to the trigger message, not the backfill.
         if getattr(event, "channel_context", None):
             from gateway.input_sanitizer import sanitize_inbound_text
-            message_text = f"{sanitize_inbound_text(event.channel_context)}\n\n[New message]\n{message_text}"
+            message_text = f"{sanitize_inbound_text(event.channel_context or '')}\n\n[New message]\n{message_text}"
         return message_text
 
     @staticmethod
@@ -1513,7 +1515,8 @@ class GatewayInboundMixin:
             # it's disambiguation (*which* prior message), not deduplication.
             # Adapters resolve the original message (or the user's native partial quote).
             # A preview here silently loses later list items and code; keep that context intact.
-            reply_text = event.reply_to_text
+            from gateway.input_sanitizer import sanitize_inbound_text
+            reply_text = sanitize_inbound_text(event.reply_to_text or "")
             _who = " your previous message" if getattr(event, "reply_to_is_own_message", False) else ""
             message_text = f'[Replying to{_who}: "{reply_text}"]\n\n{message_text}'
         return message_text

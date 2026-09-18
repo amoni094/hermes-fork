@@ -3601,6 +3601,22 @@ def _process_due_job(job: dict, adapters, loop, verbose: bool) -> bool:
     claimed_job = dict(claimed) if isinstance(claimed, dict) else dict(job)
     claimed_job["execution_id"] = job["execution_id"]
     claimed_job["_scheduled_instant"] = job.get("_scheduled_instant")
+
+    # Pre-launch heartbeat: write a fresh timestamp immediately after the claim is
+    # persisted but before the subprocess/agent is spawned.  Without this there is a
+    # window between claim_job_for_fire returning and the heartbeat thread starting
+    # (inside _run_with_fire_claim_heartbeat) during which the claim could appear
+    # stale to a competing process and be re-taken, causing a double-fire.
+    _fire_claim = claimed_job.get("fire_claim") if isinstance(claimed_job, dict) else None
+    _fire_owner = str(_fire_claim.get("by") or "") if isinstance(_fire_claim, dict) else ""
+    if _fire_owner:
+        try:
+            heartbeat_fire_claim(claimed_job["id"] if "id" in claimed_job else job["id"],
+                                 expected_owner=_fire_owner)
+        except Exception:
+            logger.debug("Job '%s': pre-launch fire_claim heartbeat failed (non-fatal)",
+                         claimed_job.get("name", claimed_job.get("id", "")), exc_info=True)
+
     return run_one_job(claimed_job, adapters=adapters, loop=loop, verbose=verbose)
 
 

@@ -2189,8 +2189,12 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
             try:
                 est.reset()
                 est._checkpoints.clear()
-            except Exception:
-                pass
+            except Exception as _est_err:
+                logger.warning(
+                    "context_compressor: entropy estimator reset failed at session boundary; "
+                    "creating fresh: %s", _est_err,
+                )
+                self._entropy_estimator = EntropyEstimator()
         else:
             self._entropy_estimator = EntropyEstimator()
         self._summary_failure_cooldown_until = 0.0

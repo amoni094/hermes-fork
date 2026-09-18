@@ -549,11 +549,11 @@ def _read_ssh_session_token_file(path: str) -> str:
         raise SystemExit("--ssh-session-token-file must be absolute")
 
     # The Desktop client writes the token under the account's $HOME/.hermes/
-    # desktop-ssh, independent of HERMES_HOME and the active profile. Anchor
-    # validation there, NOT get_hermes_home(): a non-default profile or a Docker
-    # /opt/data root re-homes get_hermes_home() and would reject every token.
-    # See #69551.
-    token_root = Path.home() / ".hermes" / "desktop-ssh"
+    # desktop-ssh, independent of the active profile. Anchor validation against
+    # HERMES_HOME (or the default ~/.hermes fallback), NOT get_hermes_home(): a
+    # non-default profile or a Docker /opt/data root re-homes get_hermes_home()
+    # and would reject every token. See #69551.
+    token_root = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "desktop-ssh"
     try:
         relative = Path(path).relative_to(token_root)
     except ValueError as exc:

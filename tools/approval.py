@@ -1177,7 +1177,15 @@ def check_execute_code_guard(code: str, env_type: str, has_host_access: bool = F
     # and messaging ask-mode drive whole-script approval); when that leaks into a CLI with no notify callback, the
     # engine falls through to the CLI Dangerous Command panel instead of a silent pending_approval.
     if not is_gateway and not is_ask:
-        return _approved()
+        # CLI path: still run the standard dangerous-command check rather than auto-approving.
+        # execute_code can call subprocess/os.system directly (bypassing terminal() guards), so
+        # the hardline floor must still apply.  We build a synthetic command string so the
+        # pattern-matcher and CLI approval panel can assess the script body.
+        _cli_command = f"execute_code <<'PY'\n{code}\nPY"
+        return check_dangerous_command(
+            _cli_command, env_type, approval_callback=approval_callback,
+            has_host_access=has_host_access,
+        )
 
     session_key = get_current_session_key()
     # Built only past the early-return gates so common paths don't copy a potentially-large script into this string.

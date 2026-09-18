@@ -265,10 +265,18 @@ def _continue_text(st: _Trunc, _retry: TurnRetryState, assistant_message: Any) -
             agent._vprint(f"{agent.log_prefix}↻ Stream interrupted — requesting continuation ({n}/4)...")
         else:
             agent._vprint(f"{agent.log_prefix}↻ Requesting continuation ({n}/4)...")
-        append_message(messages, {
-            "role": "user", "content": _get_continuation_prompt(st.is_stub, _dropped_tools),
-            "_length_continuation_nudge": True,
-        })
+        _last_role = messages[-1].get("role") if messages and isinstance(messages[-1], dict) else None
+        if _last_role != "assistant":
+            logger.debug(
+                "turn_truncation: skipping continuation nudge — last message role is %r "
+                "(expected 'assistant'); would create user→user adjacency",
+                _last_role,
+            )
+        else:
+            append_message(messages, {
+                "role": "user", "content": _get_continuation_prompt(st.is_stub, _dropped_tools),
+                "_length_continuation_nudge": True,
+            })
         agent._session_messages = messages
         _retry.restart_with_length_continuation = True
         return st.done("break")

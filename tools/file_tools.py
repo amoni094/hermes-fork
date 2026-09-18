@@ -124,6 +124,12 @@ _BLOCKED_PROC_SUFFIXES = (
     "/fd/0", "/fd/1", "/fd/2",  # stdio aliases
     "/environ", "/cmdline", "/maps", "/smaps", "/smaps_rollup", "/numa_maps",
     "/mem", "/auxv", "/pagemap")
+# Self/init process paths that directly expose process secrets or raw memory.
+# Listed explicitly so the check is O(1) and survives normpath edge cases.
+_BLOCKED_PROC_EXPLICIT = frozenset({
+    "/proc/self/environ", "/proc/self/mem", "/proc/self/maps",
+    "/proc/1/environ",
+})
 
 
 def _file_ops_uses_host_paths(file_ops) -> bool:
@@ -169,7 +175,17 @@ def _is_blocked_device_path(path: str) -> bool:
     normalized = os.path.normpath(_expand_tilde(path))
     if normalized in _BLOCKED_DEVICE_PATHS:
         return True
-    return normalized.startswith("/proc/") and normalized.endswith(_BLOCKED_PROC_SUFFIXES)
+    if normalized in _BLOCKED_PROC_EXPLICIT:
+        return True
+    if normalized.startswith("/proc/") and normalized.endswith(_BLOCKED_PROC_SUFFIXES):
+        return True
+    # Catch symlink-traversal tricks: /proc/self -> /proc/<pid>; also catches
+    # /proc/*/environ and /proc/*/mem regardless of pid segment.
+    if normalized.startswith("/proc/"):
+        tail = normalized[len("/proc/"):]
+        if "environ" in tail or "/mem" in tail:
+            return True
+    return False
 
 
 def _is_blocked_device(filepath: str, base_dir: str | Path | None = None) -> bool:

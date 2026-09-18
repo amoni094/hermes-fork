@@ -13,7 +13,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Callable, Deque, Dict, Hashable, Tuple
 
-__all__ = ["BotLoopGuard", "BotLoopGuardSettings", "load_settings", "settings_from_config"]
+__all__ = ["BotLoopGuard", "BotLoopGuardSettings", "load_settings", "settings_from_config", "is_self_response"]
 
 _TRUTHY = frozenset({"true", "1", "yes", "on"})
 _FALSY = frozenset({"false", "0", "no", "off"})
@@ -77,6 +77,24 @@ def load_settings() -> BotLoopGuardSettings:
         return settings_from_config(load_config_readonly())
     except Exception:
         return BotLoopGuardSettings()
+
+
+_SELF_RESPONSE_FINGERPRINT_LEN = 100
+
+
+def is_self_response(text: str, session_last_response: str) -> bool:
+    """Return True when *text* looks like a verbatim echo of the session's own last response.
+
+    Compares the first ``_SELF_RESPONSE_FINGERPRINT_LEN`` characters of both strings after
+    stripping leading/trailing whitespace. A short last response (< 20 chars) is considered
+    too ambiguous to fingerprint and always returns False.
+    """
+    if not text or not session_last_response:
+        return False
+    needle = session_last_response.strip()[:_SELF_RESPONSE_FINGERPRINT_LEN]
+    if len(needle) < 20:
+        return False
+    return text.strip()[:_SELF_RESPONSE_FINGERPRINT_LEN] == needle
 
 
 class BotLoopGuard:

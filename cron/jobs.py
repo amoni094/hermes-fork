@@ -889,7 +889,9 @@ _persisted_error_recoveries: int = 0
 _TELEMETRY_RECENT_HISTORY = 20
 # A fire_claim younger than this is a live run (heartbeat cadence is 60 s). One value
 # for claiming, one-shot re-arm, and stale-error recovery so they cannot disagree.
-FIRE_CLAIM_TTL_SECONDS = 300
+# 1800 s (30 min): the original 300 s TTL was routinely outlived by real jobs, causing
+# a manual cronjob(action='run') to re-claim and double-fire the same job. See #53395.
+FIRE_CLAIM_TTL_SECONDS = 1800
 _persisted_error_recoveries_recent: list = []
 
 

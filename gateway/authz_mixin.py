@@ -540,10 +540,27 @@ class GatewayAuthorizationMixin:
         platform = source.platform.value if source.platform else ""
         return (self._adapter_profile_for_source(source) or "", platform, str(source.chat_id or ""))
 
-    def _admit_bot_message(self, source: SessionSource) -> bool:
+    def _admit_bot_message(self, source: SessionSource, *, text: str = "", session_last_response: str = "") -> bool:
         """Count one authorized bot-authored inbound message. False when it trips the budget or the chat is cooling down.
-        The inbound handler calls this once per message; ``_is_user_authorized`` only peeks because it is asked several times."""
-        if not getattr(source, "is_bot", False):
+        The inbound handler calls this once per message; ``_is_user_authorized`` only peeks because it is asked several times.
+
+        For non-bot senders, a secondary content-based heuristic guard catches self-echo loops:
+        if ``text`` matches the session's own last response prefix, treat it as a bot-loop candidate
+        and apply the guard budget (even though ``is_bot`` is False).
+        """
+        from gateway.bot_loop_guard import is_self_response
+        _is_bot = getattr(source, "is_bot", False)
+        if not _is_bot:
+            # Secondary heuristic: non-bot sender echoing our own last response is a loop candidate.
+            if is_self_response(text, session_last_response):
+                allowed, state = self._bot_loop_guard_instance().admit(self._bot_loop_guard_conversation(source))
+                if state == "tripped":
+                    logger.warning(
+                        "Bot loop guard (self-response fingerprint) is dropping messages in %s chat %s "
+                        "from non-bot sender %s: message matches session's own last response prefix.",
+                        source.platform.value if source.platform else "", source.chat_id, source.user_id,
+                    )
+                return allowed
             return True
         allowed, state = self._bot_loop_guard_instance().admit(self._bot_loop_guard_conversation(source))
         if state == "tripped":

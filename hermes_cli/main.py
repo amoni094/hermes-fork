@@ -231,7 +231,7 @@ def _config_default_interface_early() -> str:
         if home:
             cfg_path = os.path.join(home, "config.yaml")
         else:
-            cfg_path = os.path.join(os.path.expanduser("~"), ".hermes", "config.yaml")
+            cfg_path = os.path.join(os.environ.get("HERMES_HOME", os.path.join(os.path.expanduser("~"), ".hermes")), "config.yaml")
         if os.path.exists(cfg_path):
             import yaml as _yaml_iface
 

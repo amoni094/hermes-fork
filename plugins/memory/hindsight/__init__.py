@@ -339,6 +339,8 @@ class HindsightMemoryProvider(MemoryProvider):
         self._writer_thread: threading.Thread | None = None
         self._sync_thread = None  # legacy alias external callers may join; points at the writer
         self._shutting_down = threading.Event()
+        self._shutdown_lock = threading.Lock()  # M-8: guard against concurrent shutdown_all()
+        self._shutdown_done = False              # M-8: idempotency flag for shutdown()
         self._atexit_registered = False
         self._retain_tags: List[str] = []
         self._tags: list[str] | None = None
@@ -1090,7 +1092,15 @@ class HindsightMemoryProvider(MemoryProvider):
                 self._status_callback(f"{_HINDSIGHT_GLYPH} Hindsight — saving to memory…")
             except Exception:
                 logger.debug("Retain indicator emit failed (non-fatal)", exc_info=True)
-        self._enqueue_retain(job)
+        # Atomicity guard: if enqueue raises, roll back the append so the two
+        # in-memory state mutations (append + queue entry) are never seen inconsistently.
+        try:
+            self._enqueue_retain(job)
+        except Exception:
+            self._session_turns.pop()
+            logger.error("sync_turn: _enqueue_retain failed; rolled back session_turns append "
+                         "(turn %d lost from in-memory buffer)", self._turn_counter, exc_info=True)
+            return
         # Advance the watermark only after the delta is queued so a later retain
         # doesn't re-ship turns already handed to the writer.
         if update_mode == "append":
@@ -1177,11 +1187,8 @@ class HindsightMemoryProvider(MemoryProvider):
             _recent_memory_writes.popitem(last=False)  # evict LRU (oldest)
         # --- end dedup gate ---
 
-        context = (metadata or {}).get("context") or _RETAIN_CONTEXT_DEFAULT
-        item = self._build_retain_kwargs(content, context=context)
         logger.debug("hindsight on_memory_write: retaining memory-tool write (action=%s, target=%s, fp=%s)",
                      action, target, fingerprint)
-        bank_id = self._bank_id
         job = self._make_turn_retain_job([json.dumps({"role": "tool", "content": content}, ensure_ascii=False)],
                                          document_id=self._document_id or "",
                                          update_mode="append", label="on_memory_write", track_ops=False)
@@ -1257,6 +1264,13 @@ class HindsightMemoryProvider(MemoryProvider):
             self._client.close()
 
     def shutdown(self) -> None:
+        # M-8: idempotency guard — concurrent shutdown_all() calls (e.g. atexit drain
+        # racing an explicit teardown) must not double-close the writer or the HTTP client.
+        with self._shutdown_lock:
+            if self._shutdown_done:
+                logger.debug("Hindsight shutdown: already done, skipping duplicate call")
+                return
+            self._shutdown_done = True
         logger.debug("Hindsight shutdown: stopping writer + waiting for background threads")
         # Stop accepting retain jobs first so late sync_turn() calls are dropped.
         self._shutting_down.set()

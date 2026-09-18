@@ -1953,7 +1953,17 @@ def try_activate_fallback(agent, reason: "FailoverReason | None" = None) -> bool
             _update_fallback_context_compressor(agent)
             _reresolve_fallback_reasoning_config(agent)
             _rescope_fallback_extra_body(agent, old_model, old_provider, old_base_url)
-            rewrite_prompt_model_identity(agent, fb_model, fb_provider)
+            # F05: skip identity rewrite on Anthropic failover to preserve prefix cache.
+            # rewrite_prompt_model_identity() mutates _cached_system_prompt mid-conversation,
+            # busting the Anthropic prefix cache for the entire failover window.  The cache
+            # miss cost (full-prompt retokenisation every turn) outweighs the benefit of
+            # correct identity labels, so we only rewrite for non-Anthropic providers.
+            if (fb_provider or "").strip().lower() == "anthropic":
+                logger.debug(
+                    "F05: skipping rewrite_prompt_model_identity for Anthropic failover (%s) "
+                    "to preserve prefix cache", fb_model)
+            else:
+                rewrite_prompt_model_identity(agent, fb_model, fb_provider)
 
             notice = (
                 f"⚠️ Model fallback: {old_model} via {old_provider} unavailable "
