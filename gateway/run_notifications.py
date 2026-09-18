@@ -336,9 +336,9 @@ class GatewayNotificationsMixin:
         stays unledgered."""
         from gateway.run import _strip_response_attachments_for_direct_send
         # Record last reply for self-echo bot-loop heuristic before delivery.
-        if session_key and response:
+        if source and response:
             try:
-                self._record_last_reply(session_key, response)
+                self._record_last_reply(source, response)
             except Exception:
                 pass
         if not text_already_delivered:

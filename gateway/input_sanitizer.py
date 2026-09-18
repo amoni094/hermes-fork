@@ -33,8 +33,11 @@ _XML_INSTRUCTION = re.compile(r'<(/?)instruction\b', re.IGNORECASE)
 # OpenAI JSON role injection: {"role": "system"} embedded in message body.
 _JSON_ROLE = re.compile(r'\{[^}]{0,60}"role"\s*:\s*"(system|user|assistant)"', re.IGNORECASE)
 
-# Hermes slash commands at the start of a line.
-_SLASH_CMD = re.compile(r'(?m)^[ \t]*/(approve|deny|yolo|stop|new|restart|reset)\b', re.IGNORECASE)
+# Hermes slash commands at the start of a line — catch-all pattern since the command
+# registry is plugin-extensible (any /word could be a real command). Restrict to
+# word-char-only names to avoid false positives on URL paths (/usr/bin etc.).
+# The replacement marker makes the neutralisation visible in logs.
+_SLASH_CMD = re.compile(r'(?m)^[ \t]*(/[a-zA-Z][a-zA-Z0-9_]{0,31})\b', re.IGNORECASE)
 
 # Replacement marker — unambiguously inert, visible in logs, not ZWS-stripped.
 _MARKER = "[⚠STRIPPED:{label}]"
@@ -64,5 +67,5 @@ def sanitize_inbound_text(text: str) -> str:
     # JSON role injection (replace whole match).
     text = _JSON_ROLE.sub(_MARKER.format(label="json-role"), text)
     # Hermes slash commands.
-    text = _SLASH_CMD.sub(lambda m: _MARKER.format(label=f"/{m.group(1)}"), text)
+    text = _SLASH_CMD.sub(lambda m: _MARKER.format(label=m.group(1)), text)
     return text

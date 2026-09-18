@@ -4014,9 +4014,11 @@ class GatewayRunner(
 
         return self._under_authorization_profile(source, _check)
 
-    def _record_last_reply(self, session_key: str, text: str) -> None:
-        """Cache the last reply text per session_key for the self-echo bot-loop heuristic.
-        Bounded to 512 chars (fingerprint only); capped at 512 entries (evict oldest)."""
+    def _record_last_reply(self, source: "SessionSource", text: str) -> None:
+        """Cache the last reply text per conversation for the self-echo bot-loop heuristic.
+        Uses the same (profile, platform, chat_id) key as _bot_loop_guard_conversation so
+        that _get_last_reply_for_source can retrieve it. Bounded to 512 chars; capped at
+        512 entries (evict oldest)."""
         cache = getattr(self, "_last_reply_texts", None)
         if cache is None:
             self._last_reply_texts: dict = {}
@@ -4026,13 +4028,18 @@ class GatewayRunner(
                 cache.pop(next(iter(cache)))
             except StopIteration:
                 pass
-        cache[session_key] = (text or "")[:512]
+        try:
+            conv_key = self._bot_loop_guard_conversation(source)
+        except Exception:
+            return  # no source metadata — skip silently
+        cache[conv_key] = (text or "")[:512]
 
-    def _get_last_reply_for_source(self, source: SessionSource) -> str:
+    def _get_last_reply_for_source(self, source: "SessionSource") -> str:
         """Return the cached last reply for the conversation that owns *source*, or ''."""
-        # Mirror the bot_loop_guard conversation key so the heuristic uses the same scope.
-        from gateway.authz_mixin import GatewayAuthorizationMixin
-        conv_key = "|".join(str(p) for p in self._bot_loop_guard_conversation(source))
+        try:
+            conv_key = self._bot_loop_guard_conversation(source)
+        except Exception:
+            return ""
         return getattr(self, "_last_reply_texts", {}).get(conv_key, "")
 
     def _admit_bot_message_for_source(self, source: SessionSource, *, text: str = "", session_last_response: str = "") -> bool:
