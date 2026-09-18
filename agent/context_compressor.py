@@ -2153,11 +2153,11 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         #      session boundary — reset here, not in set_compression_profile.
         self.protect_last_n = getattr(self, "_config_protect_last_n", self.protect_last_n)
         self.proactive_prune_tokens = getattr(self, "_config_proactive_prune_tokens", self.proactive_prune_tokens)
-        # F03 fix: summary_target_ratio and protect_first_n are mutated by set_compression_profile
-        # but had no _config_ snapshot; session 2 would inherit session 1's profile values.
-        # NOTE: protect_first_n is NOT in _PROFILE_KEYS and is not mutated by set_compression_profile;
-        # the restore here is a defensive no-op belt-and-suspenders guard in case a future profile
-        # key adds it. The snapshot at __init__ time makes it safe regardless.
+        # F03 fix: summary_target_ratio and protect_first_n snapshots are restored here.
+        # NOTE: neither field is currently in _PROFILE_KEYS (set_compression_profile does NOT
+        # mutate them). The restore is a defensive belt-and-suspenders guard — a no-op today
+        # but correct if a future profile key adds either field. The __init__ snapshot makes
+        # it safe regardless of call order.
         self.summary_target_ratio = getattr(self, "_config_summary_target_ratio", self.summary_target_ratio)
         self.protect_first_n = getattr(self, "_config_protect_first_n", self.protect_first_n)
         # MEDIUM-A: restore threshold from _config_ (not mutated _base_threshold_percent).

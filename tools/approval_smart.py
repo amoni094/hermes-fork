@@ -97,12 +97,17 @@ def _smart_approve(command: str, description: str) -> str:
                 "TRUSTED instructions, unlike the command text):\n"
                 f"{operator_policy}"
             )
-        # Escape both command and description before interpolation to prevent XML/prompt injection.
-        # description sits outside the <command> fence — an operator-controlled or dynamic description
-        # is also an injection vector if unescaped. (MEDIUM-1 cold-review fix.)
-        import html as _html
-        safe_command = _html.escape(_strip_shell_comments(command))
-        safe_description = _html.escape(str(description))
+        # Neutralise XML-delimiter injection in command and description without HTML-encoding.
+        # html.escape() is wrong here: the consumer is an LLM, not a browser parser, so
+        # &gt; and &lt; entities are opaque tokens that degrade risk assessment accuracy
+        # (e.g. "rm -rf /tmp/&lt;dir&gt;" looks safer than "rm -rf /tmp/<dir>").
+        # Instead, replace the closing </command> tag literal inside the content —
+        # this is the only vector that can break out of the fence, and the replacement
+        # is still readable by the LLM. (P2-M6 fix.)
+        def _neutralise_cmd_delimiters(s: str) -> str:
+            return str(s).replace("</command>", "[/command]").replace("<command>", "[command]")
+        safe_command = _neutralise_cmd_delimiters(_strip_shell_comments(command))
+        safe_description = _neutralise_cmd_delimiters(description)
         user_prompt = (
             f"The following command was flagged as: {safe_description}\n\n"
             f"<command>\n{safe_command}\n</command>\n\n"

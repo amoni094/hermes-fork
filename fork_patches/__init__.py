@@ -9,7 +9,7 @@ record of fork-vs-upstream divergence.
 FORK_PATCHES = [
     # (issue_id, file, approx_line, description)
     ("F01", "agent/turn_truncation.py", 246, "user→user adjacency guard: skip nudge if last msg role==user"),
-    ("F02", "agent/agent_init.py", 2009, "_pm._agent global replaced with per-session weakref registry"),
+    ("F02", "hermes_cli/plugins.py", 1887, "_SESSION_AGENTS weakref registry (register/get/unregister_session_agent); agent_init.py calls register at line ~2009"),
     ("F03", "agent/context_compressor.py", 2158, "bind_session_state resets summary_target_ratio+protect_first_n"),
     ("F04", "agent/conversation_loop.py", 766, "on_session_start now passes agent= kwarg"),
     ("F05", "agent/chat_completion_helpers.py", 1643, "skip identity rewrite on Anthropic failover to preserve prefix cache"),
@@ -29,7 +29,7 @@ FORK_PATCHES = [
     ("CLI-4","hermes_cli/env_loader.py", 335, "env_loader fallbacks use HERMES_HOME env var"),
     ("CLI-5","hermes_cli/main_dashboard.py", 556, "desktop-ssh token path uses get_hermes_home()"),
     ("CLI-7","cron/scheduler.py", None, "claim TTL 300→1800s; pre-launch heartbeat write closes race window"),
-    ("S-1", "tools/file_tools_paths.py", 172, "/proc/self/environ and related paths added to blocklist"),
+    ("S-1", "tools/file_tools.py", 123, "/proc blocklist: _BLOCKED_PROC_EXPLICIT + _BLOCKED_PROC_FD_PREFIX + suffix check in _is_blocked_device_path"),
     ("S-5", "tools/approval.py", 1179, "CLI non-gateway execute_code no longer unconditionally auto-approved"),
     ("N6",  "tests/agent/conftest.py", 1, "autouse HERMES_HOME fixture isolates test suite from live ~/.hermes"),
 ]

@@ -941,9 +941,15 @@ class HindsightMemoryProvider(MemoryProvider):
             # session.  A slow Hindsight API (>3 s) can let session A's prefetch
             # thread write _prefetch_result after a session switch; session B would
             # then drain session A's memories into its first turn.
-            if session_id and self._prefetch_session_id != session_id:
+            # P2-M3 fix: gate on session_id being non-empty on BOTH sides — an empty
+            # session_id ("") must never be treated as a valid match, since multiple
+            # callers with session_id="" would appear identical and cross-drain.
+            if session_id and self._prefetch_session_id and self._prefetch_session_id != session_id:
                 self._prefetch_result, self._prefetch_count = "", 0
                 self._prefetch_session_id = session_id
+            elif not session_id or not self._prefetch_session_id:
+                # Either side is empty — can't safely validate ownership; discard.
+                self._prefetch_result, self._prefetch_count = "", 0
             result, count = self._prefetch_result, self._prefetch_count
             self._prefetch_result, self._prefetch_count = "", 0
         return self._finish_prefetch(result, count)

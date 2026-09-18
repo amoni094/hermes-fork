@@ -269,14 +269,16 @@ def _continue_text(st: _Trunc, _retry: TurnRetryState, assistant_message: Any) -
         if _last_role != "assistant":
             logger.debug(
                 "turn_truncation: skipping continuation nudge — last message role is %r "
-                "(expected 'assistant'); would create user→user adjacency",
+                "(expected 'assistant'); would create user→user adjacency — not retrying",
                 _last_role,
             )
-        else:
-            append_message(messages, {
-                "role": "user", "content": _get_continuation_prompt(st.is_stub, _dropped_tools),
-                "_length_continuation_nudge": True,
-            })
+            # P2-M4 fix: do NOT set restart_with_length_continuation — nudge was skipped
+            # so retrying with the identical message list would only burn API budget.
+            return st.done("break")
+        append_message(messages, {
+            "role": "user", "content": _get_continuation_prompt(st.is_stub, _dropped_tools),
+            "_length_continuation_nudge": True,
+        })
         agent._session_messages = messages
         _retry.restart_with_length_continuation = True
         return st.done("break")

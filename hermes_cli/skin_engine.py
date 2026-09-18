@@ -428,7 +428,7 @@ def load_skin(name: str) -> SkinConfig:
     skins_dir = _skins_dir()
     user_file = skins_dir / f"{safe_name}.yaml"
     # Confirm resolved path stays inside skins_dir (defence-in-depth).
-    # Use skins_dir.resolve() once; mkdir=True so resolve() returns the real path
+    # Use skins_dir.resolve() once; resolve(strict=False) returns the lexically-resolved
     # even when the directory doesn't exist yet.
     try:
         skins_dir_resolved = skins_dir.resolve()
