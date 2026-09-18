@@ -45,21 +45,17 @@ _EXPECTED_WRITE_ERRNOS = {errno.EACCES, errno.EPERM, errno.EROFS}
 # Read-size guard. Model-agnostic, so characters proxy tokens: 100K chars is
 # ~25-35K tokens across typical tokenisers. Configurable: file_read_max_chars.
 _DEFAULT_MAX_READ_CHARS = 100_000
-_max_read_chars_cached: int | None = None
-
-
 def _get_max_read_chars() -> int:
-    """Return ``file_read_max_chars`` from config.yaml (cached per process; default on missing/invalid)."""
-    global _max_read_chars_cached
-    if _max_read_chars_cached is None:
-        try:
-            from hermes_cli.config import load_config
-            val = load_config().get("file_read_max_chars")
-        except Exception:
-            val = None
-        valid = isinstance(val, (int, float)) and val > 0
-        _max_read_chars_cached = int(val) if valid else _DEFAULT_MAX_READ_CHARS
-    return _max_read_chars_cached
+    """Return ``file_read_max_chars`` from config.yaml (default on missing/invalid). No module
+    cache: ``load_config_readonly`` is already mtime+path cached, and a process-lifetime slot
+    would pin the launch profile's value under the multiplexed gateway."""
+    try:
+        from hermes_cli.config import load_config_readonly
+        val = load_config_readonly().get("file_read_max_chars")
+    except Exception:
+        val = None
+    valid = isinstance(val, (int, float)) and val > 0
+    return int(val) if valid else _DEFAULT_MAX_READ_CHARS
 
 
 def _truncate_to_char_budget(content: str, max_chars: int) -> tuple[str, int, bool]:
@@ -128,6 +124,21 @@ _BLOCKED_PROC_SUFFIXES = (
     "/fd/0", "/fd/1", "/fd/2",  # stdio aliases
     "/environ", "/cmdline", "/maps", "/smaps", "/smaps_rollup", "/numa_maps",
     "/mem", "/auxv", "/pagemap")
+# Self/init process paths that directly expose process secrets or raw memory.
+# Listed explicitly so the check is O(1) and survives normpath edge cases.
+_BLOCKED_PROC_EXPLICIT = frozenset({
+    "/proc/self/environ", "/proc/self/mem", "/proc/self/maps",
+    "/proc/self/exe",   # symlink to running binary — leaks install path
+    "/proc/self/cwd",   # symlink to working directory — leaks profile path
+    "/proc/self/root",  # chroot boundary
+    "/proc/self/fd",    # directory listing of all open fds
+    "/proc/1/environ",
+    "/proc/1/exe",
+    "/proc/1/maps",
+})
+
+# Prefixes under /proc/self/fd/ cover arbitrary open file descriptors (e.g. /proc/self/fd/5).
+_BLOCKED_PROC_FD_PREFIX = "/proc/self/fd/"
 
 
 def _file_ops_uses_host_paths(file_ops) -> bool:
@@ -173,7 +184,42 @@ def _is_blocked_device_path(path: str) -> bool:
     normalized = os.path.normpath(_expand_tilde(path))
     if normalized in _BLOCKED_DEVICE_PATHS:
         return True
-    return normalized.startswith("/proc/") and normalized.endswith(_BLOCKED_PROC_SUFFIXES)
+    # P5-M1 fix: block /dev/shm/* (tmpfs IPC), /run/secrets/* (Kubernetes/Docker secret mounts),
+    # and /sys/* (kernel sysfs — hardware state, kernel parameters, cgroup info).
+    # These are not covered by the /proc/ blocklist but are common exfil targets in containers.
+    if normalized.startswith("/dev/shm/") or normalized == "/dev/shm":
+        return True
+    if normalized.startswith("/run/secrets/") or normalized == "/run/secrets":
+        return True
+    if normalized.startswith("/sys/"):
+        return True
+    if normalized in _BLOCKED_PROC_EXPLICIT:
+        return True
+    if normalized.startswith(_BLOCKED_PROC_FD_PREFIX):  # /proc/self/fd/<N> — arbitrary fd
+        return True
+    if normalized.startswith("/proc/") and normalized.endswith(_BLOCKED_PROC_SUFFIXES):
+        return True
+    # P3-H2/P4-H1 fix: block /proc/net/* (global network state — world-readable topology leak).
+    # Also block /proc/self/net/* (per-namespace view) and raw memory nodes.
+    if normalized in ("/proc/kcore", "/proc/kmem"):
+        return True
+    if normalized.startswith("/proc/net/") or normalized == "/proc/net":
+        return True
+    if normalized.startswith("/proc/"):
+        tail = normalized[len("/proc/"):]
+        if "environ" in tail or "/mem" in tail:
+            return True
+        # /proc/<pid>/net/* — per-process namespace view
+        if "/net/" in tail or tail.endswith("/net"):
+            return True
+        # /proc/<pid>/fd/... or /proc/self/fd/... (covers any numeric pid)
+        _parts = tail.split("/", 2)
+        if len(_parts) >= 2 and _parts[1] == "fd":
+            return True
+        # Other high-value paths by suffix regardless of pid
+        if tail.endswith(("/exe", "/maps", "/status", "/syscall", "/loginuid")):
+            return True
+    return False
 
 
 def _is_blocked_device(filepath: str, base_dir: str | Path | None = None) -> bool:

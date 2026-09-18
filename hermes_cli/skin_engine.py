@@ -57,7 +57,7 @@ def _wings(*glyphs) -> List[List[str]]:
 
 # Branding shared by every Hermes-named built-in (mono/daylight override help_header).
 _HERMES_BRANDING: Dict[str, str] = _branding(
-    "Hermes", "⚕", "Goodbye! ⚕", prompt="❯", help_header="(^_^)? Available Commands")
+    "Hermes", "☤", "Goodbye! ☤", prompt="❯", help_header="(^_^)? Available Commands")
 
 _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
     "default": {
@@ -342,6 +342,23 @@ _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
 
 _active_skin: Optional[SkinConfig] = None
 _active_skin_name: str = "default"
+# Routed multiplex profiles: (name, skin) per home key. ``display.skin`` and ``<home>/skins/*.yaml``
+# are per profile, and the relay display name / TUI skin payload are read under each profile's
+# override — one module slot would be last-writer-wins across profiles. Unscoped keeps the module slot.
+_active_skin_by_home: Dict[str, Tuple[str, SkinConfig]] = {}
+
+
+def _routed_home_key() -> Optional[str]:
+    from hermes_constants import get_hermes_home_override, hermes_home_key
+    return None if get_hermes_home_override() is None else hermes_home_key()
+
+
+def _profile_config() -> dict:
+    try:
+        from hermes_cli.config import load_config_readonly
+        return load_config_readonly() or {}
+    except Exception:
+        return {}
 
 
 def _skins_dir() -> Path:
@@ -404,16 +421,38 @@ def list_skins() -> List[Dict[str, str]]:
 
 def load_skin(name: str) -> SkinConfig:
     """Load a skin by name: user skins first, then built-in, then default."""
-    user_file = _skins_dir() / f"{name}.yaml"
+    # Sanitise name: strip path components and null bytes to prevent traversal
+    # via a malicious display.skin config value.
+    safe_name = Path(name).name.replace("\x00", "")
+    # Cache the skins dir once to avoid TOCTOU between resolve() and is_file().
+    skins_dir = _skins_dir()
+    user_file = skins_dir / f"{safe_name}.yaml"
+    # Confirm resolved path stays inside skins_dir (defence-in-depth).
+    # Use skins_dir.resolve() once; resolve(strict=False) returns the lexically-resolved
+    # even when the directory doesn't exist yet.
+    try:
+        skins_dir_resolved = skins_dir.resolve()
+        user_file.resolve().relative_to(skins_dir_resolved)
+    except ValueError:
+        logger.warning("Skin name '%s' resolves outside skins directory; using default", name)
+        return _build_skin_config(_BUILTIN_SKINS["default"])
     data = _load_skin_from_yaml(user_file) if user_file.is_file() else None
-    if not data and name not in _BUILTIN_SKINS:
+    if not data and safe_name not in _BUILTIN_SKINS:
         logger.warning("Skin '%s' not found, using default", name)
-    return _build_skin_config(data or _BUILTIN_SKINS.get(name) or _BUILTIN_SKINS["default"])
+    return _build_skin_config(data or _BUILTIN_SKINS.get(safe_name) or _BUILTIN_SKINS["default"])
 
 
 def get_active_skin() -> SkinConfig:
     """Currently active skin config (cached)."""
     global _active_skin
+    home_key = _routed_home_key()
+    if home_key is not None:
+        entry = _active_skin_by_home.get(home_key)
+        if entry is None:
+            # Cold routed profile: its own ``display.skin`` (nobody ran init_skin_from_config for it).
+            init_skin_from_config(_profile_config())
+            entry = _active_skin_by_home[home_key]
+        return entry[1]
     if _active_skin is None:
         _active_skin = load_skin(_active_skin_name)
     return _active_skin
@@ -422,12 +461,21 @@ def get_active_skin() -> SkinConfig:
 def set_active_skin(name: str) -> SkinConfig:
     """Switch the active skin. Returns the new SkinConfig."""
     global _active_skin, _active_skin_name
+    skin = load_skin(name)
+    home_key = _routed_home_key()
+    if home_key is not None:
+        _active_skin_by_home[home_key] = (name, skin)
+        return skin
     _active_skin_name = name
-    _active_skin = load_skin(name)
+    _active_skin = skin
     return _active_skin
 
 
 def get_active_skin_name() -> str:
+    home_key = _routed_home_key()
+    if home_key is not None:
+        entry = _active_skin_by_home.get(home_key)
+        return entry[0] if entry else "default"
     return _active_skin_name
 
 
@@ -455,7 +503,7 @@ def get_active_help_header(fallback: str = "(^_^)? Available Commands") -> str:
     return _active_branding("help_header", fallback)
 
 
-def get_active_goodbye(fallback: str = "Goodbye! ⚕") -> str:
+def get_active_goodbye(fallback: str = "Goodbye! ☤") -> str:
     return _active_branding("goodbye", fallback)
 
 

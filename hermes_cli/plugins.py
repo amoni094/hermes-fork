@@ -11,6 +11,8 @@ and an ``__init__.py`` exposing ``register(ctx)``. Plugins register callbacks fo
 from __future__ import annotations
 
 import asyncio
+import contextvars
+import difflib
 import importlib.metadata
 import inspect
 import json
@@ -21,6 +23,7 @@ import re
 import sys
 import threading
 import types
+import weakref
 from contextlib import suppress
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -62,6 +65,7 @@ from hermes_cli.plugins_state import (
     PluginState, _locked_plugin_state, _nested_plugin_mapping, _nested_plugin_value,
     _plugin_relative_segments, _plugin_settings_entry,
 )
+from hermes_cli.reasoning_resolver import MODE_TO_EFFORT, ReasoningConflictResolver
 
 
 def get_bundled_plugins_dir() -> Path:
@@ -124,17 +128,37 @@ VALID_HOOKS: Set[str] = {
     # error_body may be unredacted.
     "transform_api_error_classification", "on_session_start", "on_session_end",
     "on_session_finalize", "on_session_reset",
+    # pre_compress: BEFORE ContextCompressor.compress() runs a full compression event.
+    # Kwargs: session_id, turn_count, context_tokens, trigger_reason ("manual"|"auto"),
+    # agent (ephemeral). Plugins can persist constraint state, inject compression-prompt
+    # reminders, or call set_compression_profile based on context_tokens
+    # (arXiv:2608.24569 Constraint Weakening).
+    "pre_compress",
+    # pre_agent_exchange: before delegated agent results are passed to the parent
+    # (BoN diversity, arXiv:2608.11065). Kwargs: agent_results, parent_session_id,
+    # exchange_round. Hooks may mutate agent_results in place.
+    "pre_agent_exchange",
     # on_skill_lifecycle: successful skill lifecycle facts (local skill name visible to plugins).
     "on_skill_lifecycle", "subagent_start", "subagent_stop",
     # pre_gateway_dispatch: once per incoming MessageEvent, after the internal-event guard, BEFORE
     # auth/pairing and dispatch. Kwargs: event, gateway, session_store. Return {"action": "skip",
     # "reason"} -> drop; {"action": "rewrite", "text"} -> replace event.text; "allow"/None -> normal.
     "pre_gateway_dispatch",
+    # agent_loop_stopped: an agent turn was interrupted mid-run (/stop, or the running-agent
+    # fast-path of /new; see gateway/run.py::_interrupt_and_clear_session). Kwargs: session_key,
+    # platform, reason, invalidation_reason. Return values are ignored.
+    "agent_loop_stopped",
     # Approval observers (tools/approval.py); returns ignored — plugins cannot veto or pre-answer
     # (use pre_tool_call). Kwargs: command, description, pattern_key, pattern_keys, session_key,
     # surface: "cli"|"gateway"|"smart"; post_approval_response adds choice ("once"|"session"|
     # "always"|"deny"|"timeout"|"smart_approve"|"smart_deny") and decided_by.
     "pre_approval_request", "post_approval_response",
+    # on_room_member_activity: a hosted Group Chat member's live runtime events (tool.started/completed,
+    # request.opened, message.delta, reasoning.delta, turn.error, ...) stamped with room_id, thread_id,
+    # member_id, turn_id, task_id, execution_generation. Observer, queued per consumer off the token
+    # path (agent.plugin_stream_hooks); never written to the durable room log. Kwargs: those
+    # coordinates + kind, seq, payload (the client-safe session event payload, approvals redacted).
+    "on_room_member_activity",
     # pre_transcription: after provider resolution, BEFORE any backend runs. Kwargs: file_path,
     # provider, model, language, prompt, source. Return None or a dict mutating prompt/language/
     # model (registration order, last-writer-wins; file_path is read-only).
@@ -218,11 +242,354 @@ class PluginContext:
         self.manifest = manifest
         self._manager = manager
         self._llm: Any = None  # lazy; tests preseed it (see ``llm``)
+        self._skill_suggestions: list = []
+        self._session_id: Any = None
+        self._reasoning_mode: str = "default"
+        self._adaptive_effort: Optional[str] = None
+        self._MODE_TO_EFFORT = MODE_TO_EFFORT
+        resolver = getattr(manager, "_reasoning_resolver", None)
+        if resolver is None:
+            resolver = ReasoningConflictResolver()
+            try:
+                manager._reasoning_resolver = resolver
+            except Exception:
+                pass
+        self._reasoning_resolver = resolver
+        contexts = getattr(manager, "_plugin_contexts", None)
+        if contexts is None:
+            try:
+                manager._plugin_contexts = []
+                contexts = manager._plugin_contexts
+            except Exception:
+                contexts = None
+        if isinstance(contexts, list):
+            contexts.append(weakref.ref(self))
 
     @property
     def plugin_id(self) -> str:
         """Return the effective registry id used for this plugin's namespaces."""
         return manifest_key(self.manifest)
+
+    @property
+    def compressor(self) -> "Any | None":
+        """Live :class:`ContextCompressor` for this session, or ``None`` if not yet set.
+
+        Always re-reads ``agent.context_compressor`` (never caches the instance).
+        A model/engine swap that replaces the compressor is therefore visible on
+        the next property access. Returns ``None`` if the agent was GC'd (weakref)
+        or not yet bound.
+
+        Plugins can call :meth:`~agent.context_compressor.ContextCompressor.set_compression_profile`
+        from a ``pre_llm_call`` hook to adjust compression behaviour between turns::
+
+            # ctx is the PluginContext captured in register(), NOT a hook kwarg.
+            # Hook payload keys: session_id, user_message, agent, model, etc.
+            def on_pre_llm_call(*, agent=None, **kw):
+                c = getattr(agent, "context_compressor", None) if agent else None
+                if c and hasattr(c, "set_compression_profile"):
+                    c.set_compression_profile("research", _source="my-plugin")
+        """
+        agent = getattr(self._manager, "_agent", None)
+        if agent is None:
+            return None
+        # Freshness: do not cache; the agent may rebuild context_compressor in place.
+        return getattr(agent, "context_compressor", None)
+
+    def set_model_preference(self, preference: str) -> None:
+        """Soft model-class hint for compression-to-LLM routing (``sonnet`` / ``haiku``). Fail-open."""
+        try:
+            chosen = str(preference or "").strip().lower()
+            if not chosen:
+                return
+            self._model_preference = chosen
+            manager = getattr(self, "_manager", None)
+            if manager is not None:
+                manager._model_preference = chosen
+                sid = getattr(self, "_session_id", None)
+                if sid:
+                    prefs = getattr(manager, "_session_model_preferences", None)
+                    if not isinstance(prefs, dict):
+                        manager._session_model_preferences = {}
+                        prefs = manager._session_model_preferences
+                    prefs[str(sid)] = chosen
+            logger.debug("PluginContext.set_model_preference: %s", chosen)
+        except Exception as exc:
+            logger.debug("PluginContext.set_model_preference failed (fail-open): %s", exc)
+
+    def set_reasoning_mode(self, mode: str) -> None:
+        """Set per-session reasoning depth: ``deep``, ``fast``, or ``default``. Fail-open."""
+        try:
+            allowed = ("deep", "fast", "default")
+            chosen = mode if mode in allowed else "default"
+            self._reasoning_mode = chosen
+            logger.debug("PluginContext.set_reasoning_mode: %s", chosen)
+            manager = getattr(self, "_manager", None)
+            if manager is not None:
+                manager._reasoning_mode = chosen
+                sid = getattr(self, "_session_id", None)
+                if sid:
+                    modes = getattr(manager, "_session_reasoning_modes", None)
+                    if not isinstance(modes, dict):
+                        manager._session_reasoning_modes = {}
+                        modes = manager._session_reasoning_modes
+                    modes[str(sid)] = chosen
+            effort = MODE_TO_EFFORT.get(chosen)
+            if effort:
+                self.set_adaptive_effort(effort, confidence=0.7, priority=5)
+        except Exception as exc:
+            logger.debug("PluginContext.set_reasoning_mode failed (fail-open): %s", exc)
+
+    def get_reasoning_mode(self) -> str:
+        """Return the live reasoning mode (``deep`` / ``fast`` / ``default``). Fail-open."""
+        try:
+            return str(getattr(self, "_reasoning_mode", None) or "default")
+        except Exception:
+            return "default"
+
+    def set_verbosity_mode(self, mode: str) -> None:
+        """Set reasoning-verbosity: ``full``, ``compact``, or ``suppress``. Fail-open."""
+        try:
+            if mode not in ("full", "compact", "suppress"):
+                logger.debug("PluginContext.set_verbosity_mode: invalid mode %r", mode)
+                return
+            agent = getattr(self._manager, "_agent", None)
+            setter = getattr(agent, "set_reasoning_verbosity", None) if agent is not None else None
+            if callable(setter):
+                setter(mode)
+        except Exception as exc:
+            logger.debug("PluginContext.set_verbosity_mode failed (fail-open): %s", exc)
+
+    def set_adaptive_effort(
+        self,
+        effort: str,
+        confidence: float = 1.0,
+        priority: int = 0,
+    ) -> None:
+        """Store a per-turn reasoning-effort override. Fail-open.
+
+        Valid values are :data:`agent.reasoning_effort.EFFORT_LADDER` except
+        ``ultra`` (internal Codex product tier; no wire accepts it). Extra
+        ``confidence``/``priority`` kwargs feed the shared conflict resolver;
+        :func:`apply_adaptive_effort_to_agent` arbitrates and stamps the
+        per-call agent. The override is a floor-respecting raise — it never
+        lowers below the user's configured effort.
+        """
+        try:
+            from agent.reasoning_effort import EFFORT_LADDER
+            allowed = tuple(level for level in EFFORT_LADDER if level != "ultra")
+            chosen = str(effort or "").strip().lower()
+            if chosen not in allowed:
+                logger.debug("PluginContext.set_adaptive_effort: ignored invalid effort %r", effort)
+                return
+            self._adaptive_effort = chosen
+            manager = getattr(self, "_manager", None)
+            if manager is not None:
+                manager._adaptive_effort = chosen
+            plugin_name = getattr(self.manifest, "name", None) or self.plugin_id
+            self._reasoning_resolver.add_recommendation(
+                plugin_name, chosen, confidence, priority,
+            )
+        except Exception as exc:
+            logger.debug("PluginContext.set_adaptive_effort failed (fail-open): %s", exc)
+
+    def get_adaptive_effort(self) -> Optional[str]:
+        """Return the stored adaptive effort, or ``None``. Fail-open."""
+        try:
+            value = getattr(self, "_adaptive_effort", None)
+            return str(value) if value is not None else None
+        except Exception:
+            return None
+
+    def apply_adaptive_effort_to_agent(
+        self,
+        agent: Any = None,
+        configured_floor: str = "low",
+    ) -> str:
+        """Resolve collected recommendations and optionally stamp *agent*. Fail-open.
+
+        Returns the winning effort, never below *configured_floor*. When
+        *agent* is provided the winner is written to
+        ``agent._adaptive_effort_override`` (consumed one-shot by
+        ``_reasoning_config_for_wire``).
+        """
+        floor = configured_floor or "low"
+        if agent is not None:
+            cfg = getattr(agent, "reasoning_config", None)
+            if isinstance(cfg, dict) and cfg.get("effort"):
+                floor = str(cfg.get("effort") or floor)
+        try:
+            winner = self._reasoning_resolver.resolve(floor)
+        except Exception as exc:
+            logger.debug("PluginContext.apply_adaptive_effort_to_agent resolve failed: %s", exc)
+            winner = str(floor)
+        self._adaptive_effort = winner
+        if agent is not None:
+            try:
+                if not getattr(agent, "_reasoning_disable_rejected", False):
+                    cfg = getattr(agent, "reasoning_config", None)
+                    disabled = isinstance(cfg, dict) and (
+                        cfg.get("enabled") is False or cfg.get("effort") == "none"
+                    )
+                    if not disabled:
+                        agent._adaptive_effort_override = winner
+            except Exception as exc:
+                logger.debug("PluginContext.apply_adaptive_effort_to_agent stamp failed: %s", exc)
+        return winner
+
+    def get_reasoning_recommendation_log(self) -> list:
+        """Return this turn's recommendations: plugin, effort, confidence, priority, won."""
+        try:
+            return self._reasoning_resolver.recommendation_log()
+        except Exception:
+            return []
+
+    def reset_reasoning_state(self) -> None:
+        """Clear this turn's recommendations (called before each pre_llm_call)."""
+        try:
+            self._reasoning_resolver.clear()
+            self._adaptive_effort = None
+        except Exception:
+            return
+
+    def set_intent(self, text: str) -> None:
+        """Propagate the current task intent to the live compressor (bounded).
+
+        Used for intent-conditioned compression. No-op when no compressor is bound.
+
+        NOTE: resolves the compressor via self.compressor (PluginManager._agent weakref).
+        In a multi-session gateway process, prefer setting compressor.current_intent
+        directly via the ``agent`` kwarg passed to ``pre_llm_call`` hooks to avoid
+        cross-session writes. See FORK_README.md § Intent-conditioned compression.
+        """
+        c = self.compressor
+        if c is not None:
+            c.current_intent = str(text)[:500]  # bounded; why 500: matches hint file cap
+
+    def emit_episode(self, text: str, tags: list = None) -> None:
+        """Emit an EXG episode via ``agent.emit_memory``. Fail-open.
+
+        Resolves the live agent through ``PluginManager._agent`` (weakref). If the
+        agent is gone or ``emit_memory`` is missing, logs at DEBUG and returns.
+        """
+        try:
+            agent = getattr(self._manager, "_agent", None)
+            if agent is None:
+                logger.debug("PluginContext.emit_episode: agent not reachable")
+                return
+            emit = getattr(agent, "emit_memory", None)
+            if not callable(emit):
+                logger.debug("PluginContext.emit_episode: agent.emit_memory missing")
+                return
+            emit(text, tags)
+        except Exception as exc:
+            logger.debug("PluginContext.emit_episode failed (fail-open): %s", exc)
+
+    def recall_episodes(self, query: str, limit: int = 5) -> list:
+        """Recall EXG episodes matching *query*. Returns ``[]`` on failure."""
+        try:
+            agent = getattr(self._manager, "_agent", None)
+            if agent is None:
+                logger.debug("PluginContext.recall_episodes: agent not reachable")
+                return []
+            recall = getattr(agent, "recall_memory", None)
+            if callable(recall):
+                result = recall(query, limit=limit)
+                if isinstance(result, list):
+                    return result[: max(0, int(limit))]
+                return []
+            mm = getattr(agent, "_memory_manager", None)
+            if mm is None or not hasattr(mm, "has_tool") or not mm.has_tool("hindsight_recall"):
+                return []
+            raw = mm.handle_tool_call("hindsight_recall", {"query": str(query or "")})
+            if isinstance(raw, list):
+                return raw[: max(0, int(limit))]
+            if isinstance(raw, str) and raw.strip():
+                try:
+                    parsed = json.loads(raw)
+                except Exception:
+                    lines = [ln for ln in raw.splitlines() if ln.strip()]
+                    return lines[: max(0, int(limit))]
+                if isinstance(parsed, dict) and "result" in parsed:
+                    parsed = parsed["result"]
+                if isinstance(parsed, list):
+                    return parsed[: max(0, int(limit))]
+                if isinstance(parsed, str) and parsed.strip():
+                    lines = [ln for ln in parsed.splitlines() if ln.strip()]
+                    return lines[: max(0, int(limit))]
+            return []
+        except Exception as exc:
+            logger.debug("PluginContext.recall_episodes failed (fail-open): %s", exc)
+            return []
+
+    def suggest_skill_update(self, skill_name: str, finding: str, severity: str = "low") -> None:
+        """Record a SkillOpt-style improvement hint. Fail-open."""
+        try:
+            self._skill_suggestions.append(
+                {"skill": skill_name, "finding": finding, "severity": severity}
+            )
+        except Exception:
+            return
+
+    def get_skill_suggestions(self) -> list:
+        """Return a shallow copy of accumulated skill-update suggestions."""
+        try:
+            return list(self._skill_suggestions)
+        except Exception:
+            return []
+
+    def filter_duplicate_results(
+        self, results: list, key: str = "content", similarity_threshold: float = 0.85,
+    ) -> list:
+        """Keep the first of each near-duplicate cluster (difflib.SequenceMatcher)."""
+        try:
+            kept: list = []
+            kept_vals: list[str] = []
+            for item in results or []:
+                if isinstance(item, dict):
+                    val = str(item.get(key, "") or "")
+                else:
+                    val = str(item)
+                if any(
+                    difflib.SequenceMatcher(None, val, prev).ratio() >= float(similarity_threshold)
+                    for prev in kept_vals
+                ):
+                    continue
+                kept.append(item)
+                kept_vals.append(val)
+            return kept
+        except Exception:
+            return results
+
+    def compact_tool_result(self, role: str, content: str) -> str:
+        """MDL-compact a tool payload for research sessions. Fail-open."""
+        try:
+            session_id = getattr(self, "_session_id", None)
+            if not session_id:
+                return content
+            try:
+                from hermes_plugins.lambda_tuner.predicates import session_type as _session_type
+            except Exception:
+                return content
+            if _session_type(session_id) != "research":
+                return content
+            try:
+                from hermes_plugins.lambda_tuner.complexity import ToolResultCompactor
+            except Exception:
+                import importlib.util
+                cpath = Path(__file__).resolve().parent.parent / "plugins" / "user" / "lambda-tuner" / "complexity.py"
+                spec = importlib.util.spec_from_file_location("_lambda_tuner_complexity", cpath)
+                if spec is None or spec.loader is None:
+                    return content
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                ToolResultCompactor = mod.ToolResultCompactor
+            compactor = ToolResultCompactor()
+            text = "" if content is None else str(content)
+            if not compactor.should_compact(role, text):
+                return content
+            return compactor.compact(text)
+        except Exception:
+            return content
 
     def has_plugin(self, plugin_id: str) -> bool:
         """Return True when another plugin is loaded and enabled (runtime probe for advisory
@@ -1119,6 +1486,13 @@ class PluginManager(PluginLoaderMixin, PluginDispatchMixin, PluginLedgerMixin):
         self._discovery_lock = threading.RLock()
         self._discovered: bool = False
         self._cli_ref = None  # Set by CLI after plugin discovery
+        # why: weakref for _agent allows GC of finished sessions (a strong ref would pin the last agent forever).
+        # Set by agent_init after compressor construction. Also breaks an
+        # agent → (hook kwargs) → manager → agent cycle if one forms.
+        # Attribute assignment is atomic under the GIL; pre_llm_call may run on a
+        # timeout worker, so readers must tolerate a None / stale-but-whole agent.
+        self._agent_ref: "weakref.ref | None" = None
+        self._agent_strong: Any = None  # fallback for non-weakrefable test doubles
         self._gateway_message_injector: tuple[object, Callable] | None = None
         self._context_engine = None  # Set by a plugin via register_context_engine()
         # Manager-local registries keyed by name (see the matching ``PluginContext.register_*``):
@@ -1179,6 +1553,30 @@ class PluginManager(PluginLoaderMixin, PluginDispatchMixin, PluginLedgerMixin):
         # and contributed tool names (so `hermes plugins list` still attributes them).
         self._predeclared_modules: Dict[str, types.ModuleType] = {}
         self._predeclared_tools: Dict[str, List[str]] = {}
+        self._reasoning_mode: str = "default"
+        self._session_reasoning_modes: Dict[str, str] = {}
+        self._reasoning_resolver = ReasoningConflictResolver()
+        self._plugin_contexts: list = []
+        self._adaptive_effort: Optional[str] = None
+
+    @property
+    def _agent(self) -> Any:
+        ref = self._agent_ref
+        if ref is not None:
+            return ref()
+        return self._agent_strong
+
+    @_agent.setter
+    def _agent(self, value: Any) -> None:
+        self._agent_strong = None
+        self._agent_ref = None
+        if value is None:
+            return
+        try:
+            self._agent_ref = weakref.ref(value)
+        except TypeError:
+            # TODO: non-weakrefable stubs (some slots classes); keep a strong ref.
+            self._agent_strong = value
 
     @property
     def has_gateway_message_injector(self) -> bool:
@@ -1486,6 +1884,38 @@ _plugin_manager: Optional[PluginManager] = None
 _plugin_managers_by_home: Dict[Path, PluginManager] = {}
 _plugin_managers_lock = threading.RLock()
 
+# Per-session weakref registry — replaces process-global _pm._agent for multi-session safety.
+# Keys are session_id strings; values are weakref.ref(agent).  Access via
+# register_session_agent() / get_session_agent() / unregister_session_agent().
+_SESSION_AGENTS: Dict[str, "weakref.ref[Any]"] = {}
+_SESSION_AGENTS_LOCK = threading.Lock()
+
+
+def register_session_agent(session_id: str, agent: Any) -> None:
+    """Store a weak reference to *agent* keyed on *session_id*.
+
+    Called by agent_init after the agent object is fully constructed so that
+    plugins can retrieve it via get_session_agent() without creating a
+    process-global reference that leaks across concurrent sessions.
+    """
+    with _SESSION_AGENTS_LOCK:
+        _SESSION_AGENTS[session_id] = weakref.ref(agent)
+
+
+def get_session_agent(session_id: str) -> "Optional[Any]":
+    """Return the live agent for *session_id*, or None if it has been GC'd or is unknown."""
+    with _SESSION_AGENTS_LOCK:
+        ref = _SESSION_AGENTS.get(session_id)
+    if ref is None:
+        return None
+    return ref()  # None when the referent has been collected
+
+
+def unregister_session_agent(session_id: str) -> None:
+    """Remove the weak-reference entry for *session_id* at session teardown."""
+    with _SESSION_AGENTS_LOCK:
+        _SESSION_AGENTS.pop(session_id, None)
+
 
 def _plugin_home_key() -> Path:
     """Resolved active Hermes home — the key for per-profile plugin managers (plugins capture the
@@ -1510,6 +1940,74 @@ def _clear_plugin_submodules(manager: Optional[PluginManager]) -> None:
         with _MODULE_NAMESPACE_LOCK:
             if _BARE_MODULE_SCOPE.get(module_name) == manager.scope_key:
                 _BARE_MODULE_SCOPE.pop(module_name, None)
+
+
+def get_session_reasoning_mode(session_id: Optional[str] = None) -> str:
+    """Query the live PluginContext reasoning mode via the plugin manager. Fail-open.
+
+    Reads ``PluginContext._reasoning_mode`` as mirrored on the manager
+    (and, when *session_id* is set, the per-session map).
+    """
+    try:
+        manager = get_plugin_manager()
+        if session_id:
+            modes = getattr(manager, "_session_reasoning_modes", None)
+            if isinstance(modes, dict) and session_id in modes:
+                return str(modes.get(session_id) or "default")
+        return str(getattr(manager, "_reasoning_mode", None) or "default")
+    except Exception:
+        return "default"
+
+
+get_reasoning_mode = get_session_reasoning_mode
+
+
+def apply_adaptive_effort_to_agent(ctx: Any, agent: Any) -> None:
+    """Copy ``ctx._adaptive_effort`` onto ``agent._adaptive_effort_override``.
+
+    Floor-respecting: never below the user's configured effort. Silently
+    skips when *agent* is ``None``, reasoning is disabled, or
+    ``_reasoning_disable_rejected`` is set. Uses the shared conflict
+    resolver when recommendations exist. Fail-open on any error.
+    """
+    try:
+        if agent is None or ctx is None:
+            return
+        if getattr(agent, "_reasoning_disable_rejected", False):
+            return
+        cfg = getattr(agent, "reasoning_config", None)
+        if isinstance(cfg, dict) and (
+            cfg.get("enabled") is False or cfg.get("effort") == "none"
+        ):
+            return
+        from agent.reasoning_effort import EFFORT_LADDER
+        configured = cfg.get("effort") if isinstance(cfg, dict) else None
+        effort = None
+        resolver = getattr(ctx, "_reasoning_resolver", None)
+        recs = getattr(resolver, "_recs", None) if resolver is not None else None
+        if recs:
+            try:
+                floor = configured if configured in EFFORT_LADDER else "none"
+                effort = resolver.resolve(floor)
+            except Exception:
+                effort = None
+        if effort is None:
+            effort = getattr(ctx, "_adaptive_effort", None)
+        if effort is None:
+            return
+        try:
+            ci = EFFORT_LADDER.index(configured) if configured in EFFORT_LADDER else -1
+            oi = EFFORT_LADDER.index(effort) if effort in EFFORT_LADDER else -1
+        except Exception:
+            return
+        if oi < 0:
+            return
+        clamped = configured if ci >= oi else effort
+        if ci < 0:
+            clamped = effort
+        agent._adaptive_effort_override = clamped
+    except Exception as exc:
+        logger.debug("apply_adaptive_effort_to_agent failed (fail-open): %s", exc)
 
 
 def get_plugin_manager() -> PluginManager:
@@ -1672,6 +2170,18 @@ def _delivery_manager() -> PluginManager:
     return manager
 
 
+def invoke_hook_for_exchange(
+    agent_results: list, parent_session_id: str, exchange_round: int = 0,
+) -> list:
+    """Module-level alias of :meth:`PluginManager.invoke_hook_for_exchange`. Fail-open."""
+    try:
+        return _delivery_manager().invoke_hook_for_exchange(
+            agent_results, parent_session_id, exchange_round,
+        )
+    except Exception:
+        return agent_results
+
+
 def invoke_hook(hook_name: str, **kwargs: Any) -> List[Any]:
     """Invoke a lifecycle hook (lazy-discovers first); return non-``None`` callback results.
 
@@ -1682,8 +2192,18 @@ def invoke_hook(hook_name: str, **kwargs: Any) -> List[Any]:
     Ensures plugins are discovered on first invocation so callers in processes that never explicitly call
     ``discover_plugins()`` (gateway platform events, TUI slash workers, query mode, cron) still fire
     callbacks registered by user plugins (tracking #64178).
+
+    After ``pre_llm_call`` plugins run, any adaptive-effort request is copied
+    onto the per-call ``agent`` so ``_reasoning_config_for_wire`` can consume it.
     """
-    return _delivery_manager().invoke_hook(hook_name, **kwargs)
+    manager = _delivery_manager()
+    results = manager.invoke_hook(hook_name, **kwargs)
+    if hook_name == "pre_llm_call":
+        try:
+            apply_adaptive_effort_to_agent(manager, kwargs.get("agent"))
+        except Exception:
+            logger.debug("adaptive effort apply after pre_llm_call failed (fail-open)", exc_info=True)
+    return results
 
 
 def render_system_prompt_sections(session_info: Mapping[str, Any]) -> List[RenderedPluginSystemPromptSection]:
@@ -2007,7 +2527,10 @@ def resolve_plugin_command_result(result: Any) -> Any:
         finally:
             done.set()
 
-    threading.Thread(target=_runner, name="hermes-plugin-command-await", daemon=True).start()
+    # copy_context: the helper thread must see the caller's profile/secret scope, else an
+    # async hook under a running loop reads the default HERMES_HOME and get_secret raises.
+    threading.Thread(target=contextvars.copy_context().run, args=(_runner,),
+                     name="hermes-plugin-command-await", daemon=True).start()
     if not done.wait(timeout=_PLUGIN_COMMAND_AWAIT_TIMEOUT_SECS):
         raise TimeoutError("Plugin command async handler did not complete within "
                            f"{_PLUGIN_COMMAND_AWAIT_TIMEOUT_SECS:.0f}s")

@@ -364,7 +364,7 @@ class CLISessionMixin:
         for idx, session in enumerate(sessions, start=1):
             title = session.get("title") or "—"
             preview = (session.get("preview") or "")[:38]
-            last_active = _relative_time(session.get("last_active"))
+            last_active = _relative_time(session.get("last_active"), session_id=session.get("id"))
             _cli_visible_print(f"  {idx:<3} {title:<32} {preview:<40} {last_active:<13} {session['id']}")
         _cli_visible_print()
         _cli_visible_print("  Use /resume <number>, /resume <session id>, or /resume <session title> to continue.")
@@ -443,8 +443,8 @@ class CLISessionMixin:
 
     def _notify_session_boundary(self, event_type: str) -> None:
         """Fire a session-boundary plugin hook (on_session_finalize / on_session_reset).
-        Non-blocking; errors swallowed. Safe from shutdown, /new, /reset."""
-        with contextlib.suppress(Exception):
+        Non-blocking; errors logged. Safe from shutdown, /new, /reset."""
+        try:
             from hermes_cli.lifecycle import finalize_session, invoke_hook
 
             context = {
@@ -455,6 +455,9 @@ class CLISessionMixin:
                 finalize_session(**context)
             else:
                 invoke_hook(event_type, **context)
+        except Exception as exc:
+            from cli import logger
+            logger.warning("on_session_finalize hook failed: %s", exc, exc_info=True)
 
     def _discard_session_if_empty(self, session_id: Optional[str]) -> bool:
         """Drop a just-ended session row that never gained content (quit-immediately, /new,
@@ -1291,9 +1294,9 @@ class CLISessionMixin:
         if not msg_count:
             try:
                 from hermes_cli.skin_engine import get_active_goodbye
-                goodbye = get_active_goodbye("Goodbye! ⚕")
+                goodbye = get_active_goodbye("Goodbye! ☤")
             except Exception:
-                goodbye = "Goodbye! ⚕"
+                goodbye = "Goodbye! ☤"
             print(goodbye)
             return
 

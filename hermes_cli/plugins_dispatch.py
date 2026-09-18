@@ -15,6 +15,7 @@ import re
 import threading
 import time
 import types
+import weakref
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Union
 
@@ -150,18 +151,49 @@ def _hook_uses_callback_timeout(hook_name: str, timeout: float) -> bool:
 class PluginDispatchMixin:
     @staticmethod
     def _invoke_hook_callback(callback: Callable, payload: Dict[str, Any]) -> Any:
-        """Invoke a hook while withholding additive fields from narrow legacy callbacks."""
+        """Invoke a hook while withholding additive fields from narrow legacy callbacks.
+
+        An ``async def`` callback returns a coroutine; resolve it the way plugin slash commands
+        are (loop-safe), otherwise the bare coroutine object is appended to the results and the
+        plugin's body never runs (#12449).
+        """
+        from hermes_cli.plugins import resolve_plugin_command_result
         try:
             parameters = inspect.signature(callback).parameters
         except (TypeError, ValueError):
-            return callback(**payload)  # no introspectable signature: historical behavior
+            return resolve_plugin_command_result(callback(**payload))  # no introspectable signature
         if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
-            return callback(**payload)
+            return resolve_plugin_command_result(callback(**payload))
         keyword_kinds = {inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY}
-        return callback(**{
+        return resolve_plugin_command_result(callback(**{
             name: value for name, value in payload.items()
             if name in parameters and parameters[name].kind in keyword_kinds
-        })
+        }))
+
+    def _reset_plugin_reasoning_state(self) -> None:
+        """Clear per-turn reasoning recommendations before ``pre_llm_call`` hooks run."""
+        seen: set[int] = set()
+        for ref in list(getattr(self, "_plugin_contexts", []) or []):
+            ctx = ref() if isinstance(ref, weakref.ref) else ref
+            if ctx is None:
+                continue
+            ident = id(ctx)
+            if ident in seen:
+                continue
+            seen.add(ident)
+            reset = getattr(ctx, "reset_reasoning_state", None)
+            if callable(reset):
+                try:
+                    reset()
+                except Exception:
+                    pass
+        resolver = getattr(self, "_reasoning_resolver", None)
+        clear = getattr(resolver, "clear", None)
+        if callable(clear):
+            try:
+                clear()
+            except Exception:
+                pass
 
     def invoke_hook(self, hook_name: str, **kwargs: Any) -> List[Any]:
         """Call all callbacks for *hook_name*; return their non-``None`` results.
@@ -173,10 +205,15 @@ class PluginDispatchMixin:
         caller thread. ``pre_llm_call`` may return ``{"context": "..."}`` (or a str) to inject.
         """
         from hermes_cli.plugins import _resolve_hook_callback_timeout
+        # pre_agent_exchange — before a delegated agent result is passed to the parent
+        # (Interaction Tax, arXiv:2608.23541). Intended kwargs: agent_results (list),
+        # parent_session_id, exchange_round. Infrastructure only; no callers yet.
         # Gateway platform events define event-local envelopes; a bus-wide version here would turn
         # unrelated adapter payloads into one monolithic compatibility contract.
         if hook_name != "gateway_platform_event":
             kwargs.setdefault("telemetry_schema_version", OBSERVER_SCHEMA_VERSION)
+        if hook_name == "pre_llm_call":
+            self._reset_plugin_reasoning_state()
         results: List[Any] = []
         timeout = _resolve_hook_callback_timeout()
         use_timeout = _hook_uses_callback_timeout(hook_name, timeout)
@@ -196,7 +233,31 @@ class PluginDispatchMixin:
             except Exception as exc:
                 logger.warning(
                     "Hook '%s' callback %s raised: %s", hook_name, getattr(cb, "__name__", repr(cb)), exc)
+        if hook_name == "pre_llm_call":
+            try:
+                from hermes_cli.plugins import apply_adaptive_effort_to_agent
+                apply_adaptive_effort_to_agent(self, kwargs.get("agent"))
+            except Exception:
+                logger.debug("adaptive effort apply after pre_llm_call failed (fail-open)", exc_info=True)
         return results
+
+    def invoke_hook_for_exchange(
+        self, agent_results: list, parent_session_id: str, exchange_round: int = 0,
+    ) -> list:
+        """Fire ``pre_agent_exchange`` so plugins can diversify BoN samples. Fail-open.
+
+        Hooks may mutate ``agent_results`` in place. Returns the (possibly mutated) list.
+        """
+        try:
+            self.invoke_hook(
+                "pre_agent_exchange",
+                agent_results=agent_results,
+                parent_session_id=parent_session_id,
+                exchange_round=exchange_round,
+            )
+            return agent_results
+        except Exception:
+            return agent_results
 
     def _run_hook_callback_bounded(
         self, hook_name: str, cb: Callable, kwargs: Dict[str, Any], timeout: float

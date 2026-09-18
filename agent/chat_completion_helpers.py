@@ -38,6 +38,7 @@ from agent.model_metadata import is_local_endpoint
 from agent.message_content import flatten_message_text
 from agent.message_metadata import append_message, stamp_message_timestamp
 from agent.message_sanitization import (_sanitize_surrogates, _repair_tool_call_arguments)
+from agent.reasoning_effort import EFFORT_LADDER
 from agent.reasoning_summaries import separate_glued_reasoning_blocks
 from agent.stream_single_writer import claim_stream_writer, stream_writer_is_current
 from tools.terminal_tool_lifecycle import is_persistent_env
@@ -1175,17 +1176,51 @@ def _consume_ephemeral_reasoning_off(agent) -> bool:
     return consumed
 
 
+def _higher_effort_on_ladder(configured, override):
+    """Return ``max(configured, override)`` on :data:`EFFORT_LADDER`.
+
+    Unknown names are ignored so a bad plugin value cannot clobber the
+    user's configured effort. Fast: two ``in``/``index`` lookups on an
+    8-tuple.
+    """
+    try:
+        ci = EFFORT_LADDER.index(configured) if configured in EFFORT_LADDER else -1
+        oi = EFFORT_LADDER.index(override) if override in EFFORT_LADDER else -1
+    except Exception:
+        return configured
+    if oi < 0:
+        return configured
+    if ci < 0:
+        return override
+    return configured if ci >= oi else override
+
+
 def _reasoning_config_for_wire(agent):
-    """``agent.reasoning_config`` with the one-shot reasoning-off override applied.
+    """``agent.reasoning_config`` with one-shot overrides applied.
 
     Once the route has answered a disable with "reasoning is mandatory"
     (``agent._reasoning_disable_rejected``), every disable — configured or
     the one-shot continuation override — is dropped for the rest of the
     session: the request goes out without a reasoning config and the route
     applies its own default.
+
+    Plugins may set ``agent._adaptive_effort_override`` (via PluginContext)
+    to raise effort for this turn based on task complexity. The override is
+    a floor-respecting raise: it never goes below the user's configured
+    effort, never fires when reasoning is disabled (``enabled=False`` or
+    ``effort="none"``), and is cleared after each wire read so retries
+    don't reuse a stale value. The one-shot ``ephemeral_off`` path is
+    undisturbed — it always wins over an adaptive raise.
     """
     cfg = agent.reasoning_config
     ephemeral_off = _consume_ephemeral_reasoning_off(agent)
+    # Consume the plugin override up front (one-shot, like ephemeral_off)
+    # even if we later skip applying it.
+    try:
+        adaptive_override = getattr(agent, "_adaptive_effort_override", None)
+        agent._adaptive_effort_override = None
+    except Exception:
+        adaptive_override = None
     if getattr(agent, "_reasoning_disable_rejected", False):
         # The route rejects disables. Resend exactly what the session has
         # been sending — the user's own config — so the retry lands on the
@@ -1199,6 +1234,19 @@ def _reasoning_config_for_wire(agent):
         return cfg
     if ephemeral_off:
         cfg = {**(cfg or {}), "enabled": False, "effort": "none"}
+        return cfg
+    if adaptive_override is not None:
+        try:
+            if isinstance(cfg, dict) and (
+                cfg.get("enabled") is False or cfg.get("effort") == "none"
+            ):
+                return cfg
+            configured = cfg.get("effort") if isinstance(cfg, dict) else None
+            clamped = _higher_effort_on_ladder(configured, adaptive_override)
+            if clamped is not None:
+                cfg = {**(cfg or {}), "effort": clamped}
+        except Exception:
+            pass
     return cfg
 
 
@@ -1905,7 +1953,17 @@ def try_activate_fallback(agent, reason: "FailoverReason | None" = None) -> bool
             _update_fallback_context_compressor(agent)
             _reresolve_fallback_reasoning_config(agent)
             _rescope_fallback_extra_body(agent, old_model, old_provider, old_base_url)
-            rewrite_prompt_model_identity(agent, fb_model, fb_provider)
+            # F05: skip identity rewrite on Anthropic failover to preserve prefix cache.
+            # rewrite_prompt_model_identity() mutates _cached_system_prompt mid-conversation,
+            # busting the Anthropic prefix cache for the entire failover window.  The cache
+            # miss cost (full-prompt retokenisation every turn) outweighs the benefit of
+            # correct identity labels, so we only rewrite for non-Anthropic providers.
+            if (fb_provider or "").strip().lower() == "anthropic":
+                logger.debug(
+                    "F05: skipping rewrite_prompt_model_identity for Anthropic failover (%s) "
+                    "to preserve prefix cache", fb_model)
+            else:
+                rewrite_prompt_model_identity(agent, fb_model, fb_provider)
 
             notice = (
                 f"⚠️ Model fallback: {old_model} via {old_provider} unavailable "
@@ -2074,7 +2132,11 @@ def _summary_text(agent, response, **normalize_kwargs) -> str:
 def _codex_summary_attempt(agent, api_messages: list, api_request_id: str):
     def _attempt(retry_count: int) -> str:
         codex_kwargs = agent._build_api_kwargs(api_messages)
+        # The transport emits these three as one block (transports/codex.py build_kwargs);
+        # strict Responses backends 400 on tool_choice/parallel_tool_calls without tools.
         codex_kwargs.pop("tools", None)
+        codex_kwargs.pop("tool_choice", None)
+        codex_kwargs.pop("parallel_tool_calls", None)
         return _summary_text(agent, agent._run_codex_stream(codex_kwargs))
     return _attempt
 
@@ -2214,6 +2276,18 @@ def _build_partial_stream_stub(role, full_content, full_reasoning, model_name, u
 _SSE_CONN_PHRASES = ("connection lost", "connection reset", "connection closed", "connection terminated",
     "network error", "network connection", "terminated", "peer closed", "broken pipe",
     "upstream connect error")
+
+
+def _rejects_stream_options(exc: BaseException) -> bool:
+    """A 400/422 whose body names ``stream_options`` as an unknown/extra field: strict
+    OpenAI-compatible endpoints (Azure AI Foundry MaaS, Pydantic ``extra_forbidden``) reject
+    the usage extension outright (#9705). Distinct from "stream not supported", which flips
+    the whole session to non-streaming."""
+    if getattr(exc, "status_code", None) not in (400, 422):
+        return False
+    body = f"{getattr(exc, 'body', '') or ''} {exc}".lower()
+    return "stream_options" in body and any(
+        k in body for k in ("extra", "not supported", "unrecognized", "unexpected", "unknown"))
 
 
 def _is_sse_connection_error(exc: BaseException) -> bool:
@@ -2694,8 +2768,9 @@ class _StreamingCall(StreamingWaitMonitor):
         return usage, finish_reason
 
     def _open_chat_stream(self, stream_kwargs: dict[str, Any]):
-        # Native Gemini rejects OpenAI's usage-streaming extension.
-        if not is_native_gemini_base_url(self.agent.base_url):
+        # Native Gemini rejects OpenAI's usage-streaming extension; so do strict endpoints that
+        # already 4xx'd on it this session (``_stream_options_unsupported``, see #9705).
+        if not is_native_gemini_base_url(self.agent.base_url) and not getattr(self.agent, "_stream_options_unsupported", False):
             stream_kwargs["stream_options"] = {"include_usage": True}
         request_client = self._attempt_request_client = self.clients.set_client(
             self.agent._create_request_openai_client(reason="chat_completion_stream_request", api_kwargs=stream_kwargs))
@@ -3103,6 +3178,16 @@ class _StreamingCall(StreamingWaitMonitor):
         _is_sse_conn_err = not _is_timeout and not _is_conn_err and _is_sse_connection_error(e)
         _is_transient = _is_timeout or _is_conn_err or _is_sse_conn_err or _is_stream_parse_err
 
+        if not self.deltas_were_sent["yes"] and not getattr(self.agent, "_stream_options_unsupported", False) and _rejects_stream_options(e):
+            # Nothing streamed yet: drop the usage extension for this session and re-open.
+            self.agent._stream_options_unsupported = True
+            self._compat_retries = 1
+            logger.info("Endpoint rejected stream_options (HTTP %s); retrying without it for this session.",
+                        getattr(e, "status_code", None))
+            self._cancel_current_stream_attempt("stream_options_rejected_retry")
+            self.clients.close_once("stream_options_rejected_retry")
+            return True
+
         if self.deltas_were_sent["yes"]:
             # Died AFTER tokens were delivered: normally no retry (would duplicate
             # text). Exception: a tool call in flight — aborting discards it, so
@@ -3154,8 +3239,14 @@ class _StreamingCall(StreamingWaitMonitor):
 
     def _call(self):
         _max_stream_retries = env_int("HERMES_STREAM_RETRIES", 2)
+        # The one stream_options compatibility retry (#9705) is not a network retry and must not
+        # consume the transient budget: on the last attempt (or HERMES_STREAM_RETRIES=0) the
+        # handler returned True and the loop ended with neither a response nor an error set.
+        self._compat_retries = 0
+        _stream_attempt = -1
         try:
-            for _stream_attempt in range(_max_stream_retries + 1):
+            while _stream_attempt < _max_stream_retries + self._compat_retries:
+                _stream_attempt += 1
                 stream_attempt_id = self._start_stream_attempt()
                 # Otherwise /stop closes the connection and the retry opens a
                 # FRESH one, blocking up to a full read timeout per attempt.

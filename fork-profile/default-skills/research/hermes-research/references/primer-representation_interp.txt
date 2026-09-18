@@ -1,0 +1,66 @@
+PRIMER: Representation Learning and Interpretability
+
+=== FIELD OVERVIEW ===
+
+Representation Learning and Interpretability studies the internal structure of neural network activations and how to expose mechanistic reasoning within black-box models. Core objects: activation vectors, feature basis, disentanglement metrics, probing classifiers, circuit graphs. Why it matters mathematically: neural networks compress information into high-dimensional vector spaces following geometric and algebraic regularities. Superposition (features encoded non-orthogonally), polysemanticity (single neurons encode multiple concepts), and feature interference violate naive assumptions about interpretability. The field investigates whether we can reverse-engineer task-relevant computations, locate decision-making features, and verify that model behavior follows causal mechanistic paths rather than statistical spuria. For an agent engineer: this means auditing whether your models make routing/tool decisions for the right reasons, whether skill embeddings cluster meaningfully, and whether adversarial review catches actual failure modes or just surface patterns.
+
+=== KEY RESULTS ===
+
+Superposition Theorem (Elhage et al., 2022): A model can represent exponentially more features than neuron count via interference patterns in low-rank projections. Implication: feature count >> layer dimension, so single activations are compositional; decomposing learned representations requires solving underdetermined inverse problems, not dimensionality reduction.
+
+Linear Representation Hypothesis: Task-relevant information organizes into linear subspaces. Consequence: a simple linear probe (learned classifier on frozen activations) accurately predicts behavior if the representation is high-quality. Probing accuracy bounds representation quality lower, but not upper (spurious correlations inflate score).
+
+Circuit Faithfulness: A mechanistic subgraph is faithful if ablating those connections degrades output by roughly the amount predicted by path-tracing analysis. Standard result: most named circuits (induction heads, copy mechanisms) preserve 70-95% of their predicted causal effect.
+
+Activation Sparsity and Feature Isolation: Most features fire on <5% of inputs (sparse codes). Corollary: individual feature attribution via activation magnitude is more reliable in sparse vs. dense regimes. Models trained with sparsity penalties show higher probing accuracy and more interpretable circuits.
+
+LLM Feature Basis: Transformer residual streams contain semantic, syntactic, and task-specific features organized neither by layer nor by head, but mixed across all positions. Dictionary learning (sparse autoencoders) recovers ~10-100x more interpretable features than raw activations.
+
+=== STANDARD PRACTITIONER TOOLS ===
+
+Sparse Autoencoder (SAE): Solve min ||x - Dx||^2 + lambda||z||_1 where x is activation, D is learned dictionary, z is sparse code. Use nnsight or TransformerLens libraries (PyTorch) for hook-based activation capture. Probing accuracy measured via held-out classifier (logistic regression, fast, interpretable). Activation Attribution: Use Integrated Gradients or Attention-based saliency to rank neurons/tokens by influence on output. Feature Visualization: Optimize input to maximize neuron activation (gradient ascent on input space, regularize for natural images). Causal Intervention: Direct ablation, zero-out feature, measure output delta. Model Card audit: Log activations for tool-call decisions, cluster by task type, validate separation.
+
+=== HERMES APPLICATIONS ===
+
+APPLICATION 1: SKILL EMBEDDING QUALITY
+
+(a) Mathematical Structure:
+Skills are procedure descriptions (text) embedded into a shared latent space where routing decisions are linear classifiers over skill embeddings. If this space is well-disentangled, each skill represents a coherent procedural concept, and the router learns clean decision boundaries. If polysemantic, a single skill embedding mixes orthogonal concepts (e.g., "file I/O" and "permission checking") and the router must learn nonlinear boundaries, reducing generalization.
+
+(b) Current Hermes Approach:
+Skills are chunk-embedded via a fixed model (e.g., Mistral or Claude), stored as vectors, and retrieved by semantic similarity at task-analysis time. Router is a simple classifier (cosine nearest neighbor or learned linear layer). No audit of whether skill clusters separate meaningfully or whether embedding space has interpretable dimensions.
+
+(c) Principled Approach from RL/I:
+1. Train a sparse autoencoder on skill embeddings. Let D be learned dictionary (shape: skill_dim x num_features, num_features ~ 10-100x skill_dim). 
+2. For each skill, compute z = argmin_z ||skill_emb - Dz||^2 + lambda||z||_1 (sparse encoding).
+3. Rank features by activation frequency and variance. Visualize top features (e.g., inverse-project to embedding space, inspect nearest skills). 
+4. Measure probing accuracy: train logistic classifier on feature activations z to predict skill task-type labels. If probing accuracy >> 0.8 on held-out skills, embedding space is high-quality.
+5. Repeat with adversarial: remove top N features one at a time, re-evaluate probing accuracy. If accuracy drops sharply for few features, they are causal for classification and interpretable.
+
+(d) Value Assessment:
+Worth implementing. Cost: 1-2 days to instrument, ~hour to run SAE training on skill corpus. Risk: math assumes linear structure in embedding space; if skill concepts are truly orthogonal in the embedding model's native geometry, SAE may recover noise. Mitigation: use multiple embedding models (different tokenizers/architectures), cross-validate probing. Payoff: if SAE recovers interpretable features (e.g., "async_io", "ml_pipeline", "auth"), you gain auditable skill taxonomy. Can also detect when skillopt pollutes embeddings (low probing accuracy signals skill quality decline).
+
+APPLICATION 2: ROUTING DECISION INTERPRETABILITY
+
+(a) Mathematical Structure:
+Router receives task context (embedding or token sequence) and outputs model choice via softmax over models. Decision depends on hidden activations in router network. If activations are sparse and aligned with task properties, you can trace which features drive each routing decision via saliency or attribution. If activations are dense and distributed, routing is black-box.
+
+(b) Current Hermes Approach:
+Router is a small neural network or decision tree trained on (task_embedding, chosen_model) pairs. After routing, Hermes logs which model was chosen and task metadata, but does not instrument activations or verify causal pathways. If a bad routing choice occurs (expensive model for simple task, weak model for hard task), root cause is opaque.
+
+(c) Principled Approach from RL/I:
+1. Instrument router network: capture activations at each layer.
+2. For each routing decision, compute Integrated Gradients: IG_i = (model_logits[chosen_model] - model_logits[random_baseline]) averaged over input interpolation path. This ranks which neurons contributed to the chosen output.
+3. On a sample of routed tasks, identify top-K neurons by IG. Cluster tasks by dominant neurons.
+4. For each neuron cluster, compute probing accuracy: train classifier on neuron activations to predict ground-truth task difficulty (via model latency or validation loss of chosen model). If probing >> random, neuron encodes task complexity; if probing ~= random, neuron is noisy/correlated.
+5. Build causal circuit: ablate top neurons one at a time (set to 0), re-route same task, measure decision change frequency. If ablating neuron N flips routing 30% of the time, N is in the causal path.
+
+(d) Value Assessment:
+High value if routing errors are expensive (e.g., selecting Grok for trivial SQL query wastes quota). Cost: 1-2 hours to add activation hooks, 30 min to compute IG on 1000 routed tasks. Risk: Integrated Gradients assumes local linearity (valid near input, may fail if router learns sharp decision boundaries). Also, router may route correctly but for wrong reasons (spurious correlation with task embedding dimension unrelated to true task property). Mitigation: cross-validate with held-out tasks, retrain router with regularization to suppress noisy neurons. Payoff: debuggable routing, ability to detect when router learns shortcuts (e.g., "choose expensive model if task has long context" instead of "if task is genuinely hard").
+
+APPLICATION 3: TOOL-CALL FEATURE ATTRIBUTION
+
+(a) Mathematical Structure:
+When deciding whether to call a tool (e.g., file_write, bash_exec), the model generates a confidence score (logits) based on internal representations. Tool selection is binary classification at the representational level. If tool-call features are sparse and aligned with tool safety properties (intent clarity, permission model), you can audit why model called a tool. If features are dense/polysemantic, tool decisions may conflate unrelated concepts.
+
+(b)

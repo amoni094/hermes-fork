@@ -1,0 +1,65 @@
+PRIMER: Monte Carlo Methods and Sampling
+
+========================================================================
+1. FIELD OVERVIEW
+========================================================================
+
+Monte Carlo Methods and Sampling form a computational framework for approximating integrals, expectations, and probability densities when closed-form solutions are intractable. The core objects are: target distributions (usually high-dimensional posteriors in Bayesian inference), sample sequences drawn from them, empirical averages as estimators of true expectations, and convergence diagnostics. Why it matters mathematically: inference over complex state spaces (e.g., agent belief states, model parameters) requires integration over dimensions that scale exponentially; direct evaluation fails, but samples allow consistent estimation via the law of large numbers. Key fields within this umbrella: Markov Chain Monte Carlo (MCMC) constructs Markov chains that converge to target distributions; importance sampling reweights easy-to-sample proposals toward hard targets; sequential Monte Carlo propagates particle sets through time; variational inference trades sampling cost for approximation bias by optimizing a tractable surrogate. All share the principle: repeated random evaluation, then aggregate to estimate structure.
+
+========================================================================
+2. KEY RESULTS
+========================================================================
+
+METROPOLIS-HASTINGS DETAILED BALANCE: If proposal Q(x'|x) and acceptance ratio alpha(x,x') = min(1, pi(x') Q(x|x') / (pi(x) Q(x'|x))) define a transition kernel, the stationary distribution is the target pi(x). This guarantees asymptotic correctness: any starting point eventually produces samples from pi. Proof: detailed balance pi(x) P(x->x') = pi(x') P(x'->x) holds by construction.
+
+HMC ACCEPTANCE RATE: Hamiltonian Monte Carlo using L leapfrog steps of stepsize epsilon achieves near-constant high acceptance rate (70-90% typical) when epsilon is tuned so that total path length L*epsilon ~ O(1). Contrast with random-walk Metropolis (acceptance decays as d^(-1/3) in dimension d). This is the key practical advantage: fewer rejections, fewer wasted proposals, lower autocorrelation.
+
+IMPORTANCE SAMPLING VARIANCE REDUCTION: Draw N samples x_i ~ q(x), estimate E_pi[f(x)] via (1/N) sum f(x_i) w(x_i) where w(x_i) = pi(x_i)/q(x_i). Variance decreases as Var ~ (1/N) E_q[(f(x) w(x))^2], which is minimized when q(x) is close to |f(x)| pi(x). If q is poor, variance explodes (weight degeneracy). Effective sample size ESS = N / (1 + Var(w)) quantifies practical utility.
+
+EVIDENCE LOWER BOUND (ELBO): For a generative model p(x, z | theta) where z is latent, ELBO = E_q[log p(x,z|theta) - log q(z|x)]. The true log marginal log p(x|theta) >= ELBO, with equality when q = p(z|x). Minimizing negative ELBO (KL divergence from true posterior) gives a tractable optimization objective without sampling the marginal.
+
+SEQUENTIAL MONTE CARLO: Maintain weighted particle set {x_i^(t), w_i^(t)} at time t. As data arrives or a schedule progresses, resample high-weight particles, propagate via transition kernel, reweight by likelihood ratio. Avoids particle collapse (all weight on one particle) via resampling. Variance is O(1/N) under mild assumptions if ESS > threshold.
+
+========================================================================
+3. STANDARD PRACTITIONER TOOLS
+========================================================================
+
+Libraries: PyMC3/PyMC (MCMC + variational), Stan (HMC sampler), Pyro/NumPyro (probabilistic programming), TensorFlow Probability. Key algorithms practitioners implement: Metropolis-Hastings (rejection sampler, easy debugging), HMC with automatic differentiation (requires gradient of log-posterior), adaptive MCMC (tune stepsize/scaling online), importance sampling with softmax resampling (avoid weight underflow), Gumbel-max trick (discrete sampling via continuous relaxation). Standard formulas: acceptance ratio alpha, ESS computation, autocorrelation time tau_int = 1 + 2 sum_k rho(k) (integrated autocorrelation). Diagnostics: Rhat (potential scale reduction factor, <1.1 is good), effective sample size per second, trace plots (visual assessment of mixing).
+
+========================================================================
+4. HERMES APPLICATIONS
+========================================================================
+
+APPLICATION 1: BELIEF ESTIMATION IN AGENT UNCERTAINTY (Tool-Call Loop)
+========================================================================
+
+Mathematical Structure:
+Hermes makes sequential decisions under uncertainty: should this subagent succeed? Is this model better for this subtask? What is the true skill score of this memory retrieval? These are inference problems over discrete or continuous state spaces. The natural formalism: belief is a posterior distribution p(state | observed actions, outcomes, model outputs). Exact Bayesian updating is intractable at agent decision time (need sub-second latency). Sampling-based inference approximates the posterior with particles.
+
+Current Hermes Approach:
+Heuristic confidence scores (e.g., "model X scored 0.85 on task Y once"). Binary or shallow filtering: "if success_rate > 0.7, use model; else use fallback." No principled uncertainty quantification. Tool approval is deterministic threshold ("block if risk_score > 0.8"), not probabilistic. Model routing picks highest expected reward point estimate, ignoring posterior variance. This causes overconfidence in noisy settings.
+
+Principled Monte Carlo Approach:
+Maintain a particle filter over agent state: {theta_i = (model_quality, subagent_reliability, task_difficulty), w_i}. Observe action outcomes (model A succeeded, model B failed). Update weights via importance sampling: w_i' propto w_i * p(outcome | theta_i). Resample if ESS < N/2. At decision time, sample from the posterior to get a credible interval on success probability. Use that interval to set risk thresholds (e.g., if P(success) in [0.3, 0.7], use ensemble; if < 0.3, escalate).
+
+For tool approval: model approval_risk as a latent variable. Condition on past approvals and their outcomes (did the tool call succeed? was there file corruption?). Run a sequential importance sampler over the past 100 tool calls to estimate P(approval_risk | history). Reject only if posterior median > threshold and ESS > some minimum (not enough evidence = abstain, ask human).
+
+Concrete Algorithm: SMC with learned proposal.
+1. Initialize particles uniformly over model/skill space.
+2. Each turn, after observing outcome: compute likelihood p(outcome | theta_i) for each particle.
+3. Resample using multinomial resampling if ESS < N/2.
+4. Perturb via small MCMC move (one HMC step or Gaussian random walk) to reduce particle degeneracy.
+5. Query: sample K particles from posterior, compute credible intervals for P(success), P(risk).
+
+Value Assessment:
+MEDIUM-HIGH value. The implementation cost is moderate: ~200 lines for a basic SMC loop, plus integration into the per-turn decision pipeline. The math transfers well: agent outcomes are i.i.d. likelihoods, the posterior is well-defined, and standard diagnostics apply. Risk: latency. Each resampling/MCMC move adds ~5-50ms depending on problem size. For a 10-turn episode, that's acceptable (<1s overhead). The upside is concrete: you can measure uncertainty reduction (narrower credible intervals over time) and compare win rate under SMC vs heuristic routing.
+
+Recommended spike: run SMC belief filter offline on past episode logs. Compute posterior credible intervals for model success rates. Compare against actual empirical success rates. If posterior intervals contain truth 90% of the time and are 30% narrower than uniform priors, it works.
+
+APPLICATION 2: MEMORY CONSOLIDATION VIA MCMC (L1 to Hindsight Pipeline)
+========================================================================
+
+Mathematical Structure:
+Hermes extracts summaries (L1) from raw turns, optionally promotes to L1-promote tier, then consolidates into hindsight (long-term memory). The current system is greedy: extract facts, score them, keep top-K. The hidden structure: each memory has a latent quality score (how useful will this be in future tasks?), and extraction/promotion decisions should reflect uncertainty over that score. Treating memory consolidation as posterior inference over item quality, conditioned on extraction patterns and downstream retrieval success, is a natural Bayesian model.
+
+Current Hermes Approach

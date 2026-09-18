@@ -34,17 +34,20 @@ def load_transcript(path: str, cap_tokens: int | None = None) -> List[Dict[str, 
     msgs = data["messages"] if isinstance(data, dict) else data
     if cap_tokens is None:
         return msgs
-    prefix: List[Dict[str, Any]] = []
+    # Suffix cap: 500K-token eval window is the last ~15% of a long lineage.
+    # Domain-matched v2 lineages place research/code/mixed content in that tail.
+    selected: List[Dict[str, Any]] = []
     running = 0
-    for m in msgs:
+    for m in reversed(msgs):
         t = estimate_tokens(m)
-        if running + t > cap_tokens and len(prefix) > 10:
+        if running + t > cap_tokens and len(selected) > 10:
             break
-        prefix.append(m)
+        selected.append(m)
         running += t
-    while prefix and prefix[-1].get("tool_calls"):
-        prefix.pop()
-    return prefix
+    selected.reverse()
+    while selected and selected[-1].get("tool_calls"):
+        selected.pop()
+    return selected
 
 
 def synthetic_transcript(n_turns: int = 60, seed: int = 7) -> List[Dict[str, Any]]:

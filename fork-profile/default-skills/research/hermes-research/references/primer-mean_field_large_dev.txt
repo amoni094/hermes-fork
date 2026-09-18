@@ -1,0 +1,53 @@
+PRIMER: Mean Field Theory and Large Deviation Theory
+
+
+CORE CONCEPTS
+
+Mean field theory (MFT) approximates a system of interacting components by replacing all pairwise interactions with an effective interaction between one component and an average "field" produced by all others. Formally, given N agents with joint distribution P(x_1,...,x_N), MFT approximates this as a product distribution q(x_1)...q(x_N) where q is determined self-consistently: q(x_i) = Z^-1 * exp(-E(x_i | mean of x_{j!=i})). This decouples the joint problem into N independent problems. The cavity method (Mezard-Parisi) is exact on tree-structured factor graphs: it iterates belief propagation messages along edges to find marginals. The replica method handles disordered systems by computing E[log Z] via the replica trick: E[log Z] = lim_{n->0} (E[Z^n] - 1)/n, enabling analysis of systems with quenched disorder (heterogeneous agents, random skill graphs).
+
+Large Deviation Theory (LDT) characterises the probability of rare events at exponential scale. The Large Deviation Principle states: for a sequence of random variables S_n, P(S_n/n in A) ~ exp(-n * inf_{x in A} I(x)) where I(x) is the rate function, the Legendre-Fenchel transform of the log-moment-generating function: I(x) = sup_lambda (lambda*x - log E[exp(lambda*X)]). Cramer's theorem: for i.i.d. real-valued X_i with finite mgf in a neighbourhood of 0, P(S_n/n >= x) decays exponentially with rate I(x) = sup_lambda(lambda*x - log E[e^{lambda X}]). Sanov's theorem generalises to empirical distributions: if P_n is the empirical measure of n i.i.d. samples from P, then P(P_n in B) ~ exp(-n * inf_{Q in B} KL(Q||P)) where KL is the Kullback-Leibler divergence. Both theorems require convexity of I and finiteness of the mgf; they provide exponentially tight bounds, not approximations.
+
+
+HERMES COMPONENT ANALYSIS
+
+
+1. Failure Rate Estimation for Large Agent Fleets
+
+(a) Mathematical structure. Let X_i be the per-turn success indicator for agent i (Bernoulli p). Aggregate failure rate F_n = (1/n) sum X_i. Cramer applies directly: P(F_n >= f) <= exp(-n * I(f)) where I(f) = f*log(f/p) + (1-f)*log((1-f)/(1-p)) for Bernoulli X. For heterogeneous agents, each with p_i, Sanov gives the rate in terms of KL divergence from the empirical distribution of {p_i} to the target. With correlated agents (shared context, shared tools), MFT gives the effective failure rate: p_eff = p + (1/N) sum_{j!=i} J_{ij} * (p_j - p), where J_{ij} is the coupling (e.g., shared tool bottleneck causing correlated failure).
+
+(b) What Hermes does. Monitors individual job success/failure in lifecycle.db, surfaces errors reactively via hermes doctor, applies heuristic retry logic. No fleet-level probabilistic envelope.
+
+(c) Principled approach. Estimate p from historical lifecycle.db runs. Compute I(f) at target fleet failure rate f*. Set n (concurrency) such that exp(-n*I(f*)) < tolerance (say 0.01). Alert when observed F_n exceeds the Cramer threshold: F_n > p + sqrt(2*I^{-1}(log(1/delta)/n)) at confidence 1-delta. For correlated agents under MFT, adjust p_eff iteratively: p_eff <- sigma(h + J * p_eff) until convergence, then use p_eff in place of p in Cramer bound.
+
+(d) Value assessment. Moderate-high. Hermes already has the data (lifecycle.db, cron job logs). The Cramer bound is four lines of Python given empirical p. Risk: the i.i.d. assumption fails when agents share tools or context; the MFT correction matters most under high concurrency (delegate_task with 10 agents). Validate by splitting lifecycle.db into train/test, check calibration of predicted vs observed tail rates.
+
+
+2. Mean Field Approximation of Multi-Agent Interaction
+
+(a) Mathematical structure. In delegate_task, N subagents with states x_i (context vectors, tool-call sequences) interact through shared resources: tool rate limits, hermes-swarm-consensus aggregation, shared memory writes. The system has energy E = -sum_i h_i(x_i) - sum_{i<j} J_{ij} f(x_i, x_j), where h_i is the per-agent local quality and J_{ij} captures coupling through consensus or tool contention. MFT replaces J_{ij} f(x_i, x_j) with J * m * x_i where m = E[x_i] is the mean field, giving a decoupled self-consistency equation m = E_{q}[x] where q(x) propto exp(h(x) + J*m*x).
+
+(b) What Hermes does. hermes-swarm-consensus applies a heuristic majority/confidence-weighted vote. Agents are spawned independently with no explicit model of how their outputs will interact or reinforce each other. Diversity of agent assignments is chosen by hand.
+
+(c) Principled approach. Model the consensus as a Curie-Weiss ferromagnet with coupling J (estimated from historical agreement rates). Self-consistency: m = tanh(J*m + h) where h is the prior bias toward a verdict. If J > 1 (strong consensus pressure), the system has two stable fixed points (echo chamber regime). If J < 1, the unique fixed point gives the honest average. Hermes should: (i) estimate J from past swarm runs, (ii) if J > 1, actively inject disagreement by varying model routing per agent (h_i varied), (iii) use the free energy F = -log Z = -log(2*cosh(J*m+h)) + J*m^2/2 to score the consensus quality, flagging low-|dF/dm| solutions as fragile.
+
+(d) Value assessment. High conceptual value, moderate implementation cost. The J estimation requires at least ~30 swarm runs with recorded per-agent verdicts. Key risk: the Curie-Weiss model assumes exchangeable agents, but Hermes agents differ in model and context; the cavity/BP extension handles this but requires per-edge message passing. Start with mean-field (exchangeable) as a diagnostic, then refine.
+
+
+3. Rare Event Probability in Agent Pipelines
+
+(a) Mathematical structure. An agent pipeline is a Markov chain over states s_t (context, tool history) with transition kernel K(s_{t+1}|s_t). A rare event is a trajectory reaching a bad state B (context overflow, hallucination cascade, destructive tool call) within T steps. Path-space LDT: P(trajectory in B) ~ exp(-T * I_path) where I_path = inf_{trajectories reaching B} integral_0^T L(s, ds/dt) dt, the path-space rate function (Donsker-Varadhan). For a finite Markov chain, I_path is the spectral gap of a tilted generator.
+
+(b) What Hermes does. Tool approval hooks classify outputs reactively. Context compression triggers at fixed token thresholds. No proactive estimation of pipeline failure probability before a run.
+
+(c) Principled approach. Importance sampling with exponential tilting: tilt the tool-call distribution by exp(lambda * risk_score(tool_output)) where lambda is chosen to make rare events occur O(1) times in simulation. Use the Gartner-Ellis theorem: if the scaled cumulant generating function Lambda(lambda) = lim (1/T) log E[exp(lambda * sum risk_t)] exists and is differentiable, then I(x) = sup_lambda (lambda*x - Lambda(lambda)). Estimate Lambda(lambda) from short pilot runs, then set alert thresholds at the x where I(x) = log(1/tolerance)/T. Concretely: run 50 pilot turns, fit Lambda(lambda) by regression, compute I at x=0.1 (10% aggregate risk), solve for T_max before P(failure) > 0.01.
+
+(d) Value assessment. Highest difficulty, highest payoff for safety-critical pipelines. The tilted importance sampler can be implemented as a shadow scoring pass on every tool output without changing agent behaviour. Key dependency: a reliable scalar risk_score per tool output, which requires calibration data. Risk of misspecification is real; treat estimates as order-of-magnitude, not exact.
+
+
+IMPLEMENTATION CANDIDATES (ranked)
+
+1. Cramer-bound fleet monitor. Reads historical p from lifecycle.db, computes exponential failure rate bound, alerts when observed concurrent failure rate crosses the threshold. Expected benefit: replaces reactive error discovery with a statistically grounded early-warning signal for fleet degradation. Implementation cost: one Python script, ~50 lines, plugs into existing cron infrastructure.
+
+2. Swarm coupling diagnostic. Estimates J from recorded per-agent verdicts in past hermes-swarm-consensus runs, flags echo-chamber regime (J > 1), and triggers model-routing diversification automatically. Expected benefit: directly reduces correlated groupthink in multi-agent consensus, improving adversarial-review reliability. Implementation cost: requires instrumentation of swarm verdict logs, ~100 lines, depends on at least 30 prior swarm runs for calibration.
+
+3. Importance-sampled pipeline risk scorer. Attaches a tilted risk estimate to each tool-call sequence, estimating P(bad outcome within T steps) using pilot-run cumulants. Expected benefit: enables proactive context-length and tool-approval decisions before pipeline failures occur. Implementation cost: highest of the three; requires calibrated risk_score function and ~50 pilot runs per task class; treat as a research spike before committing.

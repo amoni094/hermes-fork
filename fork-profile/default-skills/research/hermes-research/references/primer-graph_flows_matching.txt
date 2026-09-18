@@ -1,0 +1,71 @@
+PRIMER: Graph Algorithms: Flows, Matching, and Paths
+
+================================================================================
+1. FIELD OVERVIEW
+
+Graph algorithms for flows, matching, and paths study how to route resources through networks, pair agents to tasks optimally, and find efficient routes through state spaces. The core objects are: directed and undirected graphs with capacities or weights; flow networks modeling resource distribution; matchings (sets of non-adjacent edges); and path problems seeking minimum-cost or shortest routes. Mathematically, this field matters because it connects combinatorial optimization to linear programming duality (max-flow min-cut), provides polynomial-time solutions to problems that appear exponential, and establishes tight complexity bounds. These are among the best-solved problems in computer science: practitioners can trust that O(VE log V) or O(V^3) algorithms reliably find global optima, unlike heuristic search or gradient descent.
+
+================================================================================
+2. KEY RESULTS
+
+Max-Flow Min-Cut Theorem: For any flow network, the maximum amount of flow that can be sent from source s to sink t equals the minimum capacity of any cut separating s from t. Algorithms: Ford-Fulkerson (augmenting paths, pseudopolynomial), Edmonds-Karp (O(VE^2)), Dinic's (O(V^2 E)). Push-relabel achieves O(V^3) or O(V^2 sqrt(E)) with heuristics.
+
+Hall's Marriage Theorem: A bipartite graph with parts X and Y has a matching saturating all of X if and only if for every subset S of X, the neighborhood N(S) satisfies |N(S)| >= |S|. Hopcroft-Karp finds maximum matching in O(E sqrt(V)); Hungarian algorithm solves weighted matching in O(V^3).
+
+Dijkstra's Algorithm: Computes shortest paths from source to all vertices in O((V+E) log V) with a binary heap when edge weights are non-negative. Bellman-Ford handles negative weights in O(VE), detecting negative cycles. SPFA is practical but worst-case exponential.
+
+Minimum Spanning Tree: Borůvka (O(E log V)), Prim (O(V^2) or O((V+E) log V)), and Kruskal (O(E log E)) all produce optimal trees of minimum total weight. Matroid structure guarantees greedy algorithms find global optima.
+
+================================================================================
+3. STANDARD PRACTITIONER TOOLS
+
+NetworkX (Python): max_flow, min_cost_flow, bipartite.maximum_matching, shortest_path. Boost Graph Library (C++): push_relabel for max_flow, successive_shortest_path for min-cost flow. Julia: LightGraphs. Production systems use specialized libraries: Google OR-Tools embeds Dinic's and min-cost flow solvers optimized for large sparse graphs. Standard formulas: residual capacity c_f(u,v) = c(u,v) - f(u,v); reduced cost c'(u,v) = c(u,v) + pi(u) - pi(v) for dual variables pi. Practitioners memorize complexity bounds and choose algorithms by problem size and structure (sparse vs. dense, planar, acyclic).
+
+================================================================================
+4. HERMES APPLICATIONS
+
+---
+COMPONENT: Task Assignment to Subagents (delegate_task with max 10 concurrent)
+
+(a) Mathematical Structure
+This is a maximum-cardinality matching problem on a bipartite graph: left vertices are pending tasks, right vertices are available subagents, and an edge (task_i, agent_j) exists if agent_j has the skills/capacity for task_i. Edge weight can encode agent quality, latency, or cost. With concurrency limits and agent state constraints (idle, busy, failed), this becomes a minimum-cost maximum-flow problem: source connects to tasks with capacity 1 (one assignment per task), tasks connect to agents (infinite capacity within that edge, but agent vertex has outgoing capacity limited by concurrency budget), agents connect to sink with capacity = remaining slots.
+
+(b) Current Hermes Approach
+Heuristic: iterate pending tasks, greedily pick the first idle agent matching the skill type. If no match found, queue or retry. No consideration of agent utilization, task dependency, or global optimality. Concurrent tasks chosen ad-hoc or in submission order.
+
+(c) Principled Approach
+Formulate as min-cost max-flow: cost(task_i, agent_j) = f(quality_score(j), latency, agent_load, retry_count(i)). Run Successive Shortest Path (SSP) or Cost Scaling push-relabel to find optimal assignment of up to 10 tasks to agents, minimizing total cost while respecting capacity. Pseudocode:
+  1. Build flow network: source -> tasks (cap=1), tasks -> agents (cap=infinity, cost = -quality(j) + latency(j) + 0.1*load(j)), agents -> sink (cap = remaining_slots(j)).
+  2. Run min_cost_max_flow(network, source, sink, flow=10).
+  3. Extract assignments from flow edges with flow > 0.
+  4. Spawn exactly those subagents and monitor.
+This guarantees no better assignment of the same cardinality exists. Complexity: O(10 * V * E * log V) per delegation wave, where V ~ 10 agents, E ~ tasks * agents, so very fast.
+
+(d) Value Assessment
+Worth implementing. This directly improves task throughput and subagent utilization. Implementation effort: ~4 hours (wrap OR-Tools min_cost_flow). Risk: very low; flow algorithms are rock-solid. The cost function choice (quality vs. load vs. latency tradeoff) will matter more than the algorithm. Real value comes from tuning cost weights and re-solving per delegation call (fast enough). Recommendation: implement as a weekend spike, measure mean task completion time and peak parallelism before/after.
+
+---
+COMPONENT: Skill Loading and Dependency Resolution
+
+(a) Mathematical Structure
+Skills have prerequisites (e.g., "reasoning" requires "context-extract" and "memory-recall"). Loading a skill for a task is a shortest-path problem on a DAG: nodes are skill states (unloaded, loading, loaded), edges are state transitions with cost (latency to load skill X, memory overhead, token cost). The goal: find a minimal-cost sequence of skill loads that satisfies all dependencies. Equivalently, it's a transitive-closure problem: given skill graph G with edges (A -> B) meaning "B requires A," compute all reachable skills and their load order.
+
+(b) Current Hermes Approach
+Skills listed in procedural knowledge files with manual dependency annotations. On task assignment, iterate through required skills and load depth-first or breadth-first, blocking until each is resident. No cost model, no parallelization of independent loads, no redundancy elimination (if two tasks in parallel need the same skill, load it twice rather than share).
+
+(c) Principled Approach
+Model as a shortest-path DAG traversal:
+  1. Construct skill dependency graph: vertices = skills, edges = "requires" pointers with edge weight = load_time(skill) + memory_cost(skill).
+  2. For a task requiring skills {S1, S2, ...}, compute transitive closure: reachable(task) = all prerequisites of S1 union S2 etc.
+  3. Topological sort reachable(task) to find load order; parallelize loads of skills with no inter-dependencies.
+  4. Use Dijkstra or SPFA to find minimum-cost load sequence if you allow skill caching/sharing (i.e., if multiple tasks run concurrently and share a skill, charge its load cost once and amortize).
+For shared skill caching, this becomes a min-cost max-flow again: source -> tasks, tasks -> skills (cap=1), skills -> sink (cap=unbounded), with edge cost modeling amortized load time.
+
+(d) Value Assessment
+Worth implementing but lower ROI than task matching. Benefit: parallelized skill loads and caching reduce latency. Implementation: ~6 hours (topological sort + async load orchestration). Risk: moderate. The risk is that skill load times are highly variable (network, disk I/O), and the deterministic algorithm may not adapt well to runtime conditions. Recommendation: implement as separate subsystem, measure skill cache hit rate and mean load latency. Pair with a simple heuristic cache (LRU by last-used time). Math improves scheduling, but empirical tuning is essential.
+
+---
+COMPONENT: Information Flow in Multi-Agent Pipelines (Memory promotion, hindsight aggregation)
+
+(a) Mathematical Structure
+Hermes routes information through stages: l1-extract (agent summarizes turn) -> l1-promote

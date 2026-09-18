@@ -1,0 +1,72 @@
+PRIMER: Multi-Agent LLM Collaboration
+
+CORE CONCEPTS
+
+Multi-agent LLM collaboration treats a collection of language models as a distributed system where specialization, communication protocol, and aggregation mechanism jointly determine output quality. The central result is that decomposing tasks across role-specialized agents outperforms a single generalist on structured tasks (Du et al. 2023, Khan et al. 2024), but only when the decomposition matches task structure -- mismatched decomposition adds coordination overhead with no quality gain.
+
+Debate protocol: agents independently generate answers, then iteratively read each other's responses and revise. Convergence is measured by pairwise agreement rate. Key condition: debate improves factual accuracy only when at least one agent starts with the correct answer and the error agent can be persuaded by evidence, not just majority pressure. Against coordinated errors, debate amplifies rather than corrects.
+
+Role specialization: assign agents narrow epistemic roles (critic, synthesizer, domain expert) rather than running N identical agents. The gain comes from reducing correlation between errors -- independent failure modes are more recoverable than correlated ones.
+
+Shared memory: a write-once or append-only store visible to all agents eliminates redundant retrieval and maintains consistency across turns. Benefit scales with task length and agent count; overhead dominates for short tasks.
+
+Hidden-profile problem: when each agent holds private evidence unknown to others, naive voting surfaces only shared evidence because agents argue from what they know. Correct aggregation requires structured elicitation (each agent reveals private evidence before voting) or Bayesian belief pooling, not majority rule.
+
+Orchestrator-worker pattern: a coordinator agent decomposes tasks, routes subtasks, and aggregates results. The coordinator must hold a model of each worker's competence to route optimally -- static assignment is suboptimal when worker quality varies by task type.
+
+Consensus mechanisms range from majority voting (low cost, loses minority-held truth) to weighted Bayesian aggregation (requires calibrated confidence) to adversarial challenge-and-defend (highest quality, highest compute).
+
+
+HERMES COMPONENT ANALYSIS
+
+--- delegate_task ---
+
+(a) Mathematical structure: delegate_task implements fan-out parallelism. Formally, given task T and n workers, it computes outputs {o_1, ..., o_n} in parallel, then returns them to the parent context. Without explicit aggregation, the parent agent must reduce {o_i} itself. This is an embarrassingly parallel map operation over the task space, with no defined reduce step.
+
+(b) What Hermes does: spawns up to 10 isolated subagents with a context packet injected manually. The parent receives all n summaries and reasons over them in its own turn. Subagent quality is unverified before results enter parent context.
+
+(c) Principled approach: implement a two-phase protocol. Phase 1: route subtasks using a competence model -- a simple dictionary mapping task_type to (model, routing_config) pairs scored from past task logs. Phase 2: before aggregating, apply a confidence-weighted reduce. Each subagent emits a structured JSON output with fields {answer, confidence: 0-1, evidence_cited: bool}. Parent aggregation: final = argmax over answers of sum(confidence_i * evidence_cited_i). This filters low-confidence outputs without discarding minority views entirely.
+
+(d) Value assessment: moderate-high. The current bottleneck is unverified subagent output entering parent context and inflating token budget. The fix is a structured output contract (skill: subagent-output-contract already exists) plus a lightweight scoring step. Risk is low -- it is additive and reversible. Validation: run 20 delegate_task calls with and without the confidence gate; measure parent-turn token consumption and factual agreement rate against ground truth.
+
+
+--- hermes-swarm-consensus ---
+
+(a) Mathematical structure: consensus over N agent outputs is a social choice problem. Given outputs {o_1, ..., o_N} and a target verdict v, the aggregation function f: O^N -> V should satisfy Condorcet consistency (if a majority prefer o_i pairwise over all alternatives, f returns o_i) and independence of irrelevant alternatives (IIR). Majority voting satisfies neither under correlated agents.
+
+(b) What Hermes does: the skill reduces N subagent outputs to a verdict using a heuristic -- likely majority or coordinator-selects-most-plausible. This is brittle against the hidden-profile problem: if all agents share the same retrieved context, they surface shared evidence and vote identically, producing false confidence.
+
+(c) Principled approach: implement a two-round protocol. Round 1: each agent independently emits (verdict, private_evidence_summary, confidence). Round 2: broadcast all private_evidence summaries to all agents, then re-elicit. Final aggregation: weighted vote where weight_i = calibration_score(agent_i) derived from historical accuracy on similar tasks. Calibration score is estimated by Brier score: B_i = 1 - mean((confidence_ij - correctness_ij)^2) over past tasks j. This directly addresses the hidden-profile problem by forcing evidence revelation before aggregation.
+
+(d) Value assessment: high for tasks where consensus is currently used for factual or code-correctness decisions; low for subjective or preference tasks. Risk: Brier scoring requires ground truth labels, which are not always available in an agent system. Practical proxy: use adversarial-review pass rate as a calibration signal. Implementation cost is medium -- the two-round structure requires a second LLM call per swarm, roughly doubling swarm compute.
+
+
+--- adversarial-review ---
+
+(a) Mathematical structure: adversarial review is a two-player sequential game. Proposer generates change c. Reviewer, seeing c but not proposer's reasoning chain, emits accept/reject/modify with critique. The game theoretic optimum for the proposer is to generate changes that survive critique, which is a regularization pressure toward robust outputs.
+
+(b) What Hermes does: a second model independently reviews proposed changes. The current skill triggers on explicit user request or high-risk operations. The reviewer model is hardcoded (gpt-5.6-sol via openai-api per routing config).
+
+(c) Principled approach: make reviewer assignment adaptive. Assign reviewer based on the failure mode most likely for the proposer model: if proposer is Claude Sonnet (known strength: reasoning, known weakness: over-agreement with user framing), assign a reviewer optimized for adversarial skepticism. The assignment rule: reviewer = argmax over candidate_models of (epistemic_independence(reviewer, proposer) * task_relevant_accuracy(reviewer)). Epistemic independence is approximated by cross-model agreement rate on a benchmark: lower agreement means higher independence. This guards against correlated errors between proposer and reviewer.
+
+(d) Value assessment: current implementation is already high-value. The marginal gain from adaptive reviewer assignment is meaningful only if the current fixed reviewer (gpt-5.6-sol) is known to have correlated failure modes with Claude Sonnet on specific task types. Investigate before implementing. Risk of adaptive assignment: adds a meta-routing call that can itself fail. Validate: measure adversarial-review catch rate (bugs or regressions caught) before and after adaptive assignment on a 30-task sample.
+
+
+--- context packets to subagents ---
+
+(a) Mathematical structure: a context packet is an information set I_i injected into subagent i's context window. The information design problem is: choose I_i to maximize subagent output quality q_i subject to token budget B_i. This is a constrained selection problem over the full context C.
+
+(b) What Hermes does: context packets are assembled manually or by the parent agent selecting relevant sections. No formal constraint on token budget or overlap between packets.
+
+(c) Principled approach: implement a context allocation algorithm. Score each context chunk k by relevance(k, subtask_i) using embedding cosine similarity. Select top-m chunks satisfying sum(tokens_k) <= B_i. Enforce diversity: if two chunks have similarity > 0.85, keep only the higher-scored one. Across subagents, track shared_chunks to compute overlap rate; if overlap > 0.6 across all agents, the decomposition is likely producing correlated agents (hidden-profile risk). This check is cheap and catches a common failure mode.
+
+(d) Value assessment: medium. Current manual assembly works for short tasks. It breaks silently for long tasks where the parent's context is already compressed. The embedding similarity scorer requires a local embedding model call per chunk, which adds latency. Worth implementing as a background utility that warns when overlap is high, before building full automated selection.
+
+
+IMPLEMENTATION CANDIDATES (ranked)
+
+1. Structured output contract for delegate_task with confidence-weighted aggregation. Each subagent emits JSON with answer, confidence, evidence_cited. Parent applies weighted reduce before reasoning. Expected benefit: reduces parent token consumption and surfaces low-confidence subagent results before they corrupt the main context. Implementation cost: low -- structured output contract skill exists; add a 15-line aggregation function and wire it to delegate_task calls in the harness.
+
+2. Two-round evidence-revelation protocol for hermes-swarm-consensus. Round 1: independent verdicts. Round 2: shared evidence summaries, re-elicit, then weighted vote using adversarial-review pass rate as calibration proxy. Expected benefit: directly addresses hidden-profile failure where all agents vote identically from shared retrieved context, producing false confidence. Implementation cost: medium -- doubles swarm LLM calls, requires a round-trip coordination step; two to three days of engineering plus 20-task validation run.
+
+3. Overlap audit for context packets. Compute pairwise embedding similarity across subagent context packets before dispatch; warn if mean overlap exceeds 0.6. Expected benefit: cheap early detection of correlated-agent failure before it produces false consensus. Implementation cost: low -- one embedding call per chunk per subagent, a similarity matrix, and a threshold check; can be added as a pre-dispatch hook in the delegate_task flow.

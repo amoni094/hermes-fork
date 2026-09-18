@@ -80,3 +80,31 @@ name.
   does not.
 - `--also-uncompacted` adds a control arm that answers from the full
   original transcript — the recall ceiling.
+
+## Reproducing Lineage Files
+
+The lineage .jsonl files used in ship-gate evaluations (research_v2, code_v2, mixed_v2)
+are not committed — they are too large (~several hundred MB each).
+
+They were derived from full session history exports using:
+
+```
+python evals/compaction/scripts/reconstruct_lineage.py \
+  <path/to/state_db_copy.db> \
+  <root_session_id> \
+  evals/compaction/fixtures/<lineage_name>.jsonl
+```
+
+To reproduce domain-matched lineages:
+1. Export your Hermes sessions to a .jsonl file via reconstruct_lineage.py (see above).
+2. The cap window is a **500K-token suffix** of the lineage (implemented in fixtures.py:
+   reverse-accumulate from the end until 500K tokens). It is NOT a fixed message-index slice.
+3. Check R/C ratio of the actual cap window (not a percentage approximation):
+   - Strongly research: R/C ratio >> 1
+   - Strongly code:     R/C ratio << 1
+   - Mixed:             R/C ratio ≈ 0.4–0.6
+4. Adjust the lineage truncation until the 500K-token suffix lands in the correct domain,
+   then run the eval harness. Use `--cap-tokens` to control the window size.
+
+See the hermes-fork skill (autonomous-ai-agents/hermes-fork) for detailed instructions
+on cap-window domain verification.

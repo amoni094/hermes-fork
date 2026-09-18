@@ -1,0 +1,27 @@
+# CLRS glossary (4th ed)
+
+- **Amortized cost** (Ch 16) — average cost of one operation over a worst-case *sequence*, not expected value under a distribution. No probability required.
+- **Accounting method** (Ch 16.2) — charge some ops more than actual cost; store the surplus as credit on objects. Total credit must stay nonnegative.
+- **Aggregate analysis** (Ch 16.1) — bound T(n) for n operations; amortized cost T(n)/n for every op type.
+- **Akra-Bazzi** (Ch 4.7) — generalizes Master theorem to uneven split sizes.
+- **α(n)** (Ch 19) — inverse Ackermann; ≤ 4 in any realistic union-find use.
+- **Bellman-Ford** (Ch 22.1) — SSSP with negative weights; |V|−1 relax-all-edges rounds, then a cycle check.
+- **BFS tree** (Ch 20.2) — tree of first-discovery edges; tree path is an unweighted shortest path.
+- **Collision** (Ch 11.2) — two keys with the same h(k). Inevitable when |U| > m.
+- **Comparison sort** (Ch 8.1) — order decided only by pairwise comparisons; worst-case Ω(n lg n).
+- **Cut-and-paste** (Ch 14.3) — proof that a subproblem inside an optimum must itself be optimal: replace a worse subsolution and contradict optimality.
+- **Dijkstra** (Ch 22.3) — SSSP for w ≥ 0; min-priority queue of d-values. Not correct with negative edges.
+- **Direct addressing** (Ch 11.1) — store key k in slot k; worst-case O(1), space Θ(|U|).
+- **Driving function f(n)** (Ch 4.5) — non-recursive work in a master recurrence (divide + combine).
+- **Dynamic table** (Ch 16.4) — array that expands/contracts; doubling yields O(1) amortized insert.
+- **Greedy-choice property** (Ch 15.2) — some globally optimal solution includes the locally best choice, so that choice is always safe.
+- **Load factor α** (Ch 11.2, 16.4) — n/m for hash tables; occupied/size for dynamic tables.
+- **Loop invariant** (Ch 2.1) — property true at the start of every iteration; with termination, proves correctness.
+- **Master recurrence** (Ch 4.5) — T(n) = a T(n/b) + f(n).
+- **Open addressing** (Ch 11.4) — collisions resolved inside the table (probe sequence), no chains.
+- **Optimal substructure** (Ch 14.3, 15.2) — an optimal solution contains optimal solutions to subproblems.
+- **Overlapping subproblems** (Ch 14.3) — a recursive formulation recomputes the same subproblems; memoize or tabulate.
+- **Potential Φ** (Ch 16.3) — real-valued function of the whole data structure; amortized = actual + ΔΦ.
+- **Relax** (Ch 22) — if v.d > u.d + w(u,v), set v.d and v.π. Core of SSSP.
+- **Regularity condition** (Ch 4.5 case 3) — a f(n/b) ≤ c f(n) for some c < 1 and large n.
+- **Watershed** n^{log_b a} (Ch 4.5) — leaf-work order of a master recurrence; compared with f(n) to pick a case.

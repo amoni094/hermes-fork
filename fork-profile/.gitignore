@@ -1,0 +1,19 @@
+# Runtime state
+*.lock
+*.pid
+*.sock
+*.db
+*.db-shm
+*.db-wal
+__pycache__/
+*.pyc
+*.pyo
+.env
+.op.env
+# Curator runtime state
+.bundled_manifest
+.curator_*
+.usage.json*
+# Session/process state
+active_sessions.json
+active_sessions.lock

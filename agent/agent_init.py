@@ -19,7 +19,7 @@ import uuid
 from collections import deque
 from contextlib import suppress
 from datetime import datetime
-from types import SimpleNamespace
+from types import MethodType, SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse, urlunparse
 
@@ -578,6 +578,8 @@ _TURN_STATE: Dict[str, Any] = {
 # Session persistence state.
 _SESSION_STATE: Dict[str, Any] = {
     "_session_messages": list,
+    "_reasoning_verbosity_mode": "full",
+    "_suppress_thinking_prefill": False,
     # Responses encrypted-reasoning replay: routes that 400 with ``invalid_encrypted_content``
     # make the loop disable it for the session (stateless continuity).
     "_codex_reasoning_replay_enabled": True,
@@ -627,6 +629,8 @@ _STREAM_STATE: Dict[str, Any] = {
     "_stream_writer_token": 0,
     "_stream_writer_tls": threading.local,
     "_stream_writer_dropped": 0,
+    # Set once a strict endpoint 400/422s on ``stream_options``; later streams omit it (#9705).
+    "_stream_options_unsupported": False,
     # API-facing user message override when it differs from the persisted transcript (voice).
     "_persist_user_message_idx": None,
     "_persist_user_message_override": None,
@@ -1295,6 +1299,27 @@ def _init_memory(agent, _agent_cfg, skip_memory, platform):
 
     from agent.memory_manager import inject_memory_provider_tools
     inject_memory_provider_tools(agent)
+    agent.emit_memory = MethodType(emit_memory, agent)
+
+
+def emit_memory(agent, text, tags=None) -> None:
+    """Retain an episode via ``hindsight_retain`` when importable. Fail-open."""
+    try:
+        try:
+            from plugins.memory.hindsight import RETAIN_SCHEMA  # noqa: F401
+        except Exception:
+            logger.debug("emit_memory: hindsight_retain not importable")
+            return
+        mm = getattr(agent, "_memory_manager", None)
+        if mm is not None and hasattr(mm, "has_tool") and mm.has_tool("hindsight_retain"):
+            args: Dict[str, Any] = {"content": str(text or "")}
+            if tags is not None:
+                args["tags"] = tags
+            mm.handle_tool_call("hindsight_retain", args)
+            return
+        logger.debug("emit_memory: hindsight_retain importable but no live provider")
+    except Exception as exc:
+        logger.debug("emit_memory failed (fail-open): %s", exc)
 
 
 def _apply_agent_section(agent, _agent_cfg):
@@ -1976,6 +2001,14 @@ def _inject_context_engine_tools(agent):
         except Exception as _ce_err:
             _ra().logger.debug("Context engine on_session_start: %s", _ce_err)
 
+    # Expose agent to per-session weakref registry so ctx.compressor works in
+    # pre_llm_call hooks without leaking process-global state across sessions.
+    try:
+        from hermes_cli.plugins import register_session_agent
+        register_session_agent(agent.session_id, agent)
+    except Exception as _pm_err:
+        _ra().logger.debug("plugin manager session agent register failed (non-fatal): %s", _pm_err)
+
 
 def _configure_ollama_num_ctx(agent, _model_cfg, _config_context_length):
     # Ollama defaults num_ctx to 2048, so detect the max window and send num_ctx per request.
@@ -2108,7 +2141,8 @@ def _snapshot_primary_runtime(agent):
 
 def _init_usage_state(agent):
     from agent.runtime_cwd import scope_terminal_cwd
-    agent._subdirectory_hints = SubdirectoryHintTracker(working_dir=scope_terminal_cwd() or None)
+    agent._subdirectory_hints = SubdirectoryHintTracker(
+        working_dir=scope_terminal_cwd() or None, enabled=not agent.skip_context_files)
     _set_defaults(agent, _USAGE_STATE)
 
 
@@ -2305,6 +2339,8 @@ def init_agent(
     _configure_ollama_num_ctx(agent, _model_cfg, _config_context_length)
     _emit_compression_summary(agent, cs)
     _snapshot_primary_runtime(agent)
+    if not callable(getattr(agent, "emit_memory", None)):
+        agent.emit_memory = MethodType(emit_memory, agent)
 
 
 __all__ = ["init_agent"]

@@ -56,6 +56,72 @@ from tools.delegate_tool_results import (  # noqa: F401
 
 _ROLES = frozenset({"leaf", "orchestrator"})
 
+# Adaptive Retry Budgeting (ARB, arXiv:2608.25403) — stamp-only.
+# Re-spawning inside _run_single_child is unsafe: await_child stop-signals the
+# child and shuts it down; re-calling on a stopped child is UB. Stamps let the
+# parent/batch aggregator decide on a *new* dispatch.
+#
+# delegation.retry_policy in config.yaml is NOT read. The block is operator
+# guidance (commented out) because wiring it would imply in-process retries.
+# Hardcoded remaining=2 matches the ARB-recommended cap; timeout is never
+# retryable (stop-signalled child).
+_ARB_DEFAULT_RETRIES = 2
+
+
+def _apply_arb_stamp(entry: Dict[str, Any], result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Stamp ``arb_retryable`` / ``arb_retries_remaining`` on a failure entry.
+
+    Never raises (must not break the failure path). Timeout → non-retryable.
+    Unknown/unclassified failures default to non-retryable.
+    """
+    try:
+        if str(entry.get("status") or "") == "timeout":
+            entry["arb_retryable"] = False
+            entry["arb_retries_remaining"] = 0
+            return entry
+        from agent.error_surface import build_error_surface_from_result
+
+        payload = result if isinstance(result, dict) else {
+            "error": entry.get("error") or "",
+            "failure_reason": entry.get("failure_reason") or "",
+            "failed": True,
+        }
+        reason = str(payload.get("failure_reason") or entry.get("failure_reason") or "").strip()
+        if not reason:
+            entry["arb_retryable"] = False
+            entry["arb_retries_remaining"] = 0
+            return entry
+        surface = build_error_surface_from_result(payload)
+        retryable = bool(surface and surface.get("retryable"))
+        entry["arb_retryable"] = retryable
+        entry["arb_retries_remaining"] = _ARB_DEFAULT_RETRIES if retryable else 0
+    except Exception:
+        pass
+    return entry
+
+
+def _arb_should_retry(entry: Dict[str, Any]) -> bool:
+    """Parent/batch aggregator: retry only if stamped retryable with remaining budget."""
+    try:
+        if not entry.get("arb_retryable"):
+            return False
+        return int(entry.get("arb_retries_remaining") or 0) > 0
+    except Exception:
+        return False
+
+
+def _arb_consume_retry(entry: Dict[str, Any]) -> Dict[str, Any]:
+    """Decrement remaining after one retry cycle. ``0`` terminates the loop."""
+    try:
+        remaining = max(0, int(entry.get("arb_retries_remaining") or 0) - 1)
+        entry["arb_retries_remaining"] = remaining
+        if remaining == 0:
+            entry["arb_retryable"] = False
+    except Exception:
+        pass
+    return entry
+
+
 # Nested delegation is granted by depth/role in _build_child_agent, never by the
 # model naming toolsets (there is no model-facing toolsets argument).
 def _normalize_role(r: Optional[str]) -> str:
@@ -329,7 +395,7 @@ def _run_single_child(
         run.seed_workspace()
         result, failure_entry, _child_close_deferred = run.await_child()
         if failure_entry is not None:
-            return failure_entry
+            return _apply_arb_stamp(failure_entry)
 
         schema = _validate_child_output_schema(child, result, task_index, run.child_task_id, run.relay_text)
         _merge_late_steer(result, _subagent_id, child)
@@ -349,10 +415,10 @@ def _run_single_child(
         _late_pending_steer = run.close_steering()
         logging.exception(f"[subagent-{task_index}] failed")
         # Entry status "error" (contract), progress event status "failed" (UI vocabulary).
-        return run.finish_failed(
+        return _apply_arb_stamp(run.finish_failed(
             _fabricated_entry(task_index, "error", str(exc), child, run.elapsed()), _late_pending_steer,
             preview=str(exc), summary=str(exc), status="failed",
-        )
+        ))
     finally:
         run.cleanup(heartbeat=heartbeat, child_pool=child_pool, leased_cred_id=leased_cred_id, close_deferred=_child_close_deferred)
 

@@ -45,7 +45,94 @@ POLICIES: Dict[str, Dict[str, Any]] = {
         "ctor": {"tail_mode": "lean"},
         "attrs": {"_session_id": "eval-session"},
     },
+    # Fork: research profile — compress sooner (0.45), smaller tail (22 msgs).
+    "fork_research": {
+        "ctor": {"threshold_percent": 0.45, "protect_last_n": 22},
+        "attrs": {
+            "proactive_prune_tokens": 40_000,
+            "session_type": "research",
+            "importance_biased_prune_enabled": True,
+        },
+    },
+    # Fork: code profile — compress later (0.55), larger tail (28 msgs).
+    "fork_code": {
+        "ctor": {"threshold_percent": 0.55, "protect_last_n": 28},
+        "attrs": {
+            "proactive_prune_tokens": 28_000,
+            "session_type": "code",
+            "importance_biased_prune_enabled": True,
+        },
+    },
+    # Fork: mixed profile — midpoint (0.50, 20 msgs).
+    "fork_mixed": {
+        "ctor": {"threshold_percent": 0.50, "protect_last_n": 20},
+        "attrs": {
+            "proactive_prune_tokens": 32_000,
+            "session_type": "mixed",
+            "importance_biased_prune_enabled": True,
+        },
+    },
+    # Classifier-routed arm: starts from mixed/lean knobs, then auto-selects fork profile
+    # based on session_classifier heuristic. Tests end-to-end classifier routing benefit.
+    "classified": {
+        "ctor": {"threshold_percent": 0.50, "protect_last_n": 20},
+        "attrs": {
+            "_session_id": "eval-session",
+            "proactive_prune_tokens": 32_000,
+            "importance_biased_prune_enabled": True,
+            "use_classifier": True,
+        },
+    },
+    # Same routing as `classified`, but the scorecard policy label is rewritten to
+    # classified(<detected_profile>) so the arm is scored against the profile the
+    # classifier actually chose — not the lineage domain tag (which often disagrees
+    # with the 500K-token cap-window content type).
+    "classified_oracle": {
+        "ctor": {"threshold_percent": 0.50, "protect_last_n": 20},
+        "attrs": {
+            "_session_id": "eval-session",
+            "proactive_prune_tokens": 32_000,
+            "importance_biased_prune_enabled": True,
+            "use_classifier": True,
+        },
+    },
+    # Lean + research threshold compound arm.
+    "lean_fork_research": {
+        "ctor": {"threshold_percent": 0.45, "protect_last_n": 22},
+        "attrs": {
+            "_session_id": "eval-session",
+            "proactive_prune_tokens": 40_000,
+            "session_type": "research",
+            "importance_biased_prune_enabled": True,
+        },
+    },
+    # Telegraphic pre-pass arms: tool_result messages are compacted by
+    # TelegraphicCompressor before the context compressor sees them.
+    # This reduces context size entering the compressor, effectively giving
+    # more headroom before a full compaction is needed.
+    #
+    # "lean+telegraphic": lean baseline with telegraphic pre-pass.
+    # "fork_research+telegraphic": research profile with telegraphic pre-pass.
+    #
+    # The runner handles "pre_telegraphic": True in the spec.
+    "lean_telegraphic": {
+        "ctor": {"tail_mode": "lean"},
+        "attrs": {"_session_id": "eval-session"},
+        "pre_telegraphic": True,
+    },
+    "fork_research_telegraphic": {
+        "ctor": {"threshold_percent": 0.45, "protect_last_n": 22},
+        "attrs": {
+            "proactive_prune_tokens": 40_000,
+            "session_type": "research",
+            "importance_biased_prune_enabled": True,
+        },
+        "pre_telegraphic": True,
+    },
 }
+
+# Runtime attrs the runner must setattr onto the compressor when present.
+FORK_RUNTIME_ATTRS = ("session_type", "importance_biased_prune_enabled")
 
 
 def apply_policy(compressor, spec: Dict[str, Any]):

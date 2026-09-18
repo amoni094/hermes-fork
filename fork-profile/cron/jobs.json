@@ -1,0 +1,110 @@
+{
+  "jobs": [
+    {
+      "id": "c7e4d8aa60d5",
+      "name": "hermes-monitor-suite",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "monitor-suite-runner.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 7 * * *",
+        "display": "every day at 7am"
+      },
+      "schedule_display": "every day at 7am",
+      "repeat": {
+        "times": null,
+        "completed": 2
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-09-15T16:55:48.858974+10:00",
+      "next_run_at": "2026-09-18T07:00:00+10:00",
+      "last_run_at": "2026-09-17T07:00:12.781845+10:00",
+      "last_status": "error",
+      "last_error": "Script not found: /var/home/rainbow/.hermes/profiles/fork/scripts/monitor-suite-runner.py",
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 2,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-09-17T07:00:00+10:00",
+        "dispatched_at": "2026-09-17T07:00:12.222274+10:00",
+        "lateness_seconds": 12.2,
+        "kind": "on_time"
+      },
+      "fire_claim": null
+    },
+    {
+      "id": "5916dbe125a4",
+      "name": "pr2030-comment-monitor",
+      "prompt": "You are an autonomous PR monitor for jesterG1979/hello_agent PR #2030 (branch: refactor/code-review-improvements).\n\nYour job each run:\n1. Fetch all unresolved review threads on PR #2030 using GraphQL:\n   Run this exact command:\n   gh api graphql -f query='query{repository(owner:\"jesterG1979\",name:\"hello_agent\"){pullRequest(number:2030){reviewThreads(first:50){nodes{isResolved id comments(first:1){nodes{body}}}}}}}'  | python3 -c \"\nimport sys, json\nd = json.load(sys.stdin)\nts = d['data']['repository']['pullRequest']['reviewThreads']['nodes']\nopen_t = [t for t in ts if not t['isResolved']]\nprint(len(open_t), 'unresolved')\nfor t in open_t:\n    print(' ', t['id'], t['comments']['nodes'][0]['body'][:200])\n\"\n\n2. Also check for regular PR comments (not review threads):\n   gh pr view 2030 --repo jesterG1979/hello_agent --json comments --jq '.comments[].body' | head -40\n\n3. Read the counter file:\n   python3 -c \"import pathlib; f=pathlib.Path('/tmp/pr2030_clean_counter.txt'); print(int(f.read_text().strip()) if f.exists() else 0)\"\n\n4. TERMINATION CHECK: If there are 0 unresolved review threads AND 0 unresolved PR comments, increment the counter. If counter reaches 2, write '/tmp/pr2030_loop_done.txt' and output 'PR IS CLEAN x2 — STOPPING CRON.' Then the parent session will delete this cron job. Write the new counter value to /tmp/pr2030_clean_counter.txt.\n\n5. If there ARE unresolved comments/threads:\n   a. Reset clean counter to 0: echo 0 > /tmp/pr2030_clean_counter.txt\n   b. Clone the repo locally if not present: cd /tmp && gh repo clone jesterG1979/hello_agent pr2030_work 2>/dev/null || (cd /tmp/pr2030_work && git fetch origin && git checkout refactor/code-review-improvements && git pull)\n   c. Read the relevant files in /tmp/pr2030_work/src/ that the comments refer to\n   d. Fix the issues identified by the comments\n   e. Run: cd /tmp/pr2030_work && ENVIRONMENT=ci python -m pytest tests/test_circuit_breaker.py tests/test_provider_failure_classifier.py -x -q 2>&1 | tail -5\n   f. If tests pass, commit and push:\n      cd /tmp/pr2030_work && git add -A && git commit -m 'fix: address PR review comments' && git push origin refactor/code-review-improvements\n   g. Resolve the review threads using GraphQL mutations for each thread ID found in step 1:\n      gh api graphql -f query=\"mutation { resolveReviewThread(input: {threadId: \\\"THREAD_ID\\\"}) { thread { isResolved } } }\"\n\n6. Output a summary of what you found and what you did.\n\nIMPORTANT:\n- Always re-fetch thread IDs fresh each run — never reuse IDs from previous runs\n- The counter file is /tmp/pr2030_clean_counter.txt\n- If /tmp/pr2030_loop_done.txt exists, output 'LOOP ALREADY DONE — skipping.' and exit immediately\n- The gh CLI is authenticated and works with the jesterG1979 account\n- Work directory for fixes: /tmp/pr2030_work (clone jesterG1979/hello_agent there if absent)",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": "anthropic",
+      "model_snapshot": "claude-sonnet-4-6",
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 10,
+        "display": "every 10m"
+      },
+      "schedule_display": "every 10m",
+      "repeat": {
+        "times": null,
+        "completed": 79
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-09-16T21:47:36.316755+10:00",
+      "next_run_at": "2026-09-17T15:36:10.120930+10:00",
+      "last_run_at": "2026-09-17T15:15:24.463819+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-09-17T15:25:24.463819+10:00",
+        "dispatched_at": "2026-09-17T15:26:10.064371+10:00",
+        "lateness_seconds": 45.6,
+        "kind": "on_time"
+      },
+      "fire_claim": {
+        "at": "2026-09-17T15:26:10.523087+10:00",
+        "by": "localhost:35396:a0ed0874d73c42e3a2b8f0c49597424a"
+      }
+    }
+  ],
+  "updated_at": "2026-09-17T15:26:10.523952+10:00"
+}

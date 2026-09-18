@@ -97,9 +97,23 @@ def _smart_approve(command: str, description: str) -> str:
                 "TRUSTED instructions, unlike the command text):\n"
                 f"{operator_policy}"
             )
+        # Neutralise XML-delimiter injection in command and description without HTML-encoding.
+        # html.escape() is wrong here: the consumer is an LLM, not a browser parser, so
+        # &gt; and &lt; entities are opaque tokens that degrade risk assessment accuracy
+        # (e.g. "rm -rf /tmp/&lt;dir&gt;" looks safer than "rm -rf /tmp/<dir>").
+        # Instead, replace the closing </command> tag literal inside the content —
+        # this is the only vector that can break out of the fence, and the replacement
+        # is still readable by the LLM. (P2-M6 fix; P3-L2 fix: extended to all approval_smart tags.)
+        def _neutralise_cmd_delimiters(s: str) -> str:
+            s = str(s)
+            for tag in ("command", "description", "instruction", "system", "function_calls"):
+                s = s.replace(f"</{tag}>", f"[/{tag}]").replace(f"<{tag}>", f"[{tag}]")
+            return s
+        safe_command = _neutralise_cmd_delimiters(_strip_shell_comments(command))
+        safe_description = _neutralise_cmd_delimiters(description)
         user_prompt = (
-            f"The following command was flagged as: {description}\n\n"
-            f"<command>\n{_strip_shell_comments(command)}\n</command>\n\n"
+            f"The following command was flagged as: {safe_description}\n\n"
+            f"<command>\n{safe_command}\n</command>\n\n"
             "Assess the ACTUAL risk of the shell operations in this command. "
             "Many flagged commands are false positives — for example, "
             '`python -c "print(\'hello\')"` is flagged as "script execution '

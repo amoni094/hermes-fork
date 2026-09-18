@@ -41,6 +41,7 @@ test_durations.json
 tmp/
 temp_vision_images/
 hermes-*/*
+!hermes-scripts/**
 examples/
 tests/quick_test_dataset.jsonl
 tests/sample_dataset.jsonl
@@ -50,6 +51,7 @@ run_datagen_sonnet.sh
 source-data/*
 run_datagen_megascience_glm4-6.sh
 data/*
+MagicMock/
 # No trailing slash: also matches node_modules SYMLINKS (worktrees often
 # symlink node_modules to the main checkout; the dir-only pattern let one
 # slip into a commit and break `npm ci` on CI with ENOTDIR).

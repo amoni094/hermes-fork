@@ -1,0 +1,51 @@
+model:
+  context_length: 200000
+  default: claude-sonnet-4-6
+  provider: anthropic
+plugins:
+  enabled:
+    - tool-auth-gate
+    - context-pressure-guard
+    - tool-result-audit
+_config_version: 44
+agent:
+  restart_drain_timeout: 25
+  cron_drain_timeout: 30
+database:
+  wal_autocheckpoint: 500
+  journal_size_limit: 16777216
+  journal_mode: delete
+onboarding:
+  seen:
+    openclaw_residue_cleanup: true
+    tool_progress_prompt: true
+    busy_input_prompt: true
+approvals:
+  destructive_slash_confirm: false
+shadow_flags:
+  shadow_consistency_scoring: false
+  shadow_coverage_audit: false
+  shadow_middle_section_rerun: false
+  shadow_aimd_controller: false
+  shadow_loop_detection: false
+aimd_budgets:
+  extractor: 8
+  compiler: 4
+  profiler: 2
+  structural: 2
+  llm_checks: 2
+cost_guard:
+  extractor_usd: 0.1
+  compiler_usd: 0.2
+  session_total_usd: 1.0
+improvement_governance:
+  auto_approve_low: true
+  medium_reviewers_required: 1
+  high_requires_senior: true
+  cooldown_seconds: 3600
+  max_proposals_per_hour: 5
+aimd_enabled: true
+concurrency_limits:
+  max_parallel_subagents: 8
+  max_parallel_tool_calls: 4
+  throttle_on_429: true

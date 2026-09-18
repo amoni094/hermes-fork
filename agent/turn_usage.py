@@ -14,6 +14,9 @@ import logging
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, Dict, List
+import json
+import os
+import threading
 
 from agent.image_token_cost import calibrate_from_usage
 from agent.usage_anchor import capture_usage_anchor, set_usage_anchor
@@ -200,6 +203,33 @@ def record_response_usage(
         prompt_tokens, completion_tokens, total_tokens,
         api_duration, _cache_pct, _ident,
     )
+    # S9: async per-turn token usage logging — daemon thread so this never blocks the turn loop.
+    # Appends to ~/.hermes/logs/token-usage.jsonl; rotates at 10MB.
+    def _append_token_log():
+        try:
+            from datetime import datetime, timezone
+            from hermes_constants import get_hermes_home
+            log_path = os.path.join(get_hermes_home(), "logs", "token-usage.jsonl")
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            # Rotate at 10MB
+            if os.path.exists(log_path) and os.path.getsize(log_path) > 10 * 1024 * 1024:
+                os.rename(log_path, log_path + ".1")
+            record = {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "session_id": getattr(agent, "session_id", None),
+                "turn_id": agent.session_api_calls,
+                "model": agent.model,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "tool_calls_count": api_call_count,
+                # VISTA context pressure flag (arXiv:2606.30005): flag turns consuming >60% of context window
+                "pressure_flag": "HIGH_CONTEXT_PRESSURE" if prompt_tokens > int(os.environ.get("HERMES_CONTEXT_WINDOW", "200000")) * 0.6 else None,
+            }
+            with open(log_path, "a") as _lf:
+                _lf.write(json.dumps(record) + "\n")
+        except Exception:
+            pass  # token logging must never raise — fail silently
+    threading.Thread(target=_append_token_log, daemon=True).start()
     # nous.anthropic_wire=auto: the session's wire is decided once, from this first response.
     if agent.session_api_calls == 1 and (agent.provider or "") == "nous":
         with suppress(Exception):

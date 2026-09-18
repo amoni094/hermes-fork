@@ -1,0 +1,232 @@
+[
+ {
+  "policy": "current",
+  "before_tokens": 34683,
+  "after_tokens": 22841,
+  "after_msgs": 66,
+  "compress_seconds": 9.8,
+  "recall_pct": 60.0,
+  "scores": [
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   2,
+   2,
+   1,
+   1,
+   1,
+   1,
+   2,
+   1
+  ],
+  "by_difficulty": {},
+  "by_signal_type": {
+   "TOKEN_NEUTRAL": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_SENSITIVE": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_EFFICIENT_SIGNAL": {
+    "recall_pct": 60.0,
+    "n": 15
+   }
+  },
+  "summary_error": null,
+  "head_hit_rate": 0.0,
+  "ratio": 0.658565,
+  "combined": 0.911072,
+  "ci_width": 44.4,
+  "output_tokens_per_recall_point": 2537.9
+ },
+ {
+  "policy": "lean",
+  "before_tokens": 34683,
+  "after_tokens": 23103,
+  "after_msgs": 66,
+  "compress_seconds": 11.2,
+  "recall_pct": 56.7,
+  "scores": [
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   2,
+   1,
+   2,
+   1,
+   1,
+   1,
+   1
+  ],
+  "by_difficulty": {},
+  "by_signal_type": {
+   "TOKEN_NEUTRAL": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_SENSITIVE": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_EFFICIENT_SIGNAL": {
+    "recall_pct": 56.7,
+    "n": 15
+   }
+  },
+  "summary_error": null,
+  "head_hit_rate": 0.0,
+  "ratio": 0.666119,
+  "combined": 0.851199,
+  "ci_width": 44.7,
+  "output_tokens_per_recall_point": 2716.4
+ },
+ {
+  "policy": "lean_telegraphic",
+  "before_tokens": 22190,
+  "after_tokens": 20238,
+  "after_msgs": 66,
+  "compress_seconds": 10.1,
+  "recall_pct": 23.3,
+  "scores": [
+   1,
+   1,
+   0,
+   1,
+   0,
+   0,
+   0,
+   1,
+   0,
+   1,
+   0,
+   0,
+   1,
+   1,
+   0
+  ],
+  "by_difficulty": {},
+  "by_signal_type": {
+   "TOKEN_NEUTRAL": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_SENSITIVE": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_EFFICIENT_SIGNAL": {
+    "recall_pct": 23.3,
+    "n": 15
+   }
+  },
+  "summary_error": null,
+  "head_hit_rate": 0.0,
+  "ratio": 0.912032,
+  "combined": 0.255473,
+  "ci_width": 40.8,
+  "output_tokens_per_recall_point": 5790.6
+ },
+ {
+  "policy": "fork_research",
+  "before_tokens": 34683,
+  "after_tokens": 12779,
+  "after_msgs": 16,
+  "compress_seconds": 32.0,
+  "recall_pct": 40.0,
+  "scores": [
+   2,
+   1,
+   1,
+   1,
+   1,
+   0,
+   0,
+   1,
+   1,
+   1,
+   0,
+   1,
+   1,
+   0,
+   1
+  ],
+  "by_difficulty": {},
+  "by_signal_type": {
+   "TOKEN_NEUTRAL": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_SENSITIVE": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_EFFICIENT_SIGNAL": {
+    "recall_pct": 40.0,
+    "n": 15
+   }
+  },
+  "summary_error": null,
+  "head_hit_rate": 0.0,
+  "ratio": 0.368451,
+  "combined": 1.085625,
+  "ci_width": 44.4,
+  "output_tokens_per_recall_point": 2129.8
+ },
+ {
+  "policy": "fork_research_telegraphic",
+  "before_tokens": 22190,
+  "after_tokens": 13004,
+  "after_msgs": 15,
+  "compress_seconds": 34.6,
+  "recall_pct": 40.0,
+  "scores": [
+   0,
+   1,
+   1,
+   1,
+   1,
+   1,
+   0,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   0
+  ],
+  "by_difficulty": {},
+  "by_signal_type": {
+   "TOKEN_NEUTRAL": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_SENSITIVE": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_EFFICIENT_SIGNAL": {
+    "recall_pct": 40.0,
+    "n": 15
+   }
+  },
+  "summary_error": null,
+  "head_hit_rate": 0.0,
+  "ratio": 0.58603,
+  "combined": 0.682559,
+  "ci_width": 44.4,
+  "output_tokens_per_recall_point": 2167.3
+ }
+]

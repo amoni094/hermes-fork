@@ -1,0 +1,69 @@
+# Glossary — Cover & Thomas, *Elements of Information Theory* (2nd ed.)
+
+Alphabetically ordered. Chapter numbers refer to Cover & Thomas 2nd edition (2006). Logs are base 2 (bits) unless noted.
+
+- **AEP (asymptotic equipartition property)** — For i.i.d. X_i ~ p, −(1/n) log p(X^n) → H(X) in probability. Ch 3; a.s. ergodic form (SMB) in Ch 16.
+- **Arithmetic coding** — Sequential interval coding realizing length ≈ −log q(x^n); adaptive/universal when q is a mixture. Ch 13.
+- **Blahut–Arimoto algorithm** — Alternating minimization computing C = max_p I(X;Y) or R(D)=min I(X;X̂). Ch 7, 10.
+- **Broadcast channel (BC)** — One encoder, several decoders. Degraded BC capacity via superposition and auxiliary U. Ch 15.
+- **Burg’s theorem** — Maxent process given R(0),…,R(p) is Gauss–Markov of order p (all-pole spectrum). Ch 12.
+- **Capacity C** — C = max_{p(x)} I(X;Y) for a DMC; operationally the supremum of rates with Pe→0. Ch 7. AWGN: (1/2) log(1+P/N). Ch 9.
+- **Capacity region** — Set of achievable rate tuples for a multiuser channel (MAC, BC, …). Ch 15.
+- **Cesàro mean** — a_n→a ⇒ (1/n)∑_{i=1}^n a_i → a. Used to equate entropy-rate definitions. Ch 4, 16.
+- **Channel coding theorem** — All R < C achievable; conversely R≤C if Pe→0. Ch 7.
+- **Chernoff information** — Bayesian hypothesis-testing exponent max_λ −log ∑ p1^λ p2^{1−λ}. Ch 11.
+- **Chernoff–Stein lemma** — Best type-II exponent given bounded type-I error is D(P1||P2). Ch 11.
+- **Conditional entropy H(X|Y)** — ∑_y p(y) H(X|Y=y) = H(X,Y)−H(Y). Ch 2.
+- **Conditional mutual information I(X;Y|Z)** — H(X|Z)−H(X|Y,Z). Zero iff X⟂Y|Z. Ch 2.
+- **Cramér–Rao bound** — For unbiased T of θ, var(T) ≥ 1/J(θ). Ch 11, 17.
+- **Data-processing inequality (DPI)** — X→Y→Z ⇒ I(X;Y) ≥ I(X;Z). No processing of Y increases information about X. Ch 2.
+- **de Bruijn identity** — ∂/∂t h(X+√t Z) = (1/2) J(X+√t Z), Z~N(0,1) independent. Ch 17.
+- **Differential entropy h(X)** — −∫ f log f. Can be negative; not discretization-invariant. Ch 8.
+- **Discrete memoryless channel (DMC)** — p(y^n|x^n)=∏ p(y_i|x_i). Ch 7.
+- **Distortion measure d(x,x̂)** — Per-letter loss; block average (1/n)∑ d(x_i,x̂_i). Hamming, squared error. Ch 10.
+- **Doubling rate W** — E log S, the exponential growth rate of wealth (horse race or portfolio). Ch 6, 16.
+- **Entropy H(X)** — −∑ p(x) log p(x). Operational: expected lossless description length. Ch 2, 5.
+- **Entropy power N(X)** — (1/(2πe)) 2^{2h(X)} (real r.v., h in bits with 2^{·}). Gaussian: N=σ^2. Ch 17.
+- **Entropy power inequality (EPI)** — Independent X,Y: 2^{2h(X+Y)} ≥ 2^{2h(X)}+2^{2h(Y)}. Ch 17.
+- **Entropy rate H(X)** — lim (1/n) H(X^n) = lim H(Xn|X^{n−1}) for stationary processes. Ch 4.
+- **Fano’s inequality** — H(P_e)+P_e log|X| ≥ H(X|Y); P_e ≥ (H(X|Y)−1)/log|X|. Converse engine. Ch 2, 7.
+- **Feedback capacity** — For a DMC, C_FB=C. Can increase capacity for channels with memory. Ch 7, 9.
+- **Fisher information J(θ)** — E[(∂_θ log f(X;θ))^2]. Local curvature of D(f_θ||f_{θ+Δ}). Ch 11, 17.
+- **Gelfand–Pinsker** — Channel with noncausal encoder state: C=max[I(U;Y)−I(U;S)]. Ch 15.
+- **Huffman code** — Greedy optimal prefix code for a known pmf. Ch 5.
+- **I-projection** — argmin_{P∈E} D(P||Q); the Sanov / maxent distribution. Ch 11, 12.
+- **Information inequality** — D(p||q)≥0, equality iff p=q. Master inequality. Ch 2.
+- **Joint entropy H(X,Y)** — −∑∑ p(x,y) log p(x,y). Ch 2.
+- **Joint typicality** — (x^n,y^n) typical separately and jointly; P(independent pair typical)≈2^{−n I(X;Y)}. Ch 7, 15.
+- **Kelly criterion / proportional gambling** — Bet b_i=p_i; log-optimal. Gap is D(p||b). Ch 6.
+- **Kolmogorov complexity K(x)** — Length of shortest program printing x. E K(X^n|n)≈nH. Uncomputable. Ch 14.
+- **Kraft inequality** — ∑ D^{−l_i} ≤ 1, nec. and suff. for prefix lengths; also nec. for uniquely decodable (McMillan). Ch 5.
+- **Kullback–Leibler divergence** — Synonym of relative entropy D(p||q). Ch 2.
+- **Lempel–Ziv (LZ77/LZ78)** — Universal sequential compressors; l(X^n)/n → H a.s. for stationary ergodic sources. Ch 13.
+- **Log-optimal portfolio b^*** — argmax_b E log(b^T X); Kuhn–Tucker: E[X_i/(b^{*T}X)]≤1. Ch 16.
+- **Markov chain X→Y→Z** — p(x,y,z)=p(x)p(y|x)p(z|y); X⟂Z|Y. Ch 2, 4.
+- **Method of types** — Classify x^n by empirical pmf P; |T(P)|≐2^{nH(P)}, Q^n(T(P))≐2^{−n D(P||Q)}. Ch 11.
+- **Minimal sufficient statistic** — Sufficient T that is a function of every other sufficient statistic; maximizes compression of θ. Ch 2.
+- **Multiple-access channel (MAC)** — Several encoders, one decoder. Capacity: R1<I(X1;Y|X2), R2<I(X2;Y|X1), R1+R2<I(X1,X2;Y). Ch 15.
+- **Mutual information I(X;Y)** — D(p(x,y)||p(x)p(y))=H(X)−H(X|Y). Ch 2.
+- **Prefix / instantaneous code** — No codeword is a prefix of another. Ch 5.
+- **Random binning** — Independent hashing of source sequences into bins; Slepian–Wolf achievability. Ch 15.
+- **Rate-distortion function R(D)** — min_{Ed(X,X̂)≤D} I(X;X̂). Operational Shannon limit for lossy compression. Ch 10.
+- **Relative entropy D(p||q)** — ∑ p log(p/q). Asymmetric; infinite if supp(p)⊈supp(q). Ch 2.
+- **Sanov’s theorem** — P(P̂_n ∈ E) ≐ 2^{−n inf_{P∈E} D(P||Q)}. Ch 11.
+- **Shannon code** — l(x)=⌈log(1/p(x))⌉; H ≤ L < H+1. Ch 5.
+- **Shannon–McMillan–Breiman theorem** — −(1/n) log p(X^n) → H(X) a.s. for stationary ergodic processes. Ch 16.
+- **Slepian–Wolf theorem** — Distributed lossless coding of correlated sources: R1≥H(X|Y), R2≥H(Y|X), R1+R2≥H(X,Y). Ch 15.
+- **Source coding theorem (noiseless)** — n i.i.d. symbols compress to nH+o(n) bits; fewer is impossible. Ch 3, 5.
+- **Source–channel separation** — i.i.d. source of entropy H sent over DMC iff H<C. Ch 7.
+- **Strong typicality** — Empirical frequencies (not just log-probability) close to p; needed for distortion. Ch 10, 11.
+- **Sufficient statistic** — T(X) with θ→T(X)→X, equivalently I(θ;X)=I(θ;T). Ch 2.
+- **Superposition coding** — Cloud centers plus satellites; degraded broadcast. Ch 15.
+- **Typical set A_ε^{(n)}** — {x^n : 2^{−n(H+ε)} ≤ p(x^n) ≤ 2^{−n(H−ε)}}. |A|≤2^{n(H+ε)}, P(A)→1. Ch 3.
+- **Type / type class T(P)** — Sequences with empirical pmf P. Ch 11.
+- **Universal code** — One code whose redundancy →0 for every source in a class. Minimax redundancy = a channel capacity. Ch 11, 13.
+- **Universal portfolio** — Mixture of constant-rebalanced portfolios; tracks the best b at cost O(log n). Ch 16.
+- **Universal probability P_U(x)** — ∑_{U(p)=x} 2^{−l(p)} ≈ 2^{−K(x)}. Ch 14.
+- **Waterfilling** — Optimal power P_i=(ν−N_i)^+ on parallel Gaussian channels. Reverse waterfill for Gaussian R(D). Ch 9, 10.
+- **Wyner–Ziv** — Rate distortion with side information at the decoder only: min I(X;U|Y). Ch 15.
+- **Zero-error capacity C_0** — Max rate with Pe=0 exactly; combinatorial, generally open. Ch 7.

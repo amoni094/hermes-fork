@@ -1,0 +1,25 @@
+name: lambda-tuner
+version: "1.0.2"
+# See FORK_README.md § lambda-tuner
+description: Session-type adaptive compression. See FORK_README.md § lambda-tuner.
+provides_hooks:
+  - pre_llm_call
+  - on_session_start
+  - on_session_finalize
+  - pre_compress
+hooks:
+  - pre_llm_call
+  - on_session_start
+  - on_session_finalize
+  - pre_compress
+capabilities:
+  # emit_episode and recall_episodes are PluginContext API methods (not hermes capability tokens).
+  # They do not need to be declared here; they are always available via ctx.
+settings:
+  enabled: true
+  # Canonical classifier/lock/hint/wrapper: FORK_README.md § lambda-tuner.
+  # Live knobs: ContextCompressor.COMPRESSION_PROFILES (do not fork a second table here).
+  # threshold_percent: 0.45  # research: compress sooner; large tool_result dumps fill context fast
+  # protect_last_n: 22       # eval-calibrated: 15 too aggressive (drops named facts); 22 matches lean baseline recall
+  # code_protect_last_n: 28  # eval-calibrated: dense causal chains need larger tail than 25
+  # research_lambda: "0.55"  # why: 0.55 not 0.7 — Phase-1 exec-state already holds web_extract

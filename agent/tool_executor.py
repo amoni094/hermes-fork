@@ -410,7 +410,7 @@ def _unwrap_tool_search_call(
                 f"{probe.get('hint', '')}"
             ).strip()
     except Exception:
-        pass
+        logger.debug("tool_search bridge probe failed for %r", function_name, exc_info=True)
     return function_name, function_args, scope_block
 
 
@@ -880,7 +880,8 @@ def _run_sequential_tool_execution_middleware(
                 error_type="tool_interrupted", error_message=f"Tool execution cancelled: {interrupt_reason}",
             )
         else:
-            assert timeout_s is not None  # only reachable when a deadline exists
+            if timeout_s is None:  # pragma: no cover — invariant: this branch requires a deadline
+                raise RuntimeError("tool timeout path reached without a deadline; this is a bug")
             message = f"Error executing tool '{function_name}': timed out after {timeout_s:.1f}s"
             logger.warning("sequential tool %s timed out after %.1fs", function_name, timeout_s)
             result_cls, outcome = _ToolTimeoutResult, dict(
@@ -939,7 +940,8 @@ def _begin_tool_execution(agent, ref: _ToolCallRef, display_index: int | None) -
         elif function_name == "terminal":
             command = function_args.get("command", "")
             if _is_destructive_command(command):
-                cwd = function_args.get("workdir") or os.getenv("TERMINAL_CWD", os.getcwd())
+                from agent.runtime_cwd import scope_terminal_cwd
+                cwd = function_args.get("workdir") or scope_terminal_cwd() or os.getcwd()
                 agent._checkpoint_mgr.ensure_checkpoint(cwd, f"before terminal: {command[:60]}")
 
 

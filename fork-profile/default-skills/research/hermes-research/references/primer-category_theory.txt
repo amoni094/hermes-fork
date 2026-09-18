@@ -1,0 +1,70 @@
+PRIMER: Category Theory and Applied CT
+
+CORE CONCEPTS
+
+Category theory studies structure and composition in the abstract. A category C consists of objects (not sets of elements, but nodes in a graph of relationships) and morphisms (arrows between objects) satisfying: identity (every object X has id_X : X -> X) and associativity of composition (f;g);h = f;(g;h). No reference to internal structure; only relationships matter.
+
+A functor F : C -> D maps objects to objects and morphisms to morphisms, preserving identities and composition: F(id_X) = id_{F(X)}, F(f;g) = F(f);F(g). Functors are the structure-preserving maps between categories.
+
+A natural transformation eta : F => G between functors F, G : C -> D assigns to each object X in C a morphism eta_X : F(X) -> G(X) such that for every f : X -> Y, eta_Y . F(f) = G(f) . eta_X (naturality square commutes). This formalizes "coherent" transformation between two structural interpretations.
+
+An adjunction F -| G (F left adjoint to G, between D and C) is characterized by a natural bijection Hom_D(F(X), Y) ~= Hom_C(X, G(Y)). Adjunctions characterize optimal universal constructions: F(X) is the best approximation to X in D, and G(Y) is the most informative lift of Y into C. Left adjoints preserve colimits; right adjoints preserve limits.
+
+A monad on C is a functor T : C -> C with natural transformations eta : Id => T (unit) and mu : T^2 => T (multiplication), satisfying mu . T(eta) = id = mu . eta_T and mu . T(mu) = mu . mu_T (associativity of bind). By the Kleisli construction, T-computations compose: a Kleisli arrow is f : X -> T(Y), and f >=> g = mu . T(g) . f. Monads cleanly factor out effects (state, failure, nondeterminism, IO) from pure computation.
+
+The Yoneda lemma states: for any functor F : C -> Set and object X, Nat(Hom(X,-), F) ~= F(X), naturally in X. Equivalently, the Yoneda embedding Y : C -> [C^op, Set] via Y(X) = Hom(-,X) is fully faithful. An object is completely determined by all its relationships; you can reason about X by tracking how everything maps into or out of it.
+
+Limits and colimits generalize products, intersections, and gluing. Sheaves formalize local-to-global consistency: a sheaf on a space assigns data to open sets such that locally consistent assignments glue uniquely. String diagrams are a sound and complete 2D graphical calculus for monoidal categories; they make composition of complex natural transformations readable and checkable by eye.
+
+
+MEMORY PIPELINE COMPOSITION
+
+(a) The pipeline l1-extract -> l1-promote -> hindsight is a functor chain: each layer is a category whose objects are memory items and whose morphisms are entailment/relevance relations. l1-extract is a functor from Sessions to RawFacts; l1-promote is a functor from RawFacts to ScoredFacts; hindsight's retain/recall forms a functor into a semantic vector category. The composition is F3 . F2 . F1, and the correct question is whether this composition is itself well-behaved (does it preserve relevance structure, does information survive the chain faithfully?).
+
+(b) Currently heuristic: each stage applies hand-tuned scoring thresholds, TTLs, and keyword filters. There is no formal guarantee that a fact salient at the session level survives to hindsight, only empirical tuning.
+
+(c) A principled approach treats each functor as needing to satisfy coherence laws. Define a retention functor R : RawFacts -> ScoredFacts that commutes with the relevance partial order: if fact A entails fact B then R(A) >= R(B) in score. Model the pipeline as a lax functor (which tolerates lossy transformations but requires explicit loss accounting) and track which objects fail to survive each natural transformation. Concretely: add a unit law check -- after extract then promote then embed, retrieve(embed(fact)) should approximately reconstruct fact. Measure this with cosine similarity over a held-out session corpus and set a floor.
+
+(d) Moderate value. The main gain is diagnostic: making pipeline faithfulness measurable rather than assumed. Implementation cost is modest (add retrieval round-trip test to cron). Risk: over-fitting the scoring function to the test corpus.
+
+
+TOOL-CALL EFFECTS AS MONADS
+
+(a) Each tool call is a Kleisli arrow: context -> T(context) where T is the tool-effect monad. T encapsulates IO, failure (tool timeout, blocked page), state mutation (conversation history grows), and nondeterminism (web search returns variable results). Bind (>>=) sequences tool calls: the output context of one becomes the input of the next. The monad laws state that tool composition is associative and that the no-op tool (identity) is a neutral element.
+
+(b) Currently the loop is an imperative while-loop with ad hoc error handling: each tool result is appended, exceptions are caught per-tool, there is no unified effect accounting.
+
+(c) A monadic loop makes the effect type explicit. Define ToolM a = Context -> IO (Either Error (a, Context)). Then each tool call returns ToolM Result, and the loop is just a Kleisli chain. This yields: (1) uniform error propagation via the Either layer, (2) context threading is explicit and cannot be silently dropped, (3) rollback is possible (save context before bind, restore on Left). The decision rule for implementing this: if bind(tool_A, tool_B) fails, the failure is always attributable to a specific layer (IO, parsing, trust gate) rather than ambiguous exception messages.
+
+(d) High conceptual value, moderate immediate value. Hermes is Python and the overhead of simulating monadic plumbing in an untyped language is real. Worth implementing as a typed context-threading dataclass and explicit result union type, not a full Haskell-style monad. Validate by measuring mean time to diagnose tool-chain failures before and after.
+
+
+SKILL ROUTING AS ADJUNCTION
+
+(a) Skill routing is an adjunction between the category of Tasks (objects = task descriptions, morphisms = task refinements) and the category of Skills (objects = skill files, morphisms = skill generalizations). The left adjoint L : Tasks -> Skills maps each task to its "best fit" skill. The right adjoint R : Skills -> Tasks maps each skill to the canonical task it handles. The adjunction unit eta_X : X -> R(L(X)) says: the canonical task of the best-fit skill should cover the original task. The counit epsilon_S : L(R(S)) -> S says: routing to the canonical task of a skill and then routing again should return the same skill.
+
+(b) Currently: tag/trigger keyword matching on task description against skill frontmatter. Heuristic, no formal coverage guarantee. Skills are loaded speculatively with low precision.
+
+(c) A principled approach uses the adjunction to define a coverage metric: for every task T in a held-out corpus, measure whether L(T) is the unique skill minimizing description length of T given S (a Kolmogorov-style optimality condition). The counit check -- L(R(S)) = S for all skills -- becomes a regression test: route the canonical trigger of each skill and confirm the same skill is returned. Failures identify either ambiguous triggers or missing skills. Implement as a nightly eval loop over the skill corpus.
+
+(d) High value. This is the most tractable CT-grounded improvement in Hermes. The counit regression test is cheap, automatable, and directly catches routing drift as the skill library grows. Implementation cost: one eval script, one cron job. Risk: canonical triggers may not exist for every skill and need to be curated.
+
+
+AGENT LOOP AS KLEISLI COMPOSITION
+
+(a) The per-turn agent loop is a Kleisli category over the tool monad: each turn is a morphism f_t : State -> T(State), and the full session is f_1 >=> f_2 >=> ... >=> f_n. The Kleisli laws (associativity, unit) guarantee that inserting a no-op turn or reordering independent turns does not corrupt state -- a property the current loop violates whenever context compression drops information mid-chain.
+
+(b) Currently: turns are sequential, context compression is applied heuristically when a token threshold is hit, with no formal state-equivalence check before and after compression.
+
+(c) Treat compression as a natural transformation alpha : T_full => T_compressed and require it to be a monad morphism: alpha . mu = mu . (alpha x alpha). This means compression must respect bind: compressing a two-turn composition must equal composing two individually-compressed turns. Concretely, define a bisimulation check: run a session with and without compression on a held-out task set, compare final tool-call sequences. A monad morphism violation signals that compression is losing causally relevant context.
+
+(d) Moderate value, high implementation cost. The bisimulation corpus is expensive to build. Partial shortcut: instrument compression events and log which facts were pruned; manually audit a sample weekly.
+
+
+RANKED IMPLEMENTATION CANDIDATES
+
+1. Skill routing counit regression test. Nightly eval that routes each skill's canonical trigger and verifies the correct skill is returned; catches routing drift as the library scales. One Python eval script plus a cron entry; completable in a day.
+
+2. Monadic tool-call result typing. Replace ad hoc exception handling with a typed ToolResult union (Ok/Err/Timeout) and a context-threading dataclass; makes tool-chain failures attributable and enables rollback. Refactor of the core loop; one to two days, confined to tool dispatch layer.
+
+3. Memory pipeline faithfulness test. After extract-promote-embed, retrieve and measure cosine similarity to original fact; set a floor threshold enforced in CI. Adds measurable accountability to a currently opaque pipeline; half a day plus a held-out session corpus.

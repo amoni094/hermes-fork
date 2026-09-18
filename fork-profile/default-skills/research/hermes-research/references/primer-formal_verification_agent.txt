@@ -1,0 +1,96 @@
+PRIMER: Formal Verification for Agent Safety
+
+==============================================================================
+1. FIELD OVERVIEW
+
+Formal verification for agent safety studies how to prove that autonomous systems meet safety guarantees before deployment. The core objects are state machines, transition systems, and temporal properties: we model an agent's possible behaviors as a graph and ask whether certain bad states are unreachable or whether all execution paths satisfy some constraint (e.g., "never delete without approval").
+
+The field combines model checking (exhaustive state-space search), temporal logic (LTL/CTL for expressing "always," "eventually," "until" properties), theorem proving (symbolic proof that invariants hold), abstract interpretation (sound overapproximation to handle infinite state spaces), and runtime monitoring (lightweight checks at execution time).
+
+Why it matters: heuristic guardrails catch most failures but miss edge cases. Formal methods give mathematical confidence that certain failure modes are impossible by construction. For agents with tool access, this shifts from "we hope this doesn't break production" to "we proved this can't break production in the following ways."
+
+==============================================================================
+2. KEY RESULTS
+
+MODEL CHECKING DECIDABILITY (Clarke et al., Vardi-Wolper):
+For finite-state systems, LTL model checking is decidable in O(|S| * 2^|φ|) time where |S| is state count and |φ| is formula size. CTL model checking is in O(|S| * |φ|). Implication: you can exhaustively verify agent trajectories if you bound state space (e.g., bounded memory, finite tool set, capped turn depth).
+
+CEGAR REFINEMENT (Clarke et al., 2003):
+Start with abstract (overapproximate) state space. If spurious counterexample found, refine abstraction and retry. Proved to terminate for safety properties. Application: verify agent safety against infinite unrollings by computing abstract reachable states.
+
+ABSTRACT INTERPRETATION SOUNDNESS (Cousot-Cousot):
+If concrete semantics is approximated by sound abstraction, any property proved on abstraction holds concretely. Galois connection formalizes this. For agents: prove memory doesn't overflow or cost doesn't exceed budget on abstracted (discretized) state space.
+
+RUNTIME MONITOR CORRECTNESS (Pnueli-Zuck):
+Monitor can enforce safety property φ on execution trace if φ can be violated only finitely far into execution. At violation point, halt/alert. For agents: tool approvals are monitorable (violation means tool executed without veto).
+
+INVARIANT SYNTHESIS (Garg-Necula, MPL):
+If you have set of "good" traces and set of "bad" traces, algorithms exist to infer invariants separating them (e.g., via decision trees or Datalog). Provides candidate safety properties for verification.
+
+==============================================================================
+3. STANDARD PRACTITIONER TOOLS
+
+Spin/Promela: model checker for finite-state concurrent systems. Write state machine in Promela, specify LTL property, get trace or proof.
+
+TLA+/Apalache: specify agent behavior in temporal logic, check safety/liveness properties over bounded depth.
+
+UPPAAL: timed automata model checker (for time-bounded agent tasks).
+
+Z3/CVC5: SMT solvers; encode agent state as logical formulas, check satisfiability of safety constraints.
+
+Python runtime monitors: implement LTL-inspired state machines that audit execution traces in real time.
+
+Abstract interpretation libraries: Pycpa (for timing), Grift (for numerical bounds).
+
+==============================================================================
+4. HERMES APPLICATIONS
+
+APPLICATION 1: TOOL APPROVAL GATE (ReAct loop + terminal/file ops)
+
+(a) Mathematical structure:
+Tool execution is a transition system. State = (agent_state, tool_queue, approval_state). Safety property: "dangerous tool (terminal, file delete) never executes without prior approval veto = 0." This is a safety property (bad state = execution without veto). Approval gate is a monitor enforcing this.
+
+(b) Current Hermes approach:
+Heuristic rule: check tool name against blocklist, scan for shell metacharacters, call external scanner (ClamAV or similar). No formal guarantee; depends on rule completeness and scanner accuracy.
+
+(c) Formal verification approach:
+Model approval gate as automaton:
+- State 0 (neutral): tool requested
+- State 1 (scanned): tool scanned, veto_flag = high/medium/low
+- State 2 (blocked) or State 3 (allowed): final
+Safety property: "for all traces, if tool in DANGEROUS_SET and veto_flag = high, then State 2 only." 
+Use runtime automata monitoring: instrument tool execution point, check that every dangerous tool arrival triggers at least one scan before execution. Encode as LTL: [] (dangerous_tool_requested -> <> scan_completed_before_execution). 
+Implement: maintain small state machine in agent loop, advance state on each event (request, scan, execution), abort if transition violated.
+
+(d) Honest value assessment:
+Worth implementing? Partially. The runtime monitor (state machine + audit log) is trivial (~50 lines Python) and gives you an undeniable audit trail: "tool X was scanned by Y at timestamp Z with result V." This is valuable for compliance and post-hoc debugging.
+The full formal model (proving no dangerous tool executes) requires you to define DANGEROUS_SET precisely and prove your scanner is sound (catches all risks). This is hard: scanning is heuristic, not sound. Better framing: "We can prove that if a tool passes our scanner, we have an audit record, and post-execution forensics can link risk to scanner bug."
+Risk: if you claim formal safety but your scanner has false negatives, you create false confidence. Safer claim: "formal audit trail, plus best-effort scanning."
+What it takes: ~1 week for runtime monitor skeleton, then iterative refinement of scanner definitions.
+
+APPLICATION 2: CRON AGENT SAFETY GUARANTEES (~25 scheduled jobs)
+
+(a) Mathematical structure:
+Cron agent is a repeating system. State = (job_queue, system_resource_state, memory, disk). Safety properties: (1) memory never exceeds threshold, (2) disk I/O never starves other jobs, (3) no job runs concurrently with conflicting prior job, (4) failed job doesn't cascade.
+These are invariants over infinite executions. Use LTL or CTL to specify; check via bounded model checking (unroll for N iterations) or abstraction.
+
+(b) Current Hermes approach:
+Set memory/CPU limits via cgroup. Monitor via Prometheus. Alert if threshold exceeded. No formal proof that jobs don't interfere or that cascades are impossible.
+
+(c) Formal verification approach:
+Abstract each cron job as a timed automaton with resource consumption profile (max_mem, max_disk_write, max_duration). Compose 25 jobs into product automaton. Invariants:
+- total_memory_used <= LIMIT (addition is sound over abstraction)
+- for jobs J1, J2 with conflict predicate conflict(J1, J2), never (running(J1) AND running(J2))
+Model check (or abstract interpret) over one full schedule cycle.
+For cascade prevention: encode precondition graph (job A requires job B success). Check: if B fails, A is not queued. Use CEGAR to refine if state space explodes.
+
+(d) Honest value assessment:
+Worth implementing? Yes, high ROI. Why: 25 jobs is small enough that a timed automata model checker (UPPAAL, Kronos) can verify one daily cycle in seconds. Setting up automata is ~2–3 days per job, so ~1–2 weeks total. Payoff: you eliminate entire class of resource contention bugs and cascades.
+What it takes: (1) extract job specs (dependencies, resource bounds, timing) into structured format, (2) write 25 automata in Promela/TLA+, (3) run Spin or Apalache on composed model, (4) iterate if violations found.
+Risk: low. Formal models of cron jobs are standard. Only real risk is model/reality gap: if actual job varies from spec, model gives false confidence. Mitigate by running jobs once and collecting actual traces, then comparing to model.
+
+APPLICATION 3: TRAJECTORY-RISK GUARDRAIL (multi-turn ReAct, max_turns guard)
+
+(a) Mathematical structure:
+Agent trajectory is a sequence of (observation, action, reward) tuples. Risk is a function of trajectory length, tool diversity, state reachability. Safety property: "trajectory never reaches high-risk state" or "cumulative risk never exceeds threshold."
+This is a reachability problem: find all trajectories of length <= K from initial state, and check if any

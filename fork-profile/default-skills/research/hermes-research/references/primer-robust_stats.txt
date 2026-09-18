@@ -1,0 +1,151 @@
+PRIMER: Robust Statistics
+
+===============================================================================
+1. FIELD OVERVIEW
+===============================================================================
+
+Robust statistics studies inference methods that perform reliably when data
+violates assumed distributions. Classical statistics (e.g., least squares,
+sample mean) break catastrophically under heavy tails, outliers, or model
+misspecification—a single corrupt point can arbitrarily shift the estimate.
+Robust methods trade small efficiency loss on clean data for finite-sample
+breakdown: they quantify the maximum fraction of data that can be corrupted
+before an estimator becomes worthless. Core objects: breakdown point (fraction
+of outliers tolerated), influence function (sensitivity to a single point),
+M-estimators (generalized maximum-likelihood via robust loss functions), trimmed
+means, median-of-means, and heavy-tailed concentration theory. This matters
+because real multimodal systems produce corrupted outputs (model hallucinations,
+adversarial evals, degraded sensors, Byzantine subagents), and soft consensus
+mechanisms fail silently. Robust statistics converts qualitative "be careful"
+into quantitative guarantees: if you tolerate B fraction outliers, you get
+finite-sample concentration bounds.
+
+===============================================================================
+2. KEY RESULTS
+===============================================================================
+
+Median-of-Means Theorem: Divide n samples into k groups, compute group means,
+return median of means. If k = O(log(1/delta)), median-of-means achieves
+O(sqrt(log(1/delta) * sigma^2 / n)) concentration around true mean under only
+finite second moment assumption—no sub-Gaussian required. This is weak: true
+sub-Gaussian rate is O(sqrt(sigma^2 / n)), but median-of-means succeeds when
+data has arbitrarily heavy tails.
+
+Tukey Median Breakdown Point: The geometric median (minimizer of L1 distance to
+points) has breakdown 1/3 in dimension d. Up to 33% of points can be adversarial
+with bounded impact; at 34%, worst-case error unbounded. Sample median in 1D
+achieves 1/2.
+
+Influence Function: For estimator T(F), influence of corrupting F to (1-eps)*F +
+eps*delta_x is IF(x; T, F) = lim_{eps->0} [T((1-eps)*F + eps*delta_x) - T(F)] / eps.
+Estimators with bounded IF are robust. Unbounded IF (e.g., sample mean) means one
+point can cause arbitrarily large deviation.
+
+Huber Loss M-Estimator: Loss psi(r) = r^2 / 2 if |r| <= k, else k|r| - k^2/2.
+Solves min_theta sum psi(y_i - f_theta(x_i)). Behaves like least squares near
+zero (efficient), linear in tails (robust to outliers). Breakdown is 0 but bias
+finite.
+
+Catoni's Empirical Bernstein Bound: For i.i.d. X_i with |X_i| <= 1, with
+probability 1 - delta:
+  E[X] <= mean(X) + sqrt((2 * log(2/delta) * Var(X)) / n)
+tighter than Chebyshev when variance is small.
+
+===============================================================================
+3. STANDARD PRACTITIONER TOOLS
+===============================================================================
+
+Libraries: scipy.stats (tmean for trimmed mean), numpy median, statsmodels
+robust (RLM for robust regression). Algorithm: median-of-means is O(n log k).
+Formulas: Winsorized mean (clip outliers to quantiles), Tukey biweight,
+Huber-M via iteratively reweighted least squares. Outlier flagging via MAD
+(median absolute deviation, scale ~1.4826*sigma under Gaussian). Fast L1
+regression via linear programming. These are mature: audited codebases exist,
+convergence proofs established, no black-box approximation required.
+
+===============================================================================
+4. HERMES APPLICATIONS
+===============================================================================
+
+APPLICATION 1: HERMES-SWARM-CONSENSUS AGGREGATION
+
+Mathematical Structure:
+You have k models producing outputs (scores, decisions, text); each model has
+unknown reliability. Classical approach: uniform average or weighted average by
+accuracy. Problem: one model can be Byzantine or fine-tuned adversarially;
+weights are estimated from the same data you're aggregating. Robust stats
+applies via median-of-means (breakdown 1/3) or Tukey median (breakdown 1/3 in
+vector space).
+
+Current Hermes Approach:
+Likely averaging scores with confidence-scaled weights or majority vote for
+discrete choices. No quantified breakdown point. Adversarial subagent can push
+consensus by 1/(k-1) if k models, no bound on deviation.
+
+Principled Approach:
+(a) For scalar consensus (e.g., confidence scores 0-1):
+  - Divide k models into ceil(sqrt(k)) groups of ~sqrt(k) each
+  - Compute median score within each group
+  - Return median-of-medians
+  - Breakdown: ~1/3; concentration: O(log(k) * sigma / sqrt(k))
+  - Alternative: geometric median for vector outputs (e.g., embedding space
+    comparisons). Minimize sum ||v_i - v||_2 over v. Breakdown 1/3, requires
+    iteration but robust to 33% adversarial points.
+
+(b) Implement via:
+  - Divide 10 concurrent subagents into 3 groups of 3-4
+  - Score within groups (cheap, local)
+  - Aggregate groups robustly
+  - Cost: small, O(k log k)
+
+Value Assessment:
+Worth it. Minimal overhead. Two risks: (1) if one model is systematically
+biased but not adversarial, median may be suboptimal (no adaptive weighting).
+Mitigation: run ablation—compare robust consensus vs. weighted on held-out
+tasks. (2) Theoretical breakdown assumes points are corrupted arbitrarily;
+Byzantine models might be correlated (e.g., shared fine-tuning). Mitigation:
+add disagreement penalty—if k-1 models agree, trust them, overrule outlier
+even if median-of-means would include it.
+
+APPLICATION 2: OUTLIER DETECTION IN RESEARCH TRIAGE
+
+Mathematical Structure:
+Research sweep (~25 cron agents) collects papers, summaries, relevance scores.
+Need to flag papers that are erroneous, hallucinated summaries, or junk before
+ranking. Outliers: papers with suspicious properties (abstract length outlier,
+title/abstract semantic mismatch, score inconsistent with metadata, adversarial
+seeds). Robust stats applies via Tukey boxplot with data-dependent thresholds,
+influence functions for scores.
+
+Current Hermes Approach:
+Likely hard thresholds (length > X) or heuristic flagging (score > 3*MAD from
+median). No formal model of what "corrupted" means.
+
+Principled Approach:
+(a) Robustness metric per paper: score influence. For each paper i, compute
+    IF_i = (trimmed_mean(all scores) - trimmed_mean(scores without i)) / (1/n).
+    Papers with large |IF_i| are influential—could be signal (very good) or
+    corruption (hallucinated).
+
+(b) Implement:
+  - Compute paper score (quality ranker output)
+  - Trim top/bottom 10% of scores
+  - For each paper, recompute trimmed mean without it; large deviation
+    suggests outlier
+  - Flag if |score_i - trimmed_mean(all)| > 4 * MAD(scores) AND
+    influence > threshold
+  - This catches both hallucinated high scores and unrealistic low scores
+
+(c) Adversarial defense: if subagent is seeded to produce junk papers,
+    robust flagging catches them because (1) they cluster away from main body
+    (detectable by MAD) and (2) they have asymmetric influence (removal shifts
+    trimmed mean more than removal of typical paper)
+
+Value Assessment:
+Moderately worth it. Robust flagging is computationally free (recompute trimmed
+mean is O(n)). Risk: may filter legitimate but unusual papers. Mitigation: log
+flagged papers, human review sample, measure recall/precision on seeded junk.
+If 25 cron jobs are producing hundreds of papers, the overhead of a few false
+positives (review them) is acceptable vs. risk of hallucinated papers entering
+ranking. Implement in one weekend: replace hard thresholds with MAD +
+influence function check

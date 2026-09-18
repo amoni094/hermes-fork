@@ -7,10 +7,12 @@ import copy
 import hashlib
 import json
 import logging
+import math
 import sqlite3
 import re
 import time
 import uuid
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -24,7 +26,7 @@ from agent.auxiliary_client import (
 from agent.context_engine import ContextEngine, sanitize_memory_context
 from agent.context_compressor_summary import SummaryDispatchMixin
 from agent.error_classifier import FailoverReason, classify_api_error
-from agent.micro_compaction import MicroCompactionMixin
+from agent.micro_compaction import MicroCompactionMixin, apply_partition_prune_order
 from agent.prompt_builder import STEER_DISPLAY_KIND
 from agent.model_metadata import (
     MINIMUM_CONTEXT_LENGTH, get_model_context_length, estimate_messages_tokens_rough, estimate_tokens_rough,
@@ -424,6 +426,10 @@ def salvage_grown_transcript(
         return None
 
     out = [dict(msg) if isinstance(msg, dict) else msg for msg in candidate]
+    # MemForest EventTree: prune by event-type priority order (tool_result lowest, user never).
+    # apply_partition_prune_order returns indices sorted cheapest-to-lose first, respecting
+    # protect_last_n (don't prune the most recent 10 messages).
+    priority_prune_indices = set(apply_partition_prune_order(out, protect_last_n=10))
     tool_indices = [i for i, msg in enumerate(out) if isinstance(msg, dict) and msg.get("role") == "tool"]
     last_assistant_idx = _last_index_with_role(out, "assistant")
     salvage_reasoning_keys = _NEWEST_TURN_ONLY_BUDGET_KEYS + ("reasoning_details",)
@@ -434,7 +440,9 @@ def salvage_grown_transcript(
         if msg.get("role") == "assistant" and index != last_assistant_idx:
             for key in salvage_reasoning_keys:
                 msg.pop(key, None)
-        if msg.get("role") == "tool" and index not in keep_tools:
+        # Use MemForest priority order: prune messages in priority_prune_indices first.
+        # Fall back to role=="tool" for messages not captured by event-type classification.
+        if index in priority_prune_indices or (msg.get("role") == "tool" and index not in keep_tools):
             content = msg.get("content")
             if isinstance(content, str) and len(content) > _PRUNE_MIN_CHARS:
                 msg["content"] = _PRUNED_TOOL_PLACEHOLDER
@@ -1555,13 +1563,31 @@ def _summarize_tool_result_unguarded(tool_name: str, tool_args: str, tool_conten
     return f"[{tool_name}]{first_arg} ({content_len:,} chars result)"
 
 
-def resolve_model_threshold(model: str, model_thresholds: dict[str, float] | None, default: float) -> float:
-    """Per-model threshold: longest matching ``model_thresholds`` substring key wins, else ``default``.
-    Module-level so plugin context engines can reuse it."""
+def _model_threshold_key_rank(key: str, model: str, provider: str) -> "tuple[int, int] | None":
+    """Match rank for one ``model_thresholds`` key, or None when it does not apply.
+    ``"<provider>:<substr>"`` keys apply only on that provider; bare keys apply on every route.
+    The same slug means different windows on different routes (Codex caps Astra at 272K; OpenRouter
+    serves the full window), so a bare ``astra: 0.85`` written for Codex silently leaks everywhere.
+    Rank = (substring length, scoped): the most specific model match wins, scope breaks ties."""
+    scope, sep, substr = key.partition(":")
+    if not sep:
+        return (len(key), 0) if key in model else None
+    return (len(substr), 1) if scope.strip().lower() == provider and substr in model else None
+
+
+def resolve_model_threshold(
+    model: str, model_thresholds: dict[str, float] | None, default: float, provider: str = "",
+) -> float:
+    """Per-model threshold: longest matching ``model_thresholds`` key wins, else ``default``.
+    Keys are substrings of the model name, optionally provider-scoped as ``"<provider>:<substr>"``
+    (a scoped key outranks a bare one of the same substring). Module-level so plugin context
+    engines can reuse it."""
     if not model_thresholds or not model:
         return default
-    best_key = max((key for key in model_thresholds if key in model), key=len, default="")
-    return float(model_thresholds[best_key]) if best_key else default
+    provider = (provider or "").strip().lower()
+    ranked = ((_model_threshold_key_rank(key, model, provider), key) for key in model_thresholds)
+    best = max(((rank, key) for rank, key in ranked if rank is not None), default=None)
+    return float(model_thresholds[best[1]]) if best else default
 
 
 def _memory_provider_section(memory_context: str) -> str:
@@ -1655,6 +1681,233 @@ Describe agent/tool work only as completed actions, state, or historical work.]"
         "resolved_questions": "[Write exactly: None. No user-authored questions exist.]",
     },
 }
+
+
+class EntropyEstimator:
+    """Sliding-window unigram Shannon entropy estimator (stdlib only).
+
+    Empirical entropy rate ``H = -sum p log2 p`` over whitespace-split tokens
+    in recent turns. Used as a rate-distortion proxy: higher H means denser
+    information, so compression should retain more (lower threshold_percent).
+
+    AEP floor: a history of n tokens at rate H needs about nH bits to represent
+    faithfully — ``min_retain_tokens(budget_bits)`` returns that n.
+
+    Update is O(tokens in the new turn) with a running Counter; query is
+    O(|vocab in window|), typically ~1000. Fail-open: public methods never raise.
+    """
+
+    def __init__(self, window_turns: int = 32) -> None:
+        self.window_turns = max(1, int(window_turns))
+        self._turn_token_lists: List[List[str]] = []
+        self._counts: Counter = Counter()
+        self._total_tokens = 0
+        self._turns_seen = 0
+        self._checkpoints: dict = {}
+
+    @staticmethod
+    def _tokenize(text: str) -> List[str]:
+        if not text:
+            return []
+        return str(text).split()
+
+    def reset(self) -> None:
+        try:
+            self._turn_token_lists.clear()
+            self._counts.clear()
+            self._total_tokens = 0
+            self._turns_seen = 0
+        except Exception:
+            return
+
+    def update(self, text: str) -> None:
+        """Ingest one turn. O(tokens in turn); evicts the oldest turn when full."""
+        try:
+            tokens = self._tokenize(text)
+            self._turn_token_lists.append(tokens)
+            if tokens:
+                self._counts.update(tokens)
+                self._total_tokens += len(tokens)
+            self._turns_seen += 1
+            while len(self._turn_token_lists) > self.window_turns:
+                old = self._turn_token_lists.pop(0)
+                if old:
+                    self._counts.subtract(old)
+                    self._total_tokens -= len(old)
+                    # Counter.subtract keeps zero/negative keys; drop them.
+                    stale = [key for key, count in self._counts.items() if count <= 0]
+                    for key in stale:
+                        del self._counts[key]
+            if self._total_tokens < 0:
+                self._total_tokens = 0
+        except Exception:
+            return
+
+    def entropy_rate(self) -> float:
+        """Empirical Shannon entropy in bits per token. 0.0 when empty."""
+        try:
+            total = self._total_tokens
+            if total <= 0:
+                return 0.0
+            entropy = 0.0
+            for count in self._counts.values():
+                if count <= 0:
+                    continue
+                p = count / total
+                entropy -= p * math.log2(p)
+            return float(entropy)
+        except Exception:
+            return 0.0
+
+    def min_retain_tokens(self, budget_bits: float) -> int:
+        """AEP retain floor: smallest n such that n * H >= budget_bits."""
+        try:
+            h = self.entropy_rate()
+            budget = float(budget_bits)
+            if h <= 0.0 or budget <= 0.0:
+                return 0
+            return max(0, int(math.ceil(budget / h)))
+        except Exception:
+            return 0
+
+    def checkpoint(self, name: str, clock: int) -> None:
+        """Store a named ChronoMem clock. Fail-open."""
+        try:
+            self._checkpoints[str(name)] = int(clock)
+        except Exception:
+            return
+
+    def since_checkpoint(self, name: str, current_clock: int) -> int:
+        """Turns since a named checkpoint, or -1 if unknown. Fail-open."""
+        try:
+            stored = self._checkpoints.get(str(name))
+            if stored is None:
+                return -1
+            return int(current_clock) - int(stored)
+        except Exception:
+            return -1
+
+    def entropy_delta_since(self, last_h: float) -> float:
+        """Absolute change in entropy rate since *last_h*. Fail-open."""
+        try:
+            return abs(self.entropy_rate() - float(last_h))
+        except Exception:
+            return 0.0
+
+
+class MessageImportanceScorer:
+    """Gallager-style importance: tool results and long reasoning beat ack turns."""
+
+    LOW_ACK_RE = re.compile(
+        r"^\s*(ok|sure|got it|continue|go ahead|yes|no|thanks|thank you|good|great|next|done)\.?\s*$",
+        re.I,
+    )
+
+    def score(self, role: str, content: str) -> float:
+        if role == "tool" or (isinstance(content, str) and "tool_result" in content[:50]):
+            return 1.0
+        if role == "assistant" and isinstance(content, str) and len(content) > 200:
+            return 0.85
+        if role == "user" and isinstance(content, str) and self.LOW_ACK_RE.match(content):
+            return 0.1
+        if role == "user" and isinstance(content, str) and len(content) < 30:
+            return 0.4
+        return 0.7
+
+    def compressibility(self, content: str) -> float:
+        """zlib ratio as a Kolmogorov-complexity proxy. Lower = more compressible.
+
+        Returns a value in ``[0.0, 1.0]``. Fail-open to ``0.5``.
+        """
+        try:
+            import zlib
+            text = "" if content is None else str(content)
+            ratio = len(zlib.compress(text.encode("utf-8", errors="ignore"))) / max(len(text), 1)
+            if ratio < 0.0:
+                return 0.0
+            if ratio > 1.0:
+                return 1.0
+            return float(ratio)
+        except Exception:
+            return 0.5
+
+
+def _message_text_for_entropy(msg: Any) -> str:
+    """Best-effort plaintext from a chat message. Fail-open to empty string."""
+    try:
+        if not isinstance(msg, dict):
+            return ""
+        content = msg.get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: List[str] = []
+            for part in content:
+                if isinstance(part, str):
+                    parts.append(part)
+                elif isinstance(part, dict):
+                    text = part.get("text")
+                    if isinstance(text, str):
+                        parts.append(text)
+            return " ".join(parts)
+        return ""
+    except Exception:
+        return ""
+
+
+_CAUSAL_TOOLS = frozenset({
+    "execute_code", "write_file", "patch", "terminal", "delegate_task", "web_extract",
+})
+_NOISE_TOOLS = frozenset({"read_file", "search_files", "web_search", "skill_view"})
+_CHEAP_REACQ_TOOLS = frozenset({
+    "read_file", "search_files", "web_extract", "skill_view", "web_search",
+})
+_CAUSAL_VERBS = (
+    "decided", "fixed", "conclusion", "finding", "result:", "error:", "FAILED", "PASSED",
+)
+_STRUCTURAL_MARKERS = ("path:", "config:", "constraint:", "plan:", "```", "def ", "class ")
+_TAG_PRIOR = {"CAUSAL": 1.0, "STRUCTURAL": 0.6, "NEUTRAL": 0.5, "NOISE": 0.1}
+_REACQ_EXPENSIVE_MARKERS = ("FAILED", "error:", "fixed")
+_REACQ_NUM4_RE = re.compile(r"\b\d{4,}\b")
+_FACT_PATH_RE = re.compile(r"/[\w./\-]+\.(?:py|yaml|yml|json)")
+_FACT_ARXIV_RE = re.compile(r"\d{4}\.\d{4,5}")
+_FACT_MODEL_RE = re.compile(r"(?:haiku|sonnet|grok|mistral|claude)[\w.-]*", re.I)
+_FACT_NUM_RE = re.compile(r"\b\d{3,6}\b")  # 3+ digits; window check requires adjacent word
+_FACT_SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
+_FACT_NAMED_MARKERS = ("result:", "found:", "fixed:", "error:", "PASSED", "FAILED",
+                       "LIVITANYI", "MACLANE", "SA-", "spike:", "phase ", "Phase ")
+
+
+def _msg_tool_name(msg: Any) -> str:
+    """Best-effort tool name from a message dict."""
+    if not isinstance(msg, dict):
+        return ""
+    for key in ("tool_name", "name"):
+        val = msg.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
+def _tag_message_type(msg: Any) -> str:
+    """Deterministic CAUSAL | STRUCTURAL | NOISE | NEUTRAL tag. No LLM."""
+    if not isinstance(msg, dict):
+        return "NEUTRAL"
+    role = str(msg.get("role") or "")
+    content = _message_text_for_entropy(msg)
+    tool = _msg_tool_name(msg)
+    if (role == "tool" and tool in _CAUSAL_TOOLS) or any(v in content for v in _CAUSAL_VERBS):
+        return "CAUSAL"
+    if any(m in content for m in _STRUCTURAL_MARKERS):
+        return "STRUCTURAL"
+    if (
+        role == "tool"
+        and tool in _NOISE_TOOLS
+        and len(content) > 2000
+        and not any(ch.isdigit() for ch in content)
+    ):
+        return "NOISE"
+    return "NEUTRAL"
 
 
 class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngine):
@@ -1878,12 +2131,72 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         self._reset_real_usage_pairing()
         self._last_compression_telemetry = self._active_compression_telemetry = None
         self._compression_telemetry_seed = None
+        # Plugin-visible diagnostics: remaining-token ratio and last complexity.
+        # Must not leak across /new — lambda-tuner routes model preference off these.
+        self._last_ratio = None
+        self._last_complexity_score = None
         self._reset_proactive_prune_rearm()
+        estimator = getattr(self, "_entropy_estimator", None)
+        if estimator is not None:
+            estimator.reset()
+        self._entropy_fed_count = 0
+        self.current_intent = None
 
     def bind_session_state(self, session_db: Any = None, session_id: str = "") -> None:
         """Bind the current session row so durable cooldowns can round-trip."""
         self._session_db = session_db
         self._session_id = session_id or ""
+        # Reset profile-mutated knobs to config defaults so a new session (/new) does not
+        # inherit a previous session's profile. Threshold resets via _base_threshold_percent
+        # already; protect_last_n and proactive_prune_tokens need explicit reset.
+        # why: set_compression_profile() mutates these in-place; bind_session_state is the
+        #      session boundary — reset here, not in set_compression_profile.
+        self.protect_last_n = getattr(self, "_config_protect_last_n", self.protect_last_n)
+        self.proactive_prune_tokens = getattr(self, "_config_proactive_prune_tokens", self.proactive_prune_tokens)
+        # F03 fix: summary_target_ratio and protect_first_n snapshots are restored here.
+        # NOTE: neither field is currently in _PROFILE_KEYS (set_compression_profile does NOT
+        # mutate them). The restore is a defensive belt-and-suspenders guard — a no-op today
+        # but correct if a future profile key adds either field. The __init__ snapshot makes
+        # it safe regardless of call order.
+        self.summary_target_ratio = getattr(self, "_config_summary_target_ratio", self.summary_target_ratio)
+        self.protect_first_n = getattr(self, "_config_protect_first_n", self.protect_first_n)
+        # MEDIUM-A: restore threshold from _config_ (not mutated _base_threshold_percent).
+        # why: set_compression_profile mutates _base_threshold_percent; /new must use the
+        #      original config value, then re-derive _base via model overrides.
+        _config_pct = getattr(self, "_config_threshold_percent", None)
+        if _config_pct is not None:
+            self._base_threshold_percent = resolve_model_threshold(
+                self.model, getattr(self, "model_thresholds", {}), _config_pct,
+                getattr(self, "provider", ""),
+            )
+        self.threshold_percent = self._effective_threshold_percent(
+            self._resolve_context_length(),
+            getattr(self, "_base_threshold_percent", self._config_threshold_percent),
+        )
+        # HIGH-7: reset ChronoMem state so session 2 does not inherit session 1 clock/checkpoints.
+        # why: _turn_clock and _entropy_estimator._checkpoints are per-session; /new is a boundary.
+        self._turn_clock = 0
+        self._last_compress_entropy = 0.0
+        self._last_compress_clock = 0
+        self._active_compression_profile = None
+        self._profile_source = None
+        self._session_type = None
+        self._routing_hint = None
+        # Reset plugin-set flags so a code session doesn't leak IB prune into a research session.
+        self.importance_biased_prune_enabled = False
+        est = getattr(self, "_entropy_estimator", None)
+        if est is not None:
+            try:
+                est.reset()
+                est._checkpoints.clear()
+            except Exception as _est_err:
+                logger.warning(
+                    "context_compressor: entropy estimator reset failed at session boundary; "
+                    "creating fresh: %s", _est_err,
+                )
+                self._entropy_estimator = EntropyEstimator()
+        else:
+            self._entropy_estimator = EntropyEstimator()
         self._summary_failure_cooldown_until = 0.0
         self._cooldown_persist_failed = False
         self._last_summary_error = None
@@ -2169,7 +2482,7 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         self.context_length = context_length
         # Re-resolve from the raw config value so a switch away from an overridden model falls back correctly.
         _config_pct = getattr(self, "_config_threshold_percent", self.threshold_percent)
-        self._base_threshold_percent = resolve_model_threshold(model, self.model_thresholds, _config_pct)
+        self._base_threshold_percent = resolve_model_threshold(model, self.model_thresholds, _config_pct, provider)
         self.threshold_percent = self._effective_threshold_percent(context_length, self._base_threshold_percent)
         # max_tokens=None means "unspecified": keep the existing output reservation.
         # A switch that genuinely changes the output budget passes the new value explicitly. (#43547)
@@ -2295,11 +2608,19 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         self.model_thresholds = model_thresholds or {}
         # Raw config value, before override/floor; fallback when switching to a model with no override.
         self._config_threshold_percent = threshold_percent
-        self._base_threshold_percent = resolve_model_threshold(model, self.model_thresholds, threshold_percent)
+        self._base_threshold_percent = resolve_model_threshold(model, self.model_thresholds, threshold_percent, provider)
         self.threshold_percent = self._base_threshold_percent
         # Effective trigger = min(ratio threshold, cap); re-applied in update_model().
         self.threshold_tokens_cap = self._coerce_threshold_tokens_cap(threshold_tokens_cap)
         self.protect_first_n, self.protect_last_n = protect_first_n, protect_last_n
+        # Snapshot config-time values so bind_session_state() can restore them on /new.
+        # F03: set_compression_profile mutates these; without snapshots session 2 inherits
+        # session 1's profile.
+        self._config_protect_first_n = protect_first_n
+        self._config_protect_last_n = protect_last_n
+        # Snapshot config values so bind_session_state can restore after profile mutations.
+        # why: set_compression_profile() mutates these live; /new must reset to config, not carry leak.
+        self._config_proactive_prune_tokens = int(proactive_prune_tokens or 0)
         # Proactive prune runs independently of the full-compression trigger. 0 = disabled.
         self.proactive_prune_tokens = int(proactive_prune_tokens or 0)
         # Floor at 200 chars: below that a summary can exceed what it replaces and pass 2 re-summarizes
@@ -2315,6 +2636,7 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         self._last_reclaim_block_warn: "tuple[str, int] | None" = None
         self.min_tail_user_messages = min_tail_user_messages
         self.summary_target_ratio = max(0.10, min(summary_target_ratio, 0.80))
+        self._config_summary_target_ratio = self.summary_target_ratio  # F03: bind_session_state restore
         self.quiet_mode = quiet_mode
         # Usable input = context_length - max_tokens; only a positive int counts as a reservation.
         self.max_tokens = self._coerce_max_tokens(max_tokens)
@@ -2368,6 +2690,621 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         # must ABORT and preserve the session regardless of abort_on_summary_failure (see _TERMINAL_SUMMARY_FAILURES).
         for flag, _class, _msg in _TERMINAL_SUMMARY_FAILURES:
             setattr(self, flag, False)
+        # Entropy-rate estimator + intent plumbing (additive; unused unless opted in).
+        self._entropy_estimator = EntropyEstimator()
+        self._entropy_fed_count = 0
+        self._turn_clock = 0
+        self._last_compress_entropy: float = 0.0
+        self._last_compress_clock: int = 0
+        self._importance_scorer = MessageImportanceScorer()
+        self._last_scored_messages: List[Dict[str, Any]] = []
+        self._active_compression_profile: str | None = None
+        self._profile_source: str | None = None
+        self._session_type: str | None = None
+        self._routing_hint: dict | None = None
+        self.current_intent: str | None = None
+        # Opt-in Gallager-style eviction of low-importance non-head/tail messages.
+        self.importance_biased_prune_enabled: bool = False
+
+    # --- Adaptive compression API (for plugins and session-type tuning) ---------
+
+    #: Built-in profiles that plugins can reference by name.
+    #:
+    #: Direction (threshold_percent): lower = earlier full compression.
+    #: research (0.45) < mixed (0.50) < code (0.55). Research dumps large tool
+    #: results so it should trip compression first; code keeps causal chains.
+    #:
+    #: proactive_prune_tokens is the *trigger floor* (prune when current_tokens
+    #: >= this). Higher = later prune. Research 40k / mixed 32k / code 28k is
+    #: intentional: research is allowed a larger tool-result buffer before the
+    #: cheap prune, then full compression (lower threshold) reclaims the rest.
+    #: protect_last_n is a requested floor; actual tail cut still caps at
+    #: ``_MAX_TAIL_MESSAGE_FLOOR``.
+    COMPRESSION_PROFILES: "dict[str, dict]" = {
+        "research": {
+            "threshold_percent": 0.45,  # research: compress sooner; large tool_result dumps fill context fast
+            "proactive_prune_tokens": 40_000,  # later cheap prune; full compression (lower threshold) reclaims the dump
+            "protect_last_n": 22,  # why: 22 not 15 — eval calibration (research after_tokens vs recall)
+        },
+        "code": {
+            "threshold_percent": 0.55,  # later full compression; keep causal exec/read chains
+            "proactive_prune_tokens": 28_000,
+            "protect_last_n": 28,  # why: 28 not 25 — eval calibration (code tail needs extra exec rounds)
+        },
+        "mixed": {
+            "threshold_percent": 0.50,  # conservative midpoint when type is unknown or mixed
+            "proactive_prune_tokens": 32_000,
+            "protect_last_n": 20,
+        },
+        # Rate-distortion proxy: threshold is recomputed from EntropyEstimator at
+        # apply/trigger time. Placeholder 0.50 is the empty-estimator default.
+        "entropy-adaptive": {
+            "threshold_percent": 0.50,  # placeholder; live R(D) from EntropyEstimator (not a fixed percent)
+            "proactive_prune_tokens": 32_000,
+            "protect_last_n": 20,
+        },
+    }
+    _PROFILE_THRESHOLD_MIN = 0.20
+    _PROFILE_THRESHOLD_MAX = 0.85
+    _PROFILE_PROTECT_LAST_N_MAX = 128
+    _PROFILE_KEYS = ("threshold_percent", "proactive_prune_tokens", "protect_last_n")
+
+    def set_compression_profile(
+        self,
+        profile: "str | dict",
+        **kwargs,
+    ) -> None:
+        """Apply a named or custom compression profile between turns.
+
+        Pre: not mid-pass; ``profile`` is a COMPRESSION_PROFILES key or a dict
+        of known knobs. Post: on success, threshold/prune/protect_last_n match
+        the applied settings; unknown names leave state unchanged (fail-open).
+
+        Safe to call from ``pre_llm_call`` hooks: each compression pass re-reads
+        these attributes from scratch, so a change takes effect on the next
+        compression event that starts *after* this hook returns.
+
+        **Timing note:** turn-start compaction (idle + preflight) runs *before*
+        ``pre_llm_call`` on the same turn. A profile applied here affects
+        mid-turn micro-compact events and all subsequent turns — not the
+        turn-start compaction that already completed.
+
+        *Not* safe to call mid-pass (inside the compressor's own call stack).
+
+        Fail-open: unknown names, bad types, and out-of-range values are logged
+        and ignored (or clamped) rather than raised. Extra kwargs (including
+        ``_source``) are accepted and never forwarded into compressor internals.
+
+        Args:
+            profile: A key from :attr:`COMPRESSION_PROFILES` (``"research"``,
+                ``"code"``, ``"mixed"``, ``"entropy-adaptive"``) **or** a dict
+                with any subset of keys ``threshold_percent``,
+                ``proactive_prune_tokens``, ``protect_last_n``.
+                Dict profiles merge with live state (unspecified keys unchanged).
+            **kwargs: ``_source`` is an informational log label; anything else
+                is dropped.
+        """
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
+        _source = kwargs.pop("_source", "plugin")
+        # Remaining kwargs are intentionally discarded (plugin telemetry, etc.).
+
+        if isinstance(profile, str):
+            if profile not in self.COMPRESSION_PROFILES:
+                _log.warning(
+                    "context_compressor: unknown profile %r from %s (valid: %s) — ignored",
+                    profile, _source, list(self.COMPRESSION_PROFILES),
+                )
+                return
+            settings = dict(self.COMPRESSION_PROFILES[profile])
+            # why: research protect_last_n=15 not 25 — dumps fill context fast; 25 would shield stale tool_results
+            if profile == "entropy-adaptive":
+                settings["threshold_percent"] = self._entropy_adaptive_threshold_percent()
+            self._active_compression_profile = profile
+            self._profile_source = str(_source) if _source is not None else "plugin"
+            if profile in ("research", "code", "mixed"):
+                self._session_type = profile
+        elif isinstance(profile, dict):
+            # Partial update: do not full-replace unspecified keys with defaults.
+            settings = {k: profile[k] for k in self._PROFILE_KEYS if k in profile}
+            if not settings:
+                _log.warning(
+                    "context_compressor: empty/unknown-key dict profile from %s — ignored",
+                    _source,
+                )
+                return
+            self._active_compression_profile = "custom"
+            self._profile_source = str(_source) if _source is not None else "plugin"
+        else:
+            _log.warning(
+                "context_compressor: profile must be str or dict, got %s from %s — ignored",
+                type(profile).__name__, _source,
+            )
+            return
+
+        if "threshold_percent" in settings:
+            try:
+                pct = float(settings["threshold_percent"])
+            except (TypeError, ValueError):
+                _log.warning(
+                    "context_compressor: invalid threshold_percent %r from %s — skipped",
+                    settings["threshold_percent"], _source,
+                )
+            else:
+                pct = min(self._PROFILE_THRESHOLD_MAX, max(self._PROFILE_THRESHOLD_MIN, pct))
+                # Re-apply the raise-only small-context floor so models <512K cannot be
+                # pulled below 75% by plugin profiles (matches init / update_model behaviour).
+                pct = self._effective_threshold_percent(
+                    getattr(self, "_resolved_context_length", 0) or 0, pct
+                )
+                self.threshold_percent = pct
+                # Keep the context_length setter from reverting to the pre-profile base.
+                self._base_threshold_percent = pct
+                # Invalidate derived caches so the next compress/prune recomputes.
+                self._threshold_tokens = None
+                self._tail_token_budget = None
+        if "proactive_prune_tokens" in settings:
+            try:
+                new_floor = max(0, int(settings["proactive_prune_tokens"]))
+            except (TypeError, ValueError):
+                _log.warning(
+                    "context_compressor: invalid proactive_prune_tokens %r from %s — skipped",
+                    settings["proactive_prune_tokens"], _source,
+                )
+            else:
+                old_floor = self.proactive_prune_tokens
+                self.proactive_prune_tokens = new_floor
+                # Only lower the rearm mark when the floor is genuinely tightening
+                # (new_floor < old_floor). Loosening — even if still below the current
+                # rearm — must NOT touch the rearm: the old mark already represents a
+                # meaningful hysteresis boundary and smashing it to new_floor+1 would
+                # force an immediate cache-breaking prune on the next pass.
+                # We do NOT reset to 0 (that would cache-break immediately); instead we
+                # clamp to max(new_floor + 1, 0) so rearm tracks the new floor.
+                current_rearm = getattr(self, "_proactive_prune_rearm_tokens", 0) or 0
+                if new_floor < old_floor and new_floor < current_rearm:
+                    self._proactive_prune_rearm_tokens = max(new_floor + 1, 0)
+        if "protect_last_n" in settings:
+            try:
+                n = int(settings["protect_last_n"])
+            except (TypeError, ValueError):
+                _log.warning(
+                    "context_compressor: invalid protect_last_n %r from %s — skipped",
+                    settings["protect_last_n"], _source,
+                )
+            else:
+                self.protect_last_n = max(1, min(n, self._PROFILE_PROTECT_LAST_N_MAX))
+
+        _log.debug(
+            "context_compressor: profile applied by %s — %s",
+            _source,
+            {k: getattr(self, k) for k in self._PROFILE_KEYS},
+        )
+
+    _FORK_SESSION_PROFILES = ("research", "code", "mixed")
+    _CLASSIFIER_MESSAGE_WINDOW = 30
+
+    def _fork_policy_set_exists(self) -> bool:
+        """True when named fork profiles (research/code/mixed) are registered."""
+        profiles = getattr(self, "COMPRESSION_PROFILES", None) or {}
+        return all(name in profiles for name in self._FORK_SESSION_PROFILES)
+
+    @property
+    def routing_hint(self) -> dict | None:
+        """Last computed routing hint, or None if the classifier has not run."""
+        return getattr(self, "_routing_hint", None)
+
+    @property
+    def last_compression_ratio(self) -> float | None:
+        """Remaining-token ratio (after/pre) from the last successful compress.
+
+        Returns a positive float; typically in (0, 1] but may exceed 1.0 if the
+        compressor expanded context (e.g. long summaries). Returns None if this
+        session has not completed a successful compress, or if the stored value
+        is non-positive or non-numeric. Plugins must read this, not ``_last_ratio``.
+        """
+        value = getattr(self, "_last_ratio", None)
+        try:
+            ratio = float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+        if ratio is None or ratio <= 0.0:
+            return None
+        return ratio
+
+    @property
+    def last_complexity_score(self) -> float | None:
+        """Last plugin-written complexity score in [0, 1], or None."""
+        value = getattr(self, "_last_complexity_score", None)
+        try:
+            return float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @last_complexity_score.setter
+    def last_complexity_score(self, value: float | None) -> None:
+        self._last_complexity_score = value
+
+    def _maybe_route_session_profile(self, messages: List[Dict[str, Any]]) -> None:
+        """Apply fork compression policy from a heuristic session-type classifier.
+
+        Skipped when the profile was set with ``_source='explicit'``. Fail-open:
+        missing fork policies or any exception leave the current profile in place.
+        Stores the full routing hint on ``_routing_hint`` whenever the classifier runs.
+        """
+        try:
+            from agent.session_classifier import CONFIDENCE_FLOOR, get_routing_hint
+
+            window = messages[-self._CLASSIFIER_MESSAGE_WINDOW :] if messages else []
+            hint = get_routing_hint(window)
+            self._routing_hint = hint
+            session_type = hint.get("session_type") or "mixed"
+            confidence = hint.get("confidence") or 0.0
+            if session_type not in self._FORK_SESSION_PROFILES:
+                session_type = "mixed"
+            # Always record the hint for eval observability. Do not clobber an
+            # explicit profile (or its _session_type) even if the classifier disagrees.
+            if getattr(self, "_profile_source", None) == "explicit":
+                return
+            self._session_type = session_type
+            if not self._fork_policy_set_exists():
+                return
+            # why: mixed + low confidence means "no type signal" — keep constructor
+            # knobs (protect_last_n / threshold) instead of clobbering with fork_mixed.
+            if session_type == "mixed" and float(confidence) < CONFIDENCE_FLOOR:
+                return
+            self.set_compression_profile(session_type, _source="session-classifier")
+        except Exception:
+            return
+
+    def _entropy_adaptive_threshold_percent(self) -> float:
+        """Map empirical entropy rate H to a rate-distortion threshold.
+
+        High H (>4.0 bits/token) → retain more (0.45). Low H (<2.5) →
+        compress later (0.55). Empty estimator → 0.50 (fail-open default).
+        """
+        try:
+            estimator = getattr(self, "_entropy_estimator", None)
+            if estimator is None or int(getattr(estimator, "_total_tokens", 0) or 0) <= 0:
+                return 0.50
+            h = float(estimator.entropy_rate())
+            if h > 4.0:
+                return 0.45
+            if h < 2.5:
+                return 0.55
+            return 0.50
+        except Exception:
+            return 0.50
+
+    def _refresh_entropy_adaptive_threshold(self) -> None:
+        """Recompute threshold when the active profile is entropy-adaptive."""
+        try:
+            if getattr(self, "_active_compression_profile", None) != "entropy-adaptive":
+                return
+            pct = self._entropy_adaptive_threshold_percent()
+            pct = min(self._PROFILE_THRESHOLD_MAX, max(self._PROFILE_THRESHOLD_MIN, pct))
+            pct = self._effective_threshold_percent(
+                getattr(self, "_resolved_context_length", 0) or 0, pct
+            )
+            if pct != self.threshold_percent:
+                self.threshold_percent = pct
+                self._base_threshold_percent = pct
+                self._threshold_tokens = None
+                self._tail_token_budget = None
+        except Exception:
+            return
+
+    def feed_turn(self, text: str) -> None:
+        """Update the entropy estimator with one turn's text. Fail-open."""
+        try:
+            self._turn_clock = int(getattr(self, "_turn_clock", 0) or 0) + 1
+            estimator = getattr(self, "_entropy_estimator", None)
+            if estimator is None:
+                self._entropy_estimator = EntropyEstimator()
+                estimator = self._entropy_estimator
+            estimator.update(text or "")
+        except Exception:
+            return
+
+    @property
+    def turn_clock(self) -> int:
+        """Monotonic ChronoMem turn counter (increments in ``feed_turn``)."""
+        return int(getattr(self, "_turn_clock", 0) or 0)
+
+    def score_message(self, role, content) -> float:
+        """Delegate to :class:`MessageImportanceScorer`. Fail-open to 0.7."""
+        try:
+            scorer = getattr(self, "_importance_scorer", None)
+            if scorer is None:
+                self._importance_scorer = MessageImportanceScorer()
+                scorer = self._importance_scorer
+            return float(scorer.score(role, content))
+        except Exception:
+            return 0.7
+
+    def rr_score(self, role: str, content: str, msg: Optional[Dict[str, Any]] = None) -> float:
+        """Retention score: importance + zlib uniqueness + causal/noise tag prior. Fail-open."""
+        try:
+            scorer = getattr(self, "_importance_scorer", None)
+            if scorer is None:
+                self._importance_scorer = MessageImportanceScorer()
+                scorer = self._importance_scorer
+            if msg is None:
+                msg = {"role": role, "content": content}
+            tag = _tag_message_type(msg)
+            tag_prior = _TAG_PRIOR.get(tag, 0.5)
+            uniqueness = scorer.compressibility(content)
+            return 0.5 * self.score_message(role, content) + 0.2 * uniqueness + 0.3 * tag_prior
+        except Exception:
+            return 0.7
+
+    def importance_scores(self, history: list) -> list:
+        """Score each message dict with ``role`` / ``content`` keys. Fail-open."""
+        try:
+            out: List[float] = []
+            for msg in history or []:
+                if isinstance(msg, dict):
+                    out.append(self.score_message(msg.get("role") or "", msg.get("content")))
+                else:
+                    out.append(0.7)
+            return out
+        except Exception:
+            return []
+
+    def importance_biased_prune(
+        self, messages: list, target_prune_tokens: int, protect_last_n: int = 20,
+    ) -> tuple:
+        """Evict lowest-importance middle messages until ``target_prune_tokens``. Fail-open.
+
+        Candidates exclude system-role rows, the first ``protect_first_n``, and the last
+        ``protect_last_n``. Lowest score is dropped first (Gallager sufficient statistics).
+        """
+        # SPIKE: Decision-Aware Memory Cards (arXiv:2606.08151)
+        # Per-span importance is computed here (rr_score) before eviction — the
+        # counterfactual hook. Do not replace IB-prune with an embedding model yet.
+        # Counterfactual importance I(span) = P(same next action | context) - P(same next action | context \ span)
+        # Approximation: I(span) = similarity(span_embedding, next_action_embedding) -- requires embedding model
+        # Alternative: use IB-prune score already computed; spans with IB score < 0.2 are low-counterfactual-impact
+        # Cross-link: this method is the IB-prune implementation; rr_score is the per-span IB score.
+        # SPIKE math-007-manifold (arXiv:2609.00552): manifold-based span scoring
+        # Claim: project span embeddings to a low-dim manifold before scoring importance.
+        # Synthetic win 4/5 metrics. Blocked: requires token embeddings (no embedding model in fork).
+        # Approximation without embeddings: use n-gram overlap with task goal as manifold proxy.
+        # Revisit trigger: fork has access to an embedding endpoint (e.g. via MCP).
+        try:
+            if not messages or int(target_prune_tokens or 0) <= 0:
+                return messages, 0
+            n = len(messages)
+            protect_first = max(0, int(getattr(self, "protect_first_n", 0) or 0))
+            protect_last = max(0, int(protect_last_n or 0))
+            last_start = max(0, n - protect_last)
+            candidates: List[tuple] = []
+            for i, msg in enumerate(messages):
+                if i < protect_first or i >= last_start:
+                    continue
+                role = ""
+                content = ""
+                tag = "NEUTRAL"
+                if isinstance(msg, dict):
+                    role = str(msg.get("role") or "")
+                    content = str(msg.get("content", "") or "")
+                    tag = _tag_message_type(msg)
+                if role == "system":
+                    continue
+                if tag == "CAUSAL":
+                    continue  # never evict causal chains
+                score = float(self.rr_score(role, content, msg if isinstance(msg, dict) else None))
+                noise_rank = 0 if tag == "NOISE" else 1
+                candidates.append((noise_rank, score, i, tag))
+            candidates.sort(key=lambda item: (item[0], item[1], item[2]))
+            evict: set[int] = set()
+            truncated: Dict[int, str] = {}
+            tokens_pruned = 0
+            for _noise_rank, _score, i, tag in candidates:
+                if tokens_pruned >= int(target_prune_tokens):
+                    break
+                text = _message_text_for_entropy(messages[i])
+                if tag == "STRUCTURAL":
+                    kept_text = text[:200]
+                    before_tok = int(estimate_tokens_rough(text) or 0)
+                    after_tok = int(estimate_tokens_rough(kept_text) or 0)
+                    delta = max(0, before_tok - after_tok)
+                    if delta <= 0:
+                        continue
+                    tokens_pruned += delta
+                    truncated[i] = kept_text
+                else:
+                    tokens_pruned += int(estimate_tokens_rough(text) or 0)
+                    evict.add(i)
+            if not evict and not truncated:
+                return messages, 0
+            kept = []
+            for i, m in enumerate(messages):
+                if i in evict:
+                    continue
+                if i in truncated and isinstance(m, dict):
+                    kept.append(_rewritten(m, truncated[i]))
+                else:
+                    kept.append(m)
+            return kept, tokens_pruned
+        except Exception:
+            return messages, 0
+
+    def _extract_fact_ledger(self, turns_to_summarize: List[Dict[str, Any]]) -> str:
+        """Harvest named facts from compacted turns and format a head ledger. Deduped, capped."""
+        facts: List[str] = []
+        seen: set[str] = set()
+
+        def _add(item: str) -> None:
+            text = " ".join((item or "").split())
+            if not text or text in seen:
+                return
+            seen.add(text)
+            facts.append(text)
+
+        for msg in turns_to_summarize or []:
+            if not isinstance(msg, dict):
+                continue
+            content = _message_text_for_entropy(msg)
+            if not content:
+                continue
+            for match in _FACT_PATH_RE.findall(content):
+                _add(match)
+            for match in _FACT_ARXIV_RE.findall(content):
+                _add(match)
+            for match in _FACT_MODEL_RE.findall(content):
+                _add(match)
+            for match in _FACT_SHA_RE.findall(content):
+                _add(match)
+            for match in _FACT_NUM_RE.finditer(content):
+                start, end = match.span()
+                # Skip if adjacent to dot (part of arXiv ID or decimal)
+                if (start > 0 and content[start-1] == '.') or (end < len(content) and content[end] == '.'):
+                    continue
+                window = content[max(0, start - 40): min(len(content), end + 40)]
+                if re.search(r"[A-Za-z]{2,}", window):  # require a real word nearby
+                    # Emit window line for context, not bare number
+                    line_start = content.rfind('\n', 0, start) + 1
+                    line_end = content.find('\n', end)
+                    if line_end == -1:
+                        line_end = len(content)
+                    ctx_line = content[line_start:line_end].strip()[:120]
+                    if ctx_line:
+                        _add(ctx_line)
+            for line in content.splitlines():
+                if any(marker in line for marker in _FACT_NAMED_MARKERS):
+                    _add(line.strip()[:240])
+            if len(facts) >= 80:
+                break
+        del facts[80:]
+        if not facts:
+            return ""
+        # ~1500 tokens ≈ 6000 chars
+        lines: List[str] = []
+        used = 0
+        budget_chars = 6000
+        for fact in facts:
+            extra = len(fact) + 1
+            if used + extra > budget_chars:
+                break
+            lines.append(fact)
+            used += extra
+        if not lines:
+            return ""
+        return "FACT LEDGER\n" + "\n".join(lines)
+
+    def _prepend_fact_ledger(self, summary: str, turns_to_summarize: List[Dict[str, Any]]) -> str:
+        """Put the fact ledger at the summary head so named facts survive Lost-in-the-Middle.
+
+        Order-invariant: if a compaction prefix is already attached, strip it, prepend
+        the ledger, then reattach the prefix *after* the ledger so eval head_hit_rate
+        (first HEAD_HIT_CHARS of content) sees named facts.
+        """
+        body = summary or ""
+        if body.lstrip().startswith("FACT LEDGER"):
+            return body
+        ledger = self._extract_fact_ledger(turns_to_summarize)
+        if not ledger:
+            return body
+        if len(ledger) > 2000:
+            ledger = ledger[:2000].rstrip()
+        prefix = ""
+        rest = body
+        for p in (SUMMARY_PREFIX, LEGACY_SUMMARY_PREFIX, *_HISTORICAL_SUMMARY_PREFIXES):
+            if rest.startswith(p):
+                prefix = p
+                rest = rest[len(p):].lstrip("\n")
+                break
+        if prefix:
+            return ledger + "\n" + prefix + ("\n" + rest if rest else "")
+        return ledger + "\n" + body
+
+    def _reacquisition_class(self, msg: Any) -> str:
+        """CHEAP if the body is bulky tool dump that can be re-fetched; else EXPENSIVE."""
+        if not isinstance(msg, dict):
+            return "EXPENSIVE"
+        tool = _msg_tool_name(msg)
+        content = _message_text_for_entropy(msg)
+        if (
+            tool in _CHEAP_REACQ_TOOLS
+            and len(content) > 1500
+            and _REACQ_NUM4_RE.search(content) is None
+            and not any(marker in content for marker in _REACQ_EXPENSIVE_MARKERS)
+        ):
+            return "CHEAP"
+        return "EXPENSIVE"
+
+    def _feed_messages_for_entropy(self, messages: List[Dict[str, Any]] | None) -> None:
+        """Ingest newly appended history messages into the estimator. Fail-open."""
+        try:
+            if not messages:
+                return
+            try:
+                self._last_scored_messages = list(messages[-20:])
+            except Exception:
+                self._last_scored_messages = []
+            n = len(messages)
+            start = getattr(self, "_entropy_fed_count", 0)
+            if start > n:
+                self._entropy_fed_count = n
+                return
+            # Invariant: messages[:start] already fed; _entropy_fed_count == start.
+            for msg in messages[start:]:
+                text = _message_text_for_entropy(msg)
+                if text:
+                    self.feed_turn(text)
+            self._entropy_fed_count = n
+        except Exception:
+            return
+
+    def on_turn_complete(
+        self, messages: List[Dict[str, Any]], usage: Optional[Dict[str, Any]] = None, **kwargs: Any
+    ) -> None:
+        """Keep the entropy estimator current as turns land in history."""
+        try:
+            self._feed_messages_for_entropy(messages)
+        except Exception:
+            return
+
+    def _pre_compress_checkpoint(
+        self, *, trigger_reason: str, context_tokens: int | None = None, messages=None
+    ) -> None:
+        """Structured pre-compress log (CatchBench: capture earliest info state)."""
+        try:
+            estimator = getattr(self, "_entropy_estimator", None)
+            payload: Dict[str, Any] = {
+                "session_id": getattr(self, "_session_id", "") or "",
+                "turn_count": int(getattr(estimator, "_turns_seen", 0) or 0) if estimator is not None else 0,
+                "context_tokens": int(
+                    context_tokens if context_tokens is not None else (self.last_prompt_tokens or 0)
+                ),
+                "estimated_entropy_rate": float(estimator.entropy_rate()) if estimator is not None else 0.0,
+                "threshold_percent": float(self.threshold_percent),
+                "profile_name": getattr(self, "_active_compression_profile", None) or "default",
+                "trigger_reason": str(trigger_reason or "unknown"),
+            }
+            intent = getattr(self, "current_intent", None)
+            if intent:
+                payload["intent"] = intent
+            try:
+                hist = messages[-20:] if messages else getattr(self, "_last_scored_messages", None)
+                scores = self.importance_scores(hist or [])
+                payload["avg_importance"] = (sum(scores) / len(scores)) if scores else 0.0
+                rr_vals: List[float] = []
+                for m in hist or []:
+                    if isinstance(m, dict):
+                        rr_vals.append(self.rr_score(str(m.get("role") or ""), str(m.get("content", "") or "")))
+                    else:
+                        rr_vals.append(self.rr_score("", str(m)))
+                payload["avg_rr_score"] = (sum(rr_vals) / len(rr_vals)) if rr_vals else 0.0
+            except Exception:
+                payload["avg_importance"] = 0.0
+                payload["avg_rr_score"] = 0.0
+            logger.info("pre_compress_checkpoint %s", payload)
+        except Exception:
+            return
+
+    # --- end adaptive compression API -------------------------------------------
 
     def update_from_response(self, usage: Dict[str, Any]):
         """Update tracked token usage from API response."""
@@ -2474,10 +3411,59 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         ``reason`` is None unless compression is needed but blocked: ``"cooldown:<seconds>"`` or
         ``"ineffective"``. Callers should surface a warning when it is non-None."""
         tokens = prompt_tokens if prompt_tokens is not None else self.last_prompt_tokens
+        self._refresh_entropy_adaptive_threshold()
         if tokens < self.threshold_tokens:
             return False, None
         if self._automatic_compression_blocked():
             return False, self._compression_block_reason() or "blocked"
+        # AEP floor (Shannon/Cover-Thomas Ch.3): if the context is already below the
+        # minimum tokens needed to faithfully represent the session's information content,
+        # compressing further causes irreversible loss without size benefit.
+        estimator = getattr(self, "_entropy_estimator", None)
+        _clock = getattr(self, "_turn_clock", 0) or 0
+        # Entropy-delta gate (Shannon/Gallager): if H has not moved since the last
+        # successful compression, another pass will not help. Require last_clock > 0
+        # and >3 turns since that pass so a never-compressed (stale) clock cannot skip
+        # the first compression.
+        try:
+            last_clock = int(getattr(self, "_last_compress_clock", 0) or 0)
+            last_h = float(getattr(self, "_last_compress_entropy", 0.0) or 0.0)
+            if (
+                estimator is not None
+                and last_clock > 0
+                and (_clock - last_clock) > 3
+            ):
+                delta = estimator.entropy_delta_since(last_h)
+                if delta < 0.15:
+                    logger.debug(
+                        "pre_compress skipped: low_entropy_delta clock=%d last=%d delta=%.3f",
+                        _clock, last_clock, delta,
+                    )
+                    return False, "low_entropy_delta"
+        except Exception:
+            pass
+        # AEP floor only meaningful once we have seen > protect_last_n turns.
+        # Before that the avg_tokens estimate is inflated (few turns, large denominator-free estimate)
+        # and H cancels in min_retain_tokens, making floor = protect_last_n * avg which always blocks.
+        # why: gate on clock > protect_last_n to ensure estimator has enough data to be meaningful.
+        if estimator is not None and _clock > getattr(self, "protect_last_n", 20):
+            try:
+                avg_turn_tokens = max(tokens // max(_clock, 1), 64)
+                aep_floor = estimator.min_retain_tokens(
+                    budget_bits=estimator.entropy_rate() * max(
+                        getattr(self, "protect_last_n", 20) * avg_turn_tokens,
+                        256,
+                    )
+                )
+                if tokens <= aep_floor:
+                    logger.debug(
+                        "pre_compress blocked by AEP floor: tokens=%d floor=%d entropy=%.3f clock=%d",
+                        tokens, aep_floor, estimator.entropy_rate(), _clock,
+                    )
+                    return False, "aep_floor"
+            except Exception:
+                pass  # fail-open: AEP floor is advisory only
+        self._pre_compress_checkpoint(trigger_reason="threshold", context_tokens=tokens)
         return True, None
 
     def _compression_block_reason(self) -> "str | None":
@@ -2612,7 +3598,10 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
     ) -> int:
         """First index of the protected tail; token budget (when given) beats the count floor."""
         if protect_tail_tokens is None or protect_tail_tokens <= 0:
-            return len(result) - protect_tail_count
+            # Clamp: protect_last_n > len(history) must not yield a negative index.
+            # Callers also use max(0, boundary), but a negative here would invert
+            # "everything protected" vs "nothing to walk" depending on the site.
+            return max(0, len(result) - max(0, int(protect_tail_count)))
         # Token-budget walk; cap the message-count floor like tail-cut so a bulky recent run stays prunable.
         min_protect = min(protect_tail_count, len(result), _MAX_TAIL_MESSAGE_FLOOR)
         boundary, _ = self._walk_tail_budget(result, 0, protect_tail_tokens, min_protect, cut_at_break=True)
@@ -2879,6 +3868,17 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         pruned_msgs, pruned_count = self._prune_old_tool_results(
             messages, protect_tail_count=self.protect_last_n, protect_tail_tokens=None, min_prune_chars=self.proactive_prune_min_result_chars,
         )
+        if (
+            getattr(self, "importance_biased_prune_enabled", False)
+            and getattr(self, "_importance_scorer", None) is not None
+        ):
+            target = max(int(self.proactive_prune_min_reclaim_tokens or 0), 1)
+            ib_msgs, ib_tokens = self.importance_biased_prune(
+                pruned_msgs, target_prune_tokens=target, protect_last_n=self.protect_last_n,
+            )
+            if ib_tokens:
+                pruned_count = int(pruned_count) + max(0, len(pruned_msgs) - len(ib_msgs))
+                pruned_msgs = ib_msgs
         if not pruned_count:
             # No-op contract: return the INPUT object so callers can gate on `result is not input`.
             self._warn_reclamation_no_op("prune:nothing_eligible", current_tokens)
@@ -3113,7 +4113,19 @@ Summary generation was unavailable, so this is a best-effort deterministic fallb
                 continue
             if len(content) < _LEAN_TAIL_DEMOTE_MIN_CHARS or SKILL_PRUNED_MARKER_PREFIX in content or _is_summary_stub(content):
                 continue
-            result[i] = _rewritten(msg, _lean_recovery_stub(msg.get("tool_name") or "", len(content), session_id))
+            class_ = self._reacquisition_class(msg)
+            if class_ == "CHEAP":
+                stub = content[:400].rstrip() + "\n" + _lean_recovery_stub(
+                    msg.get("tool_name") or _msg_tool_name(msg) or "", len(content), session_id,
+                )
+                result[i] = _rewritten(msg, stub)
+            else:
+                # EXPENSIVE: never stub; keep an extractive first line if the body is bulky.
+                first_line = content.splitlines()[0] if content else content
+                extractive = (first_line or content)[:500]
+                if extractive == content:
+                    continue
+                result[i] = _rewritten(msg, extractive)
             demoted += 1
         if demoted and not self.quiet_mode:
             logger.info("Lean tail: demoted %d stale tool result(s)", demoted)
@@ -3121,6 +4133,7 @@ Summary generation was unavailable, so this is a best-effort deterministic fallb
 
     def _augment_summary_lean(self, summary: str, turns_to_summarize: List[Dict[str, Any]]) -> str:
         """Append deterministic lean-mode sections to a summary; no-op in legacy mode."""
+        summary = self._prepend_fact_ledger(summary, turns_to_summarize)
         if getattr(self, "tail_mode", "lean") != "lean":
             return summary
         for heading, build in (
@@ -3319,7 +4332,6 @@ Summary generation was unavailable, so this is a best-effort deterministic fallb
             # See #32106.
             summary = _reinject_pruned_skill_markers(summary, _pruned_skill_names)
             summary = self._ground_historical_task_snapshot(summary, turns_to_summarize)
-            summary = self._augment_summary_lean(summary, turns_to_summarize)
             self._validate_summary_user_provenance(summary, has_user_turn)
             self._previous_summary = summary
             self._clear_compression_failure_cooldown()
@@ -3327,7 +4339,10 @@ Summary generation was unavailable, so this is a best-effort deterministic fallb
             self._last_summary_error = None
             for flag, _class, _msg in _TERMINAL_SUMMARY_FAILURES:
                 setattr(self, flag, False)
-            return self._with_summary_prefix(summary)
+            # Prefix first, then ledger — same order as the fallback path so the
+            # fact ledger occupies position 0 (head_hit_rate / Lost-in-the-Middle).
+            summary = self._with_summary_prefix(summary)
+            return self._augment_summary_lean(summary, turns_to_summarize)
         except Exception as e:
             return self._on_summary_failure(e, turns_to_summarize, focus_topic, memory_context)
 
@@ -3349,6 +4364,9 @@ Summary generation was unavailable, so this is a best-effort deterministic fallb
             "summary — replace any that appear with [REDACTED]. Note that credentials were present, but do "
             "not preserve their values."
         )
+        _focus = getattr(self, "summary_focus_topic", None)
+        if _focus:
+            _summarizer_preamble = f"FOCUS: Prioritize {_focus}. " + _summarizer_preamble
         # Lean mode folds the session log into this SAME single request (one aux call).
         _session_log_section = _LEAN_SESSION_LOG_SECTION if getattr(self, "tail_mode", "lean") == "lean" else ""
         _template_sections = self._summary_template_sections(_section, summary_budget, _session_log_section)
@@ -3404,20 +4422,23 @@ This compaction should PRIORITISE preserving all information related to the focu
             )
         return ""
 
-    @classmethod
-    def _summary_template_sections(cls, _section: Dict[str, str], summary_budget: int, _session_log_section: str) -> str:
+    def _summary_template_sections(self, _section: Dict[str, str], summary_budget: int, _session_log_section: str) -> str:
         """The ``## ...`` section template shared by the fresh and iterative-update prompts."""
-        _temporal_anchoring_rule = cls._temporal_anchoring_rule()
+        _temporal_anchoring_rule = self._temporal_anchoring_rule()
+        suppress = {
+            str(s).strip().lower()
+            for s in (getattr(self, "summary_suppress_sections", None) or [])
+        }
+        goal_block = ""
+        if "goal" not in suppress:
+            goal_block = f"## Goal\n{_section['goal']}\n\n"
+        constraints_block = ""
+        if not any(key in suppress for key in ("constraints", "constraints & preferences")):
+            constraints_block = f"## Constraints & Preferences\n{_section['constraints']}\n\n"
         return f"""{HISTORICAL_TASK_HEADING}
 {_section["historical_task"]}
 
-## Goal
-{_section["goal"]}
-
-## Constraints & Preferences
-{_section["constraints"]}
-
-## Completed Actions
+{goal_block}{constraints_block}## Completed Actions
 [Numbered list of concrete actions taken — include tool used, target, and outcome.
 Format each as: N. ACTION target — outcome [tool: name]
 Example:
@@ -3558,8 +4579,19 @@ Write only the summary body. Do not include any preamble or prefix."""
 
     @staticmethod
     def _starts_with_summary_prefix(text: str) -> bool:
-        """Return True if *text* begins with any known handoff prefix."""
-        return text.startswith((SUMMARY_PREFIX, LEGACY_SUMMARY_PREFIX, *_HISTORICAL_SUMMARY_PREFIXES))
+        """Return True if *text* begins with any known handoff prefix.
+
+        A leading FACT LEDGER (placed ahead of the prefix so named facts occupy
+        the summary head) is skipped so ledger-first handoffs still classify.
+        """
+        t = text.lstrip() if text else ""
+        if t.startswith("FACT LEDGER"):
+            for prefix in (SUMMARY_PREFIX, LEGACY_SUMMARY_PREFIX, *_HISTORICAL_SUMMARY_PREFIXES):
+                idx = t.find(prefix)
+                if idx >= 0:
+                    t = t[idx:]
+                    break
+        return t.startswith((SUMMARY_PREFIX, LEGACY_SUMMARY_PREFIX, *_HISTORICAL_SUMMARY_PREFIXES))
 
     @classmethod
     def classify_summary_content(cls, content: Any) -> Optional[str]:
@@ -4571,9 +5603,14 @@ Write only the summary body. Do not include any preamble or prefix."""
         # messages-only; comparing them fakes ~96% savings and kills the anti-thrashing guard.
         # Message-only savings are diagnostic; the verdict belongs to the next provider prompt count.
         pre_estimate = estimate_messages_tokens_rough(messages)
-        saved_estimate = pre_estimate - estimate_messages_tokens_rough(compressed)
+        after_estimate = estimate_messages_tokens_rough(compressed)
+        saved_estimate = pre_estimate - after_estimate
         savings_pct = (saved_estimate / pre_estimate * 100) if pre_estimate > 0 else 0
         self._last_compression_savings_pct = savings_pct
+        try:
+            self._last_ratio = (after_estimate / pre_estimate) if pre_estimate > 0 else None
+        except Exception:
+            self._last_ratio = None
         if not self.quiet_mode:
             logger.info("Compressed: %d -> %d messages (~%d tokens saved, %.0f%%)", n_messages, len(compressed), saved_estimate, savings_pct)
             logger.info("Compression #%d complete", self.compression_count)
@@ -4586,6 +5623,12 @@ Write only the summary body. Do not include any preamble or prefix."""
         if _pruned_replay and not self.quiet_mode:
             logger.info("Pruned stale replay items from %d assistant message(s) during compaction", _pruned_replay)
         self._last_compression_made_progress = True
+        try:
+            est = getattr(self, "_entropy_estimator", None)
+            self._last_compress_entropy = float(est.entropy_rate()) if est is not None else 0.0
+            self._last_compress_clock = int(getattr(self, "_turn_clock", 0) or 0)
+        except Exception:
+            pass
 
         # Compaction frees the biggest allocation: hand pages back to the OS (glibc/config-gated,
         # rate-limited, #70782). debug, not warning: compression must never fail because of a trim.
@@ -4634,10 +5677,50 @@ Write only the summary body. Do not include any preamble or prefix."""
             )
             return messages
         display_tokens = current_tokens if current_tokens else self.last_prompt_tokens or estimate_messages_tokens_rough(messages)
+        self._feed_messages_for_entropy(messages)
+        self._maybe_route_session_profile(messages)
+        # Constraint-weakening hook (arXiv:2608.24569): fire before this full compression so
+        # plugins can persist constraint state, inject summary reminders, or retune the profile.
+        try:
+            from hermes_cli.lifecycle import invoke_hook as _invoke_hook
+            _agent = None
+            try:
+                from hermes_cli.plugins import get_session_agent as _gsa
+                _agent = _gsa(self._session_id or "")
+            except Exception:
+                _agent = None
+            _invoke_hook(
+                "pre_compress",
+                session_id=self._session_id or "",
+                turn_count=sum(
+                    1 for m in messages if isinstance(m, dict) and m.get("role") == "user"
+                ),
+                context_tokens=int(display_tokens or 0),
+                trigger_reason="manual" if force else "auto",
+                agent=_agent,  # ephemeral; invoke_hook does not persist it
+            )
+        except Exception:
+            pass  # fail-open: compression must not depend on plugin dispatch
+        self._refresh_entropy_adaptive_threshold()
+        self._pre_compress_checkpoint(
+            trigger_reason="manual" if force else "auto",
+            context_tokens=int(display_tokens or 0),
+            messages=messages,
+        )
         # Phase 1: Prune old tool results (cheap, no LLM call)
         messages, pruned_count = self._prune_old_tool_results(
             messages, protect_tail_count=self.protect_last_n, protect_tail_tokens=self.tail_token_budget,
         )
+        if (
+            getattr(self, "importance_biased_prune_enabled", False)
+            and getattr(self, "_importance_scorer", None) is not None
+        ):
+            target = max(int(getattr(self, "proactive_prune_min_reclaim_tokens", 0) or 0), 1)
+            messages, ib_tokens = self.importance_biased_prune(
+                messages, target_prune_tokens=target, protect_last_n=self.protect_last_n,
+            )
+            if ib_tokens and not self.quiet_mode:
+                logger.info("Pre-compression: importance-biased prune ~%s tokens", ib_tokens)
         if pruned_count and not self.quiet_mode:
             logger.info("Pre-compression: pruned %d old tool result(s)", pruned_count)
         messages = self._drop_blank_echoes(messages)

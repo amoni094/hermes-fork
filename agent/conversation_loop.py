@@ -765,6 +765,7 @@ def _restore_or_build_system_prompt(agent, system_message, conversation_history)
             _invoke_hook(
                 "on_session_start", session_id=agent.session_id, model=agent.model,
                 platform=getattr(agent, "platform", None) or "",
+                agent=agent,
             )
         except Exception as exc:
             logger.warning("on_session_start hook failed: %s", exc)
@@ -1609,6 +1610,12 @@ def run_conversation(
         moa_config=moa_config,
         turn_author=turn_author,
     )
+    try:
+        if callable(getattr(agent, "_should_compact_thinking", None)) and agent._should_compact_thinking():
+            from agent.reasoning_verbosity import compact_thinking_history
+            compact_thinking_history(agent)
+    except Exception:
+        pass
     return export_current_turn_boundary(agent, result, user_message)
 
 

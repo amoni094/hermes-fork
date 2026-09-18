@@ -9,6 +9,7 @@ from unittest.mock import patch, MagicMock
 
 from agent.context_compressor import (
     ContextCompressor,
+    EntropyEstimator,
     HISTORICAL_TASK_HEADING,
     SUMMARY_PREFIX,
     COMPRESSED_SUMMARY_METADATA_KEY,
@@ -3700,3 +3701,225 @@ class TestSanitizeToolPairsWhitespace:
         tool_call_ids = [m.get("tool_call_id") for m in out if m.get("role") == "tool"]
         assert "call_orphan" not in tool_call_ids, "genuinely orphaned result must be removed"
         assert " call_orphan " not in tool_call_ids, "original whitespace form must also be gone"
+
+
+class TestEntropyEstimator:
+    def test_uniform_two_tokens_is_one_bit(self):
+        est = EntropyEstimator()
+        est.update("a b a b a b a b")
+        assert abs(est.entropy_rate() - 1.0) < 1e-9
+
+    def test_empty_is_zero(self):
+        est = EntropyEstimator()
+        assert est.entropy_rate() == 0.0
+        assert est.min_retain_tokens(10) == 0
+
+    def test_min_retain_tokens_aep_floor(self):
+        est = EntropyEstimator()
+        est.update("a b a b")
+        assert est.min_retain_tokens(10) == 10
+
+    def test_sliding_window_evicts_old_turns(self):
+        est = EntropyEstimator(window_turns=1)
+        est.update("unique_alpha unique_beta unique_gamma unique_delta")
+        high = est.entropy_rate()
+        est.update("x x x x")
+        assert est.entropy_rate() < high
+        assert est.entropy_rate() == 0.0  # single token type
+
+
+class TestEntropyAdaptiveProfile:
+    def _large_ctx(self):
+        with patch("agent.context_compressor.get_model_context_length", return_value=1_000_000):
+            c = ContextCompressor(model="test/model", threshold_percent=0.50, quiet_mode=True)
+            _ = c.context_length
+            return c
+
+    def test_profile_is_registered(self):
+        assert "entropy-adaptive" in ContextCompressor.COMPRESSION_PROFILES
+
+    def test_empty_estimator_keeps_midpoint(self):
+        c = self._large_ctx()
+        c.set_compression_profile("entropy-adaptive")
+        assert c.threshold_percent == 0.50
+
+    def test_high_entropy_uses_research_threshold(self):
+        c = self._large_ctx()
+        # Many unique tokens → H > 4 bits/token
+        vocab = " ".join(f"tok{i}" for i in range(64))
+        c.feed_turn(vocab)
+        c.set_compression_profile("entropy-adaptive")
+        assert c.threshold_percent == 0.45
+        assert c._entropy_estimator.entropy_rate() > 4.0
+
+    def test_low_entropy_uses_code_threshold(self):
+        c = self._large_ctx()
+        c.feed_turn("foo " * 40)
+        c.set_compression_profile("entropy-adaptive")
+        assert c.threshold_percent == 0.55
+        assert c._entropy_estimator.entropy_rate() < 2.5
+
+    def test_feed_turn_and_intent_checkpoint(self, caplog):
+        import logging
+        c = self._large_ctx()
+        c.feed_turn("hello world")
+        c.current_intent = "implement feature X"
+        with caplog.at_level(logging.INFO, logger="agent.context_compressor"):
+            c._pre_compress_checkpoint(trigger_reason="threshold", context_tokens=1234)
+        text = caplog.text
+        assert "pre_compress_checkpoint" in text
+        assert "implement feature X" in text
+        assert "threshold" in text
+
+    def test_on_turn_complete_feeds_new_messages(self):
+        c = self._large_ctx()
+        c.on_turn_complete([{"role": "user", "content": "alpha beta gamma"}])
+        assert c._entropy_estimator.entropy_rate() > 0
+        assert c._entropy_fed_count == 1
+
+
+class TestFactLedgerBeforeSummaryPrefix:
+    """Ledger must occupy position 0 so eval head_hit_rate sees named facts."""
+
+    def test_prepend_fact_ledger_puts_ledger_before_existing_prefix(self):
+        c = ContextCompressor.__new__(ContextCompressor)
+        c.tail_mode = "lean"
+        sample_turns = [
+            {"role": "assistant", "content": "arXiv:2608.24569 working-memory.py 1569 lines"},
+        ]
+        result = c._prepend_fact_ledger(SUMMARY_PREFIX + "body text here", sample_turns)
+        assert result.lstrip().startswith("FACT LEDGER")
+        assert SUMMARY_PREFIX in result
+        assert result.find("FACT LEDGER") < result.find(SUMMARY_PREFIX)
+
+    def test_ledger_first_handoff_still_classifies_standalone(self):
+        body = "FACT LEDGER\n2608.24569\n" + SUMMARY_PREFIX + "\nbody"
+        assert ContextCompressor.classify_summary_content(body) == "standalone"
+
+    def test_prepend_fact_ledger_is_idempotent(self):
+        c = ContextCompressor.__new__(ContextCompressor)
+        c.tail_mode = "lean"
+        sample_turns = [
+            {"role": "assistant", "content": "arXiv:2608.24569 working-memory.py 1569 lines"},
+        ]
+        first = c._prepend_fact_ledger(SUMMARY_PREFIX + "body text here", sample_turns)
+        second = c._prepend_fact_ledger(first, sample_turns)
+        assert first == second
+        assert first.lstrip().startswith("FACT LEDGER")
+        assert ContextCompressor._starts_with_summary_prefix(first)
+        assert first.find("FACT LEDGER") < first.find(SUMMARY_PREFIX)
+
+
+
+class TestSetCompressionProfileRearm:
+    """set_compression_profile() rearm-lowering must only fire when the floor
+    is genuinely tightening (new_floor < old_floor AND new_floor < current_rearm).
+    Loosening — even if the new floor is still below the current rearm mark —
+    must leave the rearm untouched.
+    """
+
+    def _ctx(self):
+        with patch("agent.context_compressor.get_model_context_length", return_value=1_000_000):
+            c = ContextCompressor(model="test/model", threshold_percent=0.50, quiet_mode=True)
+            _ = c.context_length
+            return c
+
+    def test_rearm_lowered_when_new_floor_is_tighter(self):
+        c = self._ctx()
+        # Establish a non-zero prior floor so tightening is unambiguous.
+        c.set_compression_profile({"proactive_prune_tokens": 50_000})
+        c._proactive_prune_rearm_tokens = 80_000
+        # Tighten: 40 000 < old floor 50 000 AND < rearm 80 000 → rearm drops.
+        c.set_compression_profile({"proactive_prune_tokens": 40_000})
+        assert c.proactive_prune_tokens == 40_000
+        assert c._proactive_prune_rearm_tokens == 40_001
+
+    def test_rearm_unchanged_when_new_floor_is_looser_but_below_rearm(self):
+        """Loosening where the new floor is still below the current rearm must
+        NOT collapse the rearm — that would force an immediate cache-breaking prune."""
+        c = self._ctx()
+        c.set_compression_profile({"proactive_prune_tokens": 28_000})
+        c._proactive_prune_rearm_tokens = 80_000
+        # Loosen: 40 000 > old floor 28 000, but 40 000 < rearm 80 000.
+        # Old (buggy) code: new_floor < current_rearm → smashed rearm to 40 001.
+        # Correct: old_floor check prevents this.
+        c.set_compression_profile({"proactive_prune_tokens": 40_000})
+        assert c.proactive_prune_tokens == 40_000
+        assert c._proactive_prune_rearm_tokens == 80_000  # must not change
+
+    def test_rearm_not_raised_when_new_floor_is_looser_above_rearm(self):
+        c = self._ctx()
+        c.set_compression_profile({"proactive_prune_tokens": 28_000})
+        c._proactive_prune_rearm_tokens = 20_000
+        # New floor 28 000 > rearm 20 000: not a tightening, rearm stays.
+        c.set_compression_profile({"proactive_prune_tokens": 28_000})
+        assert c.proactive_prune_tokens == 28_000
+        assert c._proactive_prune_rearm_tokens == 20_000
+
+    def test_rearm_unchanged_when_floor_equals_rearm(self):
+        c = self._ctx()
+        c.set_compression_profile({"proactive_prune_tokens": 32_000})
+        c._proactive_prune_rearm_tokens = 32_000
+        # Equal: new_floor is not < old_floor, so rearm stays.
+        c.set_compression_profile({"proactive_prune_tokens": 32_000})
+        assert c._proactive_prune_rearm_tokens == 32_000
+
+    def test_rearm_not_zeroed_on_tighter_floor(self):
+        c = self._ctx()
+        c.set_compression_profile({"proactive_prune_tokens": 50_000})
+        c._proactive_prune_rearm_tokens = 80_000
+        # Floor=0 is a tighten from 50 000; rearm must be max(0+1, 0)=1, not 0.
+        c.set_compression_profile({"proactive_prune_tokens": 0})
+        assert c._proactive_prune_rearm_tokens == 1
+
+    def test_floor_set_correctly_on_invalid_value(self):
+        c = self._ctx()
+        original_floor = c.proactive_prune_tokens
+        original_rearm = 30_000
+        c._proactive_prune_rearm_tokens = original_rearm
+        # Invalid value: neither floor nor rearm must change.
+        c.set_compression_profile({"proactive_prune_tokens": "not-an-int"})
+        assert c.proactive_prune_tokens == original_floor
+        assert c._proactive_prune_rearm_tokens == original_rearm
+
+
+class TestLastCompressionRatioSessionBoundary:
+    """Plugin routing reads last_compression_ratio; /new must not inherit it."""
+
+    def _ctx(self):
+        with patch("agent.context_compressor.get_model_context_length", return_value=1_000_000):
+            c = ContextCompressor(model="test/model", threshold_percent=0.50, quiet_mode=True)
+            _ = c.context_length
+            return c
+
+    def test_init_exposes_none_ratio_and_complexity(self):
+        # Counterfactual: if the properties were not defined, AttributeError would
+        # be raised; if they read _last_ratio/_last_complexity_score which don't
+        # exist yet on a fresh compressor, getattr fallback returns None — this
+        # test documents the initial state contract, not absence of attributes.
+        c = self._ctx()
+        c._last_ratio = None
+        c._last_complexity_score = None
+        assert c.last_compression_ratio is None
+        assert c.last_complexity_score is None
+
+    def test_bind_session_state_preserves_ratio_and_complexity(self):
+        # Counterfactual: before the MEDIUM fix, bind_session_state cleared
+        # _last_ratio/_last_complexity_score, which wiped diagnostics on every
+        # compression rotation (on_session_start boundary_reason="compression").
+        # After the fix, bind_session_state must NOT clear these — only
+        # _reset_session_compaction_state (the /new path) may do so.
+        c = self._ctx()
+        c._last_ratio = 0.42
+        c._last_complexity_score = 0.91
+        c.bind_session_state(None, "s-rotation")
+        assert c.last_compression_ratio == pytest.approx(0.42)
+        assert c.last_complexity_score == pytest.approx(0.91)
+
+    def test_reset_session_compaction_state_clears_ratio(self):
+        c = self._ctx()
+        c._last_ratio = 0.33
+        c._last_complexity_score = 0.7
+        c._reset_session_compaction_state()
+        assert c.last_compression_ratio is None
+        assert c.last_complexity_score is None

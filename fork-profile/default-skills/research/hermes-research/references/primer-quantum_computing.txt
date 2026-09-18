@@ -1,0 +1,61 @@
+PRIMER: Quantum Computing and Quantum Information
+
+=============================================================================
+1. FIELD OVERVIEW
+
+Quantum computing studies computation on systems governed by quantum mechanics, replacing classical bits with qubits (superposition, entanglement, measurement). Core objects: quantum states (unit vectors in Hilbert space), quantum gates (unitary operators), quantum circuits (sequences of gates followed by measurement), and quantum algorithms (protocols achieving speedup over classical methods).
+
+The field matters because quantum computers can solve certain problems exponentially faster than classical machines. Grover's algorithm achieves O(sqrt(N)) search instead of O(N). Shor's algorithm factors integers in polynomial time, threatening RSA encryption. Variational quantum algorithms (VQA) may offer advantages for optimization and machine learning on NISQ (Noisy Intermediate-Scale Quantum) devices. Error correction is necessary because quantum states are fragile; the threshold theorem proves that below a critical error rate, error correction can make computation arbitrarily reliable. This matters to Hermes because quantum principles inspire practical algorithms, constrain cryptographic trust, and may eventually power hybrid AI inference.
+
+=============================================================================
+2. KEY RESULTS
+
+Grover's Algorithm: Given a function f: {0,1}^n -> {0,1}, if exactly one x satisfies f(x) = 1, Grover's algorithm finds it in O(sqrt(2^n)) = O(sqrt(N)) time with quantum circuits. No classical algorithm can do better (lower bound proven by Bennett, Brassard, Bernstein). For N = 10^6 items, this is 1000x speedup; for N = 10^9, about 30,000x.
+
+Shor's Algorithm: Factors an m-bit integer in O(m^3) gate operations using the quantum Fourier transform to solve the order-finding problem. For 2048-bit RSA keys, this is polynomial time vs. exponential (sub-exponential classical best-known). The algorithm assumes access to a quantum computer with ~2m+3 qubits and error rates below ~10^-3 per gate.
+
+Quantum Error Correction Threshold Theorem (Aharonov, Ben-Or, Gottesman): If the physical error rate per gate is below a threshold p_th (typically ~10^-2 to 10^-3 depending on the code), then logical error rate decays exponentially with code distance, enabling fault-tolerant universal quantum computing. Above threshold, errors accumulate faster than correction removes them.
+
+Variational Quantum Eigensolver (VQE): A hybrid algorithm parametrizing a trial quantum state |psi(theta)> and classically optimizing theta to minimize <psi(theta)|H|psi(theta)> (expected energy). For chemistry/materials, this can run on NISQ devices with ~50-300 qubits. Approximation quality depends on ansatz expressivity and classical optimizer convergence.
+
+QAOA (Quantum Approximate Optimization Algorithm): Applies parameterized quantum unitaries to encode a classical objective, then measures. For MaxCut, known to achieve >0.699 of optimal with p=1 layer; scales with circuit depth but requires parameter tuning. No proven advantage over classical algorithms yet; empirical speedups remain unclear on real hardware.
+
+=============================================================================
+3. STANDARD PRACTITIONER TOOLS
+
+Practitioners use Qiskit (IBM), Cirq (Google), PyQuil (Rigetti) to construct and simulate circuits. Key operations: state preparation, parameterized gates (RX, RY, RZ rotations; CNOT entanglement), measurement, classical post-processing.
+
+Standard formulas: superposition state (1/sqrt(2))(|0> + |1>), entangled Bell pair (1/sqrt(2))(|00> + |11>), Bloch sphere parameterization (cos(theta/2)|0> + e^{i*phi}*sin(theta/2)|1>), density matrix for mixed states (rho = sum_i p_i |psi_i><psi_i|).
+
+Practical algorithms: phase estimation (extract eigenvalues), HHL (solve linear systems; requires fault tolerance), variational circuits (parameterized ansatze), quantum walk (continuous-time walk for search and sampling). Cryptographic post-quantum candidates (lattice-based, hash-based) replace RSA and ECDSA assuming Shor's threat in 10-15 years.
+
+=============================================================================
+4. HERMES APPLICATIONS
+
+--- MODEL ROUTING: LEVERAGING QUANTUM SUPERPOSITION FOR PARALLELISM ---
+
+(a) Mathematical Structure:
+Quantum superposition allows simultaneous exploration of exponentially many states; measurement collapses to one. Entanglement enables correlations between subsystems. In routing, both ideas apply: can we route subtasks as "superposed candidates" and entangle routing decisions so that a poor choice in one propagates constraints to others?
+
+(b) Current Hermes Approach:
+Model routing is a heuristic: score each model (Claude/GPT/Grok/Mistral) on task type (language, math, coding, reasoning), pick top-1 or top-k, and execute. No feedback loop optimizes routing; no exploration of joint allocations.
+
+(c) Quantum-Inspired Approach:
+Use Grover's algorithm logic (without quantum hardware): represent each (task, model) pair as a candidate with a quality oracle Q(t,m) = (latency + cost penalty - accuracy bonus). Instead of sequential scanning, maintain a superposition-like distribution over candidates weighted by Q, then perform amplitude amplification: iteratively reflect around high-quality solutions and invert around average. Each iteration raises the probability of good (task, model) pairings. This is the QAOA or VQE mindset applied classically: parametrize a probability distribution p_theta over routings, and classically optimize theta to minimize E[latency + cost - accuracy]. Formula: minimize L(theta) = E_{m ~ p_theta(m|t)} [latency(t,m) + cost(m) - alpha*accuracy(t,m)]. Use gradient descent on theta.
+
+(d) Value Assessment:
+Low risk of misapplication, but also limited payoff. Hermes currently routes accurately via hand-tuned heuristics. The quantum-inspired amplitude amplification is essentially classical softmax + temperature tuning, which Hermes can do with a neural model. Implementation cost: 2-3 days to train a routing classifier with inverse-temperature search over beta. Honest gain: 5-15% latency reduction if routing is a bottleneck; often it is not (subtask execution dominates). Worth spiking if routing latency > 50ms per task.
+
+--- DELEGATE_TASK: QUANTUM WALK FOR EXPLORATION ---
+
+(a) Mathematical Structure:
+Quantum walks are quantum analogues of random walks. On a graph, a classical random walk mixes in O(diam^2) steps; quantum walks can achieve O(diam) steps or even faster mixing for search. The idea: assign each subagent spawn a node; entangle their exploration paths so that a subagent discovering a dead-end propagates that information coherently to others, pruning the search tree faster.
+
+(b) Current Hermes Approach:
+Spawn up to 10 subagents in parallel, each exploring independently. No sharing of search guidance; if subagent 1 finds a dead-end, subagent 2 may waste cycles on the same path.
+
+(c) Quantum-Inspired Approach:
+Model the delegation space (which subagent solves which sub-problem) as a hypergraph. Use continuous-time quantum walk simulation: define a Laplacian operator L on the subagent-subproblem bipartite graph. The walk diffuses quantum amplitude along edges, and interference effects concentrate probability mass on good (subagent, subproblem) matchings. Practically: compute the transition matrix T = exp(-i*L*t/hbar) classically (matrix exponential), sample from its stationary distribution to allocate subagents, and update T as outcomes arrive (re-weight edges). This is essentially belief propagation with quantum-inspired interference.
+
+(d) Value Assessment:
+Moderate implementation cost, unclear win. The quantum walk logic transfers as classical message-passing (factor graphs, belief propagation), which Hermes could use. But Hermes already runs 10 subagents in parallel with a simple queue and timeout, achieving reasonable load balancing. Quantum walk reweighting adds complexity: you must maintain and update edge weights (subagent reliability, subproblem difficulty) dynamically. The speedup from quantum walks is worst-case sqrt(N) for uniform problems; on Hermes' structured task graphs, classical heuristics (greedy, learned routing) likely outperform. Risk: the math (continuous-time walks, matrix exponentials) is elegant but assumes regular graph structure; Hermes' task graphs are heterogeneous.

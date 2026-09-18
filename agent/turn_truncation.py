@@ -265,6 +265,27 @@ def _continue_text(st: _Trunc, _retry: TurnRetryState, assistant_message: Any) -
             agent._vprint(f"{agent.log_prefix}↻ Stream interrupted — requesting continuation ({n}/4)...")
         else:
             agent._vprint(f"{agent.log_prefix}↻ Requesting continuation ({n}/4)...")
+        _last_role = messages[-1].get("role") if messages and isinstance(messages[-1], dict) else None
+        if _last_role != "assistant":
+            logger.debug(
+                "turn_truncation: skipping continuation nudge — last message role is %r "
+                "(expected 'assistant'); would create user→user adjacency — not retrying",
+                _last_role,
+            )
+            # P2-M4 fix: do NOT set restart_with_length_continuation — nudge was skipped
+            # so retrying with the identical message list would only burn API budget.
+            # P3-M2 / P4-M4 fix: strip both fragment AND nudge messages before early return.
+            # _turn_start is computed below so slice from 0 — flags are turn-scoped and the
+            # ceiling-exit cleanup would have done the same thing.
+            messages[:] = [
+                m for m in messages
+                if not (isinstance(m, dict) and (
+                    m.get("_length_continuation_fragment")
+                    or m.get("_length_continuation_nudge")
+                ))
+            ]
+            agent._session_messages = messages
+            return st.done("break")
         append_message(messages, {
             "role": "user", "content": _get_continuation_prompt(st.is_stub, _dropped_tools),
             "_length_continuation_nudge": True,
