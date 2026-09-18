@@ -421,11 +421,20 @@ def list_skins() -> List[Dict[str, str]]:
 
 def load_skin(name: str) -> SkinConfig:
     """Load a skin by name: user skins first, then built-in, then default."""
-    user_file = _skins_dir() / f"{name}.yaml"
+    # Sanitise name: strip path components and null bytes to prevent traversal
+    # via a malicious display.skin config value.
+    safe_name = Path(name).name.replace("\x00", "")
+    user_file = _skins_dir() / f"{safe_name}.yaml"
+    # Confirm resolved path stays inside skins_dir (defence-in-depth)
+    try:
+        user_file.resolve().relative_to(_skins_dir().resolve())
+    except ValueError:
+        logger.warning("Skin name '%s' resolves outside skins directory; using default", name)
+        return _build_skin_config(_BUILTIN_SKINS["default"])
     data = _load_skin_from_yaml(user_file) if user_file.is_file() else None
-    if not data and name not in _BUILTIN_SKINS:
+    if not data and safe_name not in _BUILTIN_SKINS:
         logger.warning("Skin '%s' not found, using default", name)
-    return _build_skin_config(data or _BUILTIN_SKINS.get(name) or _BUILTIN_SKINS["default"])
+    return _build_skin_config(data or _BUILTIN_SKINS.get(safe_name) or _BUILTIN_SKINS["default"])
 
 
 def get_active_skin() -> SkinConfig:

@@ -2153,6 +2153,10 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         #      session boundary — reset here, not in set_compression_profile.
         self.protect_last_n = getattr(self, "_config_protect_last_n", self.protect_last_n)
         self.proactive_prune_tokens = getattr(self, "_config_proactive_prune_tokens", self.proactive_prune_tokens)
+        # F03 fix: summary_target_ratio and protect_first_n are mutated by set_compression_profile
+        # but had no _config_ snapshot; session 2 would inherit session 1's profile values.
+        self.summary_target_ratio = getattr(self, "_config_summary_target_ratio", self.summary_target_ratio)
+        self.protect_first_n = getattr(self, "_config_protect_first_n", self.protect_first_n)
         # MEDIUM-A: restore threshold from _config_ (not mutated _base_threshold_percent).
         # why: set_compression_profile mutates _base_threshold_percent; /new must use the
         #      original config value, then re-derive _base via model overrides.
@@ -2602,9 +2606,13 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         # Effective trigger = min(ratio threshold, cap); re-applied in update_model().
         self.threshold_tokens_cap = self._coerce_threshold_tokens_cap(threshold_tokens_cap)
         self.protect_first_n, self.protect_last_n = protect_first_n, protect_last_n
+        # Snapshot config-time values so bind_session_state() can restore them on /new.
+        # F03: set_compression_profile mutates these; without snapshots session 2 inherits
+        # session 1's profile.
+        self._config_protect_first_n = protect_first_n
+        self._config_protect_last_n = protect_last_n
         # Snapshot config values so bind_session_state can restore after profile mutations.
         # why: set_compression_profile() mutates these live; /new must reset to config, not carry leak.
-        self._config_protect_last_n = protect_last_n
         self._config_proactive_prune_tokens = int(proactive_prune_tokens or 0)
         # Proactive prune runs independently of the full-compression trigger. 0 = disabled.
         self.proactive_prune_tokens = int(proactive_prune_tokens or 0)
@@ -2621,6 +2629,7 @@ class ContextCompressor(SummaryDispatchMixin, MicroCompactionMixin, ContextEngin
         self._last_reclaim_block_warn: "tuple[str, int] | None" = None
         self.min_tail_user_messages = min_tail_user_messages
         self.summary_target_ratio = max(0.10, min(summary_target_ratio, 0.80))
+        self._config_summary_target_ratio = self.summary_target_ratio  # F03: bind_session_state restore
         self.quiet_mode = quiet_mode
         # Usable input = context_length - max_tokens; only a positive int counts as a reservation.
         self.max_tokens = self._coerce_max_tokens(max_tokens)

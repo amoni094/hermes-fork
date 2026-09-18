@@ -20,7 +20,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .complexity import DEFAULT_SCORER, TaskComplexityScorer
+from .complexity import TaskComplexityScorer
+
+# why: DEFAULT_SCORER was a module-level singleton; reset() in on_session_finalize nuked
+# novelty (_recent_tokens) for ALL concurrent sessions in gateway mode. Replaced with a
+# session-keyed dict so each session has its own scorer lifecycle. (H3 fix)
+_session_scorers: dict[str, TaskComplexityScorer] = {}
+
+
+def _get_scorer(session_id: str) -> TaskComplexityScorer:
+    """Return (or create) a per-session TaskComplexityScorer."""
+    if session_id not in _session_scorers:
+        _session_scorers[session_id] = TaskComplexityScorer()
+    return _session_scorers[session_id]
 
 logger = logging.getLogger(__name__)
 
@@ -303,7 +315,7 @@ def _maybe_reclassify_on_entropy_decay(
         rec["_reclassification_count"] = reclass_count + 1
         rec["reclassified"] = True
         try:
-            rec["complexity"] = float(DEFAULT_SCORER.score(" ".join(bucket)))
+            rec["complexity"] = float(_get_scorer(session_id).score(" ".join(bucket)))
         except Exception as exc:  # fail-open
             logger.debug("lambda-tuner: [_maybe_reclassify_on_entropy_decay complexity] suppressed: %s", exc, exc_info=True)
         _fired[session_id] = rec
@@ -572,8 +584,8 @@ def _apply_adaptive_effort(ctx: Any, session_id: str, user_message: str, session
     raw = 0.0
     if not greeter:
         try:
-            raw = float(DEFAULT_SCORER.score(user_message))
-            DEFAULT_SCORER.update_recent(user_message)
+            raw = float(_get_scorer(session_id).score(user_message))
+            _get_scorer(session_id).update_recent(user_message)
         except Exception as exc:
             logger.debug("lambda-tuner: turn complexity score failed (fail-open): %s", exc)
             raw = 0.0
@@ -830,8 +842,8 @@ def _classify_and_commit(
             accumulated_text = " ".join(bucket)
             complexity = 0.0
             try:
-                complexity = float(DEFAULT_SCORER.score(accumulated_text))
-                DEFAULT_SCORER.update_recent(accumulated_text)
+                complexity = float(_get_scorer(session_id).score(accumulated_text))
+                _get_scorer(session_id).update_recent(accumulated_text)
             except Exception as exc:
                 logger.debug("lambda-tuner: complexity score failed (fail-open): %s", exc)
                 complexity = 0.0
@@ -905,7 +917,7 @@ def _classify_and_commit(
                     #     (already done via compressor._entropy_estimator.entropy_rate();
                     #     live window is 32 turns, not 10 — would need a 10-message slice).
                     #   - Estimate distortion D from task complexity score
-                    #     (already done via DEFAULT_SCORER / rec["complexity"] in [0, 1]).
+                    #     (already done via _get_scorer(session_id) / rec["complexity"] in [0, 1]).
                     #   - Exact R(D) = H(X) - H(X|relevant). The hard part is estimating
                     #     conditional entropy H(X|relevant); Hermes has no relevance oracle
                     #     that would make H(X|relevant) observable.
@@ -1035,7 +1047,7 @@ def register(ctx: Any) -> None:
             _intent_applied.pop(session_id, None)
             _complexity_buffers.pop(session_id, None)
             try:
-                DEFAULT_SCORER.reset()
+                _session_scorers.pop(session_id, None)
             except Exception:
                 pass
         except Exception as exc:

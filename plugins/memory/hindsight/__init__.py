@@ -349,6 +349,7 @@ class HindsightMemoryProvider(MemoryProvider):
 
         # Recall: pending prefetch block + count, and the indicator state (recall_status()).
         self._prefetch_result, self._prefetch_count = "", 0
+        self._prefetch_session_id: str = ""  # F10: session that warmed the current prefetch
         self._prefetch_lock = threading.Lock()
         self._prefetch_thread = None
         self._last_recall_returned, self._last_recall_count = False, 0
@@ -926,6 +927,13 @@ class HindsightMemoryProvider(MemoryProvider):
         # Default: the background worker's result for the previous turn (capped join).
         self._join_prefetch(3.0, log=True)
         with self._prefetch_lock:
+            # F10 fix: discard the prefetch result if it was warmed for a different
+            # session.  A slow Hindsight API (>3 s) can let session A's prefetch
+            # thread write _prefetch_result after a session switch; session B would
+            # then drain session A's memories into its first turn.
+            if session_id and self._prefetch_session_id != session_id:
+                self._prefetch_result, self._prefetch_count = "", 0
+                self._prefetch_session_id = session_id
             result, count = self._prefetch_result, self._prefetch_count
             self._prefetch_result, self._prefetch_count = "", 0
         return self._finish_prefetch(result, count)
@@ -940,6 +948,11 @@ class HindsightMemoryProvider(MemoryProvider):
         # Sync mode recalls live each turn — nothing to prime in the background.
         if self._recall_sync or self._recall_disabled():
             return
+
+        # Stamp the session this prefetch belongs to before starting the thread;
+        # prefetch() checks this before draining (F10 fix).
+        with self._prefetch_lock:
+            self._prefetch_session_id = session_id
 
         def _run():
             # Wait (bounded, off the reply path) for the just-completed turn's
