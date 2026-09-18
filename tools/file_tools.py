@@ -128,8 +128,17 @@ _BLOCKED_PROC_SUFFIXES = (
 # Listed explicitly so the check is O(1) and survives normpath edge cases.
 _BLOCKED_PROC_EXPLICIT = frozenset({
     "/proc/self/environ", "/proc/self/mem", "/proc/self/maps",
+    "/proc/self/exe",   # symlink to running binary — leaks install path
+    "/proc/self/cwd",   # symlink to working directory — leaks profile path
+    "/proc/self/root",  # chroot boundary
+    "/proc/self/fd",    # directory listing of all open fds
     "/proc/1/environ",
+    "/proc/1/exe",
+    "/proc/1/maps",
 })
+
+# Prefixes under /proc/self/fd/ cover arbitrary open file descriptors (e.g. /proc/self/fd/5).
+_BLOCKED_PROC_FD_PREFIX = "/proc/self/fd/"
 
 
 def _file_ops_uses_host_paths(file_ops) -> bool:
@@ -176,6 +185,8 @@ def _is_blocked_device_path(path: str) -> bool:
     if normalized in _BLOCKED_DEVICE_PATHS:
         return True
     if normalized in _BLOCKED_PROC_EXPLICIT:
+        return True
+    if normalized.startswith(_BLOCKED_PROC_FD_PREFIX):  # /proc/self/fd/<N> — arbitrary fd
         return True
     if normalized.startswith("/proc/") and normalized.endswith(_BLOCKED_PROC_SUFFIXES):
         return True

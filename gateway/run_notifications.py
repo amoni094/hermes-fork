@@ -335,6 +335,12 @@ class GatewayNotificationsMixin:
         ``event_message_id`` reply anchor); see ``_send_queued_final_text``. Without a key the send
         stays unledgered."""
         from gateway.run import _strip_response_attachments_for_direct_send
+        # Record last reply for self-echo bot-loop heuristic before delivery.
+        if session_key and response:
+            try:
+                self._record_last_reply(session_key, response)
+            except Exception:
+                pass
         if not text_already_delivered:
             text_content = _strip_response_attachments_for_direct_send(response, adapter)
             if text_content:

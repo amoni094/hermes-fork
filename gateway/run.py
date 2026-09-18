@@ -4014,9 +4014,35 @@ class GatewayRunner(
 
         return self._under_authorization_profile(source, _check)
 
+    def _record_last_reply(self, session_key: str, text: str) -> None:
+        """Cache the last reply text per session_key for the self-echo bot-loop heuristic.
+        Bounded to 512 chars (fingerprint only); capped at 512 entries (evict oldest)."""
+        cache = getattr(self, "_last_reply_texts", None)
+        if cache is None:
+            self._last_reply_texts: dict = {}
+            cache = self._last_reply_texts
+        if len(cache) >= 512:
+            try:
+                cache.pop(next(iter(cache)))
+            except StopIteration:
+                pass
+        cache[session_key] = (text or "")[:512]
+
+    def _get_last_reply_for_source(self, source: SessionSource) -> str:
+        """Return the cached last reply for the conversation that owns *source*, or ''."""
+        # Mirror the bot_loop_guard conversation key so the heuristic uses the same scope.
+        from gateway.authz_mixin import GatewayAuthorizationMixin
+        conv_key = "|".join(str(p) for p in self._bot_loop_guard_conversation(source))
+        return getattr(self, "_last_reply_texts", {}).get(conv_key, "")
+
     def _admit_bot_message_for_source(self, source: SessionSource, *, text: str = "", session_last_response: str = "") -> bool:
         """Count a bot message under the profile that authorized it, so the guard's peek, count and
-        config all read the transport profile's ``gateway.bot_loop_guard``."""
+        config all read the transport profile's ``gateway.bot_loop_guard``.
+
+        session_last_response auto-fills from the per-conversation reply cache when not provided,
+        so the self-echo heuristic fires correctly without callers needing to pass it explicitly."""
+        if not session_last_response:
+            session_last_response = self._get_last_reply_for_source(source)
         return self._under_authorization_profile(source, lambda: self._admit_bot_message(source, text=text, session_last_response=session_last_response))
 
     def _under_authorization_profile(self, source: SessionSource, check):
