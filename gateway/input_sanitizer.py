@@ -17,8 +17,10 @@ import re
 
 # P4-M2 fix: strip zero-width / soft-hyphen / BOM / invisible formatting chars before
 # any delimiter regex runs — prevents "Human\u200b:" bypass.
+# P5-L1: NBSP (\xa0) is covered by \s* in all patterns; included here for defence-in-depth
+# and to match the module docstring's stated coverage.
 _INVISIBLE_UNICODE = re.compile(
-    r'[\u00ad\u200b\u200c\u200d\u200e\u200f\u2060\u2061\u2062\u2063\u2064\ufeff]'
+    r'[\u00a0\u00ad\u200b\u200c\u200d\u200e\u200f\u2060\u2061\u2062\u2063\u2064\ufeff]'
 )
 
 # Anthropic-style turn delimiters (double-newline prefix).

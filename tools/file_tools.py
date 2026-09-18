@@ -184,6 +184,15 @@ def _is_blocked_device_path(path: str) -> bool:
     normalized = os.path.normpath(_expand_tilde(path))
     if normalized in _BLOCKED_DEVICE_PATHS:
         return True
+    # P5-M1 fix: block /dev/shm/* (tmpfs IPC), /run/secrets/* (Kubernetes/Docker secret mounts),
+    # and /sys/* (kernel sysfs — hardware state, kernel parameters, cgroup info).
+    # These are not covered by the /proc/ blocklist but are common exfil targets in containers.
+    if normalized.startswith("/dev/shm/") or normalized == "/dev/shm":
+        return True
+    if normalized.startswith("/run/secrets/") or normalized == "/run/secrets":
+        return True
+    if normalized.startswith("/sys/"):
+        return True
     if normalized in _BLOCKED_PROC_EXPLICIT:
         return True
     if normalized.startswith(_BLOCKED_PROC_FD_PREFIX):  # /proc/self/fd/<N> — arbitrary fd
