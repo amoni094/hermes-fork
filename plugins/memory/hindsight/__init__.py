@@ -967,6 +967,11 @@ class HindsightMemoryProvider(MemoryProvider):
         # Sync mode recalls live each turn — nothing to prime in the background.
         if self._recall_sync or self._recall_disabled():
             return
+        # P4-M3 fix: empty session_id would stamp _prefetch_session_id="" which trivially
+        # matches any subsequent empty-sid thread, allowing corrupt writes and evicting a
+        # real session's stamp. Guard here so the invalid call is a no-op.
+        if not session_id:
+            return
 
         # Stamp the session this prefetch belongs to before starting the thread;
         # prefetch() checks this before draining (F10 fix).

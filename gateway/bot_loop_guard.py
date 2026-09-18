@@ -92,7 +92,10 @@ def is_self_response(text: str, session_last_response: str) -> bool:
     if not text or not session_last_response:
         return False
     needle = session_last_response.strip()[:_SELF_RESPONSE_FINGERPRINT_LEN]
-    if len(needle) < 20:
+    # P4-M5 fix: the original 20-char guard silently disabled the heuristic for short
+    # acknowledgement replies ("OK.", "Done.", "✓") which are MORE suspicious when echoed.
+    # Keep only a minimal guard for truly empty strings (ambiguous); everything else fires.
+    if not needle:
         return False
     return text.strip()[:_SELF_RESPONSE_FINGERPRINT_LEN] == needle
 

@@ -190,12 +190,18 @@ def _is_blocked_device_path(path: str) -> bool:
         return True
     if normalized.startswith("/proc/") and normalized.endswith(_BLOCKED_PROC_SUFFIXES):
         return True
-    # Catch symlink-traversal tricks: /proc/self -> /proc/<pid>; also catches
-    # /proc/*/environ and /proc/*/mem regardless of pid segment.
-    # P3-H2 fix: also block /proc/<pid>/fd/<N> for any pid (arbitrary-pid fd exfil).
+    # P3-H2/P4-H1 fix: block /proc/net/* (global network state — world-readable topology leak).
+    # Also block /proc/self/net/* (per-namespace view) and raw memory nodes.
+    if normalized in ("/proc/kcore", "/proc/kmem"):
+        return True
+    if normalized.startswith("/proc/net/") or normalized == "/proc/net":
+        return True
     if normalized.startswith("/proc/"):
         tail = normalized[len("/proc/"):]
         if "environ" in tail or "/mem" in tail:
+            return True
+        # /proc/<pid>/net/* — per-process namespace view
+        if "/net/" in tail or tail.endswith("/net"):
             return True
         # /proc/<pid>/fd/... or /proc/self/fd/... (covers any numeric pid)
         _parts = tail.split("/", 2)
