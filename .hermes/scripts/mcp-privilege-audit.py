@@ -25,7 +25,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DEFAULT_CONFIG = Path.home() / ".hermes" / "config.yaml"
+_os_mca = __import__("os")
+_hermes_base_mca = Path(_os_mca.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hermes_profile_mca = _os_mca.environ.get("HERMES_PROFILE", "")
+_hermes_root_mca = (_hermes_base_mca / "profiles" / _hermes_profile_mca) if _hermes_profile_mca else _hermes_base_mca
+DEFAULT_CONFIG = _hermes_root_mca / "config.yaml"
 DEFAULT_WORKSPACE = Path.home()
 DEFAULT_REPORT = Path("/tmp/mcp-privilege-report.txt")
 TIMEOUT = 12
