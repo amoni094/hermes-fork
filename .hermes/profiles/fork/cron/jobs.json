@@ -66,18 +66,18 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/pre-compact-annotate.py",
       "no_agent": true,
       "description": "Every 15m R-D compaction advisory",
-      "next_run_at": "2026-09-19T20:45:00+10:00",
+      "next_run_at": "2026-09-19T23:00:00+10:00",
       "env": {
         "HERMES_PROFILE": "fork"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-09-19T20:30:00+10:00",
-        "dispatched_at": "2026-09-19T20:30:09.244667+10:00",
-        "lateness_seconds": 9.2,
+        "scheduled_at": "2026-09-19T22:45:00+10:00",
+        "dispatched_at": "2026-09-19T22:45:23.494411+10:00",
+        "lateness_seconds": 23.5,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-09-19T20:30:09.989542+10:00",
+      "last_run_at": "2026-09-19T22:45:24.163619+10:00",
       "last_status": "ok",
       "failure_streak": 0,
       "last_delivery_error": null,
@@ -208,15 +208,15 @@
       "env": {
         "HERMES_PROFILE": "fork"
       },
-      "next_run_at": "2026-09-19T22:00:00+10:00",
+      "next_run_at": "2026-09-20T00:00:00+10:00",
       "last_dispatch": {
-        "scheduled_at": "2026-09-19T20:00:00+10:00",
-        "dispatched_at": "2026-09-19T20:00:06.256629+10:00",
-        "lateness_seconds": 6.3,
+        "scheduled_at": "2026-09-19T22:00:00+10:00",
+        "dispatched_at": "2026-09-19T22:00:18.758541+10:00",
+        "lateness_seconds": 18.8,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-09-19T20:00:12.276829+10:00",
+      "last_run_at": "2026-09-19T22:00:24.741307+10:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -267,5 +267,5 @@
       "next_run_at": "2026-09-20T04:00:00+10:00"
     }
   ],
-  "updated_at": "2026-09-19T20:38:10.078429+10:00"
+  "updated_at": "2026-09-19T22:45:24.185516+10:00"
 }
