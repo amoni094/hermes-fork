@@ -10,6 +10,7 @@ Usage:
   python3 hermes-math-sweep.py [--dry-run] [--limit N]
 """
 
+import os
 import sys, json, time, importlib.util, argparse
 from pathlib import Path
 from datetime import datetime, timezone
@@ -22,8 +23,8 @@ def load_module(name, path):
     spec.loader.exec_module(mod)
     return mod
 
-SCRIPTS = Path("~/.hermes/scripts").expanduser()
-CACHE   = Path("~/.hermes/cache/research").expanduser()
+SCRIPTS = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts"
+CACHE   = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache/research"
 
 sweep = load_module("sweep",       SCRIPTS / "hermes-research-sweep.py")
 interp = load_module("interpreter", SCRIPTS / "math-paper-interpreter.py")
@@ -46,7 +47,8 @@ MATH_CATS = {k: v for k, v in sweep.CATEGORIES.items() if k not in CORE_AGENT}
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dry-run', action='store_true', help='Skip API calls, show what would run')
-parser.add_argument('--limit', type=int, default=0, help='Max papers to interpret (0=all)')
+parser.add_argument('--limit', type=int, default=60,
+                    help='Max papers to interpret per run (default: 60 to avoid cron timeout; 0=all)')
 args = parser.parse_args()
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -105,12 +107,14 @@ def main():
 
     # Save a math-specific sweep output
     math_sweep_out = CACHE / 'hermes-math-sweep-latest.json'
-    math_sweep_out.write_text(json.dumps({
+    _tmp_math_sweep_out = math_sweep_out.with_suffix('.tmp')
+    _tmp_math_sweep_out.write_text(json.dumps({
         'sweep_date': datetime.now(timezone.utc).isoformat(),
         'new_paper_count': len(new_papers),
         'new_papers_flat': new_papers,
         'all_papers': all_papers,
     }, indent=2, default=str))
+    _tmp_math_sweep_out.replace(math_sweep_out)
     print(f"[hermes-math-sweep] Math sweep saved: {math_sweep_out}")
 
     # ── Step 2: Fetch abstracts + interpret with primers ──────────────────────
@@ -188,7 +192,9 @@ def main():
     }
 
     out_path = CACHE / 'math-interpretation-latest.json'
-    out_path.write_text(json.dumps(output, indent=2, default=str))
+    _tmp = out_path.with_suffix('.tmp')
+    _tmp.write_text(json.dumps(output, indent=2, default=str))
+    _tmp.replace(out_path)
 
     # ── Step 4: Summary ───────────────────────────────────────────────────────
     print(f"[hermes-math-sweep] Done.")

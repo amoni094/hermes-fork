@@ -474,7 +474,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 file=sys.stderr,
             )
             print("  Tip: run with --demo to see a demonstration.")
-            return 0
+            return 2  # distinct from REVIEW failure (1) so callers can distinguish
 
     result = run(
         records,
@@ -510,7 +510,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         "generated_at": result["generated_at"],
     }
     print(json.dumps(compact, indent=2))
-    return 0
+    return 1 if result['summary'].get('overall_verdict') == 'REVIEW' else 0
 
 
 if __name__ == "__main__":

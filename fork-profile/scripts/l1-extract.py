@@ -10,6 +10,7 @@ Cross-job lock: ~/.hermes/.l1-extract-running
 l1-promote.py skips a cycle while this lock exists so promote cannot read a
 partial YYYY-MM-DD.md while extract is still writing L1 candidates.
 """
+import os
 from __future__ import annotations
 
 import importlib.machinery
@@ -19,7 +20,7 @@ import struct
 import sys
 from pathlib import Path
 
-LOCK = Path("~/.hermes/.l1-extract-running").expanduser()
+LOCK = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / ".l1-extract-running"
 _HERE = Path(__file__).resolve().parent
 _PYC_CANDIDATES = [
     _HERE / "references" / "l1-extract.cpython-314.pyc.bak",

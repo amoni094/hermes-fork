@@ -20,11 +20,11 @@ import sqlite3
 import sys
 from pathlib import Path
 
-LOCK = Path("~/.hermes/.l1-extract-running").expanduser()
+LOCK = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / ".l1-extract-running"
 METACOG_DB = Path(
     os.environ.get(
         "MH_DB",
-        str(Path.home() / ".hermes" / "memory-facts" / "metacognitive.db"),
+        str(Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "memory-facts" / "metacognitive.db"),
     )
 )
 _HERE = Path(__file__).resolve().parent

@@ -13,7 +13,7 @@ hermes sessions prune --source subagent --older-than 3 --yes 2>&1
 hermes sessions prune --older-than 7 --yes 2>&1
 
 # GC stale working-memory files (>48h, not linked to any active session)
-WM_DIR="$HOME/.hermes/cache/working-memory"
+WM_DIR="${HERMES_HOME:-$HOME/.hermes}/cache/working-memory"
 if [ -d "$WM_DIR" ]; then
   WM_DELETED=$(find "$WM_DIR" -name '*.json' -mtime +2 2>/dev/null | wc -l)
   find "$WM_DIR" -name '*.json' -mtime +2 -delete 2>/dev/null
@@ -21,7 +21,7 @@ if [ -d "$WM_DIR" ]; then
 fi
 
 # Reclaim freed pages (SQLite VACUUM); skip if DB < 300 MB to keep it cheap
-DB="$HOME/.hermes/state.db"
+DB="${HERMES_HOME:-$HOME/.hermes}/state.db"
 DB_MB=$(du -m "$DB" | cut -f1)
 if [ "$DB_MB" -gt 300 ]; then
   python3 -c "import sqlite3; c=sqlite3.connect('$DB'); c.execute('VACUUM'); c.close(); print('VACUUMed state.db (was ${DB_MB}MB)')"

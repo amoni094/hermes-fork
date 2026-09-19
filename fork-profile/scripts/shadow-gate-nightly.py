@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """
 shadow-gate-nightly.py — Nightly shadow telemetry gate report.
@@ -20,7 +21,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 from shadow_telemetry import evaluate_flag  # noqa: E402
 
-TELEMETRY_DIR = Path.home() / ".hermes" / "cache" / "shadow-telemetry"
+TELEMETRY_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache" / "shadow-telemetry"
 
 # Recommendation thresholds (task spec)
 PROMOTE_PASS_RATE   = 0.9

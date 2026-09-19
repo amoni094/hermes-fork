@@ -148,7 +148,7 @@ def _get_consistency_score(finding: str, n_samples: int = 3) -> float:
 
 
 # ── Calibration log for consistency-augmented confidence ─────────────────────
-_CONSISTENCY_CALIB_LOG = Path.home() / ".hermes" / "cache" / "calibration-log.jsonl"
+_CONSISTENCY_CALIB_LOG = HERMES_HOME / "cache" / "calibration-log.jsonl"
 
 def _write_consistency_calib_row(predicted_confidence: float, query_hash: str,
                                   scope: str = "", condorcet: float = 1.0) -> None:
@@ -373,7 +373,7 @@ def chernoff_n_star(p_hat, p_thresh=0.5, delta=0.05):
     return math.ceil(math.log(1.0 / delta) / D)
 
 
-_CALIB_LOG = Path.home() / ".hermes" / "cache" / "calibration-log.jsonl"
+_CALIB_LOG = _CONSISTENCY_CALIB_LOG  # DRY: same path as _CONSISTENCY_CALIB_LOG above (C-H4 fix)
 
 def _write_calibration_row(session_id: str | None, task_class: str | None,
                             fok: float, jol: float, decision: str) -> None:
@@ -399,6 +399,25 @@ def _write_calibration_row(session_id: str | None, task_class: str | None,
             "decision": decision,
             "outcome": None,  # filled by outcome-labeling pass; never auto-set here
         }
+        # Fix B: inject confidence_drift from confidence_tracker.py output if fresh (<2h).
+        # confidence_tracker writes ~/.hermes/cache/confidence-trajectory.json with per-tool
+        # drift_delta fields.  We take the max absolute drift across all tools as a scalar
+        # signal so the calibration log carries a lightweight confidence health indicator.
+        _conf_traj_path = HERMES_HOME / "cache" / "confidence-trajectory.json"
+        try:
+            import time as _time
+            if _conf_traj_path.exists() and (_time.time() - _conf_traj_path.stat().st_mtime) < 7200:
+                with open(_conf_traj_path, encoding="utf-8") as _cf:
+                    _traj = __import__("json").load(_cf)
+                _deltas = [
+                    abs(_tool.get("drift_delta", 0.0) or 0.0)
+                    for _tool in _traj.get("tools", {}).values()
+                ]
+                row["confidence_drift"] = round(max(_deltas), 4) if _deltas else 0.0
+            else:
+                row["confidence_drift"] = 0.0
+        except Exception:
+            row["confidence_drift"] = 0.0  # never let tracker failure crash the harness
         with open(_CALIB_LOG, "a") as f:
             f.write(json.dumps(row) + "\n")
     except OSError:

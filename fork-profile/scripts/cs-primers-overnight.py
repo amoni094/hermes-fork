@@ -23,6 +23,7 @@ Output:
   ~/.hermes/cache/research/cs-primers/INDEX.txt
 """
 
+import os
 import argparse
 import json
 import os
@@ -31,7 +32,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-PRIMERS_DIR = Path("~/.hermes/cache/research/cs-primers").expanduser()
+PRIMERS_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache/research/cs-primers"
 PRIMERS_DIR.mkdir(parents=True, exist_ok=True)
 
 INDEX_FILE = PRIMERS_DIR / "INDEX.txt"

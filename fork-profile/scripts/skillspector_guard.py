@@ -224,7 +224,9 @@ def scan_skill(path: Path, bundled_names: set[str]) -> SkillResult:
     else:
         data = {"stderr_prefix": proc.stderr[:2000]}
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    _tmp = out_path.with_suffix('.tmp')
+    _tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    _tmp.replace(out_path)
     risk_raw = data.get("risk_assessment", {})
     risk = risk_raw if isinstance(risk_raw, dict) else {}
     findings_raw = data.get("findings", [])
@@ -558,7 +560,6 @@ def main() -> int:
         if _profile_c and "profiles" not in str(_base_c)
         else _base_c
     ) / "cache"
-    _drift_count = 0
     try:
         _integrity_path = _cache_root / "skill-integrity.json"
         if _integrity_path.exists():
@@ -578,7 +579,6 @@ def main() -> int:
                     _skill = _item.get("skill", _item.get("name", "unknown"))
                     _reason = _item.get("reason", _item.get("status", "unknown"))
                     print(f"INTEGRITY-FAIL: {_skill} ({_reason})")
-                    _drift_count += 1
     except Exception:
         pass
 
@@ -599,11 +599,10 @@ def main() -> int:
                 if _item.get("drift") or _item.get("changed"):
                     _skill = _item.get("skill", _item.get("name", "unknown"))
                     print(f"MERKLE-DRIFT: {_skill}")
-                    _drift_count += 1
     except Exception:
         pass
 
-    return 1 if _drift_count > 0 else 0
+    return 1 if locals().get('changed_high_risk') else 0
 
 
 if __name__ == "__main__":

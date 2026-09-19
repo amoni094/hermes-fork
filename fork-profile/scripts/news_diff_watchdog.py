@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # ── Config ────────────────────────────────────────────────────────────────
-CACHE_FILE = Path.home() / ".hermes" / "cache" / "news" / "seen_items.json"
+CACHE_FILE = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache" / "news" / "seen_items.json"
 MAX_CACHE_ITEMS = 500  # Rolling window to prevent unbounded growth
 
 # Feed sources: list of (name, url) tuples
@@ -58,7 +58,13 @@ def load_cache() -> dict:
     if CACHE_FILE.exists():
         try:
             return json.loads(CACHE_FILE.read_text())
-        except Exception:
+        except Exception as e:
+            import sys as _s
+            print(f"[news_diff_watchdog] cache corrupt ({e}), starting fresh", file=_s.stderr)
+            try:
+                CACHE_FILE.rename(CACHE_FILE.with_suffix(".corrupt"))
+            except Exception:
+                pass
             return {"seen": [], "last_updated": None}
     return {"seen": [], "last_updated": None}
 
@@ -68,7 +74,9 @@ def save_cache(cache: dict) -> None:
     if len(cache["seen"]) > MAX_CACHE_ITEMS:
         cache["seen"] = cache["seen"][-MAX_CACHE_ITEMS:]
     cache["last_updated"] = datetime.now(timezone.utc).isoformat()
-    CACHE_FILE.write_text(json.dumps(cache, indent=2))
+    _cf_tmp = CACHE_FILE.with_suffix('.tmp')
+    _cf_tmp.write_text(json.dumps(cache, indent=2))
+    _cf_tmp.replace(CACHE_FILE)
 
 
 def item_key(url: str) -> str:
@@ -112,7 +120,8 @@ def fetch_items(feed_url: str) -> list[dict]:
 
     except Exception as e:
         # Watchdog must stay silent on transient failures
-        pass
+        import sys as _s
+        print(f"[news_diff_watchdog] fetch/parse failed: {e}", file=_s.stderr)
 
     return items
 

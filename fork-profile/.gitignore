@@ -17,3 +17,4 @@ __pycache__/
 # Session/process state
 active_sessions.json
 active_sessions.lock
+*.tmp

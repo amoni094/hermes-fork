@@ -141,7 +141,9 @@ def _save(doc: dict[str, Any], mac_verify: bool = False) -> Path:
     if mac_verify:
         doc["_mac"] = _wm_compute_mac(doc)
     p = _path(doc["session_id"])
-    p.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+    _wm_tmp = p.with_suffix(".tmp")
+    _wm_tmp.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+    _wm_tmp.replace(p)
     return p
 
 
@@ -259,7 +261,7 @@ def cmd_add_constraint(args: argparse.Namespace) -> int:
         "source_context": getattr(args, "source_context", None) or None,  # e.g. "session:abc123" or "skill:hermes-agent"
         "predecessor_model": getattr(args, "predecessor_model", None) or None,  # model that generated this constraint
         # arXiv:2608.25553: stale constraint expiry metadata (required)
-        "created_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "expires_at_or_policy": getattr(args, "expires_at", None) or "until_changed",
         "source_turn": getattr(args, "source_turn", None),
         # Zenn JP Aug 2026: card scope
@@ -1630,11 +1632,13 @@ def cmd_risk_floor(args: argparse.Namespace) -> int:
 
     def _save_floor(floor: float) -> None:
         floor_path.parent.mkdir(parents=True, exist_ok=True)
-        floor_path.write_text(
+        _fl_tmp = floor_path.with_suffix(".tmp")
+        _fl_tmp.write_text(
             json.dumps({"floor": floor, "updated_at": _now()}, indent=2) + "\n",
             encoding="utf-8",
         )
-        # Sync to config.yaml loop_harness.loop_risk_floor so the canonical config key
+        _fl_tmp.replace(floor_path)
+        # Sync to config.yaml
         # stays current with the runtime floor (F-TRG-01 implementation).
         # Always target the default profile config (not fork override) since loop_harness
         # is defined there; fork config.yaml is a thin override with no loop_harness section.
@@ -1652,10 +1656,13 @@ def cmd_risk_floor(args: argparse.Namespace) -> int:
                             txt,
                         )
                         if txt2 != txt:
-                            _cfg_path.write_text(txt2, encoding="utf-8")
+                            _cfg_tmp = Path(str(_cfg_path) + ".tmp")
+                            _cfg_tmp.write_text(txt2, encoding="utf-8")
+                            _cfg_tmp.replace(_cfg_path)
                         break  # stop at first config that has the key
-        except Exception:
-            pass  # config sync is best-effort; floor file is authoritative
+        except Exception as e:
+            import sys as _s
+            print(f"[working-memory] _save_floor config sync failed: {e}", file=_s.stderr)  # config sync is best-effort; floor file is authoritative
 
     update_val = getattr(args, "update", None)
     do_get    = getattr(args, "get", False)

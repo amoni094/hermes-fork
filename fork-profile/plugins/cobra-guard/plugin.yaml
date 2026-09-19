@@ -1,0 +1,12 @@
+name: cobra-guard
+version: "1.0.0"
+description: >
+  CoBRA heuristic tool-use skip guard (warn-only, never blocks) and
+  post-call outcome logger. arXiv:2609.00967
+provides_hooks:
+  - pre_tool_call
+  - post_tool_call
+  - on_session_start
+  - on_session_reset
+settings:
+  enabled: true

@@ -11,6 +11,7 @@ Architecture note (ARCHITECTURE.md TIER 2 gap #6):
 Stdlib-only; shadow-wrapped (never raises into the host).
 """
 from __future__ import annotations
+import os
 
 import json
 import logging
@@ -22,7 +23,7 @@ logger = logging.getLogger("context-pressure-guard")
 
 # ── pressure reader ──────────────────────────────────────────────────────────
 
-_SCRIPT_PATH = Path("~/.hermes/scripts/context-pressure-reader.py").expanduser()
+_SCRIPT_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "context-pressure-reader.py"
 
 
 def _get_pressure_status() -> dict:
@@ -33,7 +34,7 @@ def _get_pressure_status() -> dict:
     55-line reference script.
     """
     try:
-        cache_dir = Path("~/.hermes/cache").expanduser()
+        cache_dir = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache"
         candidates = (
             list(cache_dir.glob("*pressure*.jsonl"))
             + list(cache_dir.glob("turn_usage*.jsonl"))

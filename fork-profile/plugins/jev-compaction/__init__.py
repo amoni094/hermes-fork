@@ -52,6 +52,7 @@ Config (config.yaml under plugins.jev_compaction):
     system: 1.0               # never demote
 """
 from __future__ import annotations
+import os
 
 import importlib.util
 import json
@@ -70,13 +71,13 @@ logger = logging.getLogger("jev-compaction")
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
-_SCRIPTS = Path("~/.hermes/scripts").expanduser()
+_SCRIPTS = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts"
 _JEV_PATH = _SCRIPTS / "jev_verify_fn.py"
 _RR_PATH = _SCRIPTS / "rr_compaction_spike.py"
 _COT_SCORER_PATH = _SCRIPTS / "cot_phase_scorer.py"
 _SEGMENT_COMPACTOR_PATH = _SCRIPTS / "segment_level_compactor.py"
 _CRYSTAL_TIERS_PATH = _SCRIPTS / "crystal_fidelity_tiers.py"
-_CACHE_DIR = Path("~/.hermes/cache").expanduser()
+_CACHE_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache"
 _CALIBRATION_LOG = _CACHE_DIR / "calibration-log.jsonl"
 
 # ── Tool density table (from rr_compaction_spike.py; inlined to avoid import) ─
@@ -181,7 +182,7 @@ def _load_jev() -> types.ModuleType | None:
             logger.debug("jev-compaction: %s not found; Jev pass skipped", _JEV_PATH)
             return None
         # Ensure hermes-agent is on sys.path (same pattern as jev_verify_fn itself)
-        _ha = Path("~/.hermes/hermes-agent").expanduser()
+        _ha = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "hermes-agent"
         # N08 fix: detect the actual Python version instead of hardcoding 3.11.
         # On Python 3.12+ (Fedora F39+) the venv uses python3.12/, not python3.11/.
         import sys as _sys

@@ -75,7 +75,7 @@ SEED_QUERIES = [
 
 def _load_dotenv() -> None:
     """Load ~/.hermes/.env into os.environ without overwriting existing keys."""
-    env_path = Path.home() / ".hermes" / ".env"
+    env_path = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / ".env"
     try:
         text = env_path.read_text()
     except OSError:
@@ -537,6 +537,35 @@ def main() -> int:
             f"[l1-gmemory] {failed} clusters failed — check Hindsight/Graphiti connectivity.",
             file=sys.stderr,
         )
+
+    # Post-consolidation: surface unresolved H2 obstructions from profinite-thread-check.
+    # Fail-open: any I/O or parse error is silently skipped.
+    try:
+        _hermes_home = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+        _profile = os.environ.get("HERMES_PROFILE", "")
+        # Profile-aware cache path: prefer <profile>/cache/ when HERMES_PROFILE is set,
+        # otherwise fall back to the default <HERMES_HOME>/cache/ location.
+        if _profile:
+            _ob_path = _hermes_home / "profiles" / _profile / "cache" / "h2-obstructions.json"
+            if not _ob_path.exists():
+                _ob_path = _hermes_home / "cache" / "h2-obstructions.json"
+        else:
+            _ob_path = _hermes_home / "cache" / "h2-obstructions.json"
+        if _ob_path.exists():
+            _ob_data = json.loads(_ob_path.read_text())
+            _obstructions = _ob_data.get("obstructions", [])
+            for _ob in _obstructions:
+                if _ob.get("resolved") is True:
+                    continue
+                _key = _ob.get("class_id", "<unknown>")
+                _cls = _ob.get("type", "<unknown>")
+                print(
+                    f"[l1-gmemory] unresolved H2 obstruction: {_key} ({_cls})",
+                    file=sys.stderr,
+                )
+    except Exception:
+        pass  # fail-open: H2 ledger check must never abort the pipeline
+
     return 0
 
 

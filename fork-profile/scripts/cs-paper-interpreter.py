@@ -25,6 +25,7 @@ Usage:
 The interpreter does NOT apply patches. It produces candidates for human review.
 """
 
+import os
 import argparse
 import json
 import os
@@ -38,11 +39,11 @@ from urllib.error import URLError, HTTPError
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
-CACHE_DIR      = Path("~/.hermes/cache/research").expanduser()
+CACHE_DIR      = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache/research"
 SWEEP_LATEST   = CACHE_DIR / "hermes-cs-sweep-latest.json"
 OUTPUT_LATEST  = CACHE_DIR / "cs-interpretation-latest.json"
 SPIKE_QUEUE    = CACHE_DIR / "cs-spike-queue.json"
-SPIKE_DIR      = Path("~/.hermes/research/spikes").expanduser()
+SPIKE_DIR      = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "research/spikes"
 PRIMERS_DIR    = CACHE_DIR / "cs-primers"
 
 SPIKE_DIR.mkdir(parents=True, exist_ok=True)
@@ -425,7 +426,7 @@ def main():
     # Emit content-addressed run header (arXiv:2608.23610 traceability)
     import subprocess as _sp
     _rh = _sp.run(
-        [sys.executable, str(Path("~/.hermes/scripts/run-header.py").expanduser()),
+        [sys.executable, str(Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "run-header.py"),
          "--script", "cs-paper-interpreter.py",
          "--model", "claude-haiku-4-5",
          "--skill", "hermes-cs-research",
@@ -551,7 +552,8 @@ def main():
 
     # Save outputs
     now = datetime.now(timezone.utc).isoformat()
-    output_latest.write_text(json.dumps({
+    _tmp = output_latest.with_suffix('.tmp')
+    _tmp.write_text(json.dumps({
         "interpreted_at": now,
         "paper_count": len(results),
         "prefilter_skipped": skipped_prefilter,
@@ -563,13 +565,16 @@ def main():
         "papers": results,
         "generated_ideas": generated_ideas,
     }, indent=2))
+    _tmp.replace(output_latest)
     print(f"[cs-interpreter] Saved: {output_latest}")
 
-    spike_queue_path.write_text(json.dumps({
+    _tmp = spike_queue_path.with_suffix('.tmp')
+    _tmp.write_text(json.dumps({
         "generated_at": now,
         "pending_count": len(spike_queue),
         "items": spike_queue,
     }, indent=2))
+    _tmp.replace(spike_queue_path)
     print(f"[cs-interpreter] Spike queue: {spike_queue_path} ({len(spike_queue)} items)")
 
     # Write CS ideas queue (append-dedupe)
@@ -583,18 +588,22 @@ def main():
     existing_artifacts = {i.get("hermes_artifact", "") for i in existing_ideas}
     new_ideas = [i for i in generated_ideas if i.get("hermes_artifact", "") not in existing_artifacts]
     all_ideas = existing_ideas + new_ideas
-    ideas_queue_path.write_text(json.dumps({
+    _tmp = ideas_queue_path.with_suffix('.tmp')
+    _tmp.write_text(json.dumps({
         "last_updated": now,
         "total_ideas": len(all_ideas),
         "ideas": all_ideas,
     }, indent=2))
+    _tmp.replace(ideas_queue_path)
     if generated_ideas:
         print(f"[cs-interpreter] Ideas queue: {ideas_queue_path} ({len(new_ideas)} new, {len(all_ideas)} total)")
 
     # Update seen-paper cache
     processed_ids = [p.get("id") or p.get("arxiv_id", "") for p in cs_papers if p.get("id") or p.get("arxiv_id")]
     cs_seen_processed.update(processed_ids)
-    cs_seen_path.write_text(json.dumps({"seen": sorted(cs_seen_processed), "last_updated": now}, indent=2))
+    _tmp = cs_seen_path.with_suffix('.tmp')
+    _tmp.write_text(json.dumps({"seen": sorted(cs_seen_processed), "last_updated": now}, indent=2))
+    _tmp.replace(cs_seen_path)
     print(f"[cs-interpreter] Seen cache: {len(cs_seen_processed)} total papers processed across runs")
 
     # Summary

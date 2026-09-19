@@ -5,6 +5,7 @@ Wires tool-auth-shim.py into the live Hermes fork agent via post_tool_call hook.
 Implements Shoham inspection-game probabilistic auditing (tier='EXTERNAL').
 """
 from __future__ import annotations
+import os
 
 import importlib.util
 import logging
@@ -24,7 +25,7 @@ INJECTION_RISK_TOOLS: frozenset[str] = frozenset({
     "web_extract_url",
 })
 
-_SHIM_PATH = Path("~/.hermes/scripts/tool-auth-shim.py").expanduser()
+_SHIM_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "tool-auth-shim.py"
 _TIER = "EXTERNAL"  # inspection-game tier for all external-content tools
 
 # ── Dynamic import of tool-auth-shim ────────────────────────────────────────

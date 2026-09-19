@@ -1,0 +1,12 @@
+name: tool-auth-gate
+version: "1.0.0"
+description: >
+  Agentao-inspired host-contract tool authorization gate.
+  Implements proposal/authorize separation: escalates writes to protected paths
+  for human approval, hard-denies known destructive ops.
+  arXiv:2608.13574
+provides_hooks:
+  - pre_tool_call
+settings:
+  escalate_tools: []   # additional tool names to always escalate
+  deny_tools: []       # additional tool names to hard-deny

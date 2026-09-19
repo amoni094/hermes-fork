@@ -27,6 +27,7 @@ optimization proposals for human review, then the apply job or a separate sessio
 implements them after review.
 """
 
+import os
 import argparse
 import json
 import re
@@ -56,12 +57,12 @@ def track_skip_rate(total, skipped):
         )
 
 
-CACHE_DIR = Path("~/.hermes/cache/research").expanduser()
+CACHE_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache/research"
 SWEEP_LATEST = CACHE_DIR / "hermes-math-sweep-latest.json"
 OUTPUT_LATEST = CACHE_DIR / "math-interpretation-latest.json"
 SPIKE_QUEUE = CACHE_DIR / "math-spike-queue.json"
-SPIKE_QUEUE_DIR = Path("~/.hermes/research/spikes").expanduser()
-PRIMERS_DIR = Path("~/.hermes/cache/research/primers").expanduser()
+SPIKE_QUEUE_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "research/spikes"
+PRIMERS_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache/research/primers"
 
 # ── Math category keys (from consolidated 51-cat sweep) ───────────────────────
 
@@ -735,7 +736,7 @@ def main():
     # Emit content-addressed run header (arXiv:2608.23610 traceability)
     import subprocess as _sp
     _rh = _sp.run(
-        [sys.executable, str(Path("~/.hermes/scripts/run-header.py").expanduser()),
+        [sys.executable, str(Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "run-header.py"),
          "--script", "math-paper-interpreter.py",
          "--model", "claude-haiku-4-5",
          "--skill", "hermes-math-research",
@@ -846,7 +847,9 @@ def main():
                         except Exception: pass
                     _ea = {x.get("hermes_artifact", "") for x in _ei}
                     _ni = [x for x in generated_ideas if x.get("hermes_artifact", "") not in _ea]
-                    _iqp.write_text(json.dumps({"last_updated": datetime.now(timezone.utc).isoformat(), "total_ideas": len(_ei)+len(_ni), "ideas": _ei+_ni}, indent=2))
+                    _tmp__iqp = _iqp.with_suffix('.tmp')
+                    _tmp__iqp.write_text(json.dumps({"last_updated": datetime.now(timezone.utc).isoformat(), "total_ideas": len(_ei)+len(_ni), "ideas": _ei+_ni}, indent=2))
+                    _tmp__iqp.replace(_iqp)
                     print(f"[math-interpreter] Budget-guard ideas flush: {len(_ni)} new ideas written", file=sys.stderr)
                 break
 
@@ -998,8 +1001,12 @@ def main():
 
     if not args.dry_run:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        OUTPUT_LATEST.write_text(json.dumps(output, indent=2))
-        SPIKE_QUEUE.write_text(json.dumps(spike_queue_output, indent=2))
+        _tmp = OUTPUT_LATEST.with_suffix('.tmp')
+        _tmp.write_text(json.dumps(output, indent=2))
+        _tmp.replace(OUTPUT_LATEST)
+        _tmp = SPIKE_QUEUE.with_suffix('.tmp')
+        _tmp.write_text(json.dumps(spike_queue_output, indent=2))
+        _tmp.replace(SPIKE_QUEUE)
         # Write generated ideas queue
         ideas_queue_path = CACHE_DIR / "math-ideas-queue.json"
         existing_ideas = []
@@ -1012,11 +1019,13 @@ def main():
         existing_artifacts = {i.get("hermes_artifact", "") for i in existing_ideas}
         new_ideas = [i for i in generated_ideas if i.get("hermes_artifact", "") not in existing_artifacts]
         all_ideas = existing_ideas + new_ideas
-        ideas_queue_path.write_text(json.dumps({
+        _tmp = ideas_queue_path.with_suffix('.tmp')
+        _tmp.write_text(json.dumps({
             "last_updated": output["run_date"],
             "total_ideas": len(all_ideas),
             "ideas": all_ideas,
         }, indent=2))
+        _tmp.replace(ideas_queue_path)
         print(f"[math-interpreter] Written: {OUTPUT_LATEST}", file=sys.stderr)
         print(f"[math-interpreter] Spike queue: {SPIKE_QUEUE}", file=sys.stderr)
         if generated_ideas:
@@ -1027,7 +1036,9 @@ def main():
         n_processed = _last_i + 1 if _last_i >= 0 else len(batch)
         processed_ids = [p.get("id", "") for p in batch[:n_processed] if p.get("id")]
         seen_processed.update(processed_ids)
-        seen_path.write_text(json.dumps({"seen": sorted(seen_processed), "last_updated": output["run_date"]}, indent=2))
+        _tmp = seen_path.with_suffix('.tmp')
+        _tmp.write_text(json.dumps({"seen": sorted(seen_processed), "last_updated": output["run_date"]}, indent=2))
+        _tmp.replace(seen_path)
         print(f"[math-interpreter] Seen cache: {len(seen_processed)} total papers processed across runs", file=sys.stderr)
 
     # Print digest

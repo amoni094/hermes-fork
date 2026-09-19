@@ -20,8 +20,12 @@ import time
 from pathlib import Path
 from collections import defaultdict
 
-MISS_LOG = Path('~/.hermes/cache/recall-misses.jsonl').expanduser()
-TTL_STATE = Path('~/.hermes/cache/adaptive-ttl-state.json').expanduser()
+import os as _os
+_hermes_base = Path(_os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hermes_profile = _os.environ.get("HERMES_PROFILE", "")
+_hermes_root = (_hermes_base / "profiles" / _hermes_profile) if _hermes_profile and "profiles" not in str(_hermes_base) else _hermes_base
+MISS_LOG = _hermes_root / "cache" / "recall-misses.jsonl"
+TTL_STATE = _hermes_root / "cache" / "adaptive-ttl-state.json"
 
 # Reference TTL baselines (days) per fact_type — these are the target steady-state values
 BASE_TTL_DAYS = {

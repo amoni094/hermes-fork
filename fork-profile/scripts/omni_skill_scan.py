@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """
 omni_skill_scan.py — Scheduled GEPA Omni continuous improvement driver.
@@ -21,13 +22,14 @@ The patch queue is the human review surface. No SKILL.md is ever auto-patched.
 import argparse
 import glob
 import json
+import os
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
 
-SKILLS_ROOT = Path.home() / ".hermes" / "skills"
-OMNI_DIR = Path.home() / ".hermes" / "omni"
+SKILLS_ROOT = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "skills"
+OMNI_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "omni"
 QUEUE_PATH = OMNI_DIR / "patch-queue.json"
 THRESHOLD = 0.65   # skills scoring below this are queued for optimization
 MAX_OPTIMIZE = 3   # max skills to optimize per cron run (cost control)
@@ -41,7 +43,9 @@ def load_score_history() -> dict:
     if SCORE_HISTORY_PATH.exists():
         try:
             return json.loads(SCORE_HISTORY_PATH.read_text())
-        except Exception:
+        except Exception as e:
+            import sys as _s
+            print(f"[omni_skill_scan] score-history.json corrupt ({e}), resetting", file=_s.stderr)
             return {}
     return {}
 
@@ -54,7 +58,9 @@ def update_score_history(results: list[dict]) -> dict:
         history.setdefault(name, [])
         history[name].append(round(r["score"], 3))
         history[name] = history[name][-HISTORY_WINDOW:]
-    SCORE_HISTORY_PATH.write_text(json.dumps(history, indent=2))
+    _sh_tmp = SCORE_HISTORY_PATH.with_suffix(".tmp")
+    _sh_tmp.write_text(json.dumps(history, indent=2))
+    _sh_tmp.replace(SCORE_HISTORY_PATH)
     return history
 
 
@@ -292,7 +298,9 @@ def write_report(results: list[dict], report_path: Path):
         f"  python3 ~/.hermes/scripts/omni_skill_scan.py --optimize --budget 3.0",
     ]
 
-    report_path.write_text("\n".join(lines))
+    _rp_tmp = report_path.with_suffix(".tmp")
+    _rp_tmp.write_text("\n".join(lines))
+    _rp_tmp.replace(report_path)
     return len(below)
 
 
@@ -465,7 +473,9 @@ def write_queue(results: list[dict], history: dict | None = None):
         and classify_skill_trajectory(history.get(r['name'], [])) == "HighVariance"
     ]
     queue = {"candidates": below, "high_variance": high_variance}
-    QUEUE_PATH.write_text(json.dumps(queue, indent=2))
+    _q_tmp = QUEUE_PATH.with_suffix(".tmp")
+    _q_tmp.write_text(json.dumps(queue, indent=2))
+    _q_tmp.replace(QUEUE_PATH)
     return below
 
 
@@ -492,7 +502,7 @@ def optimize_queued(budget_per_skill: float, max_skills: int):
     candidates_dir.mkdir(parents=True, exist_ok=True)
 
     # Import the evaluator from gepa_skill_eval
-    eval_script = Path.home() / ".hermes" / "scripts" / "gepa_skill_eval.py"
+    eval_script = SKILLS_ROOT / "scripts" / "gepa_skill_eval.py"
     import importlib.util
     spec = importlib.util.spec_from_file_location("gepa_skill_eval", eval_script)
     if spec is None or spec.loader is None:
@@ -502,7 +512,7 @@ def optimize_queued(budget_per_skill: float, max_skills: int):
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
 
     processed = 0
-    for item in queue[:max_skills]:
+    for item in queue.get("candidates", queue)[:max_skills]:
         skill_path = Path(item['path'])
         if not skill_path.exists():
             continue
@@ -613,16 +623,18 @@ def main():
 
     # SkillRouter overlap check (Sweep 21 — detects routing-confusing skill pairs)
     import subprocess as _sp
-    _router = Path.home() / ".hermes/scripts/skill-router-index.py"
+    _router = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts/skill-router-index.py"
     if _router.exists():
         print(f"\n--- SkillRouter: rebuilding index ---")
-        _sp.run(["python3", str(_router), "--build"], capture_output=True)
+        _result = _sp.run(["python3", str(_router), "--build"], capture_output=True)
+        if _result.returncode != 0:
+            print(f"[omni_skill_scan] skill-router-index --build failed (rc={_result.returncode})", file=sys.stderr)
         _chk = _sp.run(["python3", str(_router), "--check"], capture_output=True, text=True)
         if _chk.stdout.strip():
             print(_chk.stdout.strip())
 
     # Pending trace2skill candidates
-    _pending = Path.home() / ".hermes/cache/pending-improvements"
+    _pending = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache/pending-improvements"
     _candidates = list(_pending.glob("skill-candidate-*.md")) if _pending.exists() else []
     if _candidates:
         print(f"\n--- Pending trace2skill candidates ({len(_candidates)}) ---")
@@ -632,7 +644,7 @@ def main():
         print(f"  Promote with: skill_manage(action='create', ...)")
 
     # Skill yield audit (SYNAPSE tracker — shows metrics for skills with recorded invocations)
-    _yield_tracker = Path.home() / ".hermes/scripts/skill-yield-tracker.py"
+    _yield_tracker = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts/skill-yield-tracker.py"
     if _yield_tracker.exists():
         _yt = _sp.run(["python3", str(_yield_tracker), "--audit"], capture_output=True, text=True)
         if _yt.stdout.strip():

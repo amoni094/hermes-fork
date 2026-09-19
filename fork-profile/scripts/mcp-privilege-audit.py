@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DEFAULT_CONFIG = Path.home() / ".hermes" / "config.yaml"
+DEFAULT_CONFIG = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "config.yaml"
 DEFAULT_WORKSPACE = Path.home()
 DEFAULT_REPORT = Path("/tmp/mcp-privilege-report.txt")
 TIMEOUT = 12
@@ -397,30 +397,7 @@ def audit(config_path: Path, workspace: Path, report_path: Path) -> int:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text("\n".join(lines) + "\n")
     print(f"Wrote {report_path} ({total_tools} tools, {total_flags} findings)")
-
-    try:
-        import os as _os_m, tempfile as _tf_m, json as _json_m, time as _time_m
-        _base_m = _os_m.environ.get('HERMES_HOME', str(report_path.parent.parent.parent))
-        _profile_m = _os_m.environ.get('HERMES_PROFILE', '')
-        _root_m = (Path(_base_m) / 'profiles' / _profile_m) if _profile_m else Path(_base_m)
-        _alarm_path_m = _root_m / 'cache' / 'mcp-privilege-alarm.json'
-        _alarm_path_m.parent.mkdir(parents=True, exist_ok=True)
-        _alarm_data_m = {
-            'alarm': total_flags > 0,
-            'severity': 'HIGH' if total_flags > 0 else 'INFO',
-            'source': 'mcp-privilege-audit',
-            'findings': total_flags,
-            'report': str(report_path),
-            'ts': _time_m.time(),
-        }
-        _tfd_m, _tmp_m = _tf_m.mkstemp(dir=str(_alarm_path_m.parent), suffix='.json')
-        with _os_m.fdopen(_tfd_m, 'w') as _f_m:
-            _json_m.dump(_alarm_data_m, _f_m)
-        _os_m.replace(_tmp_m, _alarm_path_m)
-    except Exception:
-        pass
     return 1 if total_flags > 0 else 0
-
 
 
 def main(argv: list[str]) -> int:

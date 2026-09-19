@@ -28,6 +28,7 @@ Usage:
 
 DB location: ~/.hermes/memory-facts/graphiti-state.db
 """
+import os
 import sys
 import json
 import sqlite3
@@ -39,7 +40,7 @@ import urllib.request
 import urllib.error
 import importlib.util
 
-FACTS_DIR = pathlib.Path.home() / ".hermes/memory-facts"
+FACTS_DIR = pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "memory-facts"
 DB_PATH = FACTS_DIR / "graphiti-state.db"
 STAGING_PATH = FACTS_DIR / "staging.md"
 GRAPHITI_BASE = "http://127.0.0.1:8765/mcp"

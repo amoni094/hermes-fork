@@ -20,8 +20,12 @@ import time
 from pathlib import Path
 from collections import defaultdict
 
-LOG_PATH = Path('~/.hermes/cache/routing-calibration.jsonl').expanduser()
-WEIGHTS_PATH = Path('~/.hermes/cache/routing-weights.json').expanduser()
+import os as _os
+_hermes_base = Path(_os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hermes_profile = _os.environ.get("HERMES_PROFILE", "")
+_hermes_root = (_hermes_base / "profiles" / _hermes_profile) if _hermes_profile and "profiles" not in str(_hermes_base) else _hermes_base
+LOG_PATH = _hermes_root / "cache" / "routing-calibration.jsonl"
+WEIGHTS_PATH = _hermes_root / "cache" / "routing-weights.json"
 
 WINDOW_SECONDS = 48 * 3600  # 48h lookback
 WEIGHT_MIN = 0.1
@@ -30,12 +34,56 @@ EMA_DECAY = 0.9    # weight on prior run
 EMA_NEW = 0.1     # weight on new observation
 MIN_SAMPLES = 5   # minimum entries before updating (avoid noise from tiny samples)
 
-KNOWN_ROUTES = ['semantic', 'temporal', 'relational', 'exact']
+_DEFAULT_ROUTES = ['semantic', 'temporal', 'relational', 'exact']
+
+
+def _load_known_routes(weights_path: Path, log_path: Path) -> list:
+    """Dynamic route discovery.
+
+    Priority:
+    1. Keys already present in routing-weights.json (persisted from prior runs).
+    2. Fall back to _DEFAULT_ROUTES if the file is absent or unreadable.
+    3. Any route key seen in the calibration log that is NOT yet known is
+       zero-initialised (weight=0.0) so FTRL can learn from incoming data.
+    """
+    known: list = list(_DEFAULT_ROUTES)
+
+    # 1. Seed from existing weights file
+    if weights_path.exists():
+        try:
+            stored = json.loads(weights_path.read_text())
+            if isinstance(stored, dict):
+                for k in stored:
+                    if k not in known:
+                        known.append(k)
+        except Exception:
+            pass  # fall back to defaults
+
+    # 2. Discover any new routes from the calibration log
+    if log_path.exists():
+        try:
+            for line in log_path.read_text().splitlines():
+                try:
+                    row = json.loads(line)
+                    route = row.get('route', '')
+                    if route and route not in known:
+                        known.append(route)
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    return known
 
 
 def main():
     now = time.time()
     cutoff = now - WINDOW_SECONDS
+
+    # ------------------------------------------------------------------ #
+    # Discover known routes dynamically (replaces hardcoded KNOWN_ROUTES)
+    # ------------------------------------------------------------------ #
+    KNOWN_ROUTES = _load_known_routes(WEIGHTS_PATH, LOG_PATH)
 
     # ------------------------------------------------------------------ #
     # Load calibration log
@@ -82,10 +130,13 @@ def main():
         n = stats.get('total', 0)
         successes = stats.get('successes', 0)
 
-        # Prior weight (default 1.0 if no history)
-        prior = float(existing_weights.get(route, {}).get('weight', 1.0)
+        # Routes present in defaults or weights file start at 1.0 if unseen;
+        # routes discovered only from the calibration log are zero-initialised
+        # so FTRL learns from evidence rather than assuming high quality.
+        default_prior = 0.0 if route not in _DEFAULT_ROUTES and route not in existing_weights else 1.0
+        prior = float(existing_weights.get(route, {}).get('weight', default_prior)
                       if isinstance(existing_weights.get(route), dict)
-                      else existing_weights.get(route, 1.0))
+                      else existing_weights.get(route, default_prior))
 
         if n < MIN_SAMPLES:
             # Insufficient data — carry prior forward unchanged
@@ -120,7 +171,9 @@ def main():
     # ------------------------------------------------------------------ #
     try:
         WEIGHTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        WEIGHTS_PATH.write_text(json.dumps(updated_weights, indent=2))
+        _tmp_w = WEIGHTS_PATH.with_suffix('.tmp')
+        _tmp_w.write_text(json.dumps(updated_weights, indent=2))
+        _tmp_w.rename(WEIGHTS_PATH)
         print(f'Written: {WEIGHTS_PATH}')
     except Exception as e:
         print(f'ERROR writing weights: {e}')

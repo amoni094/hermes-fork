@@ -17,6 +17,7 @@ as a module but supplies its own CS-specific CATEGORIES and uses a separate seen
 cache so CS dedup is independent from the agent and math sweeps.
 """
 
+import os
 import sys
 import json
 import importlib.util
@@ -32,10 +33,14 @@ def load_module(name, path):
     spec.loader.exec_module(mod)
     return mod
 
-SCRIPTS = Path("~/.hermes/scripts").expanduser()
-CACHE   = Path("~/.hermes/cache/research").expanduser()
+SCRIPTS = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts"
+CACHE   = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache/research"
 
-sweep = load_module("sweep", SCRIPTS / "hermes-research-sweep.py")
+try:
+    sweep = load_module("sweep", SCRIPTS / "hermes-research-sweep.py")
+except Exception as e:
+    print(f"[cs-research-sweep] ERROR: cannot load hermes-research-sweep.py: {e}", file=sys.stderr)
+    sys.exit(1)
 
 # ── CS-specific CATEGORIES ───────────────────────────────────────────────────
 # 30 ACM CCS-aligned categories. Each entry matches the shape used by
@@ -352,17 +357,14 @@ for _cat in CS_CATEGORIES.values():
         _cat["queries"] = qs or [s2 or _cat["label"]]
 
 
-# ── Argument parsing ─────────────────────────────────────────────────────────
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--dry-run", action="store_true", help="Show what would run, no API calls")
-parser.add_argument("--limit", type=int, default=0, help="Max papers to process (0=all)")
-args = parser.parse_args()
-
-
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dry-run", action="store_true", help="Show what would run, no API calls")
+    parser.add_argument("--limit", type=int, default=0, help="Max papers to process (0=all)")
+    args = parser.parse_args()
+
     print(f"[hermes-cs-sweep] CS sweep: {len(CS_CATEGORIES)} categories")
     print(f"[hermes-cs-sweep] Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
@@ -410,12 +412,14 @@ def main():
 
     # Save a CS-specific timestamped output
     cs_out = CACHE / "hermes-cs-sweep-latest.json"
-    cs_out.write_text(json.dumps({
+    _cs_tmp = cs_out.with_suffix(".tmp")
+    _cs_tmp.write_text(json.dumps({
         "sweep_date": datetime.now(timezone.utc).isoformat(),
         "new_paper_count": len(new_papers),
         "new_papers_flat": new_papers,
         "all_papers": all_papers,
     }, indent=2, default=str))
+    _cs_tmp.replace(cs_out)
     print(f"[hermes-cs-sweep] Saved: {cs_out}")
 
 
