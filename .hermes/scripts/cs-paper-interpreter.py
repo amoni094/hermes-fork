@@ -551,7 +551,8 @@ def main():
 
     # Save outputs
     now = datetime.now(timezone.utc).isoformat()
-    output_latest.write_text(json.dumps({
+    _tmp = output_latest.with_suffix('.tmp')
+    _tmp.write_text(json.dumps({
         "interpreted_at": now,
         "paper_count": len(results),
         "prefilter_skipped": skipped_prefilter,
@@ -563,13 +564,16 @@ def main():
         "papers": results,
         "generated_ideas": generated_ideas,
     }, indent=2))
+    _tmp.replace(output_latest)
     print(f"[cs-interpreter] Saved: {output_latest}")
 
-    spike_queue_path.write_text(json.dumps({
+    _tmp = spike_queue_path.with_suffix('.tmp')
+    _tmp.write_text(json.dumps({
         "generated_at": now,
         "pending_count": len(spike_queue),
         "items": spike_queue,
     }, indent=2))
+    _tmp.replace(spike_queue_path)
     print(f"[cs-interpreter] Spike queue: {spike_queue_path} ({len(spike_queue)} items)")
 
     # Write CS ideas queue (append-dedupe)
@@ -583,18 +587,22 @@ def main():
     existing_artifacts = {i.get("hermes_artifact", "") for i in existing_ideas}
     new_ideas = [i for i in generated_ideas if i.get("hermes_artifact", "") not in existing_artifacts]
     all_ideas = existing_ideas + new_ideas
-    ideas_queue_path.write_text(json.dumps({
+    _tmp = ideas_queue_path.with_suffix('.tmp')
+    _tmp.write_text(json.dumps({
         "last_updated": now,
         "total_ideas": len(all_ideas),
         "ideas": all_ideas,
     }, indent=2))
+    _tmp.replace(ideas_queue_path)
     if generated_ideas:
         print(f"[cs-interpreter] Ideas queue: {ideas_queue_path} ({len(new_ideas)} new, {len(all_ideas)} total)")
 
     # Update seen-paper cache
     processed_ids = [p.get("id") or p.get("arxiv_id", "") for p in cs_papers if p.get("id") or p.get("arxiv_id")]
     cs_seen_processed.update(processed_ids)
-    cs_seen_path.write_text(json.dumps({"seen": sorted(cs_seen_processed), "last_updated": now}, indent=2))
+    _tmp = cs_seen_path.with_suffix('.tmp')
+    _tmp.write_text(json.dumps({"seen": sorted(cs_seen_processed), "last_updated": now}, indent=2))
+    _tmp.replace(cs_seen_path)
     print(f"[cs-interpreter] Seen cache: {len(cs_seen_processed)} total papers processed across runs")
 
     # Summary

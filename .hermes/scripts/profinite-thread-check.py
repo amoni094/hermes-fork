@@ -108,12 +108,14 @@ class H2ObstructionLedger:
         if OBSTRUCTION_DB.exists():
             try:
                 self._data = json.loads(OBSTRUCTION_DB.read_text())
-            except Exception:
-                pass
+            except Exception as _e:
+                import sys as _s; print(f"[H2ObstructionLedger] corrupt DB, resetting: {_e}", file=_s.stderr)
 
     def _save(self):
         OBSTRUCTION_DB.parent.mkdir(parents=True, exist_ok=True)
-        OBSTRUCTION_DB.write_text(json.dumps(self._data, indent=2))
+        _ob_tmp = OBSTRUCTION_DB.with_suffix(".tmp")
+        _ob_tmp.write_text(json.dumps(self._data, indent=2))
+        _ob_tmp.replace(OBSTRUCTION_DB)
 
     def record_obstruction(self, fact_a: str, fact_b: str, fact_c: str,
                            obstruction_type: str, detail: str = "") -> str:
@@ -254,9 +256,8 @@ class GaloisViewLattice:
 def _hindsight_search(query: str, top_k: int = 3) -> list[dict]:
     """Search Hindsight for a fact."""
     try:
-        url = f"{HINDSIGHT_BASE}/recall"
-        payload = json.dumps({"query": query, "bank": HINDSIGHT_BANK,
-                              "top_k": top_k}).encode()
+        url = f"{HINDSIGHT_BASE}/v1/default/banks/{HINDSIGHT_BANK}/memories/recall"
+        payload = json.dumps({"query": query, "top_k": top_k}).encode()
         req = urllib.request.Request(
             url, data=payload,
             headers={"Content-Type": "application/json"},
@@ -265,8 +266,8 @@ def _hindsight_search(query: str, top_k: int = 3) -> list[dict]:
         with urllib.request.urlopen(req, timeout=8) as r:
             data = json.loads(r.read())
             return data.get("results") or data.get("memories") or []
-    except Exception:
-        return []
+    except Exception as _e:
+        import sys as _s; print(f"[profinite-thread-check] hindsight search failed: {_e}", file=_s.stderr); return []
 
 
 def check_thread(fact_text: str, source_layer: str = "session") -> ProfiniteThread:

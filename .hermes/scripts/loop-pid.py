@@ -72,7 +72,9 @@ def load_state(session=None):
 def save_state(s, session=None):
     path = _state_path(session)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(s, indent=2))
+    _tmp_p = path.with_suffix('.tmp')
+    _tmp_p.write_text(json.dumps(s, indent=2))
+    _tmp_p.rename(path)
 
 
 def _iter_state_files():
@@ -580,6 +582,16 @@ def cmd_lyapunov_check(args):
 
     Checks DeltaV = V(k+1) - V(k) < 0 for each consecutive pair.
     Reports piecewise ΔV for normal and saturated steps separately (KHALIL-7).
+
+    # SLOTINE-CH5: Lyapunov stability theorem requires V(x)>0 and dV/dt<=0 along trajectories.
+    # Quadratic candidate V(e) = e^T*P*e (scalar: V=e^2) is simplest valid choice.
+    # Current implementation uses a DISCRETE Lyapunov decrease check: ΔV = V(k+1)-V(k) < 0,
+    # which is the correct discrete-time analog of the continuous dV/dt = 2*e*de/dt <= 0.
+    # The composite candidate V = e^2 + (Ki/Kp)*integrator^2 covers both error and integral
+    # state, matching the augmented state vector of the PID system. The anti-windup extension
+    # V_aw adds KAW*(u_raw-u)^2 for saturated steps (Khalil §4.7 / Slotine Ch 5 extensions).
+    # Proper continuous check would be: dV/dt = 2*e*de/dt + 2*(Ki/Kp)*integrator*d(integrator)/dt <= 0.
+    # Discrete ΔV < 0 is sufficient for practical stability of the sampled-data system.
     """
     session = getattr(args, 'session', None)
     s = load_state(session)

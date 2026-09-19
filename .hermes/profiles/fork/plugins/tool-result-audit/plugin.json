@@ -1,0 +1,9 @@
+{
+  "name": "tool-result-audit",
+  "version": "1.0.0",
+  "description": "Shadow-mode post_tool_call hook: probabilistically audits external-content tool results for prompt injection patterns using tool-auth-shim inspection-game strategy.",
+  "hooks": ["post_tool_call"],
+  "author": "hermes-fork",
+  "shadow_only": true,
+  "no_pip_deps": true
+}

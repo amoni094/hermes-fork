@@ -35,7 +35,10 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import re
 
-FACTS_DIR = Path.home() / ".hermes" / "memory-facts"
+import os
+
+_HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+FACTS_DIR = _HERMES_HOME / "memory-facts"
 LIFECYCLE_DB = FACTS_DIR / "lifecycle.db"
 STAGING_PATH = FACTS_DIR / "staging.md"
 PURGE_LOG = FACTS_DIR / "purge_log.jsonl"
@@ -43,6 +46,9 @@ STALENESS_LOG = FACTS_DIR / "staleness_log.jsonl"  # sweep 24: FAMA-style tracki
 
 # TTL policy per volatility class
 # Sweep 24: volatile TTL is now type-conditioned (see TYPE_CONDITIONED_TTL below)
+# SLOTINE-CH7 (MRAS): Fixed TTL is equivalent to open-loop control.
+# Adaptive TTL (MRAS-inspired): TTL should decrease when recall_miss_rate is high,
+# increase when recall_miss_rate is low. Reference: ~/.hermes/cache/recall-misses.jsonl
 TTL_POLICY = {
     "ephemeral": timedelta(days=1),
     "volatile": timedelta(days=30),      # default; overridden per fact_type below
@@ -78,7 +84,7 @@ REUSE_ACCESS_THRESHOLD = 2
 def _load_ttl_config() -> None:
     """Sweep 27: honor config.yaml memory.tier_thresholds caps when present."""
     global MAX_VOLATILE_SESSIONS, CONSTRAINT_MAX_AGE_DAYS
-    cfg_path = Path.home() / ".hermes" / "config.yaml"
+    cfg_path = _HERMES_HOME / "config.yaml"
     try:
         import yaml  # type: ignore
         cfg = yaml.safe_load(cfg_path.read_text()) or {}
@@ -88,6 +94,24 @@ def _load_ttl_config() -> None:
         cf = cfg.get("constraint_freshness") or (cfg.get("memory") or {}).get("constraint_freshness") or {}
         if cf.get("max_constraint_age_days") is not None:
             CONSTRAINT_MAX_AGE_DAYS = int(cf["max_constraint_age_days"])
+    except Exception:
+        pass
+
+    # Adaptive TTL override: read adjusted TTLs written by recall-miss-ttl-adjuster.py
+    import time as _time
+    _hermes_root = _HERMES_HOME
+    _adaptive_path = _hermes_root / "cache" / "adaptive-ttl-state.json"
+    try:
+        if _adaptive_path.exists():
+            _mtime = _adaptive_path.stat().st_mtime
+            if (_time.time() - _mtime) < 48 * 3600:
+                _state = json.loads(_adaptive_path.read_text())
+                _adjusted = _state.get("adjusted_ttls", {})
+                for _key, _days in _adjusted.items():
+                    if _key in TTL_POLICY:
+                        _clamped = max(3.0, min(365.0, float(_days)))
+                        TTL_POLICY[_key] = timedelta(days=_clamped)
+                        print(f"[ttl-purge] adaptive TTL override: {_key}={_clamped:.1f}d", file=sys.stderr)
     except Exception:
         pass
 
@@ -300,11 +324,24 @@ def remove_from_staging(memory_ids: set[str], dry_run: bool, verbose: bool) -> i
             removed += 1
             if verbose:
                 print(f"  PURGE [{matched_id}]: {line[:80]}")
+            try:
+                import time as _time_ttl, json as _json_ttl
+                _RECALL_MISS_PATH = _HERMES_HOME / 'cache' / 'recall-misses.jsonl'
+                _miss = {'ts': _time_ttl.time(), 'fact_label': str(matched_id)[:100],
+                         'ttl_reason': 'expired', 'fact_type': 'memory'}
+                _RECALL_MISS_PATH.parent.mkdir(parents=True, exist_ok=True)
+                with _RECALL_MISS_PATH.open('a') as _f:
+                    _f.write(_json_ttl.dumps(_miss) + '\n')
+            except Exception:
+                pass
         else:
             kept.append(line)
 
     if not dry_run and removed > 0:
-        STAGING_PATH.write_text("\n".join(kept) + ("\n" if kept else ""))
+        # H3 fix: atomic write via tmp+rename to prevent staging.md corruption on crash
+        _staging_tmp = STAGING_PATH.with_suffix('.tmp')
+        _staging_tmp.write_text("\n".join(kept) + ("\n" if kept else ""))
+        _staging_tmp.rename(STAGING_PATH)
 
     return removed
 
@@ -333,63 +370,6 @@ def append_purge_log(expired: list[dict], removed_ids: set[str], dry_run: bool):
     with open(PURGE_LOG, "a") as f:
         f.write(json.dumps(event) + "\n")
 
-
-def main():
-    _load_ttl_config()
-    p = argparse.ArgumentParser(description="TTL purge for Hermes staged memories (GPM pattern)")
-    p.add_argument("--dry-run", action="store_true", help="Show what would be purged without removing")
-    p.add_argument("--verbose", action="store_true", help="Print each purged line")
-    args = p.parse_args()
-
-    if not LIFECYCLE_DB.exists():
-        print("[memory-ttl-purge] lifecycle.db does not exist yet — nothing to purge.")
-        sys.exit(0)
-
-    with sqlite3.connect(str(LIFECYCLE_DB)) as conn:
-        expired = load_expired(conn)
-        # Freshness warn runs on every purge, including when no volatiles expired.
-        stale_constraints = check_constraint_freshness(
-            conn, max_age_days=CONSTRAINT_MAX_AGE_DAYS
-        )
-
-    if stale_constraints:
-        print(f"[memory-ttl-purge] Stale constraints found: {len(stale_constraints)}")
-        for sc in stale_constraints[:5]:
-            print(f"  STALE_CONSTRAINT  session={sc.get('session','?')} text={sc.get('text','?')[:60]}")
-
-    if not expired:
-        print("[memory-ttl-purge] No expired entries found.")
-        print(f"\n=== SUMMARY ===\nExpired: 0 | Staging lines removed: 0 | Stale constraints: {len(stale_constraints)}")
-        sys.exit(0)
-
-    expired_ids = {e["memory_id"] for e in expired}
-    print(f"[memory-ttl-purge] Found {len(expired_ids)} expired entries ({'DRY RUN' if args.dry_run else 'LIVE'})")
-
-    # Sweep 24: FAMA-style staleness tracking — log before purging (access_count still valid)
-    log_staleness_event(expired_ids, expired)
-
-    removed = remove_from_staging(expired_ids, args.dry_run, args.verbose)
-    print(f"[memory-ttl-purge] Removed {removed} lines from staging.md")
-
-    with sqlite3.connect(str(LIFECYCLE_DB)) as conn:
-        mark_purged(conn, expired_ids, args.dry_run)
-
-    append_purge_log(expired, expired_ids, args.dry_run)
-
-    if not args.dry_run:
-        print(f"[memory-ttl-purge] Done. Audit log: {PURGE_LOG}")
-
-    print(f"\n=== SUMMARY ===\nExpired: {len(expired_ids)} | Staging lines removed: {removed} | Stale constraints: {len(stale_constraints)}")
-
-
-if __name__ == "__main__":
-    main()
-
-
-# ── Stale constraint freshness gate (arXiv:2608.25553) ────────────────────────
-# ~75% of stale-consistent decisions fail under a 2-record memory budget.
-# Freshness ≠ relevance: a semantically relevant but withdrawn constraint is worse than none.
-# Add a freshness timestamp to facts tagged as constraints, and warn on stale reuse.
 
 def check_constraint_freshness(conn: sqlite3.Connection, max_age_days: int = 90) -> list[dict]:
     """
@@ -439,3 +419,93 @@ def check_constraint_freshness(conn: sqlite3.Connection, max_age_days: int = 90)
     else:
         print(f"[constraint-freshness] No stale constraints (all < {max_age_days}d old)")
     return stale
+
+
+
+
+
+def main():
+    _load_ttl_config()
+    p = argparse.ArgumentParser(description="TTL purge for Hermes staged memories (GPM pattern)")
+    p.add_argument("--dry-run", action="store_true", help="Show what would be purged without removing")
+    p.add_argument("--verbose", action="store_true", help="Print each purged line")
+    args = p.parse_args()
+
+    if not LIFECYCLE_DB.exists():
+        print("[memory-ttl-purge] lifecycle.db does not exist yet — nothing to purge.")
+        return 0
+
+    with sqlite3.connect(str(LIFECYCLE_DB)) as conn:
+        expired = load_expired(conn)
+        # Freshness warn runs on every purge, including when no volatiles expired.
+        stale_constraints = check_constraint_freshness(
+            conn, max_age_days=CONSTRAINT_MAX_AGE_DAYS
+        )
+
+    if stale_constraints:
+        print(f"[memory-ttl-purge] Stale constraints found: {len(stale_constraints)}")
+        for sc in stale_constraints[:5]:
+            print(f"  STALE_CONSTRAINT  session={sc.get('session','?')} text={sc.get('text','?')[:60]}")
+
+    if not expired:
+        print("[memory-ttl-purge] No expired entries found.")
+        print(f"\n=== SUMMARY ===\nExpired: 0 | Staging lines removed: 0 | Stale constraints: {len(stale_constraints)}")
+        return 0
+
+    expired_ids = {e["memory_id"] for e in expired}
+    print(f"[memory-ttl-purge] Found {len(expired_ids)} expired entries ({'DRY RUN' if args.dry_run else 'LIVE'})")
+
+    # Sweep 24: FAMA-style staleness tracking — log before purging (access_count still valid)
+    log_staleness_event(expired_ids, expired)
+
+    removed = remove_from_staging(expired_ids, args.dry_run, args.verbose)
+    print(f"[memory-ttl-purge] Removed {removed} lines from staging.md")
+
+    with sqlite3.connect(str(LIFECYCLE_DB)) as conn:
+        mark_purged(conn, expired_ids, args.dry_run)
+
+    append_purge_log(expired, expired_ids, args.dry_run)
+
+    if not args.dry_run:
+        print(f"[memory-ttl-purge] Done. Audit log: {PURGE_LOG}")
+
+    print(f"\n=== SUMMARY ===\nExpired: {len(expired_ids)} | Staging lines removed: {removed} | Stale constraints: {len(stale_constraints)}")
+
+
+
+
+# ── Stale constraint freshness gate (arXiv:2608.25553) ────────────────────────
+# ~75% of stale-consistent decisions fail under a 2-record memory budget.
+# Freshness ≠ relevance: a semantically relevant but withdrawn constraint is worse than none.
+# Add a freshness timestamp to facts tagged as constraints, and warn on stale reuse.
+
+def rotate_index_md(max_rows: int = 500) -> None:
+    """Trim memory-facts/INDEX.md to the most recent max_rows data rows.
+
+    INDEX.md is an append-only log table written by l1-extract. Left uncapped
+    it grows without bound (~3 rows/day). Called from main() after purge so the
+    daily cron handles rotation automatically.
+    """
+    index_md = FACTS_DIR / "INDEX.md"
+    if not index_md.exists():
+        return
+    lines = index_md.read_text().splitlines()
+    # Header: first 4 lines (# title, blank, | header |, | --- |)
+    header_end = 4
+    data_rows = lines[header_end:]
+    if len(data_rows) <= max_rows:
+        return  # nothing to trim
+    kept = data_rows[-max_rows:]
+    new_content = "\n".join(lines[:header_end] + kept) + "\n"
+    tmp = index_md.with_suffix(".tmp")
+    tmp.write_text(new_content)
+    tmp.rename(index_md)
+    trimmed = len(data_rows) - max_rows
+    print(f"[memory-ttl-purge] INDEX.md rotated: trimmed {trimmed} old rows, kept {max_rows}")
+
+
+if __name__ == "__main__":
+    _rc = main()
+    if _rc == 0:
+        sys.exit(0)
+    rotate_index_md(max_rows=500)

@@ -46,7 +46,8 @@ MATH_CATS = {k: v for k, v in sweep.CATEGORIES.items() if k not in CORE_AGENT}
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dry-run', action='store_true', help='Skip API calls, show what would run')
-parser.add_argument('--limit', type=int, default=0, help='Max papers to interpret (0=all)')
+parser.add_argument('--limit', type=int, default=60,
+                    help='Max papers to interpret per run (default: 60 to avoid cron timeout; 0=all)')
 args = parser.parse_args()
 
 # ── Main ──────────────────────────────────────────────────────────────────────

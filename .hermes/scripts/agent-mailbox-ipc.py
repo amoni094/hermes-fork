@@ -187,7 +187,9 @@ def cmd_send(args: argparse.Namespace) -> None:
         "ciphertext_hex": ciphertext.hex(),
         "aad": aad_str,
     }
-    dest_file.write_text(json.dumps(payload, indent=2))
+    _dest_tmp = dest_file.with_suffix(".json.tmp")
+    _dest_tmp.write_text(json.dumps(payload, indent=2))
+    _dest_tmp.replace(dest_file)
 
     backend = "AESGCM" if CRYPTO_AVAILABLE else "XOR+BLAKE2b(fallback)"
     print(f"[send] → {recipient}  file={filename}  backend={backend}")

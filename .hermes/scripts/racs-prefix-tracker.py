@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import time
+import fcntl
 from pathlib import Path
 
 LOG_PATH = Path.home() / '.hermes' / 'logs' / 'prefix-drift.jsonl'
@@ -35,12 +36,17 @@ def load_state(session_id: str) -> dict:
 
 def save_state(session_id: str, state: dict):
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        all_state = json.loads(STATE_PATH.read_text()) if STATE_PATH.exists() else {}
-    except Exception:
-        all_state = {}
-    all_state[session_id] = state
-    STATE_PATH.write_text(json.dumps(all_state, indent=2))
+    _lock_path = STATE_PATH.with_suffix(".lock")
+    with open(_lock_path, "w") as _lf:
+        fcntl.flock(_lf, fcntl.LOCK_EX)
+        try:
+            all_state = json.loads(STATE_PATH.read_text()) if STATE_PATH.exists() else {}
+        except Exception:
+            all_state = {}
+        all_state[session_id] = state
+        _st_tmp = STATE_PATH.with_suffix('.tmp')
+        _st_tmp.write_text(json.dumps(all_state, indent=2))
+        _st_tmp.replace(STATE_PATH)
 
 def track_turn(session_id: str, turn_num: int, blocks: dict) -> list:
     """Track a turn. Returns list of drift events (empty if no drift)."""
@@ -63,8 +69,11 @@ def track_turn(session_id: str, turn_num: int, blocks: dict) -> list:
                 'event': 'prefix_drift'
             }
             drifts.append(event)
-            with open(LOG_PATH, 'a') as f:
-                f.write(json.dumps(event) + '\n')
+            _log_lock = LOG_PATH.with_suffix(".lock")
+            with open(_log_lock, "w") as _lf:
+                fcntl.flock(_lf, fcntl.LOCK_EX)
+                with open(LOG_PATH, 'a') as f:
+                    f.write(json.dumps(event) + '\n')
     
     save_state(session_id, current_hashes)
     return drifts

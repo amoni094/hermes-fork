@@ -5,7 +5,7 @@ monitor-suite-runner.py
 Runs all Hermes monitoring scripts and prints a consolidated summary.
 Designed for cron execution (no_agent=true).
 """
-import subprocess, sys, json
+import subprocess, sys, json, os
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -89,6 +89,9 @@ for m in monitors:
             capture_output=True, text=True, timeout=30
         )
         out = r.stdout.strip()
+        err = r.stderr.strip()
+        # Also scan stderr for alarm keywords (some monitors emit to stderr)
+        combined = out + "\n" + err if err else out
         # Detect alarms via exit code (scripts exit 1 on alarm) or explicit ALARM line
         import re as _re
         alarm_line = any(
@@ -96,18 +99,21 @@ for m in monitors:
             line.strip().lower().startswith("alarm: yes") or
             "FRAGMENTED:        YES" in line or
             "SATURATED" in line
-            for line in out.splitlines()
+            for line in combined.splitlines()
         )
         no_alarm_line = any(
             _re.match(r"ALARM:\s+NO\b", line.strip(), _re.IGNORECASE) or
             line.strip().lower().startswith("alarm: no") or
             "insufficient data" in line
-            for line in out.splitlines()
+            for line in combined.splitlines()
         )
         # Alarm iff: explicit alarm keyword found AND no "no/insufficient" override
         alarm = alarm_line and not no_alarm_line
         status = "ALARM" if alarm else ("ERROR" if r.returncode != 0 else "OK")
-        results.append({"script": m, "status": status, "output": out[-300:]})
+        entry = {"script": m, "status": status, "output": combined[-400:]}
+        if err and not alarm:
+            entry["stderr"] = err[-200:]
+        results.append(entry)
     except subprocess.TimeoutExpired:
         results.append({"script": m, "status": "TIMEOUT"})
     except Exception as e:
@@ -116,9 +122,11 @@ for m in monitors:
 # Print summary
 alarms = [r for r in results if r["status"] == "ALARM"]
 errors = [r for r in results if r["status"] not in ("OK", "ALARM", "MISSING")]
+missing = [r for r in results if r["status"] == "MISSING"]
+ran = [r for r in results if r["status"] not in ("MISSING",)]
 
 print(f"=== Hermes Monitor Suite — {now[:10]} ===")
-print(f"Ran: {len(results)}  Alarms: {len(alarms)}  Errors: {len(errors)}")
+print(f"Ran: {len(ran)}  Missing: {len(missing)}  Alarms: {len(alarms)}  Errors: {len(errors)}")
 print()
 for r in results:
     print(f"  [{r['status']:<7}] {r['script']}")
@@ -128,8 +136,31 @@ if alarms:
         print(f"\n{r['script']}:")
         print(r.get("output","")[:400])
 
-# Write summary JSON
+# Write summary JSON (atomic)
 out_file = CACHE / "monitor-suite-latest.json"
 out_file.parent.mkdir(parents=True, exist_ok=True)
-out_file.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+_out_tmp = out_file.with_suffix(".json.tmp")
+_out_tmp.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+_out_tmp.replace(out_file)
 print(f"\nSummary: {out_file}")
+
+# Fix A: consume alarm-summary.json written by alarm-aggregator.py
+try:
+    _base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+    _profile = os.environ.get("HERMES_PROFILE", "")
+    _root = (
+        (_base / "profiles" / _profile)
+        if _profile and "profiles" not in str(_base)
+        else _base
+    )
+    _alarm_summary = _root / "cache" / "alarm-summary.json"
+    if _alarm_summary.exists():
+        _asdata = json.loads(_alarm_summary.read_text())
+        _count = _asdata.get("count", 0)
+        if _count > 0:
+            _alarms_list = _asdata.get("active_alarms", [])
+            _high = sum(1 for a in _alarms_list if a.get("severity") == "HIGH")
+            _med  = sum(1 for a in _alarms_list if a.get("severity") == "MEDIUM")
+            print(f"[monitor-suite] ALARMS: {_count} active (HIGH: {_high} MEDIUM: {_med})")
+except Exception:
+    pass

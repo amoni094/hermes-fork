@@ -23,6 +23,7 @@ Usage:
 Runs as a monitor in the suite.
 """
 from __future__ import annotations
+import os
 
 import json
 import sys
@@ -31,8 +32,11 @@ from pathlib import Path
 import math
 
 HOME         = Path.home()
+_HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "fork")
+_RT = _HH / "profiles" / _HP if _HP else _HH
 SESSIONS_DIR = HOME / ".hermes/sessions"
-FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+FORK_SESSIONS = _RT / "sessions"  # fork-profile sessions
 
 CACHE_DIR    = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)

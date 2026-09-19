@@ -22,6 +22,7 @@ Usage:
 Runs as a monitor in the suite.
 """
 from __future__ import annotations
+import os
 
 import json
 import math
@@ -33,7 +34,10 @@ from pathlib import Path
 import numpy as np
 
 HOME       = Path.home()
-SKILLS_DIR = HOME / ".hermes/profiles/fork/skills"
+_HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "fork")
+_RT = _HH / "profiles" / _HP if _HP else _HH
+SKILLS_DIR = _RT / "skills"
 ALT_SKILLS = HOME / ".hermes/skills"
 CACHE_DIR  = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)

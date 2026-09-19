@@ -138,10 +138,9 @@ def check_repair_context(
     return {"decision": "ALLOW", "reason": "sensitive path but not repair context"}
 
 
-# FORWARD-ONLY: CapabilityGrant and check_grant are not yet wired into the pre-tool gate.
-# To wire: call check_grant(active_grant, tool_name) in evaluate_tool_request() before the
-# string-match path. The string-match path is the production gate until this is connected.
-# Revisit trigger: a session can mint/pass a grant object to evaluate_tool_request().
+# CapabilityGrant and check_grant are wired into cmd_check() (the evaluate-tool-request gate).
+# The grant file is loaded from the profile-aware cache path at request time (fail-open on miss).
+# The string-match path remains the fallback when no grant is present or check_grant returns False.
 @dataclass(frozen=True)
 class CapabilityGrant:
     """Unforgeable grant object (arXiv:2609.08371 CapScope).
@@ -178,6 +177,45 @@ def check_grant(grant: CapabilityGrant | None, tool_name: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def _load_active_grant() -> "CapabilityGrant | None":
+    """Load the active CapabilityGrant from the profile-aware cache path.
+
+    Fail-open: returns None when the file is absent, expired (>3600s), or malformed.
+    Maps JSON keys (allowed_tools / denied_tools) onto CapabilityGrant.tools_allowed,
+    treating denied_tools as a negative filter applied before construction.
+    """
+    import os as _os_tag
+    _b = Path(_os_tag.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+    _p = _os_tag.environ.get("HERMES_PROFILE", "")
+    _root_tag = (_b / "profiles" / _p) if _p and "profiles" not in str(_b) else _b
+    grant_path = _root_tag / "cache" / "active-capability-grant.json"
+    if not grant_path.exists():
+        return None
+    try:
+        import time as _time
+        if _time.time() - grant_path.stat().st_mtime > 3600:
+            return None
+        data = json.loads(grant_path.read_text())
+        allowed = frozenset(data.get("allowed_tools", []))
+        denied = frozenset(data.get("denied_tools", []))
+        effective = allowed - denied
+        expires_str = data.get("expires_at", "")
+        expires_dt: "datetime | None" = None
+        if expires_str:
+            try:
+                expires_dt = datetime.fromisoformat(expires_str.replace("Z", "+00:00"))
+            except Exception:
+                pass
+        return CapabilityGrant(
+            grant_id=data.get("grant_id", "file-grant"),
+            tools_allowed=effective,
+            source_tier=data.get("source_tier", "VERIFIED"),
+            expires_at=expires_dt,
+        )
+    except Exception:
+        return None
 
 
 def _load_runtime_config() -> None:
@@ -295,6 +333,32 @@ def cmd_check(args: argparse.Namespace) -> int:
     if not ENABLED:
         print(json.dumps({"skipped": True, "reason": "tool_auth.enabled=false", "decision": "ALLOW"}))
         return 0
+
+    # --- CapabilityGrant gate (arXiv:2609.08371 CapScope) ---
+    # Load the file-backed grant (fail-open on missing/expired/malformed file).
+    active_grant = _load_active_grant()
+    tool_name = getattr(args, "tool_name", None) or args.proposed_action.split()[0]
+    grant_verified: "bool | None" = None
+    if active_grant is not None:
+        grant_ok = check_grant(active_grant, tool_name)
+        if not grant_ok:
+            # Determine if the proposed action contains HIGH_RISK words before string-match path.
+            _action_words = set(re.findall(r'\b\w+\b', args.proposed_action.lower()))
+            if _action_words & HIGH_RISK_ACTIONS:
+                result = {
+                    "proposed_action": args.proposed_action[:200],
+                    "source_tier": getattr(args, "source_tier", "EXTERNAL"),
+                    "risk_tier": "BLOCKED",
+                    "decision": "BLOCK_RECOMMEND",
+                    "reason": "CapabilityGrant denied",
+                    "grant_verified": False,
+                }
+                print(json.dumps(result, indent=2))
+                return 1
+        else:
+            grant_verified = True
+    # --- end CapabilityGrant gate ---
+
     action = args.proposed_action.lower()
     source_tier = getattr(args, "source_tier", "EXTERNAL")
     tier_level = TIER_TRUST.get(source_tier, 1)
@@ -334,6 +398,8 @@ def cmd_check(args: argparse.Namespace) -> int:
         "decision": decision,
         "reason": reason,
     }
+    if grant_verified is True:
+        result["grant_verified"] = True
     if repair_warning and "warning" not in result:
         result["warning"] = repair_warning
     if turn_seq > TURN_BUDGET:

@@ -30,8 +30,11 @@ Usage:
 
 Integration with skill lifecycle:
   - skill_prune_audit.py reads wiki failure_modes before pruning
-  - l1-promote.py checks wiki precondition_notes for memory routing
   - hermes-agent-skill-authoring skill recommends wiki upsert on skill update
+
+Note: l1-promote.py does NOT read precondition_notes. That integration was never
+implemented. Wiki data is consumed only by skill_prune_audit.py and agent-driven
+maintenance (skill-wiki-weekly cron).
 """
 from __future__ import annotations
 
@@ -116,7 +119,9 @@ def _save(doc: dict[str, Any]) -> Path:
     WIKI_DIR.mkdir(parents=True, exist_ok=True)
     doc["last_updated"] = _now()
     p = _path(doc["skill_name"])
-    p.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+    _tmp = p.with_suffix(".tmp")
+    _tmp.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+    _tmp.replace(p)
     return p
 
 

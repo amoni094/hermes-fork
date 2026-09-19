@@ -130,7 +130,8 @@ def main():
 
         if alarm:
             ALARM_PATH.parent.mkdir(parents=True, exist_ok=True)
-            ALARM_PATH.write_text(json.dumps({
+            _tmp = ALARM_PATH.with_suffix('.tmp')
+            _tmp.write_text(json.dumps({
                 "alarm": True,
                 "primal": round(primal, 4),
                 "dual": round(dual, 4),
@@ -140,6 +141,7 @@ def main():
                 "recommendation": "Re-run circuit-trajectory-scorer.py and review top-K routing paths.",
                 "ts": datetime.now(timezone.utc).isoformat(),
             }, indent=2))
+            _tmp.replace(ALARM_PATH)
             print(f"[duality-gap] ALARM written to {ALARM_PATH}", file=sys.stderr)
 
     conn.close()

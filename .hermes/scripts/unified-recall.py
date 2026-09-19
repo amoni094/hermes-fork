@@ -417,7 +417,7 @@ def log_recall_query(query, sources_used, query_type):
 try:
     import importlib.util as _ilu2
     _ta_spec = _ilu2.spec_from_file_location('tool_auth_shim',
-                   str(Path('~/.hermes/scripts/tool-auth-shim.py').expanduser()))
+                   str(_hermes_root() / 'scripts' / 'tool-auth-shim.py'))
     assert _ta_spec is not None
     _ta2 = _ilu2.module_from_spec(_ta_spec)
     _ta_spec.loader.exec_module(_ta2)  # type: ignore[union-attr]
@@ -561,7 +561,7 @@ def fuse_results(
     try:
         import importlib.util as _ilu
         _mp_spec = _ilu.spec_from_file_location('memory_provenance',
-                       str(Path('~/.hermes/scripts/memory-provenance.py').expanduser()))
+                       str(_hermes_root() / 'scripts' / 'memory-provenance.py'))
         assert _mp_spec is not None
         _mp = _ilu.module_from_spec(_mp_spec)
         _mp_spec.loader.exec_module(_mp)  # type: ignore[union-attr]

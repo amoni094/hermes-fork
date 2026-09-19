@@ -36,10 +36,14 @@ from pathlib import Path
 import sys
 
 import numpy as np
+import os
 
 HOME = Path.home()
+_HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "fork")
+_RT = _HH / "profiles" / _HP if _HP else _HH
 SESSIONS_DIR = HOME / ".hermes/sessions"
-FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"
+FORK_SESSIONS = _RT / "sessions"
 OUTPUT = HOME / ".hermes/cache/consensus-state.json"
 ALARM = HOME / ".hermes/cache/consensus-alarm.json"
 
@@ -156,16 +160,10 @@ def main():
 
     if not args.dry_run:
         OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-        OUTPUT.write_text(json.dumps(result, indent=2))
+        _tmp = OUTPUT.with_suffix('.tmp'); _tmp.write_text(json.dumps(result, indent=2)); _tmp.replace(OUTPUT)
         if result["fragmented"]:
-            ALARM.write_text(json.dumps({
-                "alarm": True,
-                "mean_js": result["mean_js"],
-                "max_js": result["max_js"],
-                "threshold": result["threshold"],
-                "top_diverging": result.get("top_diverging_pairs", [])[:3],
-                "ts": now,
-            }, indent=2))
+            _alarm_payload = json.dumps({"alarm": True, "mean_js": result["mean_js"], "max_js": result["max_js"], "threshold": result["threshold"], "top_diverging": result.get("top_diverging_pairs", [])[:3], "ts": now}, indent=2)
+            _tmp = ALARM.with_suffix('.tmp'); _tmp.write_text(_alarm_payload); _tmp.replace(ALARM)
             print(f"[consensus] FRAGMENTATION alarm — {ALARM}", file=sys.stderr)
 
     print(f"\n=== Consensus Convergence Monitor — {now[:10]} ===")

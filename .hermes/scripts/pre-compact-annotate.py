@@ -32,7 +32,11 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-DB_PATH       = Path.home() / ".hermes" / "state.db"
+import os as _os
+_hermes_base = Path(_os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hermes_profile = _os.environ.get("HERMES_PROFILE", "")
+_hermes_root = (_hermes_base / "profiles" / _hermes_profile) if _hermes_profile and "profiles" not in str(_hermes_base) else _hermes_base
+DB_PATH       = _hermes_root / "state.db"
 CONTEXT_LIMIT = 120_000       # fallback if model config missing
 THRESHOLD     = 0.75          # fire at 75% of context limit
 MAX_DECISIONS = 8             # cap focus string length
@@ -144,38 +148,38 @@ def main() -> None:
 
     try:
         con = sqlite3.connect(str(DB_PATH))
-        cur = con.cursor()
+        try:
+            cur = con.cursor()
 
-        if args.session:
-            cur.execute(
-                "SELECT id, input_tokens, cache_read_tokens, model_config "
-                "FROM sessions WHERE id LIKE ? ORDER BY started_at DESC LIMIT 1",
-                (f"{args.session}%",),
-            )
-        else:
-            cur.execute(
-                """
-                SELECT id, input_tokens, cache_read_tokens, model_config
-                FROM sessions
-                WHERE ended_at IS NULL AND archived = 0
-                ORDER BY last_activity_at DESC LIMIT 1
-                """,
-            )
+            if args.session:
+                cur.execute(
+                    "SELECT id, input_tokens, cache_read_tokens, model_config "
+                    "FROM sessions WHERE id LIKE ? ORDER BY started_at DESC LIMIT 1",
+                    (f"{args.session}%",),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT id, input_tokens, cache_read_tokens, model_config
+                    FROM sessions
+                    WHERE ended_at IS NULL AND archived = 0
+                    ORDER BY last_activity_at DESC LIMIT 1
+                    """,
+                )
 
-        row = cur.fetchone()
-        if not row:
+            row = cur.fetchone()
+            if not row:
+                sys.exit(0)
+
+            session_id = row[0]
+            fill = _session_fill(row)
+
+            if fill < args.threshold and not args.dry_run:
+                sys.exit(0)   # below threshold — silent
+
+            messages = _recent_messages(con, session_id)
+        finally:
             con.close()
-            sys.exit(0)
-
-        session_id = row[0]
-        fill = _session_fill(row)
-
-        if fill < args.threshold and not args.dry_run:
-            con.close()
-            sys.exit(0)   # below threshold — silent
-
-        messages = _recent_messages(con, session_id)
-        con.close()
 
         focus = _build_focus(messages)
 
@@ -186,10 +190,72 @@ def main() -> None:
 
         # Output the compact instruction — delivered as a message by cron no_agent=True
         now = datetime.now(timezone.utc).strftime("%H:%M UTC")
-        print(
+        annotation = (
             f"[pre-compact-annotate @ {now}] Context at {fill:.0%}. "
             f"Suggested: /compact {focus}"
         )
+
+        # Append rd-compaction-advisor advisory
+        try:
+            import subprocess as _sp
+            import sys as _sys
+            # Use input_tokens + cache tokens as best estimate; fall back to 80000
+            _sid, _inp, _cache, _mcfg = row
+            _current_tokens = max((_inp or 0) + (_cache or 0), 80000)
+            _adv_result = _sp.run(
+                [_sys.executable, str(Path(__file__).parent / "rd-compaction-advisor.py"),
+                 "--current-tokens", str(_current_tokens)],
+                capture_output=True, text=True, timeout=10,
+            )
+            if _adv_result.returncode == 0 and _adv_result.stdout.strip():
+                _adv = json.loads(_adv_result.stdout)
+                _agg = _adv.get("aggressiveness", 0.0)
+                _focus = _adv.get("focus_topic_prefix", "")
+                annotation += (
+                    f"\nCompaction advisory: aggressiveness={_agg:.2f}, "
+                    f"focus={_focus} (rd-compaction-advisor)"
+                )
+        except Exception:
+            pass  # advisory is best-effort; never block annotation output
+
+        # Append alarm-aggregator summary
+        try:
+            import subprocess as _sp  # noqa: F811 (re-import for standalone block)
+            import sys as _sys         # noqa: F811
+            _alarm_result = _sp.run(
+                [_sys.executable, str(Path(__file__).parent / "alarm-aggregator.py")],
+                capture_output=True, text=True, timeout=10,
+            )
+            if _alarm_result.stdout.strip():
+                _alarm_data = json.loads(_alarm_result.stdout)
+                _active = _alarm_data.get("active_alarms", [])
+                _count = _alarm_data.get("count", 0)
+                if _count > 0:
+                    _alarm_lines = "; ".join(
+                        f"{a['source']}[{a['severity']}]: {a['msg']}"
+                        for a in _active
+                    )
+                    annotation += (
+                        f"\nActive alarms ({_count}): {_alarm_lines}"
+                    )
+        except Exception:
+            pass  # alarm aggregation is best-effort; never block annotation output
+
+        # Append Focus Agent reminder (wires focus_compress.py as a live annotation)
+        try:
+            import subprocess as _sp  # noqa: F811
+            import sys as _sys         # noqa: F811
+            _fc_result = _sp.run(
+                [_sys.executable, str(Path(__file__).parent / "focus_compress.py"),
+                 "--mode", "reminder"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if _fc_result.returncode == 0 and _fc_result.stdout.strip():
+                annotation += "\n\n## Focus Agent Reminder\n" + _fc_result.stdout.rstrip()
+        except Exception:
+            pass  # focus reminder is best-effort; never block annotation output
+
+        print(annotation)
 
     except Exception as e:
         # Silent failure — never interrupt a session with a script error

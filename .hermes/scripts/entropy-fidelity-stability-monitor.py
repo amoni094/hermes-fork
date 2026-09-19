@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sqlite3
 import time
 from collections import Counter
@@ -34,11 +35,11 @@ from pathlib import Path
 HOME = Path.home()
 MEMORY_DIR = HOME / ".hermes/memories"
 FACTS_DB   = HOME / ".hermes/memory-facts/lifecycle.db"
-CACHE_DIR  = HOME / ".hermes/cache/monitors"
+CACHE_DIR  = Path(os.environ.get("HERMES_HOME", str(HOME / ".hermes"))) / "cache" / "monitors"
 ALARM_FILE = CACHE_DIR / "entropy-fidelity-alarm.json"
 STATE_FILE = CACHE_DIR / "entropy-fidelity-state.json"
 
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
+# CACHE_DIR.mkdir deferred to run() to avoid side-effects at import time
 
 # --- helpers ------------------------------------------------------------------
 
@@ -105,7 +106,9 @@ def _read_state() -> dict:
 
 
 def _write_state(state: dict) -> None:
-    STATE_FILE.write_text(json.dumps(state, indent=2))
+    _sf_tmp = STATE_FILE.with_suffix('.tmp')
+    _sf_tmp.write_text(json.dumps(state, indent=2))
+    _sf_tmp.replace(STATE_FILE)
 
 
 def _append_alarm(alarm: dict) -> None:
@@ -116,12 +119,15 @@ def _append_alarm(alarm: dict) -> None:
         except Exception:
             pass
     existing.append(alarm)
-    ALARM_FILE.write_text(json.dumps(existing[-50:], indent=2))  # keep last 50
+    _af_tmp = ALARM_FILE.with_suffix('.tmp')
+    _af_tmp.write_text(json.dumps(existing[-50:], indent=2))  # keep last 50
+    _af_tmp.replace(ALARM_FILE)
 
 
 # --- main logic ---------------------------------------------------------------
 
 def run(dry_run: bool = False, window: int = 5) -> None:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc).isoformat()
     entropy  = _read_memory_entropy()
     fidelity = _read_fidelity()

@@ -998,8 +998,12 @@ def main():
 
     if not args.dry_run:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        OUTPUT_LATEST.write_text(json.dumps(output, indent=2))
-        SPIKE_QUEUE.write_text(json.dumps(spike_queue_output, indent=2))
+        _tmp = OUTPUT_LATEST.with_suffix('.tmp')
+        _tmp.write_text(json.dumps(output, indent=2))
+        _tmp.replace(OUTPUT_LATEST)
+        _tmp = SPIKE_QUEUE.with_suffix('.tmp')
+        _tmp.write_text(json.dumps(spike_queue_output, indent=2))
+        _tmp.replace(SPIKE_QUEUE)
         # Write generated ideas queue
         ideas_queue_path = CACHE_DIR / "math-ideas-queue.json"
         existing_ideas = []
@@ -1012,11 +1016,13 @@ def main():
         existing_artifacts = {i.get("hermes_artifact", "") for i in existing_ideas}
         new_ideas = [i for i in generated_ideas if i.get("hermes_artifact", "") not in existing_artifacts]
         all_ideas = existing_ideas + new_ideas
-        ideas_queue_path.write_text(json.dumps({
+        _tmp = ideas_queue_path.with_suffix('.tmp')
+        _tmp.write_text(json.dumps({
             "last_updated": output["run_date"],
             "total_ideas": len(all_ideas),
             "ideas": all_ideas,
         }, indent=2))
+        _tmp.replace(ideas_queue_path)
         print(f"[math-interpreter] Written: {OUTPUT_LATEST}", file=sys.stderr)
         print(f"[math-interpreter] Spike queue: {SPIKE_QUEUE}", file=sys.stderr)
         if generated_ideas:
@@ -1027,7 +1033,9 @@ def main():
         n_processed = _last_i + 1 if _last_i >= 0 else len(batch)
         processed_ids = [p.get("id", "") for p in batch[:n_processed] if p.get("id")]
         seen_processed.update(processed_ids)
-        seen_path.write_text(json.dumps({"seen": sorted(seen_processed), "last_updated": output["run_date"]}, indent=2))
+        _tmp = seen_path.with_suffix('.tmp')
+        _tmp.write_text(json.dumps({"seen": sorted(seen_processed), "last_updated": output["run_date"]}, indent=2))
+        _tmp.replace(seen_path)
         print(f"[math-interpreter] Seen cache: {len(seen_processed)} total papers processed across runs", file=sys.stderr)
 
     # Print digest

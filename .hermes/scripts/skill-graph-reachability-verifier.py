@@ -20,6 +20,7 @@ Usage:
   python3 skill-graph-reachability-verifier.py --dry-run
 """
 from __future__ import annotations
+import os
 
 import argparse
 import json
@@ -30,8 +31,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HOME       = Path.home()
+_HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "fork")
+_RT = _HH / "profiles" / _HP if _HP else _HH
 SKILLS_DIR = HOME / ".hermes/skills"
-FORK_SKILLS = HOME / ".hermes/profiles/fork/skills"
+FORK_SKILLS = _RT / "skills"
 CACHE_DIR  = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE      = CACHE_DIR / "skill-graph-reachability-report.json"

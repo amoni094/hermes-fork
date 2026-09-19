@@ -1043,8 +1043,14 @@ def load_seen() -> dict:
     if SEEN_FILE.exists():
         try:
             return json.loads(SEEN_FILE.read_text())
-        except Exception:
-            return {"seen": [], "last_updated": None, "last_sweep": None}
+        except Exception as e:
+            import sys as _s
+            print(f"[hermes-research-sweep] WARNING: seen_papers.json corrupt ({e}), renaming and starting fresh", file=_s.stderr)
+            try:
+                SEEN_FILE.rename(SEEN_FILE.with_suffix(".corrupt"))
+            except Exception:
+                pass
+            return {}
     return {"seen": [], "last_updated": None, "last_sweep": None}
 
 
@@ -1052,7 +1058,9 @@ def save_seen(seen: dict) -> None:
     if len(seen["seen"]) > MAX_SEEN:
         seen["seen"] = seen["seen"][-MAX_SEEN:]
     seen["last_updated"] = datetime.now(timezone.utc).isoformat()
-    SEEN_FILE.write_text(json.dumps(seen, indent=2))
+    _tmp = SEEN_FILE.with_suffix(".tmp")
+    _tmp.write_text(json.dumps(seen, indent=2))
+    _tmp.replace(SEEN_FILE)
 
 
 def fetch(url: str, timeout: int = 15) -> str:
@@ -1064,7 +1072,9 @@ def fetch(url: str, timeout: int = 15) -> str:
         )
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.read().decode("utf-8", errors="replace")
-    except Exception:
+    except Exception as e:
+        import sys as _s
+        print(f"[hermes-research-sweep] fetch failed for {url!r}: {e}", file=_s.stderr)
         return ""
 
 
@@ -1073,7 +1083,9 @@ def arxiv_id_valid(arxiv_id: str) -> bool:
     try:
         parts = arxiv_id.split(".")
         return int(parts[0]) < 10000
-    except Exception:
+    except Exception as e:
+        import sys as _s
+        print(f"[hermes-research-sweep] arxiv_id_valid error: {e}", file=_s.stderr)
         return False
 
 
@@ -1181,7 +1193,9 @@ def search_semantic_scholar(query: str, max_results: int = 5) -> list[dict]:
                 "category": None,
             })
         return papers
-    except Exception:
+    except Exception as e:
+        import sys as _s
+        print(f"[hermes-research-sweep] semantic_scholar parse error: {e}", file=_s.stderr)
         return []
 
 
@@ -1208,7 +1222,9 @@ def search_hal(query: str, max_results: int = 5) -> list[dict]:
                 "category": None,
             })
         return papers
-    except Exception:
+    except Exception as e:
+        import sys as _s
+        print(f"[hermes-research-sweep] hal parse error: {e}", file=_s.stderr)
         return []
 
 
@@ -1242,7 +1258,9 @@ def search_aminer(query: str, max_results: int = 5) -> list[dict]:
                 "category": None,
             })
         return papers
-    except Exception:
+    except Exception as e:
+        import sys as _s
+        print(f"[hermes-research-sweep] aminer parse error: {e}", file=_s.stderr)
         return []
 
 
@@ -1282,7 +1300,9 @@ def search_openalex(query: str, max_results: int = 5) -> list[dict]:
                 "category": None,
             })
         return papers
-    except Exception:
+    except Exception as e:
+        import sys as _s
+        print(f"[hermes-research-sweep] openalex parse error: {e}", file=_s.stderr)
         return []
 
 
@@ -1316,7 +1336,9 @@ def search_crossref(query: str, max_results: int = 5) -> list[dict]:
                 "category": None,
             })
         return papers
-    except Exception:
+    except Exception as e:
+        import sys as _s
+        print(f"[hermes-research-sweep] crossref parse error: {e}", file=_s.stderr)
         return []
 
 
@@ -1345,7 +1367,9 @@ def search_jstage(query: str, max_results: int = 5) -> list[dict]:
                 "category": None,
             })
         return papers
-    except Exception:
+    except Exception as e:
+        import sys as _s
+        print(f"[hermes-research-sweep] jstage parse error: {e}", file=_s.stderr)
         return []
 
 
@@ -1371,7 +1395,9 @@ def search_cyberleninka(query: str, max_results: int = 5) -> list[dict]:
                 "category": None,
             })
         return papers
-    except Exception:
+    except Exception as e:
+        import sys as _s
+        print(f"[hermes-research-sweep] cyberleninka parse error: {e}", file=_s.stderr)
         return []
 
 
@@ -1632,8 +1658,13 @@ def main():
     output = build_output(new_papers, all_papers)
 
     if not DRY_RUN:
-        OUTPUT_LATEST.write_text(json.dumps(output, indent=2))
-        OUTPUT_DATED.write_text(json.dumps(output, indent=2))
+        _out_json = json.dumps(output, indent=2)
+        _out_tmp = OUTPUT_LATEST.with_suffix(".tmp")
+        _out_tmp.write_text(_out_json)
+        _out_tmp.replace(OUTPUT_LATEST)
+        _dated_tmp = OUTPUT_DATED.with_suffix(".tmp")
+        _dated_tmp.write_text(_out_json)
+        _dated_tmp.replace(OUTPUT_DATED)
         print(f"[hermes-research-sweep] Wrote {OUTPUT_LATEST}", file=sys.stderr)
 
     # Stdout: deliver digest only if new papers found (silent cron tick if empty)

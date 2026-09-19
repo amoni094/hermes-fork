@@ -49,14 +49,41 @@ MAX_FAILURES = 3  # abandon after this many consecutive full-run failures
 PRUNE_DAYS = 14   # remove 'written' entries older than this
 
 # TraceGrant: shared namespace policy enforcement (sweep 22)
-_tg_spec = importlib.util.spec_from_file_location(
-    "l1_tracegrant", pathlib.Path(__file__).parent / "l1-tracegrant.py"
-)
-_tg_mod = importlib.util.module_from_spec(_tg_spec)  # type: ignore[arg-type]
-_tg_spec.loader.exec_module(_tg_mod)                  # type: ignore[union-attr]
-tracegrant_check = _tg_mod.tracegrant_check
-tracegrant_log_grant = _tg_mod.tracegrant_log_grant
+# Shadow-wrapped (H1 fix): unguarded import crashed on missing file.
+try:
+    _tg_spec = importlib.util.spec_from_file_location(
+        "l1_tracegrant", pathlib.Path(__file__).parent / "l1-tracegrant.py"
+    )
+    assert _tg_spec is not None
+    _tg_mod = importlib.util.module_from_spec(_tg_spec)
+    _tg_spec.loader.exec_module(_tg_mod)  # type: ignore[union-attr]
+    tracegrant_check = _tg_mod.tracegrant_check
+    tracegrant_log_grant = _tg_mod.tracegrant_log_grant
+except Exception:
+    def tracegrant_check(*_a, **_kw): return True    # fail-open stub
+    def tracegrant_log_grant(*_a, **_kw): return None  # no-op stub
 
+# ── Concurrency lockfile (prevents concurrent reconcile runs) ─────────────────
+# H2 fix: replaced sys.exit() with module flag + atexit release (shadow compliance).
+import fcntl as _fcntl
+import atexit as _atexit
+_RECONCILE_LOCK = '/tmp/l1-graphiti-reconcile.lock'
+_RECONCILE_LOCK_HELD = False
+try:
+    _lock_fd = open(_RECONCILE_LOCK, 'w')
+    _fcntl.flock(_lock_fd, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+    _RECONCILE_LOCK_HELD = True
+    def _release_reconcile_lock():
+        try:
+            _fcntl.flock(_lock_fd, _fcntl.LOCK_UN)
+            _lock_fd.close()
+        except Exception:
+            pass
+    _atexit.register(_release_reconcile_lock)
+except BlockingIOError:
+    print('l1-graphiti-reconcile: another instance running, skipping')
+except Exception:
+    pass  # shadow: non-blocking lock failure
 
 # ── DB init ───────────────────────────────────────────────────────────────────
 
@@ -541,6 +568,9 @@ def cmd_prune():
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main():
+    # H2 fix: skip execution if lock was not acquired (another instance is running)
+    if not _RECONCILE_LOCK_HELD:
+        return
     args = sys.argv[1:]
     cmd = args[0] if args else "reconcile"
 

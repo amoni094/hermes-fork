@@ -22,12 +22,162 @@ Usage:
 Import into l1-promote.py, l1-graphiti-write.py for resilient API calls.
 """
 
+import json
+import os
+import sys
+import tempfile
 import time
 import logging
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Callable, Any
 
 log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Profile-aware cache path
+# ---------------------------------------------------------------------------
+_HERMES_BASE  = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HERMES_PROFILE = os.environ.get("HERMES_PROFILE", "")
+_HERMES_ROOT = (
+    (_HERMES_BASE / "profiles" / _HERMES_PROFILE)
+    if _HERMES_PROFILE and "profiles" not in str(_HERMES_BASE)
+    else _HERMES_BASE
+)
+_PBS_STATE_FILE = _HERMES_ROOT / "cache" / "retry-budget-state.json"
+
+# Error classes that are persisted across restarts
+_PERSISTENT_CLASSES = frozenset({"auth", "resource"})
+
+
+class PersistentBudgetState:
+    """
+    Cross-restart counter store for AUTH and RESOURCE error classes.
+
+    State file schema (JSON):
+      {
+        "<label>": {
+          "<error_class>": {
+            "attempts":    <int>,
+            "first_seen":  "<ISO8601>",
+            "window_hours": <float>
+          }
+        }
+      }
+
+    Window: entries older than window_hours (default 24 h) are expired on load.
+    Fail-open: any I/O or parse error leaves state empty; save failures are
+    logged to stderr and silently swallowed.
+    """
+
+    _WINDOW_HOURS = 24.0
+
+    def __init__(self, path: Path = _PBS_STATE_FILE) -> None:
+        self._path = path
+        self._state: dict = {}
+        self.load()
+
+    # ------------------------------------------------------------------
+    # Load / Save
+    # ------------------------------------------------------------------
+
+    def load(self) -> None:
+        """Read state from disk, expiring stale entries. Fail-open."""
+        try:
+            raw = self._path.read_text(encoding="utf-8")
+            data = json.loads(raw)
+            if not isinstance(data, dict):
+                raise ValueError("expected top-level object")
+            self._state = self._expire(data)
+        except FileNotFoundError:
+            self._state = {}
+        except Exception as exc:
+            print(f"[retry-budget-guard] PersistentBudgetState.load failed (fail-open): {exc}",
+                  file=sys.stderr)
+            self._state = {}
+
+    def save(self) -> None:
+        """Atomically write state to disk. Fail-open on any error."""
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                dir=self._path.parent, prefix=".retry-budget-state.", suffix=".tmp"
+            )
+            try:
+                with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
+                    json.dump(self._state, fh, indent=2)
+                Path(tmp_path).replace(self._path)
+            except Exception:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
+        except Exception as exc:
+            print(f"[retry-budget-guard] PersistentBudgetState.save failed (continuing): {exc}",
+                  file=sys.stderr)
+
+    # ------------------------------------------------------------------
+    # Expiry
+    # ------------------------------------------------------------------
+
+    def _expire(self, data: dict) -> dict:
+        now = datetime.now(timezone.utc)
+        result: dict = {}
+        for label, classes in data.items():
+            if not isinstance(classes, dict):
+                continue
+            kept: dict = {}
+            for ec, entry in classes.items():
+                if not isinstance(entry, dict):
+                    continue
+                try:
+                    first_seen = datetime.fromisoformat(entry["first_seen"])
+                    window_h   = float(entry.get("window_hours", self._WINDOW_HOURS))
+                    if now - first_seen < timedelta(hours=window_h):
+                        kept[ec] = entry
+                except (KeyError, ValueError, TypeError):
+                    pass  # malformed entry — drop it
+            if kept:
+                result[label] = kept
+        return result
+
+    # ------------------------------------------------------------------
+    # Mutation helpers
+    # ------------------------------------------------------------------
+
+    def increment(self, label: str, error_class: str) -> int:
+        """
+        Increment the counter for (label, error_class) and persist.
+        Returns the new total attempt count within the current window.
+        Only persists if error_class is in _PERSISTENT_CLASSES.
+        """
+        if error_class not in _PERSISTENT_CLASSES:
+            return 0  # not tracked persistently
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        label_map = self._state.setdefault(label, {})
+        entry = label_map.setdefault(error_class, {
+            "attempts":    0,
+            "first_seen":  now_iso,
+            "window_hours": self._WINDOW_HOURS,
+        })
+        entry["attempts"] = entry.get("attempts", 0) + 1
+        self.save()
+        return entry["attempts"]
+
+    def get_attempts(self, label: str, error_class: str) -> int:
+        """Return persisted attempt count for (label, error_class), 0 if absent."""
+        return self._state.get(label, {}).get(error_class, {}).get("attempts", 0)
+
+    def clear(self, label: str) -> None:
+        """Remove all persisted state for a label (called on clean success)."""
+        if label in self._state:
+            del self._state[label]
+            self.save()
+
+
+_pbs = PersistentBudgetState()
 
 
 class ErrorClass:
@@ -130,7 +280,10 @@ def with_retry(
 
     while total < MAX_TOTAL:
         try:
-            return fn(*args, **kwargs)
+            result = fn(*args, **kwargs)
+            # Clean success — reset persistent state for this label
+            _pbs.clear(label)
+            return result
         except Exception as exc:
             error_class = classify_fn(exc)
             attempt_counts[error_class] = attempt_counts.get(error_class, 0) + 1
@@ -142,6 +295,16 @@ def with_retry(
             # Hard stop: no-retry classes or budget exhausted
             if error_class in fatal_classes:
                 log.error("[retry-guard] %s FATAL (%s): %s — no retry", label, error_class, exc)
+                raise
+
+            # Persist cross-restart counts for AUTH and RESOURCE classes
+            persistent_attempts = _pbs.increment(label, error_class)
+            if persistent_attempts > 0 and persistent_attempts > max_attempts:
+                log.error(
+                    "[retry-guard] %s persistent budget exhausted for class=%s "
+                    "(cross-restart attempts=%d, max=%d): %s",
+                    label, error_class, persistent_attempts, max_attempts, exc,
+                )
                 raise
 
             if attempt_counts[error_class] > max_attempts:

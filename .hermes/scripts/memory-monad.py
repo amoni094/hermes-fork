@@ -33,6 +33,7 @@ import json
 import math
 import os
 import sqlite3
+import sys
 import time
 import urllib.request
 import urllib.error
@@ -480,12 +481,14 @@ class HyperSkillTracker:
         if HYPERSKILL_DB.exists():
             try:
                 self._data = json.loads(HYPERSKILL_DB.read_text())
-            except Exception:
-                self._data = {}
+            except Exception as _e:
+                import sys as _s; print(f"[HyperSkillTracker] corrupt DB reset: {_e}", file=_s.stderr); self._data = {}
 
     def _save(self):
         HYPERSKILL_DB.parent.mkdir(parents=True, exist_ok=True)
-        HYPERSKILL_DB.write_text(json.dumps(self._data, indent=2))
+        _tmp = HYPERSKILL_DB.with_suffix(".tmp")
+        _tmp.write_text(json.dumps(self._data, indent=2))
+        _tmp.rename(HYPERSKILL_DB)
 
     @staticmethod
     def _combo_key(skills: list[str]) -> str:
@@ -554,12 +557,14 @@ class ProvenanceGraph:
         if PROVENANCE_DB.exists():
             try:
                 self._data = json.loads(PROVENANCE_DB.read_text())
-            except Exception:
-                self._data = {"derivations": [], "equivalences": []}
+            except Exception as _e:
+                import sys as _s; print(f"[ProvenanceGraph] corrupt DB reset: {_e}", file=_s.stderr); self._data = {"derivations": [], "equivalences": []}
 
     def _save(self):
         PROVENANCE_DB.parent.mkdir(parents=True, exist_ok=True)
-        PROVENANCE_DB.write_text(json.dumps(self._data, indent=2))
+        _tmp = PROVENANCE_DB.with_suffix(".tmp")
+        _tmp.write_text(json.dumps(self._data, indent=2))
+        _tmp.rename(PROVENANCE_DB)
 
     def add_derivation(self, source_ids: list[str], conclusion_id: str,
                        method: str = "inference", session_id: str = ""):
@@ -631,18 +636,32 @@ class DoubleFunctorQuery:
         self.hindsight_base = hindsight_base
         self.hindsight_bank = hindsight_bank
 
+    # Process-lifetime recall cache: avoids duplicate OpenAI embedding API calls
+    # within a single cron run (each embedding call costs ~3-7s via OpenAI API).
+    # Key: (bank, query, top_k). Max 512 entries; evict oldest-inserted on overflow (FIFO).
+    _recall_cache: dict[tuple, list] = {}
+    _RECALL_CACHE_MAX = 512
+
     def _query_hindsight(self, query: str, top: int = 5) -> list[dict]:
-        """Query Hindsight REST API."""
+        """Query Hindsight REST API with process-lifetime dedup cache."""
+        cache_key = (self.hindsight_bank, query, top)
+        if cache_key in self._recall_cache:
+            return self._recall_cache[cache_key]
         try:
-            url = f"{self.hindsight_base}/recall"
-            payload = json.dumps({"query": query, "bank": self.hindsight_bank, "top_k": top}).encode()
+            url = f"{self.hindsight_base}/v1/default/banks/{self.hindsight_bank}/memories/recall"
+            payload = json.dumps({"query": query, "top_k": top}).encode()
             req = urllib.request.Request(url, data=payload,
                                           headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, timeout=8) as resp:
+            with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read())
-                return data.get("results") or data.get("memories") or []
+                result = data.get("results") or data.get("memories") or []
+            # Evict oldest entry if at capacity
+            if len(self._recall_cache) >= self._RECALL_CACHE_MAX:
+                self._recall_cache.pop(next(iter(self._recall_cache)))
+            self._recall_cache[cache_key] = result
+            return result
         except Exception as e:
-            return [{"error": str(e), "source": "hindsight"}]
+            import sys as _s; print(f"[DoubleFunctorQuery] hindsight query failed: {e}", file=_s.stderr); return []
 
     def query(self, query_text: str, layers: list[str] | None = None,
               top: int = 10, min_weight: float = 0.2) -> dict:
@@ -763,7 +782,7 @@ class MemoryMonad:
         """
         dfq = DoubleFunctorQuery()
         result = dfq.query(query, layers=[layer, "global"], top=top)
-        self._log("recall", hashlib.md5(query.encode()).hexdigest()[:8], "ok",
+        self._log("recall", hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()[:8], "ok",
                   f"layer={layer} found={result['total_filtered']}")
         return MemoryResult(value=result["results"], trace=["recall"])
 
@@ -896,11 +915,14 @@ if __name__ == "__main__":
                 print(f"  [{w}] {text}")
         else:
             print(f"Error: {result.error}")
+            sys.exit(1)
 
     elif args.cmd == "olog-validate":
         pair = GrothPair(context=args.context, content=args.content, type=getattr(args, "type"))
         result = OlogSchema.validate_fact(pair)
         print(json.dumps(result, indent=2))
+        if not result.get("valid", True):
+            sys.exit(1)
 
     else:
         parser.print_help()
