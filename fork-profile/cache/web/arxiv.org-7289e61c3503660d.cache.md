@@ -1,0 +1,13 @@
+[Submitted on 24 Jul 2026]
+
+# Title:Search-G1: Grounded Search Agents via Representation-Based Intrinsic Rewards
+
+[View PDF](/pdf/2608.07531) [HTML (experimental)](https://arxiv.org/html/2608.07531v1)
+
+> Abstract:Search-augmented language agents should retrieve external information only when necessary and ground their answers in retrieved evidence. Existing external rewards provide either sparse outcome supervision or richer feedback from process annotations and LLM judges. Outcome rewards scale readily but cannot distinguish grounded retrieval from redundant search, whereas richer signals require costly annotation or inference during training. Internal rewards based on policy-side signals such as entropy, likelihood, or information gain are graded and inexpensive to evaluate, yet mainly reflect model confidence rather than evidence grounding. We propose Search-G1, a representation-based intrinsic reward framework that measures the operational grounding of an agent's answers through two intervention-calibrated readouts. A prompt-state readout predicts closed-book sufficiency, whose complement defines policy-relative retrieval necessity; an answer-commit readout estimates evidence reliance from answer-stage sensitivity to evidence deletion. Together, they provide additional credit to correct searched trajectories when retrieval is estimated necessary and the answer is evidence-sensitive, favor correct direct answers when closed-book knowledge suffices, and penalize repeated search. After calibration, reward scoring requires neither process annotations nor LLM-as-judge inference during policy optimization. Because reinforcement learning changes policy representations, Search-G1 periodically refits both readouts on trajectories from the latest checkpoint, allowing the reward to co-evolve with the policy. Experiments across multiple search-based question-answering benchmarks and two model scales show that Search-G1 improves the grounding--search-cost trade-off, producing shorter response-side trajectories at competitive task accuracy. Code is available at [this https URL](https://github.com/Rosy0912/Search-G1).
+
+| Subjects: | Computation and Language (cs.CL); Artificial Intelligence (cs.AI) |
+|---|---|
+| Cite as: | [arXiv:2608.07531](https://arxiv.org/abs/2608.07531) [cs.CL] |
+| | (or [arXiv:2608.07531v1](https://arxiv.org/abs/2608.07531v1) [cs.CL] for this version) |
+| | [https://doi.org/10.48550/arXiv.2608.07531](https://doi.org/10.48550/arXiv.2608.07531) arXiv-issued DOI via DataCite |

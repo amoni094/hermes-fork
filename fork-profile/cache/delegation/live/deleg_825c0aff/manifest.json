@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_825c0aff",
+  "started": "2026-09-14 23:35:52",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Adversarial review of 6 skill patches applied to Hermes default profile skills. Your job is a COLD adversarial review — find contradictions, false claims, scope over-claims, redundancies with existing content, CDH detours, and cohesion gaps. You have NO prior context about what was implemented.\n\nSkills patched (read these files in full):\n1. /var/home/rainbow/.hermes/skills/superpowers/dispatching-parallel-agents/SKILL.md — added 'Node Prompt Contract' section\n2. /var/home/rainbow/.hermes/skills/",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_825c0aff/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-14 23:40:05"
+}

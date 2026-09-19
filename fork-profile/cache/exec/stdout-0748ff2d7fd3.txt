@@ -1,0 +1,1500 @@
+=== /tmp/hello_agent/src/feedback/analysis.py ===
+"""
+Analysis capabilities for the feedback pipeline.
+
+Provides:
+- Failure mode clustering: group similar failures by semantic similarity
+- Root cause analysis: trace failures to prompt sections, tool configs, or missing context
+- Comparative analysis: version N vs version N-1 metrics
+- Cohort analysis: quality by user segment, task type, or time of day
+"""
+
+from __future__ import annotations
+
+import logging
+import math
+import statistics
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+from typing import Any
+
+from .pipeline import EmbeddingService, FeedbackStore, VectorStore
+from .schemas import (
+    ChangeStatus,
+    FailureCluster,
+    FeedbackType,
+    InteractionEvent,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Theory-grounded statistical utilities
+# ---------------------------------------------------------------------------
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Cosine similarity between two vectors.
+
+    The normalised dot product maps semantic embedding distance to [-1, 1].
+    Cover & Thomas §12.4 discusses the relationship between inner products on
+    probability simplices and information-geometric divergences; cosine
+    similarity is the Euclidean analogue that is standard for dense embeddings
+    (see also Aggarwal, Hinneburg & Keim 2001 on high-dimensional distance).
+    Theta near 0 (similarity near 1) => highly similar failure modes.
+    """
+    if len(a) != len(b) or not a:
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(x * x for x in b))
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def _union_find_cluster(n: int, sim_matrix: list[list[float]], threshold: float) -> list[int]:
+    """Union-Find (CLRS Chapter 21) connected-components clustering.
+
+    Runs in O(n^2 * alpha(n)) where alpha is the inverse Ackermann function.
+    Replaces the greedy nearest-neighbour scan which had O(n^2) worst-case
+    with duplicated assignments and missed cross-cluster edges.
+
+    Returns a list of length n where each entry is the canonical cluster id
+    (the root of the union-find tree).
+    """
+    parent = list(range(n))
+    rank = [0] * n
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]  # path compression
+            x = parent[x]
+        return x
+
+    def union(x: int, y: int) -> None:
+        rx, ry = find(x), find(y)
+        if rx == ry:
+            return
+        if rank[rx] < rank[ry]:
+            rx, ry = ry, rx
+        parent[ry] = rx
+        if rank[rx] == rank[ry]:
+            rank[rx] += 1
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if sim_matrix[i][j] >= threshold:
+                union(i, j)
+
+    return [find(i) for i in range(n)]
+
+
+def _wasserstein_1d_distance(u: list[float], v: list[float]) -> float:
+    """Wasserstein-1 (Earth Mover's) distance between two 1-D distributions.
+
+    Peyre & Cuturi §2.3 / Villani §6: W1 = integral |F_u(t) - F_v(t)| dt
+    where F_u, F_v are empirical CDFs. For sorted samples this reduces to
+    the L1 distance between sorted lists (with equal resampling to the same
+    grid). Used to detect distributional shift between cohort metrics.
+    """
+    if not u or not v:
+        return 0.0
+    u_sorted = sorted(u)
+    v_sorted = sorted(v)
+    # Resample both onto a common grid of max(len(u), len(v)) points
+    n = max(len(u_sorted), len(v_sorted))
+
+    def interp(arr: list[float], i: int, n_total: int) -> float:
+        t = i / (n_total - 1) if n_total > 1 else 0.0
+        idx = t * (len(arr) - 1)
+        lo = int(idx)
+        hi = min(lo + 1, len(arr) - 1)
+        frac = idx - lo
+        return arr[lo] * (1 - frac) + arr[hi] * frac
+
+    return sum(abs(interp(u_sorted, i, n) - interp(v_sorted, i, n)) for i in range(n)) / n
+
+
+def _sprt_two_means(
+    samples_a: list[float],
+    samples_b: list[float],
+    alpha: float = 0.05,
+    beta: float = 0.20,
+) -> str:
+    """Sequential Probability Ratio Test for difference in means.
+
+    Wald 1947: compare H0 (means equal) vs H1 (means differ by a
+    pre-specified effect size delta0 = pooled_std / 2).
+
+    The effect size is fixed BEFORE seeing the data (half a pooled standard
+    deviation is a conventional moderate effect). Using the observed delta
+    as the effect size would make H1 data-dependent and invalid (circular).
+
+    The log-likelihood ratio sufficient statistic for N(mu, sigma^2) is:
+      LLR = n_eff * delta0 * |mu_a - mu_b| / sigma^2 - n_eff * delta0^2 / (2 * sigma^2)
+    which simplifies to the 2-sample SPRT statistic.
+
+    Returns 'significant' if H1 accepted, 'not_significant' if H0 accepted,
+    'insufficient_data' otherwise.
+    """
+    if not samples_a or not samples_b:
+        return "insufficient_data"
+    combined = samples_a + samples_b
+    if len(combined) < 4:
+        return "insufficient_data"
+    sigma = statistics.stdev(combined)
+    if sigma < 1e-9:
+        # Zero variance: if means differ, H1 trivially holds; else H0
+        return "significant" if abs(statistics.mean(samples_a) - statistics.mean(samples_b)) > 1e-9 else "not_significant"
+
+    mu_a = statistics.mean(samples_a)
+    mu_b = statistics.mean(samples_b)
+    # Pre-specified effect size (half pooled std — fixed before data)
+    delta0 = sigma / 2.0
+    # Effective sample size (harmonic mean of the two group sizes)
+    n_eff = (len(samples_a) * len(samples_b)) / (len(samples_a) + len(samples_b))
+    # Wald SPRT sufficient statistic for H0: d=0 vs H1: d=delta0
+    # LLR = n_eff * [delta0 * |mu_b - mu_a| - delta0^2 / 2] / sigma^2
+    obs_delta = abs(mu_b - mu_a)
+    llr = n_eff * (delta0 * obs_delta - delta0**2 / 2.0) / (sigma**2)
+    upper = math.log((1 - beta) / alpha)
+    lower = math.log(beta / (1 - alpha))
+    if llr >= upper:
+        return "significant"
+    if llr <= lower:
+        return "not_significant"
+    return "insufficient_data"
+
+
+def _bonferroni_z_threshold(n_tests: int, alpha: float = 0.05) -> float:
+    """Bonferroni-corrected z-score threshold for multiple comparisons.
+
+    Grimmett & Stirzaker §7.4: family-wise error rate controlled by
+    comparing each test at alpha / n_tests. For the Gaussian tail,
+    convert to a z-score using the inverse normal approximation (Abramowitz
+    & Stegun 26.2.17).
+
+    Returns the two-tailed z-threshold.
+    """
+    if n_tests <= 0:
+        return 1.96
+    adjusted_alpha = alpha / max(n_tests, 1)
+    # Rational approximation to the normal quantile
+    p = adjusted_alpha / 2.0
+    # Use Beasley-Springer-Moro inverse normal approximation
+    # (accurate to 4 decimal places for p < 0.5)
+    a = [2.515517, 0.802853, 0.010328]
+    b = [1.432788, 0.189269, 0.001308]
+    if p <= 0 or p >= 0.5:
+        return 3.5  # conservative cap
+    t = math.sqrt(-2.0 * math.log(p))
+    num = a[0] + a[1] * t + a[2] * t * t
+    den = 1.0 + b[0] * t + b[1] * t * t + b[2] * t * t * t
+    return t - num / den
+
+
+# ---------------------------------------------------------------------------
+# Failure mode clustering
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ClusterConfig:
+    """Configuration for failure clustering."""
+
+    similarity_threshold: float = 0.82  # cosine similarity threshold for cluster membership
+    min_cluster_size: int = 3  # minimum failures to form a cluster
+    max_clusters: int = 50  # cap on total clusters
+    reclustering_interval_hours: int = 24  # how often to re-cluster
+
+
+class FailureClusteringEngine:
+    """Groups similar failures together using semantic embeddings.
+
+    Algorithm:
+    1. Retrieve all interactions with negative feedback in the window
+    2. Embed each interaction (input + output)
+    3. Perform agglomerative clustering using cosine similarity
+    4. For each cluster, generate a label and root
+...[truncated]...
+
+=== /tmp/hello_agent/src/eval/conformal_abstention.py ===
+"""Conformal abstention stays gold-label until task 5.5 verification is recorded (§4.4).
+
+Theory grounding:
+  Conformal prediction (Vovk et al.; Hastie ESL §7): provides coverage guarantees
+  without distributional assumptions. The abstention threshold is calibrated on a
+  held-out calibration set such that P(score >= threshold) >= 1 - alpha.
+
+  Jaynes (Probability Theory, ch.5): the 'gold_label' mode is the conservative prior
+  (maximum ignorance about threshold placement); we only switch to 'conformal' when
+  we have a verified calibration record anchoring the posterior.
+"""
+
+from __future__ import annotations
+
+import math
+from typing import Any, Literal
+
+AbstentionMode = Literal["gold_label", "conformal"]
+PENDING_CONFORMAL = "conformal_thresholds:verification_not_recorded"
+
+
+def abstention_metric_mode(verification: dict[str, Any] | None) -> AbstentionMode:
+    """Do not switch to conformal thresholds without a recorded coverage verification."""
+    if not isinstance(verification, dict):
+        return "gold_label"
+    if verification.get("coverage_verified") is True and verification.get("thresholds_preregistered") is True:
+        return "conformal"
+    return "gold_label"
+
+
+def conformal_thresholds_for_gate(verification: dict[str, Any] | None) -> tuple[float, ...] | None:
+    """regression_gate.py consumes conformal thresholds only after the 5.5 record exists.
+
+    Numeric floors stay uninvented here. The record must already carry both the
+    coverage verification and pre-registered thresholds.
+    """
+    if abstention_metric_mode(verification) != "conformal" or not isinstance(verification, dict):
+        return None
+    raw = verification.get("thresholds")
+    if not isinstance(raw, list) or not raw:
+        return None
+    values: list[float] = []
+    for item in raw:
+        try:
+            values.append(float(item))
+        except (TypeError, ValueError):
+            return None
+    return tuple(values)
+
+
+# ---------------------------------------------------------------------------
+# Conformal calibration utilities (Hastie ESL §7 / Vovk 2005)
+# ---------------------------------------------------------------------------
+
+
+def calibrate_conformal_threshold(
+    calibration_scores: list[float],
+    alpha: float = 0.10,
+) -> float:
+    """Compute the conformal prediction threshold from a calibration set.
+
+    Vovk et al. (2005) / Hastie ESL §7.2: for a held-out calibration set
+    with n points and target coverage 1-alpha, the threshold q is the
+    ceil((n+1)(1-alpha))/n quantile of the nonconformity scores.
+
+    This guarantees P(abstain correctly) >= 1 - alpha on test points drawn
+    from the same distribution as the calibration set, WITHOUT distributional
+    assumptions beyond exchangeability (Jaynes, Probability Theory §5.2).
+
+    Args:
+        calibration_scores: Nonconformity scores (lower = more conforming).
+            Typically 1.0 - predicted_probability for classification tasks.
+        alpha: Desired miscoverage rate (e.g. 0.10 for 90% coverage).
+
+    Returns:
+        Threshold tau: abstain when score > tau; predict when score <= tau.
+    """
+    if not calibration_scores:
+        return 1.0  # abstain always if no calibration data
+    n = len(calibration_scores)
+    # Finite-sample correction: use ceil((n+1)(1-alpha))/n quantile
+    q_level = math.ceil((n + 1) * (1.0 - alpha)) / n
+    q_level = min(q_level, 1.0)
+    sorted_scores = sorted(calibration_scores)
+    idx = int(q_level * n) - 1
+    idx = max(0, min(idx, n - 1))
+    return sorted_scores[idx]
+
+
+def conformal_coverage_check(
+    calibration_scores: list[float],
+    test_scores: list[float],
+    alpha: float = 0.10,
+) -> dict[str, float]:
+    """Empirically verify conformal coverage on a held-out test set.
+
+    Returns a dict with:
+      threshold: the calibrated abstention threshold
+      empirical_coverage: fraction of test points correctly abstained-on
+      target_coverage: 1 - alpha
+      coverage_gap: empirical_coverage - target_coverage (positive = conservative)
+
+    Used to populate the 'coverage_verified' field in the verification record
+    that abstention_metric_mode() checks before switching to conformal mode.
+    """
+    if not calibration_scores or not test_scores:
+        return {
+            "threshold": 1.0,
+            "empirical_coverage": 0.0,
+            "target_coverage": 1.0 - alpha,
+            "coverage_gap": -(1.0 - alpha),
+        }
+    tau = calibrate_conformal_threshold(calibration_scores, alpha)
+    # Coverage = fraction of test points where score <= tau (correctly predicted)
+    covered = sum(1 for s in test_scores if s <= tau)
+    empirical_coverage = covered / len(test_scores)
+    return {
+        "threshold": tau,
+        "empirical_coverage": empirical_coverage,
+        "target_coverage": 1.0 - alpha,
+        "coverage_gap": empirical_coverage - (1.0 - alpha),
+    }
+
+
+
+=== /tmp/hello_agent/src/rules/engine.py ===
+"""
+Rules evaluation engine.
+
+This module provides the RulesEngine class that evaluates contract data
+against defined rule sets and produces evaluation reports.
+"""
+
+from collections.abc import Callable
+from operator import eq, ge, gt, le, lt, ne
+from typing import Any
+
+from .models import (
+    Condition,
+    ConditionalRule,
+    CumulativeRule,
+    EvaluationReport,
+    LogicalOperator,
+    Operator,
+    RiskLevel,
+    RuleResult,
+    RuleSet,
+    ThresholdRule,
+)
+
+# Risk level ordering for comparison (higher index = more severe)
+# Support both enum and string values
+RISK_SEVERITY = {
+    RiskLevel.ACCEPTABLE: 0,
+    RiskLevel.LOW: 1,
+    RiskLevel.MEDIUM: 2,
+    RiskLevel.HIGH: 3,
+    RiskLevel.CRITICAL: 4,
+    "acceptable": 0,
+    "low": 1,
+    "medium": 2,
+    "high": 3,
+    "critical": 4,
+}
+
+
+def _normalize_risk_level(level: Any) -> str | None:
+    """Normalize risk level to string for comparison."""
+    if level is None:
+        return None
+    if isinstance(level, RiskLevel):
+        return level.value
+    return str(level).lower()
+
+
+def _risk_matches(level1: Any, level2: Any) -> bool:
+    """Check if two risk levels match (handling enum/string mix)."""
+    return _normalize_risk_level(level1) == _normalize_risk_level(level2)
+
+
+def _unsupported_operator(value: Any, threshold: Any) -> bool:
+    return False
+
+
+# Comparison operator dispatch, keyed by ``Operator`` value. Each callable is
+# ``(value, threshold) -> bool``; comparison errors propagate to ``_compare``.
+_COMPARATORS: dict[str, Callable[[Any, Any], bool]] = {
+    "<": lt,
+    "<=": le,
+    ">": gt,
+    ">=": ge,
+    "==": eq,
+    "!=": ne,
+    "contains": lambda value, threshold: str(threshold).lower() in str(value).lower(),
+    "not_contains": lambda value, threshold: str(threshold).lower() not in str(value).lower(),
+    "is_true": lambda value, threshold: bool(value) is True,
+    "is_false": lambda value, threshold: bool(value) is False,
+}
+
+
+def check_rule_consistency(rule_set: RuleSet) -> list[str]:
+    """Check a RuleSet for internally contradictory ConditionalRules.
+
+    Theory (Huth & Ryan, *Logic in Computer Science*, Ch. 3 — CTL model checking):
+    A formula ``φ ∧ ψ`` is a contradiction when ``φ ∧ ψ ≡ False`` for all
+    valuations.  For numeric fields, the conjunction ``(field < X) ∧ (field > Y)``
+    with Y ≥ X is unsatisfiable — no real number can be both strictly less than X
+    and strictly greater than Y when Y ≥ X.  This function detects that structural
+    contradiction at rule-load time so the system fails fast before evaluation.
+
+    Args:
+        rule_set: The RuleSet to check.
+
+    Returns:
+        List of warning strings for each detected contradiction.
+        Empty list if no contradictions are found.
+    """
+    warnings: list[str] = []
+    for rule in rule_set.conditional_rules:
+        # Group conditions by field
+        by_field: dict[str, list] = {}
+        for condition in rule.conditions:
+            by_field.setdefault(condition.field, []).append(condition)
+
+        for field_name, conds in by_field.items():
+            # Collect < / > numeric thresholds for this field
+            lt_vals: list[float] = []
+            gt_vals: list[float] = []
+            for cond in conds:
+                op = cond.operator if isinstance(cond.operator, str) else str(cond.operator)
+                try:
+                    val = float(cond.value)  # type: ignore[arg-type]
+                except (TypeError, ValueError):
+                    continue
+                if op == "<":
+                    lt_vals.append(val)
+                elif op == ">":
+                    gt_vals.append(val)
+
+            # Flag contradiction: field < X and field > Y where Y >= X
+            for x in lt_vals:
+                for y in gt_vals:
+                    if y >= x:
+                        warnings.append(
+                            f"Rule {rule.id!r} contradicts itself: field {field_name!r} "
+                            f"has conditions that cannot simultaneously hold "
+                            f"(< {x} and > {y})"
+                        )
+    return warnings
+
+
+class RulesEngine:
+    """
+    Evaluates contract data against rule sets.
+
+    The engine processes three types of rules:
+    1. Threshold rules: Simple comparisons (e.g., liability_cap < 6 months)
+    2. Conditional rules: Complex AND/OR logic (e.g., auto_renewal AND high_increase)
+    3. Cumulative rules: Aggregate scoring (e.g., 3+ HIGH items = CRITICAL)
+    """
+
+    def __init__(self, rule_set: RuleSet):
+        """
+        Initialize the engine with a rule set.
+
+        Args:
+            rule_set: The RuleSet containing rules to evaluate against
+        """
+        self.rule_set = rule_set
+        self._field_index: dict | None = None
+
+    def _build_field_index(self) -> dict:
+        """Build and cache a {field_name: [rules]} index for O(1) field lookup.
+
+        Theory (Sipser, *Introduction to the Theory of Computation*, Ch. 0):
+        Indexing transforms the rule-lookup problem from an O(|rules|) linear
+        scan into an O(1) hash-table lookup — the same complexity argument used
+        to justify DFA transition tables over NFA ε-closure searches.  The index
+        is built lazily on first call and cached on ``self._field_index`` so
+        subsequent lookups pay only the hash cost.
+
+        For ThresholdRule: indexed by ``rule.field``.
+        For ConditionalRule: indexed by each ``condition.field``.
+
+        Returns:
+            dict mapping field name → list of rules that reference that field.
+        """
+        if self._field_index is not None:
+            return self._field_index
+
+        index: dict = {}
+        for rule in self.rule_set.threshold_rules:
+            index.setdefault(rule.field, []).append(rule)
+        for rule in self.rule_set.conditional_rules:
+            for condition in rule.conditions:
+                index.setdefault(condition.field, []).append(rule)
+        self._field_index = index
+        return self._field_index
+
+    def _compare(self, value: Any, operator: Any, threshold: Any) -> bool:
+        """
+        Perform a comparison operation.
+
+        Args:
+            value: The actual value from contract data
+            operator: The comparison operator (can be Operator enum or string)
+            threshold: The threshold value to compare against
+
+        Returns:
+            True if the comparison holds, False otherwise
+        """
+        if value is None:
+            return False
+
+        # Handle both enum and string values for operator
+        op = operator.value if isinstance(operator, Operator) else str(operator)
+
+        try:
+            return _COMPARATORS.get(op, _unsupported_operator)(value, threshold)
+        except (TypeError, ValueError):
+            return False
+
+    def evaluate_threshold(self, rule: ThresholdRule, data: dict[str, Any]) -> RuleResult:
+        """
+        Evaluate a threshold rule against contract data.
+
+        Args:
+            rule: The threshold rule to evaluate
+            data: Contract data dictionary
+
+        Returns:
+            RuleResult indicating if the rule was triggered
+        """
+        value = data.get(rule.field)
+
+        # Classify as unevaluable if field is missing, null, empty, or "N/A"
+        if value is None or value == "" or (isinstance(value, str) and value.strip().upper() == "N/A"):
+            return RuleResult(
+                rule_id=rule.id,
+                rule_name=rule.name,
+                rule_type="threshold",
+                triggered=False,
+                evaluable=False,
+                risk_level=None,
+                details=f"Field '{rule.field}' was not extracted from this agreement",
+                recommendation=None,
+                field_value=None,
+                missing_fields=[rule.field],
+            )
+
+        # Check if the condition is violated (rule triggers when condition is TRUE)
+        violated = self._compare(value, rule.operator, rule.threshold)
+
+        # Get operator display v
+...[truncated]...
+
+=== /tmp/hello_agent/src/pipeline/consistency_scorer.py ===
+"""Consistency-sampled calibrated confidence for compiler findings.
+
+Research (`LLM_Legal_Contract_Analysis_Failure_Modes_Research.md` §10) shows that
+self-reported LLM confidence is systematically overconfident (GPT-4 assigned its
+highest confidence score to 87% of responses, including factually wrong ones)
+and recommends consistency-based methods instead.
+
+This module runs N cheap re-verification calls against a lightweight model
+asking a yes/no question — "Given this quote and context, does this finding
+hold?" — then maps the agreement rate to a calibrated confidence score.
+
+The feature is shipped behind ``Config.enable_consistency_scoring`` (default
+False) so it can be turned on in shadow mode or A/B testing before replacing
+the compiler-LLM self-report as the routing signal.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+import threading
+import time
+from dataclasses import dataclass, field
+from itertools import pairwise
+from typing import Any
+
+from src.agent import call_with_timeout, get_agent
+from src.config import Config
+from src.pipeline.agent_response import extract_message_text
+from src.security.input_sanitizer import sanitize_contract_text
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Public types
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ConsistencyScore:
+    """Calibrated consistency signal derived from N re-verification votes.
+
+    ``agree_rate`` is the fraction of samples that returned ``yes`` — samples
+    that error out or return ``null`` count as disagreement (conservative).
+    ``calibrated_confidence`` is the agree_rate rounded to the fixed mapping
+    in ``_AGREEMENT_TO_CONFIDENCE``.
+    """
+
+    agree_rate: float
+    calibrated_confidence: float
+    sample_votes: list[str | None] = field(default_factory=list)
+    sample_reasons: list[str] = field(default_factory=list)
+    model_id: str = ""
+    n: int = 0
+    error_count: int = 0
+    latency_ms: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "agree_rate": self.agree_rate,
+            "calibrated_confidence": self.calibrated_confidence,
+            "sample_votes": list(self.sample_votes),
+            "sample_reasons": list(self.sample_reasons),
+            "model_id": self.model_id,
+            "n": self.n,
+            "error_count": self.error_count,
+            "latency_ms": self.latency_ms,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Agreement-rate -> calibrated confidence mapping
+#
+# For N=3:
+#   3/3 yes  -> 1.00   (unanimous agreement)
+#   2/3 yes  -> 0.50   (split majority — weak signal, route to potential_issues)
+#   1/3 yes  -> 0.25   (split minority — filtered_findings per compiler routing)
+#   0/3 yes  -> 0.00   (unanimous disagreement)
+#
+# For N != 3 we compute by linear interpolation against these anchors so the
+# function is consistent if the sample count is tuned up or down later.
+# ---------------------------------------------------------------------------
+
+_AGREEMENT_TO_CONFIDENCE: list[tuple[float, float]] = [
+    (0.0, 0.0),
+    (1 / 3, 0.25),
+    (2 / 3, 0.5),
+    (1.0, 1.0),
+]
+
+
+def _map_agree_rate(agree_rate: float) -> float:
+    """Map an agreement rate in [0, 1] to a calibrated confidence in [0, 1]."""
+    if agree_rate <= 0:
+        return 0.0
+    if agree_rate >= 1:
+        return 1.0
+    for (lo_rate, lo_conf), (hi_rate, hi_conf) in pairwise(_AGREEMENT_TO_CONFIDENCE):
+        if lo_rate <= agree_rate <= hi_rate:
+            span = hi_rate - lo_rate
+            if span <= 0:
+                return round(hi_conf, 2)
+            frac = (agree_rate - lo_rate) / span
+            return round(lo_conf + frac * (hi_conf - lo_conf), 2)
+    return round(agree_rate, 2)
+
+
+# ---------------------------------------------------------------------------
+# Prompt — kept in-module so a snapshot test can pin the exact wording.
+#
+# DO NOT reword without updating the snapshot test in
+# ``tests/pipeline/test_consistency_scorer.py``.
+# ---------------------------------------------------------------------------
+
+VERIFIER_PROMPT_TEMPLATE = """You are a Consistency Verifier for legal contract findings.
+
+A separate analysis produced this finding. You must decide whether the finding is
+supported by the quoted contract text.
+
+FINDING: {finding}
+
+QUOTED CONTRACT TEXT: "{quote}"
+
+SURROUNDING SOURCE CONTEXT (for grounding only — do not rely on anything outside):
+{context}
+
+Task:
+1. Decide whether the finding is supported by the quoted text in the context above.
+2. Respond on the FIRST line with exactly one of: yes | no
+3. On the SECOND line, give a 1-sentence reason (<= 160 chars).
+
+Rules:
+- Answer "no" if the quote does not appear in the context or the finding
+  mischaracterises what the quote says.
+- Answer "no" rather than "yes" when you are uncertain.
+- Do not add any other output besides the two lines above.
+"""
+
+
+_YES_NO_RE = re.compile(r"^\s*(yes|no)\b", re.IGNORECASE)
+
+
+def _extract_text(response: Any) -> str:
+    """Pull plain text out of a Strands agent response (same shape as verify_quote)."""
+    return extract_message_text(response)
+
+
+def _parse_vote(text: str) -> tuple[str | None, str]:
+    """Parse a yes/no response. Returns (vote, reason) where vote is 'yes', 'no', or None."""
+    if not text:
+        return None, ""
+    lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
+    if not lines:
+        return None, ""
+    match = _YES_NO_RE.match(lines[0])
+    vote = match.group(1).lower() if match else None
+    reason = " ".join(lines[1:])[:160] if len(lines) > 1 else ""
+    return vote, reason
+
+
+_CONTEXT_WINDOW_CHARS = 2500
+_CONTEXT_PAD_CHARS = 600
+
+
+def _build_context(quote: str, extracted_text: str) -> str:
+    """Return a short extract around ``quote`` from ``extracted_text``."""
+    if not extracted_text:
+        return ""
+    if not quote:
+        return extracted_text[:_CONTEXT_WINDOW_CHARS]
+    # Try an exact locate first — falls back to the document head when absent.
+    idx = extracted_text.find(quote)
+    if idx == -1 and len(quote) > 40:
+        idx = extracted_text.find(quote[:40])
+    if idx == -1:
+        return extracted_text[:_CONTEXT_WINDOW_CHARS]
+    start = max(0, idx - _CONTEXT_PAD_CHARS)
+    end = min(len(extracted_text), idx + len(quote) + _CONTEXT_PAD_CHARS)
+    return extracted_text[start:end]
+
+
+def _build_prompt(finding: str, quote: str, context: str) -> str:
+    safe_finding = sanitize_contract_text((finding or "").strip())[:800]
+    safe_quote = sanitize_contract_text((quote or "").strip())[:800]
+    safe_context = sanitize_contract_text(context or "")
+    return VERIFIER_PROMPT_TEMPLATE.format(
+        finding=safe_finding or "(no finding text)",
+        quote=safe_quote or "(no quote)",
+        context=safe_context or "(no context)",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Core scorer
+# ---------------------------------------------------------------------------
+
+
+def _default_call_verifier(prompt: str, session_id: str, model_id: str, provider: str | None) -> Any:
+    """Invoke a lightweight Strands agent. Isolated so tests can monkey-patch it."""
+    tid = threading.get_ident()
+    agent = get_agent(
+        f"{session_id}-consistency-{tid}",
+        model_id=model_id,
+        provider=provider,
+    )
+    return call_with_timeout(agent, prompt, timeout=30)
+
+
+def score_consistency(
+    issue: dict[str, Any] | Any,
+    extracted_text: str,
+    config: Config,
+    n: int = 3,
+    *,
+    session_id: str = "consistency-scorer",
+    call_verifier: Any = None,
+) -> ConsistencyScore:
+    """Run N lightweight re-verification calls and compute a calibrated score.
+
+    Args:
+        issue: Either a ``CompilationIssue`` or a plain dict with ``details``,
+            ``verbatim_quote``, and optional ``rule_name``.
+        extracted_text: The full source text the findi
+...[truncated]...
+
+=== /tmp/hello_agent/src/aimd.py ===
+"""
+AIMD (Additive Increase/Multiplicative Decrease) concurrency controller.
+Migrated from worker.js to Python.
+
+Dynamically adjusts concurrency limits based on error and throttle rates.
+Extended in Phase 27 with per-node, per-provider controllers and backpressure.
+"""
+
+from __future__ import annotations
+
+import enum
+import logging
+import math
+import threading
+import time
+from contextlib import contextmanager
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# NodePriority enum
+# ---------------------------------------------------------------------------
+
+
+class NodePriority(enum.IntEnum):
+    """Priority levels for pipeline nodes. Higher = more important."""
+
+    LOW = 0
+    MEDIUM = 1
+    HIGH = 2
+
+
+# Default budgets per node (initial concurrency limit)
+_DEFAULT_BUDGETS: dict[str, int] = {
+    "extractor": 8,
+    "compiler": 4,
+    "profiler": 2,
+    "structural": 2,
+    "llm_checks": 2,
+}
+
+# Default priorities per node
+_NODE_PRIORITIES: dict[str, NodePriority] = {
+    "extractor": NodePriority.HIGH,
+    "compiler": NodePriority.MEDIUM,
+    "profiler": NodePriority.MEDIUM,
+    "structural": NodePriority.LOW,
+    "llm_checks": NodePriority.LOW,
+}
+
+# Default budget for unknown nodes
+_DEFAULT_BUDGET = 2
+_DEFAULT_PRIORITY = NodePriority.MEDIUM
+
+
+def _coerce_status_code(value: object) -> int:
+    """Best-effort integer coercion for HTTP status values."""
+    if isinstance(value, bool) or value is None:
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        value = value.strip()
+        if value.isdigit():
+            return int(value)
+    return 0
+
+
+def _extract_error_status_code(err: Exception) -> int:
+    """Support SDK errors that expose status on either the exception or response.
+
+    OpenAI SDK errors may attach an httpx ``Response`` object at ``err.response``,
+    which does not implement ``dict.get``. Botocore-style errors instead expose a
+    mapping with ``ResponseMetadata``. Handle both shapes safely.
+    """
+    for attr in ("status_code", "status"):
+        code = _coerce_status_code(getattr(err, attr, None))
+        if code:
+            return code
+
+    response = getattr(err, "response", None)
+    if response is None:
+        return 0
+
+    if isinstance(response, dict):
+        metadata = response.get("ResponseMetadata") or {}
+        return _coerce_status_code(
+            metadata.get("HTTPStatusCode") or response.get("status_code") or response.get("status")
+        )
+
+    for attr in ("status_code", "status"):
+        code = _coerce_status_code(getattr(response, attr, None))
+        if code:
+            return code
+
+    metadata = getattr(response, "ResponseMetadata", None) or getattr(response, "response_metadata", None)
+    if isinstance(metadata, dict):
+        return _coerce_status_code(metadata.get("HTTPStatusCode"))
+
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# ConcurrencyController (extended)
+# ---------------------------------------------------------------------------
+
+
+class ConcurrencyController:
+    """Thread-safe adaptive concurrency controller with priority and backpressure."""
+
+    def __init__(
+        self,
+        name: str,
+        initial: int,
+        min_limit: int,
+        max_limit: int,
+        priority: int = NodePriority.MEDIUM,
+        registry: ControllerRegistry | None = None,
+        provider: str = "",
+    ):
+        self.name = name
+        self.limit = initial
+        self.min_limit = min_limit
+        self.max_limit = max_limit
+
+        self._initial = initial
+        self._priority = priority
+        self._registry = registry
+        self._provider = provider
+
+        self._running = 0
+        self._window: list[dict] = []
+        self._window_size = 20
+        self._ops = 0
+
+        # Strogatz (Dynamical Systems) + Astrom-Murray (Feedback Control):
+        # Track limit history to detect convergence to a fixed point.
+        self._limit_history: list[float] = []
+
+        self._cond = threading.Condition()
+
+    def acquire(self, timeout: float = 30.0) -> None:
+        """Acquire a slot, blocking if the current limit is reached.
+
+        If this controller has LOW priority and its provider's health is
+        degraded (ratio < 0.5), the acquire blocks until health recovers
+        or the timeout expires.
+
+        Args:
+            timeout: Maximum seconds to wait. Raises TimeoutError on expiry.
+        """
+        deadline = time.monotonic() + timeout
+
+        # --- Backpressure check for LOW priority nodes ---
+        if self._priority <= NodePriority.LOW and self._registry and self._provider:
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(
+                        f"[BACKPRESSURE][{self._provider}] {self.name} timed out "
+                        f"waiting for provider health recovery (timeout={timeout}s)"
+                    )
+                health = self._registry.get_provider_health(self._provider)
+                if health["ratio"] >= 0.5:
+                    break
+                logger.info(
+                    "[BACKPRESSURE][%s] activated: delaying %s (ratio=%.2f)",
+                    self._provider,
+                    self.name,
+                    health["ratio"],
+                )
+                # Poll every 0.05s (short for tests, low overhead in production)
+                time.sleep(min(0.05, remaining))
+
+        # --- Standard slot acquisition with timeout ---
+        with self._cond:
+            while self._running >= self.limit:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(
+                        f"[{self.name}] acquire timed out after {timeout}s "
+                        f"(running={self._running}, limit={self.limit})"
+                    )
+                self._cond.wait(timeout=min(remaining, 0.1))
+            self._running += 1
+
+    def release(self, duration_ms: float = 0.0, error: bool = False, throttled: bool = False) -> None:
+        """Release a slot and update the sliding window of performance data."""
+        with self._cond:
+            self._window.append({"durationMs": duration_ms, "error": error, "throttled": throttled})
+            if len(self._window) > self._window_size:
+                self._window.pop(0)
+
+            self._running -= 1
+            self._ops += 1
+
+            if self._ops % 5 == 0:
+                self._adjust()
+
+            self._cond.notify_all()
+
+    def _adjust(self) -> None:
+        """Evaluate the window and adjust the concurrency limit."""
+        if len(self._window) < 5:
+            return
+
+        throttles = sum(1 for s in self._window if s["throttled"])
+        errors = sum(1 for s in self._window if s["error"])
+        prev = self.limit
+
+        if throttles >= 2:
+            # Aggressive decrease on rate limiting
+            self.limit = max(self.min_limit, self.limit // 2)
+        elif errors >= 3:
+            # Moderate decrease on general errors
+            self.limit = max(self.min_limit, int(self.limit * 0.7))
+        elif errors == 0 and throttles == 0 and len(self._window) >= self._window_size * 0.75:
+            # Additive increase when stable
+            self.limit = min(self.max_limit, self.limit + 1)
+
+        if self.limit != prev:
+            lats = sorted([s["durationMs"] for s in self._window])
+            p95 = lats[int(len(lats) * 0.95)] if lats else 0
+            logger.info(
+                "[ADAPTIVE][%s] %d -> %d (throttle=%d err=%d/%d p95=%dms)",
+                self.name,
+                prev,
+                self.limit,
+                throttles,
+                errors,
+                len(self._window),
+                int(p95),
+            )
+
+    def is_near_fixed_point(self, tolerance: float = 0.05) -> bool:
+        """Detect convergence to a dynamic
+...[truncated]...
+
+=== /tmp/hello_agent/src/circuit_breaker.py ===
+"""
+Circuit breaker for LLM provider calls (GAP-1.2).
+
+Tracks consecutive failures per provider and trips open after a threshold,
+preventing cascading slow/failing calls. Auto-resets after a cooldown period.
+
+Uses DynamoDB for global state across distributed Lambda workers.
+"""
+
+import enum
+import logging
+import math
+import os
+import time
+from decimal import Decimal
+
+try:
+    import boto3
+    from botocore.exceptions import ClientError
+except ImportError:
+    boto3 = None
+    ClientError = Exception
+
+logger = logging.getLogger(__name__)
+
+
+class CircuitState(enum.Enum):
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+
+class CircuitBreaker:
+    """Per-provider circuit breaker using DynamoDB for global state across workers."""
+
+    def __init__(self, threshold: int = 5, cooldown: int = 120, table_name: str | None = None):
+        self._threshold = threshold
+        self._cooldown = cooldown
+        from .config import get_config
+
+        config = get_config()
+        self.table_name = table_name or os.environ.get("RATE_LIMITS_TABLE", f"denuto-rate-limits-{config.environment}")
+        self.table = None
+
+        if boto3 and config.environment != "local" and not os.environ.get("DISABLE_DYNAMODB_CB"):
+            try:
+                dynamodb = boto3.resource("dynamodb", region_name=config.aws_region)
+                self.table = dynamodb.Table(self.table_name)
+            except Exception as e:
+                logger.warning("Could not initialize DynamoDB for CircuitBreaker: %s", e)
+
+        if not self.table:
+            logger.info("Using fallback in-memory circuit breaker (DynamoDB disabled or not available)")
+            self._local_state = {}
+
+    def _get_db_state(self, provider: str) -> dict:
+        if self.table is None:
+            st = self._local_state.get(provider, {"failures": 0, "state": "closed", "opened_at": 0.0})
+            if "state" not in st:
+                st["state"] = "closed"
+            return st
+
+        try:
+            response = self.table.get_item(Key={"PK": f"CB#{provider}", "SK": "STATE"})
+            item = response.get("Item")
+            if item:
+                return {
+                    "failures": int(item.get("failures", 0)),
+                    "state": item.get("state", "closed"),
+                    "opened_at": float(item.get("opened_at", 0.0)),
+                }
+        except ClientError as e:
+            logger.warning("Error reading circuit breaker state from DynamoDB: %s", e)
+
+        return {"failures": 0, "state": "closed", "opened_at": 0.0}
+
+    def _put_db_state(self, provider: str, failures: int, state: str, opened_at: float):
+        if self.table is None:
+            self._local_state[provider] = {"failures": failures, "state": state, "opened_at": opened_at}
+            return
+
+        try:
+            self.table.put_item(
+                Item={
+                    "PK": f"CB#{provider}",
+                    "SK": "STATE",
+                    "failures": failures,
+                    "state": state,
+                    "opened_at": Decimal(str(opened_at)),
+                    "ttl": int(time.time()) + (86400 * 7),  # Auto cleanup after 7 days
+                }
+            )
+        except ClientError as e:
+            logger.warning("Error writing circuit breaker state to DynamoDB: %s", e)
+
+    def record_success(self, provider: str) -> None:
+        """Record a successful call — resets failure count and closes the circuit."""
+        state = self._get_db_state(provider)
+        if state["state"] != "closed":
+            logger.info("Circuit breaker CLOSED for %s after successful probe", provider)
+        self._put_db_state(provider, 0, "closed", 0.0)
+
+    def record_failure(self, provider: str) -> None:
+        """Record a failed call — increments count and may trip the circuit open."""
+        if self.table is None:
+            # In-memory fallback is single-process; read-modify-write is fine.
+            state = self._get_db_state(provider)
+            failures = state["failures"] + 1
+            if state["state"] == "half_open":
+                self._put_db_state(provider, failures, "open", time.time())
+                logger.warning("Circuit breaker re-OPENED for %s (probe failed)", provider)
+            elif failures >= self._threshold and state["state"] == "closed":
+                self._put_db_state(provider, failures, "open", time.time())
+                logger.warning("Circuit breaker OPEN for %s after %d consecutive failures", provider, failures)
+            else:
+                self._put_db_state(provider, failures, state["state"], state["opened_at"])
+            return
+
+        # Distributed path: the increment must be atomic. A get-then-put here
+        # loses updates when two workers race (both read N, both write N+1), so
+        # a burst of concurrent failures could keep the count below threshold
+        # and the breaker would trip late or never.
+        try:
+            response = self.table.update_item(
+                Key={"PK": f"CB#{provider}", "SK": "STATE"},
+                UpdateExpression=(
+                    "ADD failures :one "
+                    "SET #st = if_not_exists(#st, :closed), "
+                    "opened_at = if_not_exists(opened_at, :zero), "
+                    "#ttl = :ttl"
+                ),
+                ExpressionAttributeNames={"#st": "state", "#ttl": "ttl"},
+                ExpressionAttributeValues={
+                    ":one": 1,
+                    ":closed": "closed",
+                    ":zero": Decimal("0"),
+                    ":ttl": int(time.time()) + (86400 * 7),
+                },
+                ReturnValues="ALL_NEW",
+            )
+        except ClientError as e:
+            logger.warning("Error recording circuit breaker failure to DynamoDB: %s", e)
+            return
+
+        item = response.get("Attributes", {})
+        failures = int(item.get("failures", 1))
+        current_state = item.get("state", "closed")
+
+        if current_state == "half_open":
+            # Probe failed — re-open
+            self._put_db_state(provider, failures, "open", time.time())
+            logger.warning("Circuit breaker re-OPENED for %s (probe failed)", provider)
+        elif failures >= self._threshold and current_state == "closed":
+            self._put_db_state(provider, failures, "open", time.time())
+            logger.warning("Circuit breaker OPEN for %s after %d consecutive failures", provider, failures)
+
+    def is_open(self, provider: str) -> bool:
+        """Return True if the circuit is currently open (tripped) for *provider*."""
+        state = self._get_db_state(provider)
+
+        if state["state"] == "closed":
+            return False
+
+        if state["state"] == "open":
+            # Check if cooldown has elapsed → transition to half-open
+            if time.time() - state["opened_at"] >= self._cooldown:
+                self._put_db_state(provider, state["failures"], "half_open", state["opened_at"])
+                return False  # allow one probe
+            return True
+
+        # HALF_OPEN — not "open" (allow the probe)
+        return False
+
+    def allow_request(self, provider: str) -> bool:
+        """Return True if a request to *provider* should be allowed."""
+        return not self.is_open(provider)
+
+    def get_state(self, provider: str) -> CircuitState:
+        """Return the current circuit state for *provider* (for testing/observability)."""
+        state_str = self._get_db_state(provider)["state"]
+        return CircuitState(state_str)
+
+    def get_failure_count(self, provider: str) -> int:
+        """Return the current consecutive failure count for *provider*."""
+        return self._get_db_state(provider)["failures"]
+
+    def lyapunov_stable(self, failure_history: list[bool], window: int = 10) -> bool:
+        """Lyapunov stability check on observed failure rates.
+
+        Theory: Khalil (Nonlinear Systems, 3rd ed.) Lyapunov stability theorem.
+        A system is stable at equilibrium if a Lyapu
+...[truncated]...
+
+=== /tmp/hello_agent/src/performance/metrics.py ===
+"""Performance metric calculators for the Denuto platform."""
+
+from __future__ import annotations
+
+import math
+import statistics
+from collections import deque
+from dataclasses import dataclass
+from datetime import datetime, timezone
+
+
+@dataclass
+class MetricResult:
+    """Result of a metric computation."""
+
+    value: float
+    confidence: float  # 0.0 - 1.0
+    sample_size: int
+    trend: str  # "improving", "stable", "declining", "insufficient_data"
+
+
+# ---------------------------------------------------------------------------
+# Productivity Metrics
+# ---------------------------------------------------------------------------
+
+
+def compute_weighted_throughput(jobs: list[dict], period_days: int = 30) -> MetricResult:
+    """Compute weighted throughput from completed jobs.
+
+    Each job dict should have: agreement_type, issue_count, page_count, completed_at
+    Weights: NDA=1.0, DPA=1.3, SaaS=1.5, MSA=2.0
+    Issue multiplier: 0-5=1.0, 6-10=1.2, 11-20=1.5, 21+=2.0
+    Page multiplier: 1-10=1.0, 11-30=1.2, 31-50=1.5, 51+=2.0
+    """
+    _ = period_days
+    if not jobs:
+        return MetricResult(value=0, confidence=0, sample_size=0, trend="insufficient_data")
+
+    base_weights = {"nda": 1.0, "dpa": 1.3, "saas": 1.5, "msa": 2.0}
+
+    total_weight = 0.0
+    for job in jobs:
+        base = base_weights.get(job.get("agreement_type", "").lower(), 1.0)
+
+        issue_count = job.get("issue_count", 0)
+        if issue_count > 20:
+            issue_mult = 2.0
+        elif issue_count > 10:
+            issue_mult = 1.5
+        elif issue_count > 5:
+            issue_mult = 1.2
+        else:
+            issue_mult = 1.0
+
+        page_count = job.get("page_count", 0)
+        if page_count > 50:
+            page_mult = 2.0
+        elif page_count > 30:
+            page_mult = 1.5
+        elif page_count > 10:
+            page_mult = 1.2
+        else:
+            page_mult = 1.0
+
+        total_weight += base * issue_mult * page_mult
+
+    confidence = min(1.0, len(jobs) / 10)  # Full confidence at 10+ jobs
+    return MetricResult(
+        value=total_weight,
+        confidence=confidence,
+        sample_size=len(jobs),
+        trend="insufficient_data",
+    )
+
+
+def compute_cycle_time(jobs: list[dict]) -> MetricResult:
+    """Compute cycle time stats from jobs with created_at and completed_at (as epoch ms)."""
+    durations = []
+    for job in jobs:
+        created = job.get("created_at_ms", 0)
+        completed = job.get("completed_at_ms", 0)
+        if created and completed and completed > created:
+            durations.append(completed - created)
+
+    if len(durations) < 3:
+        return MetricResult(
+            value=0,
+            confidence=0,
+            sample_size=len(durations),
+            trend="insufficient_data",
+        )
+
+    median_ms = statistics.median(durations)
+    confidence = min(1.0, len(durations) / 10)
+    return MetricResult(
+        value=median_ms,
+        confidence=confidence,
+        sample_size=len(durations),
+        trend="insufficient_data",
+    )
+
+
+def compute_first_touch_rate(jobs: list[dict]) -> MetricResult:
+    """Percentage of jobs completed without rework. Each job has 'had_rework' boolean.
+
+    Also supports 'had_escalation' boolean (False = first-touch success) for
+    reviewer-focused job dicts.
+    """
+    if len(jobs) < 5:
+        return MetricResult(
+            value=0,
+            confidence=0,
+            sample_size=len(jobs),
+            trend="insufficient_data",
+        )
+
+    # Support both had_rework (legacy) and had_escalation (reviewer) schemas.
+    def _is_first_touch(j: dict) -> bool:
+        if "had_escalation" in j:
+            return not j["had_escalation"]
+        return not j.get("had_rework", False)
+
+    no_rework = sum(1 for j in jobs if _is_first_touch(j))
+    rate = no_rework / len(jobs)
+    confidence = min(1.0, len(jobs) / 10)
+    return MetricResult(
+        value=rate,
+        confidence=confidence,
+        sample_size=len(jobs),
+        trend="insufficient_data",
+    )
+
+
+def compute_error_rate(total_issues: int, errors: int) -> MetricResult:
+    """Error rate = errors / total_issues."""
+    if total_issues < 10:
+        return MetricResult(
+            value=0,
+            confidence=0,
+            sample_size=total_issues,
+            trend="insufficient_data",
+        )
+    rate = errors / total_issues
+    confidence = min(1.0, total_issues / 20)
+    return MetricResult(
+        value=rate,
+        confidence=confidence,
+        sample_size=total_issues,
+        trend="insufficient_data",
+    )
+
+
+def compute_consistency_score(weekly_scores: list[float]) -> MetricResult:
+    """1 - coefficient_of_variation of weekly quality scores. Higher = more consistent."""
+    if len(weekly_scores) < 4:
+        return MetricResult(
+            value=0,
+            confidence=0,
+            sample_size=len(weekly_scores),
+            trend="insufficient_data",
+        )
+
+    mean_val = statistics.mean(weekly_scores)
+    if mean_val == 0:
+        return MetricResult(
+            value=0,
+            confidence=0,
+            sample_size=len(weekly_scores),
+            trend="insufficient_data",
+        )
+
+    std_dev = statistics.stdev(weekly_scores)
+    cv = std_dev / mean_val
+    score = max(0.0, 1.0 - cv)
+    confidence = min(1.0, len(weekly_scores) / 8)
+    return MetricResult(
+        value=score,
+        confidence=confidence,
+        sample_size=len(weekly_scores),
+        trend="insufficient_data",
+    )
+
+
+def compute_feature_utilization(features_used: set[str], all_features: dict[str, float]) -> MetricResult:
+    """Weighted feature utilization. all_features maps feature_name -> weight."""
+    if not all_features:
+        return MetricResult(value=0, confidence=0, sample_size=0, trend="insufficient_data")
+
+    total_weight = sum(all_features.values())
+    used_weight = sum(w for f, w in all_features.items() if f in features_used)
+    score = used_weight / total_weight if total_weight > 0 else 0
+    return MetricResult(
+        value=score,
+        confidence=min(1.0, len(features_used) / 3),
+        sample_size=len(features_used),
+        trend="insufficient_data",
+    )
+
+
+def compute_skill_velocity(weekly_skill_scores: list[float]) -> MetricResult:
+    """Linear regression slope of weekly skill scores, normalized by mean."""
+    if len(weekly_skill_scores) < 6:
+        return MetricResult(
+            value=0,
+            confidence=0,
+            sample_size=len(weekly_skill_scores),
+            trend="insufficient_data",
+        )
+
+    n = len(weekly_skill_scores)
+    x = list(range(n))
+    x_mean = statistics.mean(x)
+    y_mean = statistics.mean(weekly_skill_scores)
+
+    if y_mean == 0:
+        return MetricResult(value=0, confidence=0, sample_size=n, trend="insufficient_data")
+
+    numerator = sum((x[i] - x_mean) * (weekly_skill_scores[i] - y_mean) for i in range(n))
+    denominator = sum((x[i] - x_mean) ** 2 for i in range(n))
+
+    if denominator == 0:
+        return MetricResult(value=0, confidence=0, sample_size=n, trend="stable")
+
+    slope = numerator / denominator
+    normalized_velocity = slope / y_mean
+
+    if normalized_velocity > 0.02:
+        trend = "improving"
+    elif normalized_velocity < -0.02:
+        trend = "declining"
+    else:
+        trend = "stable"
+
+    confidence = min(1.0, n / 12)
+    return MetricResult(
+        value=normalized_velocity,
+        confidence=confidence,
+        sample_size=n,
+        trend=trend,
+    )
+
+
+def compute_active_days_ratio(active_days: int, business_days: int) -> MetricResult:
+    """Ratio of active days to business days."""
+    if business_days == 0:
+        return MetricResult(value=0, confidence=0, sample_size=0, trend="insufficient_data")
+    ratio = active_days / business_days
+    confidence = min(1.0, business_days / 10)
+    return MetricResult(
+        value=ratio,
+        confidence=confidence,
+        sample_size=business_days,
+        trend="insufficient_data",
+    )
+
+
+def compute_active_days_ratio_from_events(events: list
+...[truncated]...
+

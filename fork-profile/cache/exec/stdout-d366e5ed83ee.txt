@@ -1,0 +1,1566 @@
+
+=== DIR: explainability ===
+
+--- contracts.py ---
+"""Explainability, candidate-lineage, and coverage contracts (plan §7.1-§7.3).
+
+Confidence, wherever it appears, is an optional calibrated band with a
+calibration set/version — never raw model self-confidence, never a bare float.
+An absent band means ``unscored``, not a default score.
+"""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import Field
+
+from src.contracts._base import ContractModel, NonEmptyStr, NonNegativeInt, TimestampStr
+from src.contracts.audit import StageClassificationV1, StageStateV1
+
+__all__ = [
+    "AssumptionStatusV1",
+    "AssumptionV1",
+    "AuthorityRefV1",
+    "CandidateLineageV1",
+    "CandidateTransitionV1",
+    "ClaimNodeV1",
+    "ConfidenceBandV1",
+    "CoverageEntryV1",
+    "CoverageSummaryV1",
+    "DecisionExplanationV1",
+    "EvidenceRefV1",
+    "ExecutionProvenanceV1",
+    "ExplanationOriginV1",
+    "FieldLineageV1",
+    "ReviewConclusionExplanationV1",
+    "ReviewCoverageV1",
+    "RuleFamilyCoverageV1",
+    "VerificationResultsV1",
+]
+
+ExplanationOriginV1 = Literal["deterministic_rule", "model_inference", "hybrid", "human_added"]
+AssumptionStatusV1 = Literal["known", "inferred", "unknown", "not_applicable"]
+CandidateTransitionV1 = Literal[
+    "generated",
+    "schema_validated",
+    "grounded",
+    "normalised",
+    "merged",
+    "duplicate",
+    "suppressed",
+    "retained",
+    "human_disposition",
+]
+CoverageSummaryV1 = Literal["complete", "complete_with_advisory_warnings", "analysis_incomplete"]
+
+
+class ConfidenceBandV1(ContractModel):
+    """Optional calibrated confidence band (plan §7.1) — never a bare float."""
+
+    band: NonEmptyStr
+    calibration_set: NonEmptyStr
+    calibration_version: NonEmptyStr
+
+
+class ClaimNodeV1(ContractModel):
+    """Node of the claim/evidence graph (plan §7.1)."""
+
+    claim_id: NonEmptyStr
+    kind: Literal["document_observation", "normative_requirement", "conclusion"]
+    statement: NonEmptyStr
+    producer: NonEmptyStr
+    derived_from: list[NonEmptyStr] | None = None
+    evidence_ids: list[NonEmptyStr] | None = None
+
+
+class EvidenceRefV1(ContractModel):
+    """Supporting/contradicting/contextual evidence reference (plan §7.1)."""
+
+    evidence_id: NonEmptyStr
+    document_id: NonEmptyStr | None = None
+    asset_id: NonEmptyStr | None = None
+    object_version: NonEmptyStr
+    page: NonNegativeInt | None = None
+    region: NonEmptyStr | None = None
+    char_start: NonNegativeInt | None = None
+    char_end: NonNegativeInt | None = None
+    source_span_ha
+
+=== DIR: performance ===
+
+--- models.py ---
+"""
+Pydantic models for the Denuto User Performance Tracking System.
+
+Defines the data entities for performance events, analytics aggregates,
+coaching signals, recommendations, and goals.
+
+Entities
+--------
+- PerformanceEvent     PK ``USER#<userId>``  SK ``EVENT#<timestamp>#<eventId>``
+- DailyUserMetrics     PK ``USER#<userId>``  SK ``AGG#DAILY#<metric_date>``
+- WeeklyUserMetrics    PK ``USER#<userId>``  SK ``AGG#WEEKLY#<week_start>``
+- CoachingSignal       PK ``USER#<userId>``  SK ``SIGNAL#<signal_type>#<detected_at>``
+- CoachingRecommendation  PK ``MANAGER#<managerId>``  SK ``REC#<generated_at>#<recommendationId>``
+- PerformanceGoal      PK ``USER#<userId>``  SK ``GOAL#<goalId>``
+"""
+
+import time
+import uuid
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from src.compat import StrEnum
+
+# ---------------------------------------------------------------------------
+# Helper
+# ---------------------------------------------------------------------------
+
+
+def generate_ulid() -> str:
+    """Generate a ULID-like identifier (timestamp-sortable, globally unique).
+
+    Combines a millisecond-precision timestamp prefix (12 hex chars) with a
+    random suffix (20 hex chars) to produce a 32-character, lexicographically
+    sortable, globally unique string.
+    """
+    timestamp_ms = int(time.time() * 1000)
+    timestamp_hex = format(timestamp_ms, "012x")
+    random_hex = uuid.uuid4().hex[:20]
+    return f"{timestamp_hex}{random_hex}"
+
+
+# ---------------------------------------------------------------------------
+# Enums
+# ---------------------------------------------------------------------------
+
+
+class PerformanceEventType(StrEnum):
+    """Types of trackable user performance events."""
+
+    ANALYSIS_SUBMITTED = "analysis_submitted"
+    ANALYSIS_COMPLETED = "analysis_completed"
+    ANALYSIS_ERROR = "analysis_error"
+    ISSUE_ACTION = "issue_action"
+    MARKUP_GENERATED = "markup_generated"
+    MARKUP_APPROVED = "markup_approved"
+    REPORT_EXPORTED = "report_exported"
+    SESSION_LOGIN = "session_login"
+    PAGE_VIEW = "page_view"
+    FEATURE_USED = "feature_used"
+    FEATURE_FIRST_USE = "feature_first_use"
+    HELP_ACCESSED = "help_accessed"
+    REVIEW_CONTRIBUTED = "review_contributed"
+    DEAL_HANDOFF = "deal_handoff"
+    DEAL_CHAT = "deal_chat"
+    COMPLEXITY_ATTEMPTED = "complexity_attempted"
+
+
+class EventCategory(StrEnum):
+    """High-level category grouping for performance events."""
+
+    EFFICIENCY = "efficiency"
+    ENGAGEMENT = "
+
+--- metrics.py ---
+"""Performance metric calculators for the Denuto platform."""
+
+from __future__ import annotations
+
+import math
+import statistics
+from dataclasses import dataclass
+
+
+@dataclass
+class MetricResult:
+    """Result of a metric computation."""
+
+    value: float
+    confidence: float  # 0.0 - 1.0
+    sample_size: int
+    trend: str  # "improving", "stable", "declining", "insufficient_data"
+
+
+# ---------------------------------------------------------------------------
+# Productivity Metrics
+# ---------------------------------------------------------------------------
+
+
+def compute_weighted_throughput(jobs: list[dict], period_days: int = 30) -> MetricResult:
+    """Compute weighted throughput from completed jobs.
+
+    Each job dict should have: agreement_type, issue_count, page_count, completed_at
+    Weights: NDA=1.0, DPA=1.3, SaaS=1.5, MSA=2.0
+    Issue multiplier: 0-5=1.0, 6-10=1.2, 11-20=1.5, 21+=2.0
+    Page multiplier: 1-10=1.0, 11-30=1.2, 31-50=1.5, 51+=2.0
+    """
+    _ = period_days
+    if not jobs:
+        return MetricResult(value=0, confidence=0, sample_size=0, trend="insufficient_data")
+
+    base_weights = {"nda": 1.0, "dpa": 1.3, "saas": 1.5, "msa": 2.0}
+
+    total_weight = 0.0
+    for job in jobs:
+        base = base_weights.get(job.get("agreement_type", "").lower(), 1.0)
+
+        issue_count = job.get("issue_count", 0)
+        if issue_count > 20:
+            issue_mult = 2.0
+        elif issue_count > 10:
+            issue_mult = 1.5
+        elif issue_count > 5:
+            issue_mult = 1.2
+        else:
+            issue_mult = 1.0
+
+        page_count = job.get("page_count", 0)
+        if page_count > 50:
+            page_mult = 2.0
+        elif page_count > 30:
+            page_mult = 1.5
+        elif page_count > 10:
+            page_mult = 1.2
+        else:
+            page_mult = 1.0
+
+        total_weight += base * issue_mult * page_mult
+
+    confidence = min(1.0, len(jobs) / 10)  # Full confidence at 10+ jobs
+    return MetricResult(
+        value=total_weight,
+        confidence=confidence,
+        sample_size=len(jobs),
+        trend="insufficient_data",
+    )
+
+
+def compute_cycle_time(jobs: list[dict]) -> MetricResult:
+    """Compute cycle time stats from jobs with created_at and completed_at (as epoch ms)."""
+    durations = []
+    for job in jobs:
+        created = job.get("created_at_ms", 0)
+        completed = job.get("completed_at_ms", 0)
+        if created and completed and completed > created:
+            durations.append(completed
+
+--- event_store.py ---
+"""
+DynamoDB event store for the Denuto User Performance Tracking System.
+
+Handles writing and querying raw performance events in the
+``denuto-activity-events`` table using a single-table design.
+
+Access patterns
+---------------
+* **Base table**  PK=``USER#<userId>``     SK=``EVENT#<timestamp>#<eventId>``
+* **GSI1**        PK=``TEAM#<teamId>``     SK=``EVENT#<timestamp>#<eventId>``
+"""
+
+import logging
+import os
+import threading
+
+import boto3
+from boto3.dynamodb.conditions import Key
+
+from src.performance.models import PerformanceEvent
+from src.persistence.dynamo_table import DynamoTableMixin
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_TABLE = "denuto-activity-events"
+_BATCH_WRITE_LIMIT = 25
+
+
+class PerformanceEventStore(DynamoTableMixin):
+    """DynamoDB-backed store for raw user performance events.
+
+    Single-table design with the following access patterns:
+
+    * **Base table** -- ``PK = USER#{user_id}``, ``SK = EVENT#{timestamp}#{event_id}``
+    * **GSI1** -- ``TEAM#{team_id}`` -> events for a team.
+
+    Thread-safe via a module-level lock and lazy DynamoDB initialisation.
+    """
+
+    def __init__(
+        self,
+        table_name: str | None = None,
+        region: str = "ap-southeast-2",
+    ):
+        self._table_name = table_name or os.environ.get("PERF_EVENTS_TABLE", _DEFAULT_TABLE)
+        self._region = region
+        self._dynamo = boto3.resource("dynamodb", region_name=self._region)
+        self._table = self._dynamo.Table(self._table_name)
+        self._lock = threading.Lock()
+
+    # -----------------------------------------------------------------------
+    # Helper methods
+    # -----------------------------------------------------------------------
+
+    def _query(
+        self,
+        key_condition,
+        filter_expression=None,
+        index_name: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Execute a DynamoDB query with optional filter and index.
+
+        Args:
+            key_condition: Boto3 Key condition expression.
+            filter_expression: Optional Boto3 filter expression.
+            index_name: Optional GSI name to query against.
+            limit: Maximum number of items to return.
+
+        Returns:
+            A list of matching items.
+        """
+        kwargs: dict = {
+            "KeyConditionExpression": key_condition,
+            "Limit": limit,
+        }
+        if filter_expression is not None:
+            kwargs["FilterExpression"] = filter_expression
+        if index_name i
+
+--- ethical_guardrails.py ---
+"""Ethical guardrails for the coaching recommendation engine."""
+
+from dataclasses import dataclass
+
+from src.compat import StrEnum
+
+
+class AccessLevel(StrEnum):
+    FULL = "full"  # IC sees own data
+    SUMMARY = "summary"  # Manager sees report summaries
+    AGGREGATE = "aggregate"  # HR sees de-identified aggregates
+    NONE = "none"  # No access
+
+
+class DataCategory(StrEnum):
+    ACTIVITY_COUNTS = "activity_counts"
+    QUALITY_SCORES = "quality_scores"
+    SPEED_METRICS = "speed_metrics"
+    SKILLS_PROFILE = "skills_profile"
+    ACHIEVEMENTS = "achievements"
+    GOALS = "goals"
+    STREAK_DATA = "streak_data"
+    TIMESTAMPS = "timestamps"
+    RAW_EVENTS = "raw_events"
+    FEATURE_USAGE_DETAIL = "feature_usage_detail"
+    COMMUNICATION_CONTENT = "communication_content"
+
+
+# Data that must NEVER be exposed to managers
+NEVER_SURFACE_TO_MANAGERS = {
+    DataCategory.TIMESTAMPS,
+    DataCategory.RAW_EVENTS,
+    DataCategory.FEATURE_USAGE_DETAIL,
+    DataCategory.COMMUNICATION_CONTENT,
+}
+
+# Default sharing preferences (IC controls these)
+DEFAULT_SHARING = {
+    DataCategory.ACTIVITY_COUNTS: {"manager": True, "org": False},
+    DataCategory.QUALITY_SCORES: {"manager": True, "org": False},
+    DataCategory.SPEED_METRICS: {"manager": True, "org": False},
+    DataCategory.SKILLS_PROFILE: {"manager": True, "org": True},
+    DataCategory.ACHIEVEMENTS: {"manager": True, "org": True},
+    DataCategory.GOALS: {"manager": True, "org": False},
+    DataCategory.STREAK_DATA: {"manager": True, "org": True},
+}
+
+MIN_TEAM_SIZE_FOR_AGGREGATES = 5
+MIN_ORG_SIZE_FOR_BENCHMARKS = 15
+
+
+def resolve_access_level(
+    requester_role: str,
+    requester_id: str,
+    target_id: str,
+    requester_reports: list[str],
+) -> AccessLevel:
+    """Determine what access level a requester has to a target's data."""
+    if requester_id == target_id:
+        return AccessLevel.FULL
+    if requester_role == "admin":
+        return AccessLevel.NONE  # Admins see config, not individual data
+    if requester_role == "hr":
+        return AccessLevel.AGGREGATE
+    if requester_role in ("manager", "director"):
+        if target_id in requester_reports:
+            return AccessLevel.SUMMARY
+        if requester_role == "director":
+            return AccessLevel.SUMMARY  # Directors see all in org
+    return AccessLevel.NONE
+
+
+def filter_data_for_access(
+    data: dict,
+    access_level: AccessLevel,
+    privacy_settings: dict | None = None,
+) -> dict:
+    """Filter performance data based on access level 
+
+--- composites.py ---
+"""Composite performance scores for the Denuto platform."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass
+class CompositeScore:
+    """A composite performance score with breakdown."""
+
+    score: float  # 0-100
+    confidence: float  # 0.0-1.0
+    breakdown: dict[str, float]  # component_name -> normalized_value
+    percentile_rank: float | None = None  # 0-100
+
+
+def normalize_to_percentile(value: float, cohort_values: list[float]) -> float:
+    """Convert a raw value to percentile rank (0-100) within a cohort.
+
+    Uses exclusive rank: count of cohort members strictly below *value* divided
+    by cohort size, scaled to 0-100.  Defaults to 50.0 when fewer than two
+    cohort values are available.
+    """
+    if not cohort_values or len(cohort_values) < 2:
+        return 50.0
+    below = sum(1 for v in cohort_values if v < value)
+    return (below / len(cohort_values)) * 100
+
+
+# ---------------------------------------------------------------------------
+# Reviewer Effectiveness Index (REI)
+# ---------------------------------------------------------------------------
+
+
+def compute_rei(
+    throughput: float,
+    quality: float,
+    speed: float,
+    first_touch: float,
+    consistency: float,
+    cohort_throughputs: list[float],
+    cohort_qualities: list[float],
+    cohort_speeds: list[float],
+    cohort_first_touches: list[float],
+    cohort_consistencies: list[float],
+) -> CompositeScore:
+    """Reviewer Effectiveness Index.
+
+    REI = 0.30*throughput + 0.25*quality + 0.20*speed + 0.15*first_touch + 0.10*consistency
+
+    All components are percentile-normalised within the role cohort before
+    weighting so that each dimension is expressed on a 0-100 scale.
+    """
+    norm_t = normalize_to_percentile(throughput, cohort_throughputs)
+    norm_q = normalize_to_percentile(quality, cohort_qualities)
+    norm_s = normalize_to_percentile(speed, cohort_speeds)
+    norm_f = normalize_to_percentile(first_touch, cohort_first_touches)
+    norm_c = normalize_to_percentile(consistency, cohort_consistencies)
+
+    score = 0.30 * norm_t + 0.25 * norm_q + 0.20 * norm_s + 0.15 * norm_f + 0.10 * norm_c
+
+    min_cohort = min(
+        len(cohort_throughputs),
+        len(cohort_qualities),
+        len(cohort_speeds),
+        len(cohort_first_touches),
+        len(cohort_consistencies),
+    )
+    confidence = min(1.0, min_cohort / 10)
+
+    return CompositeScore(
+        score=score,
+        confidence=confidence,
+        breakdown={
+      
+
+--- coaching_store.py ---
+"""
+DynamoDB coaching store for the Denuto User Performance Tracking System.
+
+Handles writing and querying coaching signals, manager recommendations,
+and user performance goals in the ``denuto-perf-coaching`` table.
+
+Access patterns
+---------------
+* Signals         PK=``USER#<userId>``       SK=``SIGNAL#<signal_type>#<detected_at>``
+* Recommendations PK=``MANAGER#<managerId>`` SK=``REC#<generated_at>#<recommendationId>``
+* Goals           PK=``USER#<userId>``       SK=``GOAL#<goalId>``
+"""
+
+import logging
+import os
+import threading
+
+import boto3
+from boto3.dynamodb.conditions import Attr, Key
+
+from src.performance.models import CoachingRecommendation, CoachingSignal, PerformanceGoal
+from src.persistence.dynamo_table import DynamoTableMixin
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_TABLE = "denuto-perf-coaching"
+
+
+class CoachingStore(DynamoTableMixin):
+    """DynamoDB-backed store for coaching signals, recommendations, and goals.
+
+    Single-table design with the following access patterns:
+
+    * Coaching signals      -- ``PK = USER#{user_id}``, ``SK = SIGNAL#{signal_type}#{detected_at}``
+    * Recommendations       -- ``PK = MANAGER#{manager_user_id}``, ``SK = REC#{generated_at}#{recommendation_id}``
+    * Performance goals     -- ``PK = USER#{user_id}``, ``SK = GOAL#{goal_id}``
+
+    Thread-safe via a module-level lock and lazy DynamoDB initialisation.
+    """
+
+    def __init__(
+        self,
+        table_name: str | None = None,
+        region: str = "ap-southeast-2",
+    ):
+        self._table_name = table_name or os.environ.get("PERF_COACHING_TABLE", _DEFAULT_TABLE)
+        self._region = region
+        self._dynamo = boto3.resource("dynamodb", region_name=self._region)
+        self._table = self._dynamo.Table(self._table_name)
+        self._lock = threading.Lock()
+
+    # -----------------------------------------------------------------------
+    # Helper methods
+    # -----------------------------------------------------------------------
+
+    def _query_by_prefix(self, pk: str, sk_prefix: str, filter_expression=None) -> list[dict]:
+        """Query items for a partition key whose SK begins with a given prefix.
+
+        Args:
+            pk: The partition key value.
+            sk_prefix: The sort key prefix.
+            filter_expression: Optional Boto3 filter expression.
+
+        Returns:
+            A list of matching items, ordered by SK.
+        """
+        kwargs: dict = {
+            "KeyConditionExpression": (Key("PK").eq(pk) & Key("SK"
+
+--- analytics_store.py ---
+"""
+DynamoDB analytics store for the Denuto User Performance Tracking System.
+
+Handles writing and querying aggregated daily/weekly user metrics and
+org-level benchmarks in the ``denuto-perf-analytics`` table.
+
+Access patterns
+---------------
+* Daily metrics    PK=``USER#<userId>``          SK=``AGG#DAILY#<metric_date>``
+* Weekly metrics   PK=``USER#<userId>``          SK=``AGG#WEEKLY#<week_start>``
+* Benchmarks       PK=``BENCHMARK#<orgId>#<period>``  SK=``METRIC#<metric_name>``
+"""
+
+import logging
+import os
+import threading
+
+import boto3
+from boto3.dynamodb.conditions import Key
+
+from src.performance.models import DailyUserMetrics, WeeklyUserMetrics
+from src.persistence.dynamo_table import DynamoTableMixin
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_TABLE = "denuto-perf-analytics"
+
+
+class AnalyticsStore(DynamoTableMixin):
+    """DynamoDB-backed store for aggregated performance analytics.
+
+    Single-table design with the following access patterns:
+
+    * Daily user metrics   -- ``PK = USER#{user_id}``, ``SK = AGG#DAILY#{metric_date}``
+    * Weekly user metrics  -- ``PK = USER#{user_id}``, ``SK = AGG#WEEKLY#{week_start}``
+    * Org benchmarks       -- ``PK = BENCHMARK#{org_id}#{period}``, ``SK = METRIC#{metric_name}``
+
+    Thread-safe via a module-level lock and lazy DynamoDB initialisation.
+    """
+
+    def __init__(
+        self,
+        table_name: str | None = None,
+        region: str = "ap-southeast-2",
+    ):
+        self._table_name = table_name or os.environ.get("PERF_ANALYTICS_TABLE", _DEFAULT_TABLE)
+        self._region = region
+        self._dynamo = boto3.resource("dynamodb", region_name=self._region)
+        self._table = self._dynamo.Table(self._table_name)
+        self._lock = threading.Lock()
+
+    # -----------------------------------------------------------------------
+    # Helper methods
+    # -----------------------------------------------------------------------
+
+    def _query_by_sk_range(self, pk: str, sk_start: str, sk_end: str) -> list[dict]:
+        """Query items for a partition key whose SK falls within a range.
+
+        Args:
+            pk: The partition key value.
+            sk_start: Lower bound of the SK range (inclusive).
+            sk_end: Upper bound of the SK range (inclusive).
+
+        Returns:
+            A list of matching items, ordered by SK.
+        """
+        try:
+            resp = self._table.query(
+                KeyConditionExpression=(Key("PK").eq(pk) & Key("SK").between(sk_start, sk_end)),
+       
+
+--- aggregation.py ---
+"""Aggregation pipeline for Denuto user performance tracking.
+
+Rolls up raw event streams into DailyUserMetrics and WeeklyUserMetrics,
+and provides cohort-level percentile benchmarking.
+
+Event schema expectations
+-------------------------
+Each event dict carries at minimum:
+
+    event_type : str
+        One of: "job_completed", "job_started", "review_action",
+                "session_start", "session_end", "feature_used",
+                "skill_assessment", "rework_flagged"
+
+    ts_ms : int
+        Unix epoch in milliseconds.
+
+Additional keys are event-type specific and documented inline.
+"""
+
+from __future__ import annotations
+
+import logging
+import statistics
+from datetime import date, timedelta
+from typing import Any
+
+from src.performance.metrics import (
+    GamingFlag,
+    MetricResult,
+    compute_active_days_ratio,
+    compute_consistency_score,
+    compute_cycle_time,
+    compute_error_rate,
+    compute_feature_utilization,
+    compute_first_touch_rate,
+    compute_skill_velocity,
+    compute_weighted_throughput,
+    detect_gaming,
+    detect_trend,
+    temporal_weight,
+)
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+_PERCENTILE_TARGETS = (10, 25, 50, 75, 90, 99)
+
+# All known platform features and their weights for utilization scoring.
+_PLATFORM_FEATURES: dict[str, float] = {
+    "clause_extraction": 1.5,
+    "risk_scoring": 1.5,
+    "redline_suggestions": 2.0,
+    "comparison_view": 1.2,
+    "bulk_review": 1.3,
+    "playbook_apply": 2.0,
+    "negotiation_assist": 1.8,
+    "export_report": 1.0,
+    "comment_thread": 1.0,
+    "version_history": 1.0,
+}
+
+# Half-life (days) for temporal decay applied to older daily records when
+# computing the weekly rollup's weighted quality score.
+_QUALITY_HALF_LIFE_DAYS = 7
+
+
+def _safe_mean(values: list[float]) -> float:
+    """Return the mean, or 0.0 for an empty sequence."""
+    return statistics.mean(values) if values else 0.0
+
+
+def _safe_median(values: list[float]) -> float:
+    """Return the median, or 0.0 for an empty sequence."""
+    return statistics.median(values) if values else 0.0
+
+
+def _quantile(sorted_values: list[float], p: float) -> float:
+    """Return the p-th percentile (0-100) via linear interpolation.
+
+    *sorted_values* must be sorted ascending and non-empty.
+    """
+    if not sorted_values:
+        return 0.0
+    if len(sorted
+
+=== DIR: feedback ===
+
+--- storage.py ---
+"""
+Storage backends for the feedback pipeline.
+
+Provides:
+- InMemoryFeedbackStore: For testing and local development
+- DynamoDBFeedbackStore: Production storage with hot/warm/cold tiering
+
+Status (DEN-185): a Qdrant-backed vector store for semantic similarity search
+over interactions was designed (see ARCHITECTURE.md §3.3) but never
+implemented here, and the Qdrant/Ollama stack it would have depended on has
+since been retired repo-wide. No vector store class exists in this module.
+
+Storage Architecture:
+    HOT  (< 7 days):   DynamoDB on-demand + ElastiCache Redis
+    WARM (7-90 days):   DynamoDB with provisioned capacity
+    COLD (> 90 days):   S3 Parquet + Athena for ad-hoc queries
+
+DynamoDB Single-Table Design:
+    Table: denuto-feedback
+
+    Entity              PK                          SK                              GSI1PK              GSI1SK
+    ────────────────    ────────────────────────    ────────────────────────────    ──────────────────  ────────────────────
+    Interaction         SESSION#<sid>               INTERACTION#<iid>               DATE#<YYYY-MM-DD>   <ts>#<iid>
+    Feedback            INTERACTION#<iid>           FEEDBACK#<fid>                  FEEDBACK_TYPE#<t>   <ts>#<fid>
+    Outcome             SESSION#<sid>               OUTCOME#<oid>                   DATE#<YYYY-MM-DD>   <ts>#<oid>
+    Improvement         IMPROVEMENT#<cid>           META                            CHANGE_TYPE#<t>     <ts>#<cid>
+    QualityScore        QUALITY#<scope>             WINDOW#<window_end>             (none)              (none)
+    Alert               ALERT#<aid>                 META                            SEVERITY#<s>        <ts>#<aid>
+    Cluster             CLUSTER#<cid>               META                            STATUS#<s>          <ts>#<cid>
+
+    GSI2 (Feedback only):
+                        ANNOTATOR#<annotator_id>    <ts>#<fid>
+"""
+
+from __future__ import annotations
+
+import logging
+from collections import defaultdict
+
+from .schemas import (
+    FailureCluster,
+    FeedbackEvent,
+    ImprovementEvent,
+    InteractionEvent,
+    OutcomeEvent,
+    RegressionAlert,
+    RollingQualityScore,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# In-memory store (testing / local development)
+# ---------------------------------------------------------------------------
+
+
+class InMemoryFeedbackStore:
+    """Thread-safe in-memory implementation of the FeedbackStore protocol.
+
+    
+
+--- schemas.py ---
+"""
+Event schemas for the Denuto feedback storage and improvement pipeline.
+
+Defines Pydantic models for the four core event types:
+- InteractionEvent: Raw agent interaction capture
+- FeedbackEvent: Human-in-the-loop signals
+- OutcomeEvent: Task-level outcome tracking
+- ImprovementEvent: Change tracking with before/after metrics
+
+All schemas use the project's existing ULID generator and are designed
+for DynamoDB single-table storage with hot/warm/cold tiering.
+"""
+
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from src.models.intake import generate_ulid
+
+# ---------------------------------------------------------------------------
+# Enums
+# ---------------------------------------------------------------------------
+
+
+class FeedbackType(StrEnum):
+    """Classification of feedback signals."""
+
+    THUMBS_UP = "thumbs_up"
+    THUMBS_DOWN = "thumbs_down"
+    RATING = "rating"  # 1-5 scale
+    TEXT_CORRECTION = "text_correction"  # user rewrote the output
+    FIELD_OVERRIDE = "field_override"  # user changed an extracted field
+    CLASSIFICATION_OVERRIDE = "classification_override"  # user changed risk level
+    ISSUE_MISSED = "issue_missed"  # user flagged a false negative
+    ISSUE_SPURIOUS = "issue_spurious"  # user flagged a false positive
+    HALLUCINATION = "hallucination"  # factual error flagged
+    PROMPT_SUGGESTION = "prompt_suggestion"  # user suggested prompt change
+    ESCALATION = "escalation"  # user escalated to human reviewer
+
+
+class FeedbackSource(StrEnum):
+    """Origin of the feedback signal."""
+
+    LAWYER_REVIEW = "lawyer_review"  # lawyer reviewing agent output
+    CLIENT_FEEDBACK = "client_feedback"  # end client reaction
+    QC_AGENT = "qc_agent"  # automated QC agent
+    EVAL_SUITE = "eval_suite"  # golden dataset eval run
+    SYSTEM_DETECTED = "system_detected"  # automatic regression detection
+    ANNOTATOR = "annotator"  # dedicated annotation session
+
+
+class ChangeType(StrEnum):
+    """Type of improvement change applied."""
+
+    PROMPT_EDIT = "prompt_edit"
+    TOOL_CONFIG = "tool_config"
+    EXTRACTION_RULE = "extraction_rule"
+    PLAYBOOK_UPDATE = "playbook_update"
+    MODEL_SWITCH = "model_switch"
+    TEMPERATURE_ADJUST = "temperature_adjust"
+    CONTEXT_WINDOW = "context_window"
+    GUARDRAIL_RULE = "guardrail_rule"
+    RETRY_POLICY = "retry_policy"
+
+
+class ChangeStatus(StrEnum):
+    """Lifecycle of an improvement change."""
+
+    PROPOSED =
+
+--- pipeline.py ---
+"""
+Feedback pipeline — six-stage processing from raw events to deployed improvements.
+
+Pipeline Stages:
+    Stage 1: Raw event ingestion and deduplication
+    Stage 2: Signal enrichment (context, classification, pattern detection)
+    Stage 3: Aggregation and trend detection (rolling scores, regression alerts)
+    Stage 4: Improvement candidate generation
+    Stage 5: Improvement validation (A/B against holdout set)
+    Stage 6: Deployment and monitoring (rollout, watch for regressions)
+
+Each stage is implemented as an independent processor that reads from and
+writes to the storage layer, enabling both real-time streaming and batch
+reprocessing.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any, Protocol
+
+from .schemas import (
+    ChangeStatus,
+    ChangeType,
+    FailureCluster,
+    FeedbackEvent,
+    FeedbackType,
+    ImprovementEvent,
+    InteractionEvent,
+    MetricSnapshot,
+    OutcomeEvent,
+    RegressionAlert,
+    RollingQualityScore,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Storage protocol — backends implement this interface
+# ---------------------------------------------------------------------------
+
+
+class FeedbackStore(Protocol):
+    """Protocol for the feedback storage backend.
+
+    Implementations include DynamoDB (production), in-memory (testing),
+    and hybrid (DynamoDB + Redis cache for hot tier).
+    """
+
+    # -- Write operations --
+
+    def put_interaction(self, event: InteractionEvent) -> None: ...
+
+    def put_feedback(self, event: FeedbackEvent) -> None: ...
+
+    def put_outcome(self, event: OutcomeEvent) -> None: ...
+
+    def put_improvement(self, event: ImprovementEvent) -> None: ...
+
+    def put_quality_score(self, score: RollingQualityScore) -> None: ...
+
+    def put_alert(self, alert: RegressionAlert) -> None: ...
+
+    def put_cluster(self, cluster: FailureCluster) -> None: ...
+
+    # -- Read operations --
+
+    def get_interaction(self, interaction_id: str) -> InteractionEvent | None: ...
+
+    def get_interactions_by_session(self, session_id: str) -> list[InteractionEvent]: ...
+
+    def get_interactions_by_date_range(self, start: str, end: str, limit: int = 1000) -> list[InteractionEvent]: ...
+
+    def get_feedback_for_interaction(self, interaction_id: str) -> list[FeedbackEvent]: ...
+
+    def get_f
+
+--- pii_filter.py ---
+"""PII detection and redaction for feedback text and log messages.
+
+Protects the HITL self-improvement pipeline from inadvertently storing
+or logging personally identifiable information from contract text or
+user feedback submissions.
+"""
+
+from __future__ import annotations
+
+import re
+from typing import Any
+
+from src.feedback.schemas import FeedbackEvent, InteractionEvent
+
+# ---------------------------------------------------------------------------
+# PII pattern definitions
+# ---------------------------------------------------------------------------
+
+PII_PATTERNS: dict[str, re.Pattern[str]] = {
+    "email": re.compile(
+        r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
+        re.IGNORECASE,
+    ),
+    "phone_au": re.compile(
+        r"(?:\+61\s?|0)(?:\d[\s\-]?){8}\d",
+        re.IGNORECASE,
+    ),
+    "phone_intl": re.compile(
+        r"\+(?!61)(?:[1-9]\d{0,2})[\s\-.]?(?:\d[\s\-.]?){6,13}\d",
+    ),
+    # ABN must be matched BEFORE TFN: an ABN (NN NNN NNN NNN) ends with a
+    # TFN-like substring (NNN NNN NNN), so processing ABN first prevents the
+    # TFN pattern from firing on the tail of a longer ABN match.
+    "abn": re.compile(
+        r"\b\d{2}\s\d{3}\s\d{3}\s\d{3}\b",
+    ),
+    "tfn": re.compile(
+        r"\b\d{3}\s\d{3}\s\d{3}\b",
+    ),
+    "credit_card": re.compile(
+        r"\b(?:\d{4}[\s\-]){3}\d{4}\b",
+    ),
+    "ssn": re.compile(
+        r"\b\d{3}[\s\-]\d{2}[\s\-]\d{4}\b",
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+class PIIFilter:
+    """Detect and redact PII patterns from feedback text and log messages."""
+
+    def redact_pii(self, text: str) -> str:
+        """Replace all PII matches in *text* with ``[REDACTED_<TYPE>]``.
+
+        Patterns are applied in a deterministic order so that longer /
+        more-specific matches (e.g. ABN before TFN) take priority when
+        the same substring could theoretically match multiple patterns.
+        """
+        result = text
+        for pattern_name, pattern in PII_PATTERNS.items():
+            result = pattern.sub(f"[REDACTED_{pattern_name.upper()}]", result)
+        return result
+
+    def contains_pii(self, text: str) -> bool:
+        """Return ``True`` if *text* contains at least one PII match."""
+        return any(pattern.search(text) for pattern in PII_PATTERNS.values())
+
+    def redact_feedback_event(self, event: FeedbackEvent) -> FeedbackE
+
+--- invariants.py ---
+"""Runtime pipeline invariants for the Denuto contract analysis pipeline.
+
+These checks must always hold regardless of any prompt-engineering or
+configuration improvements applied by the HITL self-improvement loop.
+They act as a hard safety net that runs after every analysis pass.
+"""
+
+from __future__ import annotations
+
+from src.feedback.pii_filter import PIIFilter
+
+_VALID_RISK_LEVELS: frozenset[str] = frozenset({"low", "medium", "high", "critical"})
+_QUOTE_RISK_LEVELS: frozenset[str] = frozenset({"high", "critical"})
+
+_pii_filter = PIIFilter()
+
+
+# ---------------------------------------------------------------------------
+# Custom exception
+# ---------------------------------------------------------------------------
+
+
+class InvariantViolationError(Exception):
+    """Raised when a critical pipeline invariant is violated."""
+
+
+# ---------------------------------------------------------------------------
+# Invariant checks
+# ---------------------------------------------------------------------------
+
+
+class PipelineInvariants:
+    """Runtime property checks that must always hold regardless of improvements."""
+
+    @staticmethod
+    def check_output_valid_json(result: dict) -> tuple[bool, str]:
+        """Check that *result* is a dict containing the ``overall_risk`` key.
+
+        Returns:
+            ``(passed, message)``
+        """
+        if not isinstance(result, dict):
+            return False, f"Result is not a dict: {type(result).__name__}"
+        if "overall_risk" not in result:
+            return False, "Result dict is missing required key 'overall_risk'"
+        return True, "Output is a valid dict with 'overall_risk'"
+
+    @staticmethod
+    def check_risk_level_valid(result: dict) -> tuple[bool, str]:
+        """Check that ``result['overall_risk']`` is one of the accepted risk levels.
+
+        Accepted values: low, medium, high, critical.
+        """
+        risk = result.get("overall_risk")
+        if risk is None:
+            return False, "Missing 'overall_risk' key"
+        if risk not in _VALID_RISK_LEVELS:
+            return False, f"Invalid risk level '{risk}'; must be one of {sorted(_VALID_RISK_LEVELS)}"
+        return True, f"Risk level '{risk}' is valid"
+
+    @staticmethod
+    def check_quotes_grounded(result: dict, source_text: str) -> tuple[bool, str]:
+        """Check that all quoted text in critical/high issues exists in *source_text*.
+
+        Only issues whose ``risk_level`` is ``high`` or ``critical`` are verified
+        (lower
+
+--- analysis.py ---
+"""
+Analysis capabilities for the feedback pipeline.
+
+Provides:
+- Failure mode clustering: group similar failures by semantic similarity
+- Root cause analysis: trace failures to prompt sections, tool configs, or missing context
+- Comparative analysis: version N vs version N-1 metrics
+- Cohort analysis: quality by user segment, task type, or time of day
+"""
+
+from __future__ import annotations
+
+import logging
+import statistics
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+from typing import Any
+
+from .pipeline import EmbeddingService, FeedbackStore, VectorStore
+from .schemas import (
+    ChangeStatus,
+    FailureCluster,
+    FeedbackType,
+    InteractionEvent,
+)
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Failure mode clustering
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ClusterConfig:
+    """Configuration for failure clustering."""
+
+    similarity_threshold: float = 0.82  # cosine similarity threshold for cluster membership
+    min_cluster_size: int = 3  # minimum failures to form a cluster
+    max_clusters: int = 50  # cap on total clusters
+    reclustering_interval_hours: int = 24  # how often to re-cluster
+
+
+class FailureClusteringEngine:
+    """Groups similar failures together using semantic embeddings.
+
+    Algorithm:
+    1. Retrieve all interactions with negative feedback in the window
+    2. Embed each interaction (input + output)
+    3. Perform agglomerative clustering using cosine similarity
+    4. For each cluster, generate a label and root cause hypothesis
+    5. Store clusters for the candidate generation stage
+    """
+
+    def __init__(
+        self,
+        store: FeedbackStore,
+        vector_store: VectorStore,
+        embedding_service: EmbeddingService,
+        config: ClusterConfig | None = None,
+    ) -> None:
+        self.store = store
+        self.vector_store = vector_store
+        self.embedding_service = embedding_service
+        self.config = config or ClusterConfig()
+
+    def find_failed_interactions(self, window_start: str, window_end: str) -> list[InteractionEvent]:
+        """Find all interactions with negative feedback signals."""
+        interactions = self.store.get_interactions_by_date_range(window_start, window_end)
+        failed = []
+        for interaction in interactions:
+            feedback_list = self.store.get_feedback_for_interaction(interaction.i
+
+=== DIR: improvement ===
+
+--- prompt_registry.py ---
+"""Prompt version registry for the Denuto HITL self-improvement pipeline.
+
+Tracks prompt versions so that feedback can be correlated with the exact
+prompt that produced the output.  Every analysis is tagged with the hashes
+of the prompts that were active at run time.
+"""
+
+from __future__ import annotations
+
+import ast
+import hashlib
+import os
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+
+# ---------------------------------------------------------------------------
+# Data model
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PromptVersion:
+    """A single versioned snapshot of a pipeline-node prompt.
+
+    Attributes:
+        version_id:     First 12 characters of the SHA-256 hash of the
+                        prompt content — used as a compact stable identifier.
+        pipeline_node:  Which node owns this prompt (profiler, extractor,
+                        compiler, structural).
+        content_hash:   Full SHA-256 hex digest.
+        content:        The verbatim prompt text.
+        agreement_type: Optional agreement-type scope (NDA, MSA, SaaS, etc.).
+                        ``None`` means the prompt applies to all types.
+        created_at:     ISO 8601 UTC timestamp of first registration.
+        quality_score:  Running average quality rating from HITL feedback.
+                        ``None`` until at least one feedback event is recorded.
+        sample_size:    Number of analysis interactions produced with this
+                        prompt version.
+        is_active:      Whether this version is currently selected for use.
+        metadata:       Arbitrary extra info (model_id, temperature, …).
+    """
+
+    version_id: str
+    pipeline_node: str
+    content_hash: str
+    content: str
+    agreement_type: str | None
+    created_at: str
+    quality_score: float | None
+    sample_size: int
+    is_active: bool
+    metadata: dict = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Registry
+# ---------------------------------------------------------------------------
+
+
+class PromptRegistry:
+    """In-memory registry of prompt versions for all pipeline nodes.
+
+    Versions are stored in two internal structures:
+
+    * ``_by_node`` — ``{(pipeline_node, agreement_type): list[PromptVersion]}``
+      ordered by registration time, newest last.
+    * ``_by_id``   — ``{version_id: PromptVersion}`` for O(1) look-ups.
+
+    Th
+
+--- governance.py ---
+"""Improvement governance for the Denuto HITL self-improvement system.
+
+Manages the full lifecycle of pipeline improvement proposals: creation,
+evaluation gating, human approval, deployment, and rollback. Enforces
+configurable rate limits and cooldown periods to prevent runaway changes.
+
+Architecture:
+    - ``ImprovementRiskLevel``: LOW / MEDIUM / HIGH classification for a proposal.
+    - ``ImprovementPolicy``: frozen dataclass of all configurable governance
+      thresholds (reviewer counts, rate limits, cooldown, gate requirements).
+    - ``ImprovementProposal``: dataclass capturing a single improvement's full
+      lifecycle state (status, eval results, approvers, timestamps).
+    - ``ImprovementGovernor``: stateful, thread-safe manager that enforces the
+      policy across all proposals.
+    - ``classify_change_risk()``: pure function mapping change type / target to
+      a risk level.
+
+Thread-safe: ``ImprovementGovernor`` state is guarded by ``threading.Lock``.
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from src.compat import StrEnum
+from src.models.intake import generate_ulid
+
+logger = logging.getLogger("denuto.improvement.governance")
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_SENIOR_REVIEWER_PREFIX = "senior:"
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _now_iso() -> str:
+    return _now().isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Enums
+# ---------------------------------------------------------------------------
+
+
+class ImprovementRiskLevel(StrEnum):
+    """Risk classification for an improvement proposal."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+# ---------------------------------------------------------------------------
+# Policy
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ImprovementPolicy:
+    """Configurable thresholds governing improvement governance.
+
+    Attributes:
+        low_risk_auto_approve: If True, LOW-risk proposals are automatically
+            approved once their eval results pass (no human reviewer needed).
+        medium_risk_reviewers: Minimum number of reviewer approvals required
+            for MEDIUM-risk prop
+
+--- github_issues.py ---
+"""GitHub code-issue filing workflow for autonomous engineering findings.
+
+This module provides a conservative workflow for turning agent-detected code
+findings (from logs, metrics, and HITL quality signals) into GitHub issues.
+
+Design goals:
+- Deterministic deduplication via stable fingerprints
+- Safe auto-filing gates (severity/confidence/sample-size/sensitivity checks)
+- Human-readable issue templates with traceable evidence refs
+- Minimal runtime dependencies (stdlib HTTP client only)
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import logging
+import os
+import re
+import threading
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any, Protocol
+from urllib import error as url_error
+from urllib import parse as url_parse
+from urllib import request as url_request
+
+from src.compat import StrEnum
+from src.improvement.governance import ImprovementPolicy
+from src.models.intake import generate_ulid
+
+try:
+    import jwt
+except ImportError:  # pragma: no cover - optional at import-time in some environments
+    jwt = None  # type: ignore[assignment]
+
+logger = logging.getLogger(__name__)
+
+_FINGERPRINT_MARKER_PREFIX = "denuto-fingerprint:"
+_FINGERPRINT_MARKER_RE = re.compile(
+    r"<!--\s*denuto-fingerprint:(?P<fp>[a-f0-9]{12,64})\s*-->",
+    flags=re.IGNORECASE,
+)
+
+
+class CodeIssueKind(StrEnum):
+    """Supported engineering issue classes for GitHub filing."""
+
+    BUG = "bug"
+    REGRESSION = "regression"
+    PERFORMANCE = "performance"
+    RELIABILITY = "reliability"
+    OBSERVABILITY_GAP = "observability-gap"
+    TEST_GAP = "test-gap"
+    DATA_QUALITY = "data-quality"
+
+
+class IssueSeverity(StrEnum):
+    """Severity used for triage labels and auto-filing policy."""
+
+    S1 = "s1"
+    S2 = "s2"
+    S3 = "s3"
+    S4 = "s4"
+
+
+class FilingAction(StrEnum):
+    """Outcome of attempting to process a finding."""
+
+    SUPPRESSED = "suppressed"
+    NEEDS_APPROVAL = "needs_approval"
+    CREATED = "created"
+    DUPLICATE_UPDATED = "duplicate_updated"
+
+
+@dataclass(frozen=True)
+class EvidenceRef:
+    """Reference to supporting evidence without embedding sensitive payloads."""
+
+    source: str
+    ref_id: str
+    summary: str = ""
+    metric_name: str | None = None
+    value: float | None = None
+    baseline: float | None = None
+    delta_pct: float | None = None
+    count: int | None = None
+
+    def to_compact_dict(self) -> dict[str, Any]:
+        """Return a compact, serialis
+
+--- github_issue_routing.py ---
+"""Repository-specific GitHub code-issue routing config.
+
+Provides default component->label/assignee routes for this repository and
+optional environment-variable overrides.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+from dataclasses import dataclass, field
+from typing import Any
+
+from src.improvement.github_issues import ComponentRoute
+
+logger = logging.getLogger(__name__)
+
+_ROUTES_JSON_ENV = "GITHUB_CODE_ISSUE_ROUTES_JSON"
+_ROUTES_MODE_ENV = "GITHUB_CODE_ISSUE_ROUTES_MODE"  # append | replace
+_REPOSITORY_ENV = "GITHUB_ISSUES_REPOSITORY"
+
+
+@dataclass(frozen=True)
+class RepoIssueRoutingConfig:
+    """Resolved routing configuration for GitHub code issue filing."""
+
+    repository: str
+    component_routes: tuple[ComponentRoute, ...] = field(default_factory=tuple)
+
+
+def _route_from_dict(item: dict[str, Any]) -> ComponentRoute:
+    if not isinstance(item, dict):
+        raise TypeError("Route entries must be objects")
+    match_prefix = str(item.get("match_prefix", "")).strip()
+    if not match_prefix and item.get("allow_catch_all") is not True:
+        raise ValueError("match_prefix is required (or set allow_catch_all=true)")
+    labels = item.get("extra_labels") or item.get("labels") or []
+    assignees = item.get("assignees") or []
+    if not isinstance(labels, (list, tuple)):
+        raise TypeError("Route labels must be a list")
+    if not isinstance(assignees, (list, tuple)):
+        raise TypeError("Route assignees must be a list")
+    return ComponentRoute(
+        match_prefix=match_prefix,
+        extra_labels=tuple(str(x) for x in labels if str(x).strip()),
+        assignees=tuple(str(x) for x in assignees if str(x).strip()),
+    )
+
+
+def parse_component_routes_json(raw: str) -> tuple[ComponentRoute, ...]:
+    """Parse JSON route config into ``ComponentRoute`` tuples."""
+    if not raw or not raw.strip():
+        return ()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid {_ROUTES_JSON_ENV}: {exc.msg}") from exc
+    if not isinstance(parsed, list):
+        raise ValueError(f"{_ROUTES_JSON_ENV} must be a JSON array")
+    return tuple(_route_from_dict(item) for item in parsed)
+
+
+def default_hello_agent_component_routes() -> tuple[ComponentRoute, ...]:
+    """Default component routing for this repository's engineering areas."""
+    return (
+        ComponentRoute("compiler.", ("area:llm", "team:core-ai")),
+        ComponentRoute("extractor.", ("area:llm
+
+--- bug_report_triage.py ---
+"""Bug report triage utilities for engineering validation and fix recommendations.
+
+This module ingests bug reports from the frontend bug-reporting tool, infers
+affected components, proposes/runs targeted validation commands (tests where
+available), and synthesizes engineering-facing recommendations plus a
+``CodeIssueFinding`` for the GitHub issue workflow.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+import subprocess
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from src.improvement.github_issues import CodeIssueFinding, CodeIssueKind, EvidenceRef, IssueSeverity
+from src.models.intake import generate_ulid
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_TIMEOUT_SECONDS = 180
+_MAX_OUTPUT_CHARS = 4000
+
+
+@dataclass(frozen=True)
+class ValidationCommand:
+    """A deterministic validation command inferred from a bug report."""
+
+    kind: str  # test | syntax_check | smoke_check
+    command: tuple[str, ...]
+    cwd: str
+    reason: str
+    target: str | None = None
+
+
+@dataclass(frozen=True)
+class ValidationRunResult:
+    """Execution result for a validation command."""
+
+    kind: str
+    command: tuple[str, ...]
+    cwd: str
+    reason: str
+    target: str | None
+    status: str  # passed | failed | timeout | error
+    exit_code: int | None
+    duration_ms: int
+    stdout_tail: str = ""
+    stderr_tail: str = ""
+
+
+@dataclass(frozen=True)
+class BugReportTriageResult:
+    """Structured bug report triage output consumed by agent tools."""
+
+    report_id: str | None
+    title: str
+    route: str
+    inferred_component: str
+    issue_kind: CodeIssueKind
+    issue_severity: IssueSeverity
+    confidence: float
+    validation_commands: tuple[ValidationCommand, ...]
+    validation_results: tuple[ValidationRunResult, ...]
+    recommendations: tuple[str, ...]
+    finding: CodeIssueFinding
+
+
+def _truncate(text: str, limit: int = _MAX_OUTPUT_CHARS) -> str:
+    return text if len(text) <= limit else text[:limit]
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _as_list(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
+
+
+def _norm_str(value: Any) -> str:
+    return str(value).strip() if value is not None else ""
+
+
+def parse_bug_report_json(text: str) -> dict[str, Any]:
+    """Parse a bug-report payload JSON (request or detail shape)."""
+    if not text or not text.strip():
+        raise ValueError("bug_report

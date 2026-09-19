@@ -1,0 +1,39 @@
+{
+  "delegation_id": "deleg_238beacc",
+  "started": "2026-09-19 19:34:23",
+  "task_count": 5,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Deep bottleneck audit: memory pipeline and state.db surface.\n\nContext:\n- Scripts: /var/home/rainbow/.hermes/scripts/\n- Fork profile: /var/home/rainbow/.hermes/profiles/fork/\n- lifecycle.db: /var/home/rainbow/.hermes/memory-facts/lifecycle.db (tables: fact_lifecycle, tracegrant_grants; 11 fact rows, 3 active, 8 purged)\n- state.db has NO memories table — it has sessions/messages/async_delegations etc\n- memory-monad.py: uses HERMES_HOME/cache/ — only reads HERMES_HOME env, no HERMES_PROFILE awarene",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_238beacc/task-0.log",
+      "status": "running"
+    },
+    {
+      "index": 1,
+      "goal": "Deep bottleneck audit: config, runtime flags, shadow subsystem, and agent wiring.\n\nContext:\n- Scripts: /var/home/rainbow/.hermes/scripts/\n- Fork profile: /var/home/rainbow/.hermes/profiles/fork/\n- config.yaml: /var/home/rainbow/.hermes/profiles/fork/config.yaml\n- Agent dir: /var/home/rainbow/.hermes/hermes-fork/agent/\n- shadow_* flags in config.yaml are all false; only shadow_telemetry.py reads them (confirmed)\n- cost_guard section is stub — no enforcement\n- Write-early pattern mandated.\n\nTask:\n",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_238beacc/task-1.log",
+      "status": "running"
+    },
+    {
+      "index": 2,
+      "goal": "Deep bottleneck audit: scripts not in cron that should be — calibration loop, monitors, skill pipeline.\n\nContext:\n- Scripts: /var/home/rainbow/.hermes/scripts/\n- Fork profile: /var/home/rainbow/.hermes/profiles/fork/\n- Cron jobs (15): calibration-threshold-updater, concept-lattice-index, cross-calibration-monitor, fork-state-vacuum, gate_audit, mcp-privilege-audit, memory-ttl-purge, monitor-suite-runner, omni_skill_scan, pre-compact-annotate, recall-miss-ttl-adjuster, routing-weight-updater, sha",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_238beacc/task-2.log",
+      "status": "running"
+    },
+    {
+      "index": 3,
+      "goal": "Deep bottleneck audit: skill pipeline, routing, and index integrity.\n\nContext:\n- Scripts: /var/home/rainbow/.hermes/scripts/\n- Fork profile: /var/home/rainbow/.hermes/profiles/fork/\n- skill-router-index.py: builds BM25+lattice index, route() returns skills; recently fixed relative_to(SKILLS_ROOT) bug\n- SKILLS_ROOT for fork: ~/.hermes/profiles/fork/skills/ OR ~/.hermes/skills/ (check which)\n- skill-router-index-rebuild.py: may be a standalone rebuild trigger\n- skill-yield-tracker.py: tracks which",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_238beacc/task-3.log",
+      "status": "running"
+    },
+    {
+      "index": 4,
+      "goal": "Deep bottleneck audit: architecture dead wires, import chains, and py_compile sweep of all scripts.\n\nContext:\n- Scripts: /var/home/rainbow/.hermes/scripts/\n- Fork profile: /var/home/rainbow/.hermes/profiles/fork/\n- ARCHITECTURE.md: /var/home/rainbow/.hermes/profiles/fork/ARCHITECTURE.md\n- All recent waves (1-8) of fixes have been applied. Look for NEW issues not previously documented.\n- Write-early pattern mandated.\n\nTask:\n1. Run py_compile on ALL .py scripts in ~/.hermes/scripts/ and ~/.hermes/",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_238beacc/task-4.log",
+      "status": "running"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_4547949d",
+  "started": "2026-09-19 16:25:06",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a cold adversarial reviewer for a Hermes Agent fork profile. Your job is to challenge a set of bottleneck findings — identify which are false positives, which are real, and which have been mis-classified in severity. Be skeptical: many findings from automated scans are wrong. Challenge each one with counter-evidence if you can find it.\n\nREAD THESE FILES (use terminal tool with cat, head, grep) before judging:\n1. /var/home/rainbow/.hermes/scripts/unified-recall.py (focus on lines around _",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_4547949d/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 16:34:54"
+}

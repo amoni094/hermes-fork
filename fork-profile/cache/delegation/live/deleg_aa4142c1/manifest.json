@@ -1,0 +1,27 @@
+{
+  "delegation_id": "deleg_aa4142c1",
+  "started": "2026-09-19 17:36:06",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Adversarial cold review of Cluster 1 scripts in ~/.hermes/scripts/. Read every file in full. Find all HIGH and MEDIUM issues. Write findings to /tmp/adv_cluster1.md.\n\nFiles to review (read each completely using read_file with offset/limit for large files):\n- ~/.hermes/scripts/memory-monad.py\n- ~/.hermes/scripts/concept-lattice-index.py\n- ~/.hermes/scripts/profinite-thread-check.py\n- ~/.hermes/scripts/memory-ttl-purge.py\n- ~/.hermes/scripts/fork-state-vacuum.py\n- ~/.hermes/scripts/skill-router-in",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_aa4142c1/task-0.log",
+      "status": "running"
+    },
+    {
+      "index": 1,
+      "goal": "Adversarial cold review of Cluster 2 scripts in ~/.hermes/scripts/. Read every file in full. Find all HIGH and MEDIUM issues. Write findings to /tmp/adv_cluster2.md.\n\nFiles to review:\n- ~/.hermes/scripts/hermes-research-sweep.py\n- ~/.hermes/scripts/skill-wiki.py\n- ~/.hermes/scripts/omni_skill_scan.py\n- ~/.hermes/scripts/racs-prefix-tracker.py\n- ~/.hermes/scripts/skill-state.py\n- ~/.hermes/scripts/working-memory.py\n- ~/.hermes/scripts/occam-skill-ranker.py\n\nContext: These scripts were recently pa",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_aa4142c1/task-1.log",
+      "status": "running"
+    },
+    {
+      "index": 2,
+      "goal": "Adversarial cold review of Cluster 3 scripts in ~/.hermes/scripts/ PLUS config files. Read every file in full. Find all HIGH and MEDIUM issues. Write findings to /tmp/adv_cluster3.md.\n\nFiles to review:\n- ~/.hermes/scripts/skill-integrity-check.py\n- ~/.hermes/scripts/merkle-skill-check.py\n- ~/.hermes/scripts/news_diff_watchdog.py\n- ~/.hermes/scripts/entropy-fidelity-stability-monitor.py\n- ~/.hermes/scripts/experience-verifier.py\n- ~/.hermes/scripts/unified-recall.py\n- ~/.hermes/profiles/fork/conf",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_aa4142c1/task-2.log",
+      "status": "running"
+    }
+  ]
+}

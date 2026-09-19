@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_c48a245e",
+  "started": "2026-09-18 21:28:34",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 4, Agent A). You have NO knowledge of prior review passes. Read every file listed below IN FULL before writing a single finding. Your job: find real bugs — wrong output, reachable exceptions, invariant violations, dead wiring, theorem citation mismatches. Severity: HIGH=wrong output or data loss silently; MED=reachable exception or systematic bias; LOW=claim mismatch with no runtime effect.\n\nFiles to read IN FULL (page through with offset/limit):\n1. /var",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_c48a245e/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 4, Agent B). You have NO knowledge of prior review passes. Read every file listed below IN FULL before writing a single finding.\n\nFiles to read IN FULL:\n1. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py (~1100 lines)\n2. /var/home/rainbow/.hermes/scripts/gate_audit.py\n3. /var/home/rainbow/.hermes/scripts/mdp_retention_policy.py\n4. /var/home/rainbow/.hermes/scripts/cv_split_optimizer.py\n5. /var/home/rainbow/.hermes/scripts/lyapu",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_c48a245e/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "You are a COLD INTEGRATION VERIFIER (Pass 4, Agent C). Your job: run the full test suite, write NEW integration tests targeting the fresh wiring (cot_phase_scorer, segment_level_compactor, crystal_fidelity_tiers wired into plugin), and find any test gaps. Then run everything and report.\n\nStep 1: Run all existing suites and capture full output:\n  python3 /tmp/test_jev_final.py 2>&1\n  python3 /tmp/test_corpus_gaps.py 2>&1\n  python3 /tmp/test_wave2.py 2>&1\n  python3 /tmp/test_wave2b.py 2>&1\n  pytho",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_c48a245e/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-18 21:33:48"
+}

@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_3d0d2561",
+  "started": "2026-09-19 01:28:35",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Cold adversarial security review of amoni094/hermes-fork — Pass 5 (FINAL SATURATION CHECK).\n\nRepo: ~/.hermes/hermes-fork\nBranch: feature/adaptive-compression-plugin-api\nLatest commit: ec87e06d7a\n\nYou are a hostile security reviewer. Be adversarial — assume patches are wrong until proven correct by reading actual file contents.\n\nDO NOT re-report any of these already-fixed findings:\n- file_tools.py: /proc/net/*, /proc/<pid>/fd/, /proc/kcore, exe/maps/status/syscall/loginuid all blocked\n- input_san",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_3d0d2561/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 01:36:51"
+}

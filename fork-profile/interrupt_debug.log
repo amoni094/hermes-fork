@@ -1,0 +1,2 @@
+01:10:48 interrupt fired: msg='continue', children=0, parent._interrupt=True
+01:10:48 ENTER: queued interrupt msg='continue', agent_running=True

@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_2f17760d",
+  "started": "2026-09-15 20:57:21",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Perform a cold adversarial review of 16 Python monitoring/routing scripts. For each script, identify real bugs only — no style nitpicks. Categories to check:\n\n1. ALARM_LOGIC: Does the script print exactly 'ALARM: yes — <reason>' and 'ALARM: no — <reason>' on all code paths? Any path that omits either branch is a bug.\n2. MATH: Is the mathematical claim in the docstring actually implemented correctly? Wrong formula, wrong bound, wrong direction of inequality?\n3. DEAD_CODE: Variables assigned but n",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_2f17760d/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 20:58:27"
+}

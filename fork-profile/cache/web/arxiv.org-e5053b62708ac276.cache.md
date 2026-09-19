@@ -1,0 +1,16 @@
+# Phantom crossing from the Standard Model and General Relativity
+URL: https://arxiv.org/abs/2607.08120
+
+Phantom crossing from the Standard Model and General Relativity
+
+arXiv is now an independent nonprofit! Learn moreÃ
+
+# Phantom crossing from the Standard Model and General Relativity
+
+Jinglong Liu jinglong_liu@sjtu.edu.cn Tsung-Dao Lee Institute, 1 Lisuo Road, Shanghai, 201210, China School of Physics and Astronomy, Shanghai Jiao Tong University, 800 Dongchuan Road, Shanghai 200240, China Tucker Manton tucker_manton@ucas.ac.cn School of Fundamental Physics and Mathematical Sciences, Hangzhou Institute for Advanced Study, University of Chinese Academy of Sciences (HIAS-UCAS), Hangzhou, 310024, China Yifu Cai yifucai@ustc.edu.cn Department of Astronomy, School of Physical Sciences, University of Science and Technology of China, Hefei 230026, China CAS Key Laboratory for Research in Galaxies and Cosmology, School of Astronomy and Space Science, University of Science and Technology of China, Hefei 230026, China Antonino MarcianÃ² marciano@fudan.edu.cn Department of Physics & Center for Astronomy and Astrophysics, Fudan University, 200433 Shanghai, China Laboratori Nazionali di Frascati INFN, Frascati (Rome), Italy, EU
+
+###### Abstract
+
+Suggestions of a late-time phantom crossing from DESI baryon acoustic oscillation measurements, combined with cosmic microwave background and Type-Ia supernova observations, have renewed interest in non-standard dark energy models. In this Letter, we propose a new realization of a low redshift phantom crossing using only well understood ingredients from fermion condensation and general relativity. Our construction relies on the interplay between effective quintom-like dark energy and backreaction from non-linear structure formation. The full cosmological evolution is consistent with $\Lambda$ CDM until low redshift, where the backreaction starts to become prominent and a phase transition occurs. At this point, the total dark energy equation of state first crosses $w_{\text{DE}}=-1$ from above. For benchmark values of the backreaction energy density, a second crossing from below occurs at a lower redshift, as suggested by recent observation. Fitting our theoretical model with CPL parametrization, we find the result is consistent with the combined DESI+CMB+SNIa data analysis with DESY5, PantheonPlus, and Union3 datasets. Specifically, for backreaction density parameter $\Omega_{\rm BR}(z=0)=0.0572$ , the CPL parametrization gives the phantom crossing redshift $z_{*}\simeq 0.35$ , $w_{0}\simeq-0.76$ and $w_{a}\simeq-0.93$ .
+
+Introduction. â The physical origin of dark energy remains one of the most profound open questions in modern cosmology. Since the discovery of cosmic acceleration through Type-Ia supernova observations [28, 27], a broad range of measurements, including the cosmic microwave background (CMB), baryon acoustic oscillations (BAO), weak lensing, and large-scale structure surveys, have converged toward a cosmological model in which approximately $70\%$ of the present energy density is stored in a dark compone

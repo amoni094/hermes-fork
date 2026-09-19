@@ -1,0 +1,132 @@
+All 8 files read in full. Now performing deep adversarial analysis before writing a single finding.
+
+```json
+[
+  {
+    "id": "P7B-01",
+    "severity": "HIGH",
+    "file": "segment_level_compactor.py",
+    "line_range": [286, 316],
+    "failure_condition": "segment_compact_message() is called on a message whose content is a list where the first item is a dict with NEITHER a 'text' NOR a 'content' key (e.g. {'type': 'image_url', 'image_url': {...}}). Line 296 evaluates key=None, so line 298's branch is skipped. Line 301 executes: result['content'] = [new_content] (a plain-string list). _extract_content_text on this result (line 313) hits the list branch, finds a str item, and returns new_content correctly — so actual_reduction is computed correctly. BUT the original content was a dict-list with image metadata; collapsing it to [new_content] silently destroys the non-text items (image_url blocks, etc.). If the message is passed downstream to Anthropic's multi-modal API, the image reference is gone.",
+    "impact": "Irreversible data loss of non-text list items (image_url, tool_use blocks) when a dict-keyed content list has no 'text'/'content' key. The compaction appears to succeed (returns non-None), but destroys multi-modal message structure silently.",
+    "fix_recommendation": "Before collapsing the list, check whether any item is non-text (e.g. type=='image_url', type=='tool_use'). If non-text items exist, return None (do not compact). Alternatively, preserve all non-text items verbatim and only replace text-bearing items."
+  },
+  {
+    "id": "P7B-02",
+    "severity": "HIGH",
+    "file": "segment_level_compactor.py",
+    "line_range": [290, 316],
+    "failure_condition": "P6B-01/02/12 write-back collapses the content list to a single-item list: either [{key: new_content}] (dict shape, line 298) or [new_content] (plain-string shape, line 304). _extract_content_text (line 313) on the dict shape iterates: item is a dict, extracts item.get('text') or item.get('content'). This works correctly for 'text' and 'content' keys. However, if the original first dict used a different key that happened to also carry 'text' (e.g. both 'text' and 'value' present), only 'text' is used — no bug there. BUT: the plain-string shape [new_content] goes through the list branch, appends the str, and returns new_content correctly. So far no '' return. HOWEVER: actual_reduction = (len(content) - len(post_content)) / max(len(content), 1). If new_content after join is LONGER than original content (possible when placeholders are verbose and many segments are dropped but replaced with long placeholder strings), actual_reduction is NEGATIVE. A negative actual_reduction < min_reduction (0.30) → returns None correctly. No bug here. BUT: if ALL segments score above retain_threshold (to_retain_set contains all indices), every segment is retained and the join with '\\n\\n' separators adds characters not in the original. new_content > content in length. actual_reduction is negative → function returns None. This is correct behavior. HOWEVER: the demo on line 374 checks len(new_content) < len(long_content) using result.get('content') directly, which works for str content but would return a list for the dict-list shape. This demo assertion silently passes by accident (result.get('content') returns a list, and len([...]) == 1 < len(long_content) which is a large int — this comparison succeeds vacuously because Python compares len of a list (1) with len of a str (large)). The demo's correctness check is therefore broken for dict-list content shapes.",
+    "impact": "The demo (Test 3) silently passes even when the dict-list write-back path is exercised, because len([{...}]) == 1 is always less than len(long_content). This masks bugs in the dict-list branch during smoke testing.",
+    "fix_recommendation": "In _demo(), normalize the result content before checking length: use _extract_content_text(result) rather than result.get('content') for length comparison. This ensures the test actually measures character reduction, not list length vs string length."
+  },
+  {
+    "id": "P7B-03",
+    "severity": "HIGH",
+    "file": "crystal_fidelity_tiers.py",
+    "line_range": [204, 226],
+    "failure_condition": "crystal_lossy_compress() is called on a message whose content is a list with multiple items: e.g. [{'text': 'first part'}, {'text': 'second part'}, {'image_url': ...}]. The loop (lines 212-222) finds the first dict with 'text' key at j=0, sets item['key'] = new_content, sets updated=True, and breaks. The second dict item {'text': 'second part'} and the image_url item are left unchanged in result['content']. _extract_content_text on this result would concatenate new_content + 'second part' — the stale second text item is not cleared. This is the exact P6B-02 bug that segment_level_compactor fixed (P6B-02: 'only the FIRST dict item received new_content; subsequent items kept original text'), but crystal_lossy_compress has NOT applied the equivalent fix.",
+    "impact": "Lossy compression is ineffective on multi-item list content: only the first text-bearing item gets new_content; remaining items retain original text. Effective compression ratio is far below the intended value, and the downstream _extract_content_text still returns near-full-length content. crystal_lossy_compress silently fails to compress.",
+    "fix_recommendation": "Apply the same P6B-01/02 fix used in segment_level_compactor: after finding the first text-bearing item, collapse the entire list to a single-item list: result['content'] = [{'text': new_content} if dict-shape else new_content]. This matches segment_level_compactor's line 298/304 approach."
+  },
+  {
+    "id": "P7B-04",
+    "severity": "MED",
+    "file": "crystal_fidelity_tiers.py",
+    "line_range": [80, 125],
+    "failure_condition": "crystal_fidelity_decide() is called with a msg dict that has no 'content' key at all (e.g. an assistant message with only 'tool_calls' and no 'content'). Line 115 calls _extract_content_length(msg). Inside _extract_content_length (line 128-143), c = msg.get('content') returns None. None is not str and not list, so the function returns 0. content_len == 0. For rr_score in [LOSSY_THRESHOLD, LOSSLESS_THRESHOLD), the check on line 119 is: rr_score >= effective_lossy_thresh AND content_len >= LOSSY_MIN_CHARS (600). 0 >= 600 is False. Line 121: rr_score >= effective_lossy_thresh AND content_len < LOSSY_MIN_CHARS → True. Returns 'lossless'. This causes a tool-call-only assistant message (content=None) with a medium RR score to be classified as 'lossless' and retained fully — no bug in itself. BUT when crystal_lossy_compress is then called (from __init__.py line 1081 for 'lossy' tier), it would receive a no-content message. The 'lossy' branch is never reached for content_len==0, so no crash. However, if content IS absent and rr_score >= LOSSLESS_THRESHOLD, returns 'lossless' — correct. The 'demote' path for content_len==0 is only triggered when rr_score < effective_lossy_thresh. All paths are safe; no KeyError. BUT: the docstring says 'content' is required implicitly. The actual failure mode is: msg has 'content': None (explicit None, not missing key). _extract_content_length: c = None → not str, not list → returns 0. Same safe behavior. Verdict: no crash, but a message with content=None gets 'lossless' treatment at medium scores instead of 'demote' — a logic error.",
+    "impact": "Messages with content=None or missing 'content' at medium RR scores are classified 'lossless' (retained whole) instead of being sent to Jev scoring or demoted. These are typically empty assistant tool-call messages; retaining them is functionally harmless but wastes context budget.",
+    "fix_recommendation": "In crystal_fidelity_decide, add an explicit guard: if content_len == 0 and rr_score < LOSSLESS_THRESHOLD, return 'demote' to let the normal pipeline handle empty/tool-call-only messages. Alternatively, document that content_len==0 → lossless is intentional (avoids breaking tool-call messages)."
+  },
+  {
+    "id": "P7B-05",
+    "severity": "MED",
+    "file": "segment_level_compactor.py / crystal_fidelity_tiers.py / cot_phase_scorer.py",
+    "line_range": [77, 92],
+    "failure_condition": "There are THREE independent implementations of _extract_content_text: one in segment_level_compactor.py (lines 77-92), one in crystal_fidelity_tiers.py (lines 146-161), and one in cot_phase_scorer.py (lines 106-121). All three are structurally identical. The __init__.py also has its own copy (lines 341-356). Any bug fix applied to one copy (e.g. a future edge-case fix for a new Anthropic content block type like 'refusal') must be manually propagated to all four copies. Currently the implementations are in sync, but this is a maintenance time-bomb.",
+    "impact": "A bug fix to _extract_content_text in one module will silently not apply to the other three modules, causing divergent behavior between the compaction pipeline stages (RR scoring, crystal tier, segment compactor, CoT scorer). This has already caused at least P7B-03 (crystal_lossy_compress not getting the P6B-02 fix that segment_level_compactor got).",
+    "fix_recommendation": "Extract _extract_content_text into a single shared utility module (e.g. ~/.hermes/scripts/compaction_utils.py) and import it in all four files. Remove the four duplicate implementations."
+  },
+  {
+    "id": "P7B-06",
+    "severity": "MED",
+    "file": "mdp_retention_policy.py",
+    "line_range": [130, 139],
+    "failure_condition": "value_iteration() extracts the greedy policy pi on lines 130-138 by re-evaluating Q(s,a) using the FINAL V from value iteration. The lambda on line 134 closes over `a` (the loop variable). In Python, lambda captures the variable `a` by reference, not by value. The outer loop `for s in STATES` iterates first, and inside it `max(ACTIONS, key=lambda a: ...)` evaluates the lambda with all values of `a` during the max() call — this is safe because max() evaluates the lambda immediately for each `a` in ACTIONS. However, the lambda also references the outer loop variable `a` from the `for a in ACTIONS` loop on line 115 — wait, that loop has already completed by line 130. The `a` in `lambda a: ...` on line 134 is the lambda's OWN parameter `a`, which correctly shadows any outer `a`. This is NOT a closure-variable capture bug. Verdict: the lambda is correctly parameterized. No bug here — confirmed safe.",
+    "impact": "None — this focus area is confirmed safe. The lambda parameter `a` on line 134 correctly shadows any outer variable.",
+    "fix_recommendation": "No fix required. Adding a comment clarifying that `lambda a:` creates a fresh `a` parameter (not a closure capture) would improve readability for future reviewers."
+  },
+  {
+    "id": "P7B-07",
+    "severity": "MED",
+    "file": "mdp_retention_policy.py",
+    "line_range": [172, 181],
+    "failure_condition": "_cached_value_iteration is decorated with @lru_cache(maxsize=128). The cache stores MappingProxyType views of V and pi. If _cached_value_iteration.cache_clear() is called (e.g. from a test, or theoretically from a future cache-invalidation feature), the next call to optimal_action() calls value_iteration() fresh. value_iteration() initializes V = {s: 0.0 for s in STATES} and runs up to n_iter=max(20,1)=20 Bellman iterations. This is correct — a cold-start rebuild from zero is valid and produces the same converged result. However: if cache_clear() is called WHILE another thread is inside _cached_value_iteration (which is not thread-safe — lru_cache acquires no lock on CPython), a race condition can cause the fresh computation to run twice, returning two different MappingProxyType objects that both represent the correct answer. Since MappingProxyType is read-only, the double-computation is at worst wasteful, not incorrect. BUT: lru_cache on CPython 3.12 is NOT thread-safe for concurrent writes to the same key. Two threads calling _cached_value_iteration(0.5) simultaneously can both miss the cache and run value_iteration() twice, then both attempt to write to the cache — CPython's GIL makes the dict write atomic, so the result is deterministic (last write wins) and correct. Verdict: thread-safety is acceptable under the GIL but fragile under free-threaded Python (3.13+ no-GIL builds).",
+    "impact": "Under Python 3.13+ no-GIL builds, concurrent calls to optimal_action() with the same rr_score can race inside lru_cache, potentially causing cache corruption. On current CPython (GIL), this is benign but wastes CPU on duplicate Bellman iterations.",
+    "fix_recommendation": "Wrap _cached_value_iteration in a threading.Lock, or use functools.cached_property / a manual dict with a lock. Alternatively, document the GIL dependency explicitly so it's caught during a no-GIL migration."
+  },
+  {
+    "id": "P7B-08",
+    "severity": "MED",
+    "file": "occam_audit.py",
+    "line_range": [125, 134],
+    "failure_condition": "The diff=700 boundary: math.exp(700) = 1.0142320547350045e304. min(math.exp(700), 1e308) = 1.0142320547350045e304. This is a normal finite float, well below 1e308. The float('inf') guard was removed by P4B-02 (replaced with diff>700 cap), and the 1e308 sentinel is only used when diff>700 strictly. At diff==700 exactly: the else branch executes bayes_factor = math.exp(700) ≈ 1.01e304. This is JSON-serializable (a large finite float). No overflow. Verdict: the boundary at exactly diff=700 is safe. HOWEVER: the lower guard `elif diff < -700: bayes_factor = 0.0` is also correct (math.exp(-700) ≈ 9.86e-305, rounds to 0.0 in IEEE754 — using explicit 0.0 is cleaner). No edge case at exact boundary. Confirmed safe. SECONDARY FINDING: outcomes where `score` or `actual_quality_delta` is NaN or Inf (e.g. from a corrupted calibration log) will cause _log_gaussian to return NaN, which propagates into m1_log_ev/m2_log_ev, making diff=NaN. diff > 700 is False for NaN, diff < -700 is False for NaN, so else branch: math.exp(NaN) = NaN. bayes_factor = NaN. NaN > 3.0 is False; NaN < 1/3 is False → preferred = 'inconclusive'. json.dumps(NaN) raises ValueError on standard json. The return dict with bayes_factor=NaN is NOT JSON-serializable.",
+    "impact": "A single corrupted calibration log entry with NaN score or NaN actual_quality_delta propagates NaN through the entire audit, producing a NaN bayes_factor. Any caller that json.dumps() the result (e.g. a monitoring script) raises ValueError. The calibration loop is silently broken until the corrupt entry is manually removed.",
+    "fix_recommendation": "In the per-outcome loop, add: `if not (math.isfinite(score) and math.isfinite(actual)): continue` to skip corrupt entries. Alternatively, add a final guard: `if not math.isfinite(bayes_factor): bayes_factor = 1.0` with a warning log."
+  },
+  {
+    "id": "P7B-09",
+    "severity": "MED",
+    "file": "lyapunov_monitor.py",
+    "line_range": [79, 95],
+    "failure_condition": "Scenario: target_retain=5, current_retained starts at 10. Each pruning step reduces by 1: calls with [9,8,7,6,5,5]. V sequence: init=5.0, then 4,3,2,1,0,0. Steps: (5→4): v_now<v_prev → stall=0. (4→3): descent → stall=0. (3→2): descent → stall=0. (2→1): descent → stall=0. (1→0): descent → stall=0. (0→0): v_now==0.0 → P4B-03 guard fires → stall=0. is_stable()=True throughout. Correct behavior. BUT: the scenario target_retain=5, initial=10, but the caller passes retained=5 THEN retained=5 again (V=0 twice). The second V=0 call: v_prev=0.0, v_now=0.0. v_now < v_prev? 0 < 0 = False. v_now == 0.0? True → stall=0. Correct. SECONDARY FINDING: is_stable() returns self._stable which is initialized to True and only set to False on violation. There is NO mechanism to RESET is_stable() to True after a violation is detected and then the loop recovers. If the loop stalls for 3 steps (violation fires, _stable=False) but then resumes descent and reaches V=0, is_stable() still returns False even though the loop did eventually converge. This is a one-way ratchet: once False, always False.",
+    "impact": "A pruning loop that stalls temporarily (e.g. due to min_prune_chars skipping a message) then resumes and converges will be permanently flagged as unstable. Callers that check mon.is_stable() after the loop completes will incorrectly report instability and may trigger unnecessary fallback behavior.",
+    "fix_recommendation": "In __call__, after the V=0 equilibrium check (line 88), also reset _stable=True: if V=0 was reached, the loop did converge regardless of prior stalls. Add: `if v_now == 0.0: self._stable = True` (or set _stable=True in the equilibrium branch, overriding any prior violation flag)."
+  },
+  {
+    "id": "P7B-10",
+    "severity": "LOW",
+    "file": "cot_phase_scorer.py",
+    "line_range": [143, 154],
+    "failure_condition": "classify_cot_phase() checks conclusion patterns FIRST (line 144-146), before checking content length (line 148). A very short assistant message (e.g. 10 chars: 'Done.') that happens to match a conclusion pattern (line 96: r'^(done|complete|finished)[.!]\\s*$' with re.MULTILINE) is classified as 'cot_conclusion' and returned immediately — bypassing the COT_MIN_CHARS length check. 'cot_conclusion' messages receive NO score adjustment (cot_adjust_rr_score returns base_rr_score unchanged). This is actually the INTENDED behavior per the docstring: 'Check for conclusion markers first (overrides intermediate, even in shorter text)'. So a 10-char 'Done.' message correctly gets 'cot_conclusion' and no demotion. Verdict: intended behavior, not a bug. HOWEVER: the _COT_CONCLUSION_PATTERNS include r'\\bthe answer is\\b' and r'\\bmy answer is\\b' without any length guard. A very common short assistant response like 'The answer is 42.' (18 chars) matches, gets 'cot_conclusion', and is never demoted — even if it appears 50 times in context (repeated boilerplate). These near-duplicate short answers should score well in NCD (near-identical → demote one), but the CoT scorer actively prevents their demotion.",
+    "impact": "Repeated boilerplate conclusion phrases (e.g. 'The answer is X.' appearing many times) are permanently classified as 'cot_conclusion' and exempt from CoT-based score penalty. This slightly increases retained context for repetitive answer patterns, but is minor since NCD or RR scoring may still demote them.",
+    "fix_recommendation": "Add a minimum length check for conclusion classification: only apply 'cot_conclusion' override if len(content) >= COT_MIN_CHARS / 2 (e.g. 200 chars). Short boilerplate answers should fall through to 'direct' classification instead."
+  },
+  {
+    "id": "P7B-11",
+    "severity": "LOW",
+    "file": "kolmogorov_predicates.py",
+    "line_range": [115, 121],
+    "failure_condition": "ncd('', '') — both strings are equal (both empty), so the identity fast-path on line 115 fires: s1 == s2 → return 0.0. This is correct: NCD(x,x)=0 by definition (Li-Vitanyi §8.4 reflexivity). The P6B-03 guard on line 120 ('if not s1 or not s2: return 1.0') is only reached when strings are unequal but one is empty — which cannot happen when both are '' because s1==s2 fires first. Verdict: ncd('','')=0.0 is mathematically correct and the guard ordering is sound. SECONDARY FINDING: _pad_to_min(b'') returns b'' (line 58: 'if not b: return b'). If the empty-string guard on line 120 were removed, the code would proceed to compress b'' (two empty bytes objects). zlib.compress(b'') returns a fixed 8-byte DEFLATE stream. c1=8, c2=8, c12=8. denom=max(8,8,1)=8. (8-8)/8=0.0. ncd would return 0.0 (same as identity). This means the P6B-03 guard is actually unnecessary for the ncd('','') case — the identity check already handles it — but IS necessary for ncd('', 'non-empty') where identity fails and _pad_to_min('') = b'' gives c1=8, c12=len(compress('non-empty')), potentially giving (c12-8)/max(8,c_nonempty) < 1.0 falsely implying similarity.",
+    "impact": "No incorrect behavior — the confirmed analysis validates that ncd('','')=0.0 is correct and the guard ordering is sound. The P6B-03 guard correctly handles the asymmetric empty case (ncd('','x')→1.0). No fix needed for this specific focus area.",
+    "fix_recommendation": "No fix required. The code is correct as written. Add a comment on line 120 clarifying that the guard fires only for the asymmetric case (one empty, one not) since the symmetric empty case is already handled by the identity check on line 115."
+  },
+  {
+    "id": "P7B-12",
+    "severity": "LOW",
+    "file": "plugins/jev-compaction/__init__.py",
+    "line_range": [1283, 1310],
+    "failure_condition": "_patch_compressor detects a re-entry for an already-patched compressor. If stored is a tuple (the W3-F01 path), _session_ref[0] is updated inside a first `with _PATCHED_LOCK` block (lines 1291-1294). However, lines 1291-1292 READ stored OUTSIDE the lock (stored was read at line 1285 under the lock, but lines 1291-1292 operate on the local variable `stored` which was captured before `already_patched` was evaluated). The GC finalizer _evict_patched_id can run between line 1285 and line 1292, popping the entry from _PATCHED. The update to _session_ref[0] on line 1292 still works (it mutates the local list object in memory), but the subsequent `_PATCHED[cid] = (session_id, _ref)` write on line 1294 re-inserts the evicted entry — potentially for a compressor that was just garbage collected and whose id() might be reused. The _weakref.finalize was already called for the old compressor; no new finalize is registered for the re-inserted entry.",
+    "impact": "After a GC race evicts a compressor id between the outer lock read and the inner lock write, the re-inserted _PATCHED[cid] entry has no associated weakref finalizer. If the old id() is reused by a new compressor object, _patch_compressor for the new compressor will see `already_patched=True` and update _session_ref[0] — but the patch installed on the old (now-dead) compressor is gone. The new compressor is never actually patched. The next compression pass runs the unpatched original method.",
+    "impact": "Silent loss of the jev-compaction patch for a new compressor that reuses a GC'd compressor's id(). The session continues with unpatched (positional oldest-first) compaction, silently degrading relevance-gating without error.",
+    "fix_recommendation": "In the already_patched branch, after updating _session_ref[0], attempt to verify the compressor is still alive (e.g. check that the compressor instance still has the patched _prune_old_tool_results attribute). If not, fall through to the fresh-patch branch by setting already_patched=False. Alternatively, use a WeakValueDictionary keyed by id to avoid the stale-id problem entirely."
+  }
+]
+```
+
+**Summary of what was found:**
+
+| ID | Sev | File | Nature |
+|----|-----|------|--------|
+| P7B-01 | HIGH | segment_level_compactor.py | Multi-modal data loss: non-text dict items (image_url, tool_use blocks) destroyed when content list has no text/content key — compaction silently corrupts multi-part messages |
+| P7B-02 | HIGH | segment_level_compactor.py | Demo smoke test silently passes for dict-list content shapes because `len([{...}])` (1) < `len(long_content)` (large int) is trivially true — masks write-back bugs in the dict branch |
+| P7B-03 | HIGH | crystal_fidelity_tiers.py | crystal_lossy_compress has the exact P6B-02 bug that segment_level_compactor already fixed: only first text item updated, subsequent items retain original stale text — lossy compression is ineffective on multi-item lists |
+| P7B-04 | MED | crystal_fidelity_tiers.py | Messages with content=None at medium RR scores get 'lossless' treatment instead of 'demote', wasting context budget |
+| P7B-05 | MED | all scripts | Four independent copies of _extract_content_text — maintenance time-bomb already causing divergence (P7B-03 is a direct consequence of this duplication) |
+| P7B-06 | MED | mdp_retention_policy.py | lambda parameter correctly shadows outer variable — confirmed no closure-capture bug (confirmed safe, documented) |
+| P7B-07 | MED | mdp_retention_policy.py | lru_cache not thread-safe under Python 3.13+ no-GIL; concurrent calls can race on cache writes |
+| P7B-08 | MED | occam_audit.py | NaN from corrupt calibration log entries propagates to bayes_factor=NaN; json.dumps() of result raises ValueError, breaking monitoring scripts |
+| P7B-09 | MED | lyapunov_monitor.py | is_stable() is a one-way ratchet: once set False by a transient stall, never resets to True even after the loop converges to V=0 |
+| P7B-10 | LOW | cot_phase_scorer.py | Repeated short boilerplate conclusions ('The answer is 42.') permanently classified as cot_conclusion, exempt from demotion scoring |
+| P7B-11 | LOW | kolmogorov_predicates.py | Confirmed: ncd('','')=0.0 is correct; guard ordering is sound; no bug (documented) |
+| P7B-12 | LOW | jev-compaction/__init__.py | GC finalizer race in _patch_compressor re-entry: evicted entry re-inserted without a new weakref finalizer; id() reuse silently skips patching a new compressor |

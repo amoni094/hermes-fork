@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_980cc88d",
+  "started": "2026-09-15 15:56:56",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Run a cold adversarial review on all new/modified scripts built in this session. For each script:\n\n1. Read the script in full.\n2. Verify py_compile passes.\n3. Run a smoke test of the primary subcommand.\n4. Check for: (a) dead code never called, (b) claimed features not present, (c) imports that will fail at runtime, (d) hardcoded paths that don't exist on disk, (e) functions that reference undefined variables.\n5. For each issue found: classify as BLOCKER (prevents the feature working at all) or ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_980cc88d/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 16:06:46"
+}

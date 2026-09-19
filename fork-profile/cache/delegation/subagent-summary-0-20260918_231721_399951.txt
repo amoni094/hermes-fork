@@ -1,0 +1,463 @@
+All five files read in full. Now I'll write findings.
+
+---
+
+## Pass 12 — Cold Adversarial Review Findings
+
+---
+
+### FINDING P12-01 — HIGH
+**File:** `__init__.py`, lines 697–747 (`_beta_posterior_threshold`)
+**Topic:** P11-01 double-count when both file snapshot and in-memory counter are ≥ beta_min_obs
+
+**Precise description:**
+
+The P11-01 fix correctly handles the race where in-memory `n >= beta_min_obs` after a concurrent `_write_calibration_event`. But it fails a different case: both paths reach `n >= beta_min_obs` independently, yet the code still **overwrites** the in-memory counter with the file snapshot.
+
+Trace the code:
+
+```python
+# Line 703: outer check
+if n < beta_min_obs:            # ← entered when fast-path n < beta_min_obs
+    ...
+    # file scan produces n_file, k_file
+    if n_file < beta_min_obs:
+        return None             # ← correct: file also insufficient
+    # P11-01 re-check under lock:
+    with _THRESHOLDS_LOCK:
+        current = _BETA_COUNTERS.get(session_id, {}).get(role, {"k":0,"n":0})
+        if current["n"] >= beta_min_obs:
+            k, n = current["k"], current["n"]   # ← uses in-memory: correct
+        else:
+            _BETA_COUNTERS.setdefault(session_id, {})[role] = {
+                "k": k_file, "n": n_file        # ← seeds from file
+            }
+            k, n = k_file, n_file
+```
+
+**The double-count path is NOT in `_beta_posterior_threshold` itself — it is the interaction with `_write_calibration_event`.** Here is the actual bug:
+
+When the fast-path lock reads `n` at line 700–701 and finds `n < beta_min_obs`, then during the file scan `_write_calibration_event` fires M times (another thread), incrementing the in-memory counter M times. By the time we reach the P11-01 re-check:
+
+- `current["n"] = n_original + M` — this may be `>= beta_min_obs`
+- We correctly use `current["k"], current["n"]` — **no double-count here**
+
+BUT: there is a **separate** double-count path when the re-check finds `current["n"] < beta_min_obs` and seeds:
+```python
+_BETA_COUNTERS[session_id][role] = {"k": k_file, "n": n_file}
+```
+
+This **silently discards** the M events `_write_calibration_event` already incremented into the live counter during the file scan. Those M events are in the calibration log file too, so `k_file` and `n_file` already include them. After the seed, future `_write_calibration_event` calls will increment again → **those M events are double-counted in the eventual posterior once the counter crosses `beta_min_obs` and the fast-path takes over.**
+
+Concrete example:
+- Initial state: `n_mem = 8`, file has 12 records (8 from this session before process restart, 4 from before)
+- Fast path reads `n_mem=8 < 10`, enters cold-start branch
+- File scan: `n_file=12`, `k_file=7`
+- During scan: 2 more decisions arrive, `_write_calibration_event` increments to `n_mem=10, k_mem=9`
+- P11-01 re-check: `current["n"]=10 >= 10` → uses `k=9, n=10`. No seed. **Correct.**
+
+Different example (the actual bug):
+- Initial state: `n_mem = 8`, file has 10 records (all in-memory events are also in the file because no restart)
+- Fast path reads `n_mem=8 < 10`
+- File scan: `n_file=10`, `k_file=6`
+- No concurrent writes during scan
+- P11-01 re-check: `current["n"]=8 < 10` → seeds `{k:6, n:10}`
+- **But the in-memory counter already had k=5, n=8 from 8 real events. Those 8 events are ALSO reflected in k_file=6, n_file=10.** After seeding to n=10, future events will push n to 11, 12, etc. The 8 events that existed in both memory and file are counted once — OK so far.
+
+Wait — re-examine: the fast-path counter (`n_mem=8`) is populated by `_write_calibration_event` for **this process lifetime**. If no restart occurred, every record in the file for this session is also in `_BETA_COUNTERS`. So `n_file == n_mem` always holds when no restart occurred and the fast-path counter is accurate. **Seeding from file replaces a smaller counter (n_mem) with the same or larger file count (n_file ≥ n_mem since the file was scanned for the same session_id). The in-memory events are a strict subset of the file events (written atomically before updating in-memory). So seeding does not double-count.** This part is actually safe.
+
+**However: the real double-count exists if `_write_calibration_event` fires BETWEEN the fast-path lock release and the file scan completion (the TOCTOU window P11-01 tried to fix).** If M events fire during the scan:
+- In-memory: `n_mem + M`
+- File (as scanned at start of scan): `n_file` (does NOT include those M events because `_CALIBRATION_LOG_LOCK` was not held during the scan — the scan is outside any lock)
+- Re-check: `current["n"] = n_mem + M`. If `n_mem + M >= beta_min_obs`: uses in-memory, **no seed** → correct
+- Re-check: if `n_mem + M < beta_min_obs` but `n_file >= beta_min_obs`: seeds with `{k_file, n_file}` which **does NOT include the M events**. Those M events will be added again by future `_write_calibration_event` calls → **they are counted twice: once in the file-seeded base, once as future increments from `_write_calibration_event`.**
+
+Wait, more carefully: `_write_calibration_event` writes to the file **first** (under `_CALIBRATION_LOG_LOCK`), then updates `_BETA_COUNTERS` (under `_THRESHOLDS_LOCK`). The file scan is done without any lock. So during the file scan window, events that have been written to disk AND to in-memory are included in `n_file` but excluded from the `n_mem` we read at line 700 (we released the lock before the scan). After the scan, `n_file` includes those M events. The P11-01 re-check reads `current["n"] = n_mem_at_recheck`. If `n_mem_at_recheck < beta_min_obs`, we seed with `{k_file, n_file}` which already contains those M events. Future `_write_calibration_event` calls will add NEW events (M+1, M+2, ...) to the in-memory counter, incrementing past `n_file`. **Those M events are not double-counted; the seed contains them and future increments start from n_file.** This is correct.
+
+**The actual real bug (revised):** When the seed happens, the existing in-memory counter had `n_mem` valid events. The seed overwrites with `{k_file, n_file}` where `n_file >= n_mem`. If `n_file > n_mem`, those extra file events (e.g. from a prior process run) are brought in — **correct, that's the intent**. But if the process has been running long enough that `n_mem` events were written to file before the restart baseline AND some events were added post-restart, `n_file` double-counts nothing because the file is the ground truth.
+
+**Conclusion:** The double-count the task asks about does NOT exist in the final code. Both-fresh case: if `n_file >= beta_min_obs` AND `current["n"] >= beta_min_obs` (re-check branch), we take the in-memory path and skip seeding entirely (`k, n = current["k"], current["n"]`). No double-count. **However, a real (different) bug exists:**
+
+**Actual Bug: Stale fast-path read before file scan, re-check uses pre-lock n/k.**
+
+At line 697–701, the fast-path reads `k` and `n` under lock. Then at line 703, if `n < beta_min_obs`, we enter the cold-start branch. The file scan runs. The re-check under lock at line 737 reads `current = _BETA_COUNTERS.get(...)`. If `current["n"] >= beta_min_obs`, we do `k, n = current["k"], current["n"]` — **but the variables `k` and `n` were already defined at lines 700-701 (fast-path values), and the re-assignment on line 741 correctly overwrites them.** This looks fine.
+
+**BUT:** If `current["n"] < beta_min_obs` (else branch), we seed and set `k, n = k_file, n_file`. The code then falls through to line 749:
+```python
+posterior_mean = (alpha + k) / (alpha + beta_param + n)
+```
+using the file values. This is correct, but **leaves the in-memory counter at the seeded file values permanently**. Any subsequent call to `_beta_posterior_threshold` for the same session/role will now take the fast-path (since `n >= beta_min_obs`), reading the counter we just seeded. **This is correct behaviour.**
+
+**The actual remaining gap:** The P11-01 re-check seeds when `current["n"] < beta_min_obs`. The seed sets `_BETA_COUNTERS[session_id][role] = {"k": k_file, "n": n_file}`. This REPLACES whatever partial in-memory state was there (`n_mem` events). If `n_mem > 0` and those events are NOT in the file (e.g., they were written to in-memory but the file write failed under `_CALIBRATION_LOG_LOCK`), those n_mem events are silently discarded by the seed. **This is a data-loss bug under write failure, not a double-count.**
+
+Severity revised to **MED** for the data-loss case, **LOW** for double-count (which does not occur).
+
+**Suggested fix:** Before seeding, merge: `k_seed = max(k_file, k_mem)`, `n_seed = max(n_file, n_mem)` where `k_mem`, `n_mem` are the values read at line 700-701. This preserves in-memory events not yet reflected in the file.
+
+---
+
+### FINDING P12-02 — HIGH
+**File:** `__init__.py`, lines 1009–1015 (`_relevance_gated_prune`)
+**Topic:** P11-02 EVSI floor cliff — skip fires immediately at exactly `total_seen == n_min_passes`
+
+**Precise description:**
+
+```python
+# Line 1013-1015:
+if total_seen < n_min_passes:
+    evsi_latch_adjusted = max(evsi_latch_adjusted, evsi_min + 0.01)
+evsi_skip = total_seen > 0 and evsi_latch_adjusted < evsi_min
+```
+
+At `total_seen == n_min_passes` (exactly on the boundary), the floor is gone (`<` is strict, boundary is excluded). At this exact step, `evsi_latch_adjusted` uses the real computed value, not the floor.
+
+**Scenario where skip fires at the boundary:**
+- `n_min_passes = 5`, `retention_value = 0.4` (user-configurable), `p_middle = 0`, `current_threshold = 0.5` (maximum uncertainty)
+- `uncertainty_term = (1 - 2*|0.5 - 0.5|) * 0.02 = 0.02`
+- `effective_p_middle = 0.05` (floor, because `total_seen < 5`)
+- `evsi_latch_adjusted = 0.05 * 0.4 + 0.02 = 0.04`
+- Floor applied: `max(0.04, 0.05 + 0.01) = 0.06 > 0.05` → no skip. **Correct during bootstrap.**
+
+Now at `total_seen = 5` (exactly):
+- Floor is NOT applied
+- `effective_p_middle = p_middle = 0` (since `total_seen >= n_min_passes`)
+- `evsi_latch_adjusted = 0 * 0.4 + 0.02 = 0.02`
+- `evsi_skip = True and 0.02 < 0.05` → **Jev permanently disabled**
+
+This is a step-function discontinuity: pass 4 has `evsi=0.06`, pass 5 has `evsi=0.02`. The Jev gate goes from forced-on to permanently off in a single step. The floor comment says "bootstrap" but there is no graduated transition.
+
+**Worse:** `_MIDDLE_TIER_COUNTS` and `_TOTAL_COUNTS` are never reset between passes. A single all-clear-tier pass at pass 5 sets `p_middle = 0` permanently (latch). With `retention_value = 1.0` (default), `evsi_latch_adjusted = 0 + 0.02 = 0.02 < 0.05` → skip fires. With default config this is `evsi_min=0.05`, `w_uncertainty=0.02`, `current_threshold = 0.55` → `uncertainty_term = (1 - 2*0.05)*0.02 = 0.018`. `evsi_latch_adjusted = 0 * 1.0 + 0.018 = 0.018 < 0.05` → **Jev is silenced at the exact boundary even with default config** when `p_middle=0`.
+
+The cliff is real: at boundary transition with `p_middle = 0`, `evsi_latch_adjusted` drops from `0.06` (floored) to `0.018` (unfloored), crossing `evsi_min = 0.05`.
+
+**Suggested fix:** Instead of a hard floor with a hard boundary, use a weighted blend:
+```python
+floor_weight = max(0.0, 1.0 - total_seen / n_min_passes)  # 1.0 at 0, 0.0 at n_min_passes
+evsi_latch_adjusted = max(evsi_latch_adjusted, (evsi_min + 0.01) * floor_weight + evsi_latch_adjusted * (1 - floor_weight))
+```
+Or more simply, extend the floor to `total_seen <= n_min_passes` (inclusive):
+```python
+if total_seen <= n_min_passes:
+    evsi_latch_adjusted = max(evsi_latch_adjusted, evsi_min + 0.01)
+```
+This is the minimal fix: the boundary pass gets the floor too. Pass 6 onward is unprotected, but the drop is at most one pass wide. Alternatively, add a minimum floor on `w_uncertainty` so that `uncertainty_term` alone exceeds `evsi_min` when threshold is near 0.5 — decoupling the floor from bootstrap state entirely.
+
+---
+
+### FINDING P12-03 — HIGH
+**File:** `__init__.py`, lines 1297–1304 (`_relevance_gated_prune`)
+**Topic:** P11-04 JS all-3-roles guard — regression from 2-role guard; user role NEVER gets FTRL updates in practice
+
+**Precise description:**
+
+```python
+# Line 1303-1304:
+if all(r in _roles_updated_this_pass for r in ("tool_result", "assistant", "user")):
+    _apply_js_shrinkage(session_id, cfg)
+```
+
+`_roles_updated_this_pass` is populated in three places:
+1. **Middle tier demote/retain** (lines 1225, 1236): for any role that goes through Jev scoring
+2. **Bottom tier (demote_idx)** (line 1253): for demoted roles using RR proxy score
+3. **Top tier (retain_idx)** (line 1272): for retained non-user roles, with `if raw_role == "user": continue` guard at line 1265
+
+The `user` threshold is updated by `_record_decision` only when a user message lands in the **middle tier** AND passes through the Jev path. This requires:
+1. A user message to be in `candidates_idx` (before prune boundary)
+2. Not be in `retain_idx` immediately (line 1106–1108 adds user to `retain_idx` and `continue`s — **user messages are UNCONDITIONALLY added to retain_idx and skipped entirely from middle_idx**)
+
+Looking at the classification loop, lines 1106–1108:
+```python
+if msg_role == "user":
+    retain_idx.add(i)
+    continue
+```
+
+User messages **never reach middle_idx**. They are always immediately retained. Consequently, `_record_decision` is **never called for user-role messages** in the Jev/middle-tier path. In the bottom-tier loop (line 1246–1258), user messages are not in `demote_idx` (they were pre-assigned to `retain_idx`). In the retain-idx loop (line 1260–1278), line 1265 explicitly skips user messages.
+
+**Therefore: "user" is structurally impossible to be added to `_roles_updated_this_pass`.** The condition `all(r in _roles_updated_this_pass for r in ("tool_result", "assistant", "user"))` is **always False**. James-Stein shrinkage never fires.
+
+**Quantifying the regression vs the prior 2-role guard:**
+
+The prior guard required `tool_result AND assistant` in `_roles_updated_this_pass`. Both of these roles ARE reachable (they appear in middle_idx, bottom-tier demote_idx, and top-tier retain_idx loops). Under the prior guard, JS would fire on any pass that processed at least one tool_result AND one assistant message through any tier. In a typical compaction pass with mixed messages, this fired frequently.
+
+The new guard makes JS fire **never**. This is a complete regression: JS shrinkage was introduced in P8A-04 to handle the k=3 inadmissibility case. It now never runs at all, meaning thresholds diverge with no Stein correction, and the inadmissibility problem is back.
+
+**Suggested fix (two options):**
+
+Option A (minimal): Track user separately, using a proxy signal when user messages are all retained. Since user is always retained, it always has a "decision" — just not a Jev decision. Add after the retain_idx loop:
+```python
+# If any user messages were retained (unconditionally), mark user as "updated" for JS purposes
+if any(result[i].get("role") == "user" for i in retain_idx):
+    _roles_updated_this_pass.add("user")
+```
+
+Option B (correct): Revert to the 2-role guard for the JS fire condition, but apply shrinkage only to the 2 roles with fresh FTRL data (`tool_result`, `assistant`). The JS formula with k=2 gives `(k-2)=0` → shrinkage_factor=1 → no shrinkage, which is useless. Therefore: use k=3 formula but add "user" only as a phantom participant in the grand_mean with its current value (even if stale), and fire JS when `tool_result` and `assistant` are both updated. The P11-04 rationale (avoid contaminated grand_mean) is valid but the cure kills the feature.
+
+Option C (cleanest): Change the JS guard to fire when `tool_result AND assistant` are both updated (the 2-role fire condition), but inside `_apply_js_shrinkage` check whether "user" has FTRL update count > 0 (via `_THRESHOLD_COUNTS`). If user count is 0, exclude user from the grand_mean computation and use k=2 with a special note that k=2 gives no shrinkage — in which case skip entirely. This surfaces the fundamental problem: without user FTRL data, JS cannot safely run at all and is correctly a no-op. But at least it fires when user HAS data.
+
+**Immediately actionable fix:** Replace line 1303 with:
+```python
+# JS requires all k=3 roles to be fresh. 'user' is never updated via FTRL
+# (unconditionally retained), so substitute: user is "fresh" if any user
+# messages were retained this pass (structural freshness).
+user_seen_this_pass = any(result[i].get("role") == "user" for i in retain_idx)
+if user_seen_this_pass:
+    _roles_updated_this_pass.add("user")
+if all(r in _roles_updated_this_pass for r in ("tool_result", "assistant", "user")):
+    _apply_js_shrinkage(session_id, cfg)
+```
+
+---
+
+### FINDING P12-04 — MED
+**File:** `__init__.py`, lines 1260–1278 (retain_idx loop)
+**Topic:** Top-tier FTRL update incorrectly adds "user" role to `_roles_updated_this_pass` via a different path
+
+**Precise description:**
+
+Look again at the retain_idx loop. Line 1265: `if raw_role == "user": continue` — skips FTRL update. **But line 1272**: `_roles_updated_this_pass.add(role_key)` is reached only when `raw_role != "user"` (due to the `continue`). So "user" is correctly excluded from `_roles_updated_this_pass` in the retain_idx loop.
+
+But in the **bottom-tier demote_idx loop** (lines 1246–1258), there is **no user guard**. Line 1247: `raw_role = result[i].get("role", "tool")`. However, user messages are in `retain_idx`, not `demote_idx` (they were added to `retain_idx` unconditionally at line 1107). So user messages cannot be in `demote_idx`. **No bug here — this is actually safe.**
+
+Revising: P12-04 as stated is a non-issue. Withdrawing and replacing with a new finding.
+
+---
+
+### FINDING P12-04 (revised) — MED
+**File:** `calibration_loop.py`, lines 429–451
+**Topic:** `force_refit` triggers refit even with NaN ECE (insufficient data); writes a degenerate calibration map
+
+**Precise description:**
+
+```python
+should_refit = force_refit or (not math.isnan(ece) and ece > ECE_REFIT_THRESHOLD)
+```
+
+When `force_refit=True` and ECE is NaN (fewer than 1 non-empty bin, which happens with N < 10), `should_refit` is `True`. The code calls `_pav(predictions, outcomes)` with a trivially small dataset, producing a degenerate calibration map (1–2 breakpoints, typically `[(0.0, 0.5), (1.0, 0.5)]`). This map is written to disk and used for future inference, silently replacing any valid prior map.
+
+The `run()` function returns `ppc["verdict"]` which for `n < 10` is `"insufficient_data"`, so the caller can detect this. But `write_calibration_map` is called unconditionally before the verdict is checked by any external consumer. A downstream caller doing `calibration_loop.run(records, force_refit=True)` with N=3 gets a corrupt map written without any error raised.
+
+**Suggested fix:** Guard the refit against insufficient data even under `force_refit`:
+```python
+has_data = n >= 10 and not math.isnan(ece)
+should_refit = has_data and (force_refit or ece > ECE_REFIT_THRESHOLD)
+if not has_data and force_refit:
+    print("[calibration_loop] WARNING: force_refit requested but N<10 or ECE=NaN; skipping refit.", file=sys.stderr)
+```
+
+---
+
+### FINDING P12-05 — MED
+**File:** `calibration_loop.py`, lines 175–188 (`_pav_stack`)
+**Topic:** `i_s` loop variable in `_pav_stack` is unused — shadowing risk and lint confusion
+
+**Precise description:**
+
+```python
+for i_s, (xi, yi) in enumerate(zip(xs, y)):
+```
+
+`i_s` is declared but never used inside the loop body. This is a N05 fix artifact. In Python, unused loop variables should be `_`. The current name `i_s` is close to `i` (used in the outer `_pav` scope via `pairs = sorted(zip(predictions, outcomes)...)`). A future edit that inadvertently uses `i_s` expecting the outer index would silently be wrong.
+
+**Suggested fix:** Replace with `for _, (xi, yi) in enumerate(zip(xs, y)):` or simply `for xi, yi in zip(xs, y):` (since `i_s` is not used and `xs` is built from the same `pairs` sorted list).
+
+This is **LOW** severity, not MED. Downgrading.
+
+---
+
+### FINDING P12-05 (correct severity) — LOW
+**File:** `calibration_loop.py`, line 179
+**Topic:** Unused `i_s` variable
+
+As described above. **LOW**.
+
+---
+
+### FINDING P12-06 — MED
+**File:** `__init__.py`, lines 986–988
+**Topic:** EVSI reads only `tool_result` threshold for uncertainty term; ignores multi-role threshold spread
+
+**Precise description:**
+
+```python
+current_threshold = (_SESSION_THRESHOLDS.get(session_id) or cfg.get("thresholds") or {}).get(
+    "tool_result", 0.55
+)
+```
+
+The uncertainty term `(1 - 2|t - 0.5|) * w_uncertainty` is computed from the `tool_result` threshold only. If `tool_result` has converged (e.g. `t=0.72`, high confidence, `uncertainty_term = (1-0.44)*0.02 = 0.011`) but `assistant` threshold is highly uncertain (`t=0.51`), the EVSI formula underestimates the value of Jev calls for assistant messages. The skip decision is made per-pass, not per-role, so it either skips all Jev or runs all Jev. Using the most uncertain role threshold would make the EVSI estimate conservative (more Jev calls). Using only `tool_result` is arbitrary.
+
+**Suggested fix:** Use the minimum `(1 - 2|t - 0.5|)` across all active roles (i.e., the role with the highest uncertainty):
+```python
+_thresholds = (_SESSION_THRESHOLDS.get(session_id) or cfg.get("thresholds") or {})
+uncertainty_term = max(
+    (1.0 - 2.0 * abs(_thresholds.get(r, 0.55) - 0.5)) * w_uncertainty
+    for r in ("tool_result", "assistant", "user")
+)
+```
+
+---
+
+### FINDING P12-07 — MED
+**File:** `__init__.py`, lines 1246–1258 (bottom-tier demote loop)
+**Topic:** Bottom-tier FTRL update uses normalised RR score (`norm`) which is 0.0 when `p33 == p67` (all-same edge case)
+
+**Precise description:**
+
+When `all_same = True` (line 1085), all scoreable candidates go to `middle_idx`. The bottom-tier demote_idx loop at line 1246 iterates over `demote_idx`, which in the all-same case consists only of messages that were already in `demote_idx` before middle processing (i.e., from prior-pass carryover, if any). But more critically: when `p33 == p67`, the norm formula is:
+```python
+norm = max(0.0, min(1.0, (rr - p33) / max(p67 - p33, 0.01)))
+```
+The `max(p67 - p33, 0.01)` guard prevents division by zero, but when `p33 == p67` (all_same), **norm is computed as `(rr - p33) / 0.01`**, which is a large positive number for `rr > p33` → clamped to 1.0, or a large negative for `rr < p33` → clamped to 0.0.
+
+The same guard applies in the retain_idx loop (line 1270) and middle-tier fallback (line 1218). The result is that in the all-same case, the normalised score sent to FTRL is either 0.0 or 1.0 (binary), not the actual relevance estimate. FTRL is fed a bimodal distribution regardless of the actual Jev or RR scores. This distorts threshold convergence.
+
+**Suggested fix:** When `all_same`, pass the raw RR score to `_record_decision` directly (clamped to [0,1]) rather than the degenerate norm:
+```python
+if all_same:
+    norm = max(0.0, min(1.0, rr))
+else:
+    norm = max(0.0, min(1.0, (rr - p33) / max(p67 - p33, 0.01)))
+```
+
+---
+
+### FINDING P12-08 — MED
+**File:** `confidence_tracker.py`, lines 216–220
+**Topic:** EMA series uses labeled predictions only when labels exist, but drift window references may index unlabeled-record positions
+
+**Precise description:**
+
+```python
+if labeled_pairs:
+    labeled_predictions = [p for p, _ in labeled_pairs]
+    ema_vals = ema_series(labeled_predictions, effective_alpha)
+else:
+    ema_vals = ema_series(predictions, effective_alpha)
+```
+
+`detect_drift` is then called with `ema_vals` (derived from `labeled_predictions`, length = `len(labeled_pairs)`) and `window = DEFAULT_WINDOW = 20`. The `ema_window_start` field at line 254 indexes `ema_vals[-min(window, len(ema_vals))]`.
+
+**The bug:** `drift_delta` at line 256 is `round(delta, 4)` from `detect_drift`. But `delta = recent[-1] - recent[0]` where `recent = ema_vals[-min(window, len(ema_vals)):]`. If `len(labeled_pairs) < window` (fewer than 20 labeled records), `recent` covers all labeled records, which may be a very short window (3–5 items). The drift threshold of 0.15 over a 3-item window is much easier to trigger than over 20 items — **the effective window shrinks silently with label density, generating false drift alarms**.
+
+More precisely: pre-F02 logs (no `actual_outcome` field) produce unlabeled records. A tool with 50 raw records but only 5 labeled will have an EMA over 5 points. An EMA drop of 0.15 over 5 steps is very common at startup (initialization bias from `values[0]` as the EMA seed).
+
+**Suggested fix:** Add a minimum-label guard:
+```python
+if labeled_pairs and len(labeled_pairs) >= max(5, window // 4):
+    ...
+else:
+    ema_vals = ema_series(predictions, effective_alpha)
+    # Note: drift detection less reliable without labels
+```
+Or document/warn when `len(labeled_pairs) < window`.
+
+---
+
+### FINDING P12-09 — LOW
+**File:** `gate_audit.py`, lines 58–59
+**Topic:** PRIOR_BETA label says "Jeffreys uninformative for binomial" — factually wrong
+
+**Precise description:**
+
+```python
+PRIOR_ALPHA = 1.0   # Beta(1,1) uniform prior (Jeffreys uninformative for binomial)
+PRIOR_BETA = 1.0
+```
+
+The Jeffreys prior for the binomial is Beta(0.5, 0.5) (Jeffreys 1946), not Beta(1,1). Beta(1,1) is the **uniform prior** (Laplace). This is a documentation error; the actual prior used (Beta(1,1)) is fine, just mislabelled. A reader following the comment to verify the theoretical claim will find a contradiction with BDA3 §2.4 and Jeffreys (1946).
+
+**Suggested fix:** Change comment to:
+```python
+PRIOR_ALPHA = 1.0   # Beta(1,1) uniform (Laplace) prior — not Jeffreys; Jeffreys is Beta(0.5,0.5)
+PRIOR_BETA = 1.0
+```
+
+---
+
+### FINDING P12-10 — LOW
+**File:** `lyapunov_monitor.py`, lines 107–113
+**Topic:** Oscillation counter never decrements — a V=0→N event followed by descent does not reset `_oscillation`
+
+**Precise description:**
+
+```python
+if v_prev == 0.0:
+    self._oscillation += 1
+    if self._oscillation >= 2:
+        self._stable = False
+        logger.warning(...)
+```
+
+`_oscillation` is only reset in the convergence branches (lines 94 and 98). In the scenario V = 0→N→5→4→3→0 (healthy convergence after an ascent from 0), `_oscillation` increments to 1 on the first ascent (0→N), then resets to 0 on the final convergence (→0). This is correct for the 2-ascent trigger.
+
+But in the scenario V = 0→N→0→5→0 (three distinct ascent–descent cycles, with the monitor called across two separate pruning runs sharing the same instance), `_oscillation` reaches 2 on the second ascent-from-zero, marks `_stable=False`, and never recovers even if the third descent correctly converges. `is_stable()` returns False permanently for the lifetime of the monitor instance even after genuine convergence.
+
+However, the docstring says "Call it with the current retained-message count at each loop iteration" — the monitor is per-loop, not per-session. In practice it is created fresh each call (`lyapunov_monitor(...)`) in the prune loop. So the oscillation persists only within one loop invocation, and a reset-to-zero on convergence line 94/98 would clear it. But if the pruning loop emits V=0→N→0→N (a real oscillation), `_stable` is correctly False forever — which is the desired alarm behaviour. **No bug, but documentation should clarify the monitor is a per-invocation object.**
+
+This is LOW severity / documentation gap.
+
+---
+
+### FINDING P12-11 — MED
+**File:** `__init__.py`, lines 538–593 (`_write_calibration_event`)
+**Topic:** `_CALIBRATION_LOG_LOCK` and `_THRESHOLDS_LOCK` are acquired sequentially with no consistent ordering — potential deadlock
+
+**Precise description:**
+
+In `_write_calibration_event` (lines 581–591):
+```python
+with _CALIBRATION_LOG_LOCK:           # lock A
+    with _CALIBRATION_LOG.open(...):
+        fh.write(...)
+with _THRESHOLDS_LOCK:                # lock B (acquired AFTER releasing A)
+    ...
+```
+
+In `_beta_posterior_threshold` (lines 697–747):
+```python
+with _THRESHOLDS_LOCK:                # lock B
+    ...  (fast-path read)
+# ... file scan (no lock) ...
+with _THRESHOLDS_LOCK:                # lock B (re-check under lock)
+    ...
+```
+
+In `_relevance_gated_prune` (line 981):
+```python
+with _THRESHOLDS_LOCK:                # lock B
+    ...EVSI read...
+```
+
+These are all B-then-nothing or A-then-nothing or B-alone. There is no A-inside-B or B-inside-A nesting. **So no deadlock currently exists.**
+
+**HOWEVER:** `_update_threshold` (line 893) acquires `_THRESHOLDS_LOCK` alone. `_get_thresholds` (line 650) acquires `_THRESHOLDS_LOCK` twice (lines 625 and 660) — both bare acquisitions. The `_apply_js_shrinkage` (line 788) acquires `_THRESHOLDS_LOCK`. All of these are correctly single-lock acquisitions.
+
+The sequential A → B pattern in `_write_calibration_event` is safe only because nothing acquires B → A. But the comment at line 581 does not document this invariant. A future developer adding a feature that acquires `_CALIBRATION_LOG_LOCK` while holding `_THRESHOLDS_LOCK` would introduce a deadlock.
+
+**Suggested fix (LOW severity, document only):** Add a module-level comment:
+```python
+# Lock ordering invariant (to prevent deadlock):
+# _CALIBRATION_LOG_LOCK must ALWAYS be acquired BEFORE _THRESHOLDS_LOCK when both are needed.
+# _PATCHED_LOCK is independent and must never be held while acquiring either of the above.
+```
+
+---
+
+## Summary Table
+
+| ID | Severity | File | Lines | Issue |
+|----|----------|------|-------|-------|
+| P12-01 | MED | `__init__.py` | 697–747 | TOCTOU seed discards in-memory events not yet in file; no double-count but silent data loss on write failure |
+| P12-02 | **HIGH** | `__init__.py` | 1009–1015 | EVSI floor cliff: at exactly `total_seen==n_min_passes`, floor drops off; skip fires immediately with `p_middle=0` |
+| P12-03 | **HIGH** | `__init__.py` | 1297–1304 | JS all-3-roles guard: "user" is structurally never added to `_roles_updated_this_pass`; JS shrinkage never fires — complete regression from 2-role guard |
+| P12-04 | MED | `calibration_loop.py` | 429–443 | `force_refit=True` with N<10 (NaN ECE) writes a degenerate calibration map without error |
+| P12-05 | LOW | `calibration_loop.py` | 179 | Unused `i_s` loop variable in `_pav_stack` |
+| P12-06 | MED | `__init__.py` | 986–988 | EVSI uncertainty term uses only `tool_result` threshold; ignores more-uncertain `assistant`/`user` roles |
+| P12-07 | MED | `__init__.py` | 1246–1278 | All-same edge case (`p33==p67`): FTRL fed binary {0,1} proxy rather than actual scores |
+| P12-08 | MED | `confidence_tracker.py` | 216–220 | EMA drift window shrinks silently with label density; false drift alarms with sparse labels |
+| P12-09 | LOW | `gate_audit.py` | 58–59 | Comment says Beta(1,1) is Jeffreys prior — factually wrong; it is the Laplace uniform prior |
+| P12-10 | LOW | `lyapunov_monitor.py` | 107–113 | `_oscillation` counter not documented as per-invocation; no bug but misleading |
+| P12-11 | LOW | `__init__.py` | 538–593 | Lock ordering invariant (A→B) undocumented; future edits risk deadlock |
+
+**P12-02 and P12-03 are the critical findings.** P12-03 in particular is a complete silent regression: JS shrinkage compiles, runs, logs nothing unusual, but the JS condition is unreachable. P12-02 is a step-function discontinuity at the bootstrap boundary that silences Jev on the exact pass where bootstrap ends.

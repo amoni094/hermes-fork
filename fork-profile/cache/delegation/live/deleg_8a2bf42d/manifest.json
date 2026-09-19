@@ -1,0 +1,24 @@
+{
+  "delegation_id": "deleg_8a2bf42d",
+  "started": "2026-09-16 16:55:01",
+  "task_count": 2,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a cold adversarial reviewer for the Denuto legal-tech AI repo. Be maximally skeptical — find real bugs, incorrect math, violated theory, wrong citations, and misleading results. Do NOT trust the implementation author's comments.\n\nRepo: /tmp/hello_agent, branch: feature/theory-grounded-research\nFocus files (all changed in commit bb9d0a3):\n\n1. src/pipeline/consistency_scorer.py — vote-anchor contract fix\n2. src/eval/conformal_abstention.py — empty-calibration tau=-inf fix\n3. src/aimd.py — ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_8a2bf42d/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "You are a cold adversarial reviewer for the Denuto legal-tech AI repo. Be maximally skeptical — find real bugs, incorrect math, violated theory, wrong citations, and misleading results.\n\nRepo: /tmp/hello_agent, branch: feature/theory-grounded-research\nFocus files (all changed in commit bb9d0a3):\n\n1. src/feedback/analysis.py — W1 unit fix (remove value_range multiplier) + raw-sample cohort fix\n2. src/pipeline/knowledge_graph.py — BFS mark-on-dequeue fix\n3. src/reasoning/causal_engine.py — z_and_d",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_8a2bf42d/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-16 17:04:37"
+}

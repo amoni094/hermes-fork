@@ -1,0 +1,74 @@
+=== Hermes subagent live transcript ===
+delegation: deleg_255ab203   task: 0
+goal: Implement Sweep-36 HIGH finding batch A for Hermes Agent. Read each target skill/file, then patch it with the specified content. Do NOT rubber-stamp — verify each patch lands cleanly. FINDING 1: arXiv:2609.05339 — Memory Portability on Model Upgrade Signal: KG-fixed memory transfers reliably across model upgrades (±0.002 accuracy delta); compressed NOTES degrade 9-13pp; RAG degrades from retrieval failure (81% of deficit). Always retain raw source histories alongside summaries. Direction-specifi …(+3420 chars)
+started: 2026-09-15 12:38:56
+(append-only; streams while the subagent runs — tail -f me)
+========================================
+12:38:56 user     | kickoff: Implement Sweep-36 HIGH finding batch A for Hermes Agent. Read each target skill/file, then patch it with the specified content. Do NOT rubber-stamp — verify each patch lands cleanly. FINDING 1: arXiv:2609.05339 — Memory Portability on Model Upgrade Signal: KG-fixed memory transfers reliably across model upgrades (±0.002 accuracy delta); compressed NOTES degrade 9-13pp; RAG degrades from retrieval failure (81% of deficit). Always retain raw source histories alongside summaries. Direction-specifi …(+3420 chars) | context: Hermes fork: ~/.hermes/hermes-fork/ branch feature/adaptive-compression-plugin-api. Default skills: ~/.hermes/skills/. Fork profile skills: ~/.hermes/profiles/fork/skills/. Scripts: ~/.hermes/scripts/. Use skill_manage for skill patches, patch/write_file for scripts. Check if a fork profile copy of a skill exists before patching the default.
+12:38:57 start    | Implement Sweep-36 HIGH finding batch A for Hermes Agent. Read each target skill/file, then patch it with the specified content. Do NOT rubber-stamp — verify each patch lands cleanly. FINDING 1: arXiv:2609.05339 — Memory Portability on Model Upgrade Signal: KG-fixed memory transfers reliably across model upgrades (±0.002 accuracy delta); compressed NOTES degrade 9-13pp; RAG degrades from retrieval failure (81% of deficit). Always retain raw source histories alongside summaries. Direction-specifi …(+3420 chars)
+12:39:05 think    | I'll read all target files first, then patch them systematically.
+12:39:05 assistant| I'll read all target files first, then patch them systematically.
+12:39:05 tool     | -> search_files(hermes-memory-surface-selection)
+12:39:05 tool     | -> search_files(hermes-context-hygiene)
+12:39:05 tool     | -> search_files(l1-extract.py)
+12:39:05 result   | search_files ok 0.3s: {"total_count": 0}
+12:39:05 result   | search_files ok 0.4s: {"total_count": 0}
+12:39:05 result   | search_files ok 0.4s: {"total_count": 1, "files": ["/var/home/rainbow/.hermes/scripts/l1-extract.py"]}
+12:39:10 think    | Files not found by name search — let me locate them directly:
+12:39:10 assistant| Files not found by name search — let me locate them directly:
+12:39:10 tool     | -> search_files(SKILL.md)
+12:39:10 tool     | -> search_files(SKILL.md)
+12:39:10 tool     | -> read_file(l1-extract.py)
+12:39:10 result   | search_files ok 0.1s: {"total_count": 51, "files": ["/var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-cron-and-agents/SKILL.md", "/var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-observability-and-task-ledger/SKILL.md", "/var/home/rainbow/.hermes/skills/autonomous-ai-agents/dispatching-parallel-agents/SKILL.md", "/var/home/rainbow/.hermes/skills/autonomous-ai-agents/opencode/SKILL.md", "/var/hom …(+4286 chars)
+12:39:10 result   | search_files ok 0.0s: {"total_count": 0}
+12:39:10 result   | read_file ok 0.0s: {"content": "1|#!/usr/bin/env python3\n2|\"\"\"l1-extract.py — lockfile wrapper + bytecode restore.\n3|\n4|The original 662-line source (28631 bytes, 2026-09-07 05:26) was zeroed by a\n5|failed patch-tool write on this root-owned path. Runtime is restored from\n6|__pycache__/l1-extract.cpython-314.pyc (same mtime as the wiped source).\n7|A copy also lives at scripts/references/l1-extract.cpython-3 …(+2238 chars)
+12:39:14 think    | Good. Now read the two target skill files:
+12:39:14 assistant| Good. Now read the two target skill files:
+12:39:14 tool     | -> read_file(SKILL.md)
+12:39:14 tool     | -> read_file(SKILL.md)
+12:39:15 result   | read_file ok 0.2s: {"content": "1|---\n2|name: hermes-memory-surface-selection\n3|version: 3.2.0\n4|related_skills:\n5| - agent-memory-consolidation\n6| - graphiti-mcp-setup\n7| - hermes-context-hygiene\n8| - obsidian-research-ingestion\n9| - hermes-memory-capture-and-bridge\n10|triggers:\n11| - Deciding where information should live or which retrieval surface to query\n12| - Choosing between memory tool, session_se …(+96670 chars)
+12:39:15 result   | read_file ok 0.1s: {"content": "1|---\n2|name: hermes-context-hygiene\n3|triggers:\n4| - session has become tool-heavy or the context window is bloating with accumulated tool output\n5| - user complains about slowdowns, missed compression, or prompt bloat in a long session\n6| - about to run broad searches, session-history recovery, or large documentation/patch passes\n7| - context compression is failing or not trig …(+44277 chars)
+12:39:19 think    | Good. Now I have full context. Let me check if there's a fork copy of the contex
+12:39:20 assistant| Good. Now I have full context. Let me check if there's a fork copy of the context-hygiene skill, then make all patches:
+12:39:20 tool     | -> search_files(context-hygiene)
+12:39:20 result   | search_files ok 0.0s: {"total_count": 0}
+12:39:36 think    | No fork copy — patch the default. Now apply all patches:
+12:39:36 assistant| No fork copy — patch the default. Now apply all patches: **Patch 1A: hermes-memory-surface-selection — Memory Portability section**
+12:39:36 tool     | -> skill_manage({'operations': [{'name': 'hermes-memory-surface-selection', 'action': 'patch', 'old_string': '## HyMem Four-Layer Isolation (arXiv:2608.15703)', 'new_string': '## Memory Portability on Model Upgrade (arXiv:2609.05339)\n\ …(+1867 chars))
+12:39:36 result   | skill_manage ERROR 0.0s: {"success": false, "error": "operations[0] (patch on 'hermes-memory-surface-selection') failed: Skill 'hermes-memory-surface-selection' not found in active profile 'fork'. A skill by that name exists in profile 'default' (/var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-memory-surface-selection). To edit it, switch profiles (`hermes -p default`) or edit the file directly (file tools /  …(+111 chars)
+12:39:44 think    | The skill is in the default profile. I'll patch the files directly:
+12:39:44 assistant| The skill is in the default profile. I'll patch the files directly:
+12:39:44 tool     | -> patch(/var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-memory-surface-selection/SKILL.md)
+12:39:44 result   | patch ok 0.2s: {"success": true, "diff": "--- a//var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-memory-surface-selection/SKILL.md\n+++ b//var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-memory-surface-selection/SKILL.md\n@@ -453,6 +453,21 @@\n \n ---\n \n+## Memory Portability on Model Upgrade (arXiv:2609.05339)\n+\n+KG-fixed memory transfers reliably across model upgrades (±0.002 accura …(+2167 chars)
+12:39:48 think    | **Patch 1B (Finding 1) + 2A (Finding 2): HyMem section into hermes-memory-surfac
+12:39:48 assistant| **Patch 1B (Finding 1) + 2A (Finding 2): HyMem section into hermes-memory-surface-selection** First check if a HyMem section already exists:
+12:39:48 tool     | -> search_files(HyMem)
+12:39:49 result   | search_files ok 0.0s: {"total_count": 0}
+12:40:05 think    | No existing HyMem section. Add it now — I'll append it before the "Priority and
+12:40:05 assistant| No existing HyMem section. Add it now — I'll append it before the "Priority and trust" section which is a good anchor point:
+12:40:05 tool     | -> patch(/var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-memory-surface-selection/SKILL.md)
+12:40:05 result   | patch ok 0.1s: {"success": true, "diff": "--- a//var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-memory-surface-selection/SKILL.md\n+++ b//var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-memory-surface-selection/SKILL.md\n@@ -889,6 +889,35 @@\n \"never stored\" / \"lacking bridging knowledge\" / \"stored but never surfaced\". The failure is in the\n query-conditioned retrieval interface,  …(+2505 chars)
+12:40:18 think    | **Patch 2B: hermes-context-hygiene — Context Layer Isolation (HyMem) section**
+12:40:18 assistant| **Patch 2B: hermes-context-hygiene — Context Layer Isolation (HyMem) section**
+12:40:18 tool     | -> patch(/var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-context-hygiene/SKILL.md)
+12:40:18 result   | patch ok 0.2s: {"success": true, "diff": "--- a//var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-context-hygiene/SKILL.md\n+++ b//var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-context-hygiene/SKILL.md\n@@ -535,6 +535,30 @@\n **Pitfall**: changing repo files only, then forgetting already-running Hermes processes still serve old in-memory code and old locale state.\n **Response hygiene**: …(+2526 chars)
+12:40:22 think    | All three skill patches landed. Now handle Finding 1B — the l1-extract.py script
+12:40:22 assistant| All three skill patches landed. Now handle Finding 1B — the l1-extract.py script check:
+12:40:22 tool     | -> search_files(source_text)
+12:40:22 result   | search_files ok 0.0s: {"total_count": 0}
+12:40:31 think    | The `l1-extract.py` is a **wrapper stub** that loads actual logic from a `.pyc`
+12:40:31 assistant| The `l1-extract.py` is a **wrapper stub** that loads actual logic from a `.pyc` bytecode file — the real 662-line source was lost (zeroed by a prior failed patch) and only the bytecode backup exists. The wrapper has no fact-writing logic; it just dispatches to `_load().main()`. Patching it for `source_text` would be unsafe and ineffective since the actual memory-writing code is in the bytecode. Now verify all patches landed with a grep check:
+12:40:31 tool     | -> search_files(arXiv:2609\.05339)
+12:40:31 tool     | -> search_files(arXiv:2608\.15703)
+12:40:31 tool     | -> search_files(arXiv:2608\.15703)
+12:40:31 result   | search_files ok 0.1s: {"total_count": 2, "matches": [{"path": "/var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-memory-surface-selection/SKILL.md", "line": 456, "content": "## Memory Portability on Model Upgrade (arXiv:2609.05339)"}, {"path": "/var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-memory-surface-selection/SKILL.md", "line": 467, "content": "Reference: arXiv:2609.05339, \"Memory Portab …(+35 chars)
+12:40:31 result   | search_files ok 0.1s: {"total_count": 2, "matches": [{"path": "/var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-memory-surface-selection/SKILL.md", "line": 892, "content": "## HyMem Four-Layer Isolation (arXiv:2608.15703)"}, {"path": "/var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-memory-surface-selection/SKILL.md", "line": 917, "content": "Reference: arXiv:2608.15703, \"HyMem: Hierarchical Me …(+41 chars)
+12:40:31 result   | search_files ok 0.1s: {"total_count": 2, "matches": [{"path": "/var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-context-hygiene/SKILL.md", "line": 538, "content": "## Context Layer Isolation (HyMem, arXiv:2608.15703)"}, {"path": "/var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-context-hygiene/SKILL.md", "line": 558, "content": "Reference: arXiv:2608.15703, \"HyMem: Hierarchical Memory for Long- …(+27 chars)
+12:40:35 think    | All three sections verified. Final line-count check on modified files:
+12:40:35 assistant| All three sections verified. Final line-count check on modified files:
+12:40:35 tool     | -> execute_code(from hermes_tools import terminal r1 = terminal('wc -l /var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-memory-surface-selection/SKILL.md') r2 = terminal('wc -l /var/home/rainbow/.hermes/skills/autonomous-ai- …(+159 chars))
+12:40:36 result   | execute_code ok 0.5s: {"status": "success", "output": "hermes-memory-surface-selection: 1436 /var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-memory-surface-selection/SKILL.md\nhermes-context-hygiene: 689 /var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-context-hygiene/SKILL.md\n", "exit_code": 0, "tool_calls_made": 2, "duration_seconds": 0.51, "kernel": {"mode": "session", "reused": false, "exe …(+151 chars)
+12:40:48 think    | All patches verified. Here's the summary:
+12:40:48 assistant| All patches verified. Here's the summary: --- ## What was done **Finding 1A — Memory Portability (arXiv:2609.05339):** - Added `## Memory Portability on Model Upgrade (arXiv:2609.05339)` section to `hermes-memory-surface-selection/SKILL.md` at line 456 - 6 rules: KG-fixed over NOTES, source_text field, bidirectional upgrade testing, model_version Graphiti tag, NOTES volatile treatment, re-embed after model swap **Finding 1B — l1-extract.py script:** - **Not patched** — `l1-extract.py` is a stub wrapper that loads logic from bytecode (`l1-extract.cpython-314.pyc.bak`); the original 662-line sou …(+1035 chars)
+12:40:48 final    | status=completed duration=111.06s summary: All patches verified. Here's the summary: --- ## What was done **Finding 1A — Memory Portability (arXiv:2609.05339):** - Added `## Memory Portability on Model Upgrade (arXiv:2609.05339)` section to `hermes-memory-surface-selection/SKILL.md` at line 456 - 6 rules: KG-fixed over NOTES, source_text field, bidirectional upgrade testing, model_version Graphiti tag, NOTES volatile treatment, re-embed af …(+96 chars)
+12:58:22 final    | end status=completed exit_reason=completed

@@ -1,0 +1,24 @@
+{
+  "delegation_id": "deleg_9654951c",
+  "started": "2026-09-16 23:13:51",
+  "task_count": 2,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Cold adversarial review of a Hermes wiring sprint. Review every modified script and skill for correctness, integration errors, wiring gaps, and dead code. Also check wiring: are new functions actually called from the live path, or just defined?\n\nSCRIPTS TO REVIEW (all modified in this sprint):\n1. /var/home/rainbow/.hermes/scripts/unified-recall.py - UCB1 bandit weighting added\n2. /var/home/rainbow/.hermes/scripts/memory-query-router.py - FTRL routing log added\n3. /var/home/rainbow/.hermes/script",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_9654951c/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Coherence and wiring audit: verify that all new scripts and cron jobs are correctly wired together and that there are no inter-component conflicts from the sprint.\n\nCHECK 1 - CRON WIRING:\nRead /var/home/rainbow/.hermes/cron/jobs.json.\nVerify:\n- 'calibration-threshold-updater-0001' exists with schedule '0 4 * * *' and script 'calibration-threshold-updater.py'\n- 'context-pressure-monitor-0001' exists with schedule '*/30 * * * *' and script 'context-pressure-reader.py'\n- 'shadow-gate-0001' still ex",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_9654951c/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-16 23:28:05"
+}

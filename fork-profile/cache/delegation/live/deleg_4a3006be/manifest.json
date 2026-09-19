@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_4a3006be",
+  "started": "2026-09-15 12:10:47",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Adversarial review of 16 Hermes Agent improvements implemented in this session. For each item, read the actual files and verify correctness, wiring, and coherence. Flag genuine problems with evidence. Do not rubber-stamp — find real issues or explain why they don't exist.",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_4a3006be/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 12:14:04"
+}

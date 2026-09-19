@@ -1,0 +1,14 @@
+{
+  "id": "31376e8b",
+  "subsystem": "memory",
+  "action": "replace",
+  "summary": "background review consolidation (replace on user): - replace: Desktop: DESKTOP-PH4F2DK Win11 100.88.247.70(TS)/192.168.0.181. SSH admin/Gunn1967. Pixel 8a: Telstra 5G; DNS Cloudflare DoT. SERVER01 LAN",
+  "origin": "background_review",
+  "created_at": 1789812729.7638226,
+  "payload": {
+    "action": "replace",
+    "target": "user",
+    "content": "Desktop: DESKTOP-PH4F2DK Win11 100.88.247.70(TS)/192.168.0.181. SSH admin/Gunn1967. Pixel 8a: Telstra 5G; DNS Cloudflare DoT. SERVER01 LAN (192.168.1.49): Plex+NordVPN. Religion KG: 116 texts; amoni094/religion-knowledge-graph.\n§\nGalina (grandmother): Ubuntu 26.04 LXQt TV media PC, low-tech. Natasha (mother): DESKTOP-NAIHLES Win11, i5-9600K, GTX 1660, 16GB RAM, ASUS ROG STRIX Z390-E, Tailscale 100.121.155.11; SSH as Administrator with ~/.ssh/id_ed25519; router admin/Telstra (Telstra LH1000 192.168.0.1); managed remotely. Will (Natasha's partner): iPad MAC B6:3F:E9:95:1C:B7 (randomised), IP 192.168.0.58.",
+    "old_text": "Desktop: DESKTOP-PH4F2DK Win11 100.88.247.70(TS)/192.168.0.181. SSH admin/Gunn1967. Pixel 8a: Telstra 5G; DNS Cloudflare DoT. SERVER01 LAN (192.168.1.49): Plex+NordVPN. Religion KG: 116 texts; amoni094/religion-knowledge-graph.\n§\nGalina (grandmother): Ubuntu 26.04 LXQt TV media PC, low-tech. Natasha (mother): DESKTOP-NAIHLES Win, Tailscale 100.121.155.11; managed remotely."
+  }
+}

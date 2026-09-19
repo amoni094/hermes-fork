@@ -1,0 +1,45 @@
+{
+  "delegation_id": "deleg_b7556f1f",
+  "started": "2026-09-19 19:14:41",
+  "task_count": 5,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Wire the 5 disconnected skill routers into skill-router-index.py as a post-hoc ensemble layer, and replace dual-backend-memory-fuser.py stubs with real backend calls.\n\nSpec Part A — skill router ensemble:\n1. Read ~/.hermes/scripts/skill-router-index.py lines 1-60 and 390-440 (route() function added in a prior wave).\n2. The route() function currently returns BM25+lattice results. Add an ensemble step AFTER the existing ranking: for queries where top BM25 score < 0.4 (low-confidence), call each of",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_b7556f1f/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Fix H-I8: improvement_governance.py is never called before HIGH-risk agent writes. Wire a governance pre-check into tool_guardrails.py.\n\nSpec:\n1. Read ~/.hermes/hermes-fork/agent/tool_guardrails.py lines 1-80. Understand the structure — where are HIGH-risk tool checks performed?\n2. Read lines 300-400 to find the pre-call hook or the main guard function.\n3. Read ~/.hermes/scripts/improvement_governance.py lines 1-50 to understand the propose CLI args.\n4. The fix: In tool_guardrails.py, find the f",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_b7556f1f/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Fix l1-extract.py source restoration and wire H2ObstructionLedger into the l1 pipeline.\n\nSpec Part A — l1-extract.py source restore:\n1. Read ~/.hermes/scripts/l1-extract.py fully (it is a stub pointing at bytecode).\n2. Read ~/.hermes/scripts/__pycache__/ to find the .pyc file named l1-extract.cpython-*.pyc.\n3. Decompile the .pyc to recover the source: use `python3 -c \"import dis, marshal, struct; ...\"` or `python3 -m dis` to extract what the bytecode does. Specifically: read the pyc header, mars",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_b7556f1f/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Fix the focus_compress.py phantom-tools gap and clean up dead config gate documentation. Also wire focus_compress.py prompt injection into pre-compact-annotate.py.\n\nSpec Part A — focus_compress.py wiring:\n1. Read ~/.hermes/scripts/focus_compress.py lines 1-50 and 180-220 (the --mode system output).\n2. Read ~/.hermes/scripts/pre-compact-annotate.py to understand its annotation output format.\n3. The fix: in pre-compact-annotate.py, add a call to focus_compress.py --mode reminder after the existing",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_b7556f1f/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 4,
+      "goal": "Adversarial cold pass on the structural gap fixes from this wave. Read each file fresh after the sibling subagents complete. Be hostile.\n\nWait 120 seconds before starting your file reads to allow sibling subagents to finish writing.\n\nFiles to review:\n1. ~/.hermes/scripts/skill-router-index.py — does the ensemble layer actually call the 5 routers? Does each subprocess call have timeout=? Is the fail-open try/except in place? Would a missing router binary crash route()?\n2. ~/.hermes/scripts/dual-b",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_b7556f1f/task-4.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 19:19:18"
+}

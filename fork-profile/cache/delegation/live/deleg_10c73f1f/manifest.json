@@ -1,0 +1,24 @@
+{
+  "delegation_id": "deleg_10c73f1f",
+  "started": "2026-09-19 15:22:39",
+  "task_count": 2,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "COLD adversarial code review of PR 2073 (feat(eval): 100-agreement tabular synth v1 gold set) in /tmp/hello_agent.\n\nBranch: pr-2073 (origin/cursor/tabular-synth-gold-100-87d3). Base: main.\n\nScope (new/changed source files only — not fixture JSON):\n- src/eval/bulk_table_score.py (SYNTH_V1_PACKS, SYNTH_V1_JOBS, write_synth_html parameterisation, --synth-v1-html CLI arg, main() flag logic)\n- tests/eval/test_tabular_synth_v1.py (new file — 170 lines)\n- tests/eval/test_bulk_table_score.py (changes on",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_10c73f1f/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "COLD adversarial code review of PR 2072 (feat(review): Jev extraction cascade Choice hop) in /tmp/hello_agent.\n\nBranch: pr-2072 (origin/cursor/jev-extraction-cascade-d02d). Base: main.\n\nScope (source changes only):\n- src/eval/extraction_cascade_score.py: noul→Choice migration (map_noul_to_status→map_choice_to_status, CHOICES frozenset, CHOICE_ACCEPT=0.8, map_choice_confidence_band)\n- src/eval/extraction_cascade_compare.py: validate_synth_pack, _validate_named_pack, --predictions now optional, sc",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_10c73f1f/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 15:28:41"
+}

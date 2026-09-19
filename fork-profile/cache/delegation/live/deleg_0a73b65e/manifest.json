@@ -1,0 +1,38 @@
+{
+  "delegation_id": "deleg_0a73b65e",
+  "started": "2026-09-14 23:48:19",
+  "task_count": 4,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Read every book corpus skill SKILL.md for the math/CS corpus (all files listed below) and extract: (1) every theorem/result that is currently captured, (2) whether it has a concrete Hermes application wired in (skill patch, config, code), (3) gaps where the theory is described but no application exists yet. Then read the session-modified skills (also listed below) and identify where theory from the books COULD strengthen or ground those patches. Output a JSON file at /tmp/corpus-audit-theory.jso",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_0a73b65e/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Generate new Hermes agent applications from the math/CS corpus books. Read these specific books/skills and derive concrete, implementable applications NOT currently in any Hermes skill:\n\nBooks to read:\n- /var/home/rainbow/books/control/astrom-murray-feedback-systems.pdf (read_file, first 300 lines for structure, then Ch 1-3 and Ch 10-11 on stability/feedback)\n- /var/home/rainbow/books/dynamical-systems/Nonlinear Dynamics and Chaos - With Applications to Physics, Biology, Chemistry, and Engineeri",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_0a73b65e/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Cohesion audit of all Hermes skills modified in the last 24 hours. For each skill file listed below, read it in full and check:\n1. Internal cohesion: do all sections serve the skill's stated trigger? Flag any section that belongs in a different skill.\n2. Cross-skill cohesion: does this skill duplicate rules already present in another skill without cross-referencing? Check against the skills listed as 'related_skills' in frontmatter.\n3. Wiring check: does the skill's trigger match when it would a",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_0a73b65e/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Cold adversarial review of all Hermes skills modified in the last 24 hours from the math/CS corpus optimization pass. Your job: find false claims, scope over-claims, contradictions, CDH detours, and unwired rules. You have NO prior context — read the files cold.\n\nRead these files in full:\n- /var/home/rainbow/.hermes/skills/superpowers/dispatching-parallel-agents/SKILL.md\n- /var/home/rainbow/.hermes/skills/autonomous-ai-agents/ralph-loops/SKILL.md\n- /var/home/rainbow/.hermes/skills/software-devel",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_0a73b65e/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 00:00:20"
+}

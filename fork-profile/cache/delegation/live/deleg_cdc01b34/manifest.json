@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_cdc01b34",
+  "started": "2026-09-18 23:17:14",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 13, Agent A). This is the saturation check: we stop when two consecutive passes find no HIGH or MED findings. Read every file IN FULL before writing a single finding.\n\nFiles:\n1. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py\n2. /var/home/rainbow/.hermes/scripts/calibration_loop.py\n3. /var/home/rainbow/.hermes/scripts/confidence_tracker.py\n4. /var/home/rainbow/.hermes/scripts/lyapunov_monitor.py\n\nFocus for Pass 13:\n- P12-02 use",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_cdc01b34/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 13, Agent B). This is the saturation check. Read every file IN FULL.\n\nFiles:\n1. /var/home/rainbow/.hermes/scripts/compaction_utils.py\n2. /var/home/rainbow/.hermes/scripts/segment_level_compactor.py\n3. /var/home/rainbow/.hermes/scripts/crystal_fidelity_tiers.py\n4. /var/home/rainbow/.hermes/scripts/occam_audit.py\n5. /var/home/rainbow/.hermes/scripts/proper_scoring.py\n6. /var/home/rainbow/.hermes/scripts/mdp_retention_policy.py\n7. /var/home/rainbow/.hermes/",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_cdc01b34/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "You are an INTEGRATION TESTER (Pass 13, Agent C).\n\nStep 1: Write /tmp/test_p13_regression.py covering:\n- V1: user structural freshness — simulate a session with NO user messages in retain_idx. Verify JS does NOT fire (_apply_js_shrinkage not called).\n- V2: user structural freshness — simulate a session WITH user messages in retain_idx (plus tool_result + assistant FTRL updates). Verify JS DOES fire.\n- V3: EVSI mature cliff — total_seen = n_min_passes + 1 = 6, p_middle=0, no floor. Verify evsi_la",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_cdc01b34/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-18 23:23:10"
+}

@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_578feb87",
+  "started": "2026-09-18 22:37:45",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 9, Agent A). Read every file listed below IN FULL before writing a single finding.\n\nFiles:\n1. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py\n2. /var/home/rainbow/.hermes/scripts/calibration_loop.py\n3. /var/home/rainbow/.hermes/scripts/confidence_tracker.py\n4. /var/home/rainbow/.hermes/scripts/gate_audit.py\n5. /var/home/rainbow/.hermes/scripts/proper_scoring.py\n6. /var/home/rainbow/.hermes/scripts/lyapunov_monitor.py\n\nFocus:\n- ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_578feb87/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 9, Agent B). Read every file listed below IN FULL before writing a single finding.\n\nFiles:\n1. /var/home/rainbow/.hermes/scripts/compaction_utils.py\n2. /var/home/rainbow/.hermes/scripts/segment_level_compactor.py\n3. /var/home/rainbow/.hermes/scripts/crystal_fidelity_tiers.py\n4. /var/home/rainbow/.hermes/scripts/cot_phase_scorer.py\n5. /var/home/rainbow/.hermes/scripts/kolmogorov_predicates.py\n6. /var/home/rainbow/.hermes/scripts/occam_audit.py\n7. /var/home",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_578feb87/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "You are a COLD INTEGRATION VERIFIER (Pass 9, Agent C).\n\nStep 1: Run ALL 12 existing test suites:\n  cd /tmp && for f in test_jev_final test_corpus_gaps test_wave2 test_wave2b test_gate_gaps test_deferred_fixes test_wave3_wiring test_p4_integration test_p5_regression test_p6_regression test_p7_regression test_p8_regression; do python3 ${f}.py 2>&1 | tail -2; done\n\nStep 2: Write /tmp/test_p9_regression.py covering:\n  V1: _apply_js_shrinkage k=3 -- with tool_result=0.55, assistant=0.90, user=0.70 --",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_578feb87/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-18 22:42:55"
+}

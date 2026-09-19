@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_cbe9c04a",
+  "started": "2026-09-15 15:51:05",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Apply 7 HIGH-severity cohesion audit fixes to Hermes skills. These are targeted patches — do not rewrite files wholesale.\n\n1. clrs-algorithms SKILL.md frontmatter description is wrong: currently says 'Use when implementing gradient descent or convex solvers' (that is Boyd). Fix to: 'Knowledge base from CLRS Introduction to Algorithms. Use when analyzing algorithm complexity, implementing classic algorithms (sorting, graphs, DP), or studying algorithm correctness proofs.' Path: find it with searc",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_cbe9c04a/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Fix 5 confirmed adversarial corpus findings in Hermes skills. These are targeted patches only — no wholesale rewrites.\n\nF-HCH-01 (HIGH): hermes-context-hygiene SKILL.md claims '/context /focus /diff /init are Hermes slash commands'. These are actually Claude Code CLI commands, not Hermes commands. Find and remove or correct this claim — replace with: 'Note: /context, /focus, /diff, /init are Claude Code CLI commands, not Hermes slash commands. Hermes slash commands are listed in hermes --help.'\n",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_cbe9c04a/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Apply 8 new theory-grounded applications to Hermes skills. These come from the corpus audit theory file. Apply each as a targeted patch (add a new named section to the relevant skill). Do NOT rewrite entire files.\n\n1. agent-runtime-loop-patterns: Add section '## Lyapunov Loop-Divergence Detector (Khalil Thm 4.1)'. Content: 'Map iteration error to V(x) = ||goal_metric[t] - goal_metric[t-1]||. If V is non-decreasing over 3 consecutive iterations AND absolute error is not shrinking (less than 1% re",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_cbe9c04a/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 15:55:27"
+}

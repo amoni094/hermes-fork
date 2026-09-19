@@ -1,0 +1,19 @@
+{
+  "id": "7dbb54b8",
+  "subsystem": "memory",
+  "action": "batch",
+  "summary": "background review consolidation (batch on memory): - replace: Aux: mistral-small for triage/titles (no reasoning_effort — 422 extra_forbidden). Compression+vision: haiku-4-5@anthropic. adversarial: gp",
+  "origin": "background_review",
+  "created_at": 1789803206.1305902,
+  "payload": {
+    "action": "batch",
+    "target": "memory",
+    "operations": [
+      {
+        "action": "replace",
+        "old_text": "Aux: mistral-small for triage/titles (no reasoning_effort — 422 extra_forbidden). Compression+vision: haiku-4-5@anthropic. adversarial: gpt-5.6-sol via openai-api only (NOT custom:openai). Routing skill updated 2026-08-30: 9-dim benchmark matrix; Grok-4.6 workers evidenced; devstral scaffolding-only; magistral-small for math.",
+        "content": "Aux: mistral-small for triage/titles (no reasoning_effort — 422 extra_forbidden). Compression+vision: haiku-4-5@anthropic. adversarial: gpt-5.6-sol via openai-api only (NOT custom:openai). Routing skill updated 2026-08-30: 9-dim benchmark matrix; Grok-4.6 workers evidenced; devstral scaffolding-only; magistral-small for math. NEVER use a local LLM or local embedding model."
+      }
+    ]
+  }
+}

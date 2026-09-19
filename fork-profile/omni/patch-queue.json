@@ -1,0 +1,22 @@
+{
+  "candidates": [
+    {
+      "name": "autonomous-food-retail-vending",
+      "category": "root",
+      "path": "/var/home/rainbow/.hermes/profiles/fork/skills/autonomous-food-retail-vending/SKILL.md",
+      "score": 0.286,
+      "weak_checks": [
+        "trigger_count",
+        "trigger_specificity",
+        "pitfall_count",
+        "step_concreteness",
+        "has_version"
+      ],
+      "trajectory": "Insufficient",
+      "score_history": [
+        0.286
+      ]
+    }
+  ],
+  "high_variance": []
+}

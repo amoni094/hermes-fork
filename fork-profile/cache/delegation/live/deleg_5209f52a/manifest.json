@@ -1,0 +1,45 @@
+{
+  "delegation_id": "deleg_5209f52a",
+  "started": "2026-09-19 18:14:30",
+  "task_count": 5,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Recursive bottleneck audit of the Hermes fork — DOMAIN: MEMORY LAYER. Your job is a cold adversarial read: find every bottleneck, dead wire, race condition, and gap. Write findings incrementally to /tmp/audit_memory.md (create skeleton first, append after each file). Do NOT apply any fixes.\n\nSurface to audit:\n  - ~/.hermes/scripts/unified-recall.py (1201 lines)\n  - ~/.hermes/scripts/memory-monad.py (928 lines)\n  - ~/.hermes/scripts/memory-query-router.py (492 lines)\n  - ~/.hermes/scripts/memory-",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_5209f52a/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Recursive bottleneck audit of the Hermes fork — DOMAIN: RUNTIME SCRIPTS (skill routing, cron, config, governance). Your job is a cold adversarial read: find every bottleneck, dead wire, race, and gap. Write findings incrementally to /tmp/audit_runtime.md (create skeleton first, append after each file).\n\nSurface to audit:\n  - ~/.hermes/profiles/fork/config.yaml (full)\n  - ~/.hermes/profiles/fork/cron/jobs.json (full — WARNING: this file may be malformed: check if it is a list or a dict with 'jobs",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_5209f52a/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Recursive bottleneck audit of the Hermes fork — DOMAIN: PLUGINS + AGENT CORE. Cold adversarial read. Write findings incrementally to /tmp/audit_plugins.md (skeleton first, append after each file).\n\nSurface to audit:\n  - ~/.hermes/profiles/fork/plugins/jev-compaction/__init__.py (1654 lines)\n  - ~/.hermes/profiles/fork/plugins/context-pressure-guard/__init__.py (166 lines)\n  - ~/.hermes/profiles/fork/plugins/tool-result-audit/__init__.py (165 lines)\n  - ~/.hermes/hermes-fork/agent/context_compres",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_5209f52a/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Recursive bottleneck audit of the Hermes fork — DOMAIN: RESEARCH PIPELINE + SCRIPTS (sweep, interpreters, monitors). Cold adversarial read. Write findings incrementally to /tmp/audit_research.md (skeleton first, append after each file).\n\nSurface to audit:\n  - ~/.hermes/scripts/hermes-research-sweep.py (1678 lines — paginate in chunks of 200)\n  - ~/.hermes/scripts/cs-research-sweep.py (426 lines)\n  - ~/.hermes/scripts/cs-paper-interpreter.py (619 lines)\n  - ~/.hermes/scripts/math-paper-interprete",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_5209f52a/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 4,
+      "goal": "Recursive bottleneck audit of the Hermes fork — DOMAIN: ARCHITECTURE + SKILLS + USER-FACING. Cold adversarial read. Write findings incrementally to /tmp/audit_arch.md (skeleton first, append after each file).\n\nSurface to audit:\n  - ~/.hermes/profiles/fork/ARCHITECTURE.md (full)\n  - ~/.hermes/profiles/fork/config.yaml (full — check ALL keys against ARCHITECTURE.md 'dead config' list)\n  - ~/.hermes/profiles/fork/skills/ (list all skills, read SKILL.md for each fork-local skill)\n  - ~/.hermes/skill",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_5209f52a/task-4.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 18:24:21"
+}

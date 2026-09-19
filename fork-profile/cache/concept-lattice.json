@@ -1,0 +1,86 @@
+{
+  "built_at": "2026-09-19T09:54:53.559792+00:00",
+  "n_facts": 39,
+  "n_clusters": 8,
+  "concepts": [
+    {
+      "intent": [
+        "C7"
+      ],
+      "support": 16,
+      "members": [
+        "Hermes Agent added skill-entropy and skill-mi subcommands to",
+        "Hermes Agent added skill-entropy and skill-mi subcommands to",
+        "Agent assigned TASK 3/3 to implement remaining 6 HIGH-priori",
+        "Agent is implementing Domain C: Skills/Memory consolidation ",
+        "Agent completed Task 3/3 on September 9, 2026: cold adversar",
+        "Agent detected concurrent write violation on agent-memory-co",
+        "llm-agent-memory-pipeline-research skill: Confirmed text-emb",
+        "Agent modified 6 scripts in this batch: working-memory.py (s",
+        "Agent completed Task 3/3: Cold adversarial review of 5 skill",
+        "Agent is implementing Domain C: Skills/Memory consolidation "
+      ]
+    },
+    {
+      "intent": [
+        "C0"
+      ],
+      "support": 7,
+      "members": [
+        "On September 9, 2026, Hermes Agent identified 5 priority act",
+        "On September 9, 2026, Hermes Agent was tasked with searching",
+        "Hermes Agent is implementing research findings from literatu",
+        "All 3 skills updated with trigger gaps fixed: harness-first-",
+        "Agent completed arXiv search task for papers (2025-2026) on ",
+        "Hermes Agent fixed trigger gaps by adding triggers to three ",
+        "Hermes Agent conducted a systematic literature sweep for pap"
+      ]
+    },
+    {
+      "intent": [
+        "C1"
+      ],
+      "support": 5,
+      "members": [
+        "On September 9, 2026, Hermes Agent reviewed research paper '",
+        "Agent reviewed research paper 'Agent Memory Distillation (AM",
+        "Agent implemented RRM (Reflective Experience Memory) Lifecyc",
+        "Agent verified 6 research papers on disk and applied finding",
+        "Agent reviewed paper (arXiv:2608.31057) 'Measure Before You "
+      ]
+    },
+    {
+      "intent": [
+        "C4"
+      ],
+      "support": 4,
+      "members": [
+        "Hermes Agent completed TASK 4/4: Deep research on AI agent m",
+        "Three script implementations were verified and deployed to l",
+        "Hermes Agent is implementing TEPA-inspired memory conflict g",
+        "Hermes Agent identified a MAJOR issue: orphan sentence in me"
+      ]
+    },
+    {
+      "intent": [
+        "C6"
+      ],
+      "support": 3,
+      "members": [
+        "5 remaining skills including agent-memory-consolidation (con",
+        "Agent extracted content to `references/skill-authoring-resea",
+        "Agent extracted reference material to `references/skill-auth"
+      ]
+    },
+    {
+      "intent": [
+        "C2"
+      ],
+      "support": 2,
+      "members": [
+        "Completed cold adversarial review of 5 research-implementati",
+        "A cold adversarial review task was completed: reviewer exami"
+      ]
+    }
+  ]
+}

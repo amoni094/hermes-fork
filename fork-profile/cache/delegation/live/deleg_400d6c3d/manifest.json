@@ -1,0 +1,38 @@
+{
+  "delegation_id": "deleg_400d6c3d",
+  "started": "2026-09-19 18:38:13",
+  "task_count": 4,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Wire the self-improvement spike pipeline: write a new script ~/.hermes/scripts/spike-queue-actuator.py that reads both cs-spike-queue.json and math-spike-queue.json and dispatches accepted SPIKE items as improvement proposals via improvement_governance.py CLI, then add it as a cron job.\n\nFull spec:\n1. Read ~/.hermes/scripts/cs-paper-interpreter.py lines 450-615 and ~/.hermes/scripts/math-paper-interpreter.py lines 960-1010 to understand the spike queue JSON schema.\n2. Read ~/.hermes/scripts/impr",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_400d6c3d/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Wire calibration_loop.py and confidence_tracker.py outputs into their consumers: both files write output that nothing reads. Fix both.\n\nSpec:\n1. Read ~/.hermes/scripts/calibration_loop.py fully (511 lines, paginate 200-line chunks). Understand what calibration-map.json contains (breakpoints + metadata).\n2. Read ~/.hermes/scripts/calibration-threshold-updater.py fully (74 lines). This is the ACTUAL live calibration consumer. Understand its input format.\n3. Read ~/.hermes/scripts/confidence_tracke",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_400d6c3d/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Wire the monitor alarm chain: currently monitors write alarm JSONs that nothing reads. Add a lightweight alarm-aggregator script that the pre-compact-annotate.py cron already calls, so active alarms surface as annotations.\n\nSpec:\n1. Read ~/.hermes/scripts/pre-compact-annotate.py fully (227 lines). Understand where it writes its annotation output and what format it uses.\n2. Read 3-4 monitor scripts to understand their alarm JSON schema: ~/.hermes/scripts/session-stability-monitor.py lines 1-60, f",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_400d6c3d/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Wire the skill router: currently no dispatcher uses any of the 5 router scripts. Pick the most appropriate one (skill-router-index.py — it already has the BM25 + concept-lattice logic and is the most complete), wire it into unified-recall.py's skill-suggestion path, and add a cron job to keep its index fresh.\n\nSpec:\n1. Read ~/.hermes/scripts/unified-recall.py lines 1-80 and search for 'skill' to find where skill results are returned.\n2. Read ~/.hermes/scripts/skill-router-index.py lines 1-80 and",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_400d6c3d/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 18:41:10"
+}

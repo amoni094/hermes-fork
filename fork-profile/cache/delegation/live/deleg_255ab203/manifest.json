@@ -1,0 +1,38 @@
+{
+  "delegation_id": "deleg_255ab203",
+  "started": "2026-09-15 12:38:56",
+  "task_count": 4,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Implement Sweep-36 HIGH finding batch A for Hermes Agent. Read each target skill/file, then patch it with the specified content. Do NOT rubber-stamp — verify each patch lands cleanly.\n\nFINDING 1: arXiv:2609.05339 — Memory Portability on Model Upgrade\nSignal: KG-fixed memory transfers reliably across model upgrades (±0.002 accuracy delta); compressed NOTES degrade 9-13pp; RAG degrades from retrieval failure (81% of deficit). Always retain raw source histories alongside summaries. Direction-specif",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_255ab203/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Implement Sweep-36 HIGH finding batch B for Hermes Agent. Read each target skill, then patch it with the specified content. Do NOT rubber-stamp.\n\nFINDING 3: arXiv:2608.21690 — Scroll: Programmatic Context Management\nSignal: Append-only Event Log + persistent kernel. Tool outputs bound to named variables; only explicit projections enter model's working view. 94.8% LongMemEval_S, +37.4pp on LOCA_256K. Key: lossless Event Log for repair + code-based projection rather than compaction.\nTargets:\n  (A)",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_255ab203/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Implement Sweep-36 HIGH finding batch C for Hermes Agent. Read each target skill, then patch it with specified content. Do NOT rubber-stamp.\n\nFINDING 5: arXiv:2608.03648 — DEAR: Blind Conformity Guard via Debate Relationship Regulation\nSignal: Blind conformity in multi-agent debate is driven by reference-peer selection, not individual confidence. Individual confidence/perplexity-based evaluation EXACERBATES conformity. Fix: regulate group interaction — quantify consensus+divergence as group evid",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_255ab203/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Run a fresh Hermes math and CS research sweep, triage results, and implement any HIGH findings. This is a research + implementation task.\n\nSTEP 1 — Math sweep: Run the math paper interpreter.\n  cd ~/.hermes/hermes-fork\n  source venv/bin/activate\n  python3 ~/.hermes/scripts/math-paper-interpreter.py --limit 30 2>&1 | tail -50\n  Read output from ~/.hermes/cache/research/math-interpretation-latest.json\n  Read pending items from ~/.hermes/cache/research/math-spike-queue.json\n  Report: how many paper",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_255ab203/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 12:58:22"
+}

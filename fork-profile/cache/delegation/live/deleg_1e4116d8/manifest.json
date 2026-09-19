@@ -1,0 +1,59 @@
+{
+  "delegation_id": "deleg_1e4116d8",
+  "started": "2026-09-18 23:51:36",
+  "task_count": 7,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Deep adversarial code review of the Hermes agent core turn loop and context compression system. Read every file fully in these paths: ~/.hermes/hermes-fork/agent/ — focus on turn_*.py, context_compressor.py, conversation_loop.py, agent_init.py, memory_manager.py, plugin_manager.py (or wherever plugins_dispatch lives). Also read run_agent.py.\n\nAttack vectors:\n1. Role alternation invariant: scan for any place two same-role messages could be injected back-to-back in the turn loop.\n2. Prompt cache s",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_1e4116d8/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Deep adversarial code review of the Hermes gateway and platform adapter system. Read: ~/.hermes/hermes-fork/gateway/run.py (5613 lines — page through it all), gateway/platforms/ (all adapter files), gateway/builtin_hooks/, gateway/authz_mixin.py, gateway/delivery*.py, gateway/bot_loop_guard.py.\n\nAttack vectors:\n1. Two-message-guard: confirm the gateway enforces no two consecutive same-role messages. Find the guard location and check all bypass paths.\n2. Token lock: is there a per-session token l",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_1e4116d8/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Deep adversarial code review of the Hermes tools system, registry, model_tools.py, and delegation. Read: ~/.hermes/hermes-fork/tools/registry.py (954 lines), model_tools.py (978 lines), tools/approval*.py (all files), tools/async_delegation.py, tools/browser_*.py (sample 3-4 files), toolsets.py.\n\nAttack vectors:\n1. Tool registration races: is tools/registry.py safe for concurrent import from multiple threads? Any module-level dict mutations without locks?\n2. check_fn TTL cache: process-wide chec",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_1e4116d8/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Deep adversarial code review of the Hermes CLI, config system, plugin loader, and cron scheduler. Read: ~/.hermes/hermes-fork/hermes_cli/plugins.py (2614 lines), cron/jobs.py (3358 lines), cron/scheduler.py (if exists), hermes_cli/config*.py (all config siblings), cli.py (top-level), hermes_constants.py.\n\nAttack vectors:\n1. Config injection: can a user-supplied config.yaml value inject code or cause path traversal? Any eval() or __import__() on config values?\n2. Plugin discovery order: later-win",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_1e4116d8/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 4,
+      "goal": "Deep adversarial code review of the Hermes memory system, skills curator, and hindsight provider. Read: ~/.hermes/hermes-fork/agent/memory_manager.py (full), plugins/memory/hindsight/ (all files), agent/curator*.py (all files), skills/AGENTS.md.\n\nAttack vectors:\n1. Memory mirroring: H-I2 says no fact lives in two stores. Scan for any code that writes the same fact to both memory and session history, or both skills and memory.\n2. Curator write safety: can the curator write to a user-owned skill w",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_1e4116d8/task-4.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 5,
+      "goal": "Deep adversarial code review of the Hermes fork-specific additions: the lambda-tuner plugin (full), the adaptive compression plugin API hooks wired into context_compressor.py, and the eval harness (evals/compaction/). Also review the fork's test suite additions in tests/agent/test_context_compressor.py and tests/tools/test_plugin_guard.py.\n\nFiles:\n- ~/.hermes/hermes-fork/plugins/user/lambda-tuner/__init__.py (full, 1162 lines)\n- ~/.hermes/hermes-fork/plugins/user/lambda-tuner/complexity.py (full",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_1e4116d8/task-5.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 6,
+      "goal": "Deep adversarial code review of the Hermes security boundary, approval system, and dependency pinning. Read: ~/.hermes/hermes-fork/tools/approval*.py (all files), tools/approval_smart.py, tools/dangerous_command_patterns.py (in ~/.hermes/scripts/ or tools/), tools/tool_sandbox.sh (if present), hermes_cli/auth*.py (all auth siblings), pyproject.toml (dependency bounds), scripts/ci/ (relevant CI files).\n\nAlso read the sweep33 security patterns reference if accessible, otherwise apply OWASP LLM Top",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_1e4116d8/task-6.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 00:04:00"
+}

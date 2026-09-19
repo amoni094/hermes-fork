@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_9fac78a2",
+  "started": "2026-09-19 17:55:12",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Adversarial cold review of Cluster 1 scripts in ~/.hermes/scripts/. Read every file in full. Find all HIGH and MEDIUM issues. Write findings to /tmp/adv_cluster1.md.\n\nCRITICAL: Write the output file FIRST (skeleton), then fill it in. Do NOT wait until the end to write — your process may be killed before then.\n\nStep 1: Create /tmp/adv_cluster1.md immediately with a skeleton header.\nStep 2: Read files using read_file (paginate large files with offset/limit). Read each file completely.\nStep 3: Afte",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_9fac78a2/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Adversarial cold review of Cluster 2 scripts in ~/.hermes/scripts/. Read every file in full. Find all HIGH and MEDIUM issues. Write findings to /tmp/adv_cluster2.md.\n\nCRITICAL: Write the output file FIRST (skeleton), then fill it in. Do NOT wait until the end to write — your process may be killed before then.\n\nStep 1: Create /tmp/adv_cluster2.md immediately with a skeleton header.\nStep 2: Read each file completely with read_file (paginate large files with offset/limit).\nStep 3: After EACH file, ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_9fac78a2/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Adversarial cold review of Cluster 3 scripts in ~/.hermes/scripts/ PLUS config files. Read every file in full. Find all HIGH and MEDIUM issues. Write findings to /tmp/adv_cluster3.md.\n\nCRITICAL: Write the output file FIRST (skeleton), then fill it in. Do NOT wait until the end to write — your process may be killed before then.\n\nStep 1: Create /tmp/adv_cluster3.md immediately with a skeleton header.\nStep 2: Read each file completely. For large files use read_file with offset/limit pagination.\nSte",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_9fac78a2/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 17:58:56"
+}

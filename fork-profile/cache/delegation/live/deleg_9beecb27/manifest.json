@@ -1,0 +1,38 @@
+{
+  "delegation_id": "deleg_9beecb27",
+  "started": "2026-09-15 00:13:00",
+  "task_count": 4,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Implement theory-application gaps across Hermes runtime scripts, config, and memory architecture. These are gaps where theory is captured in skills but NOT operationalized in scripts/config. You have full read/write access to /var/home/rainbow/.hermes/scripts/ and /var/home/rainbow/.hermes/config.yaml.\n\nCONFIRMED GAPS TO IMPLEMENT (10 items):\n\n## 1. Wald SPRT early-exit in memory-zscore-retention.py\nRead the script fully first. Add new subcommand: sprt-check that takes --observations as JSON lis",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_9beecb27/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Patch Hermes skills for corpus theory gaps. Read /tmp/corpus-audit-theory.json first - filter entries where application_wired=false AND captured_in_skill is not null. These 52 entries have theory documented but not operationalized.\n\nFor the top 25 by impact, patch the candidate_target_skill with a concrete operationalization rule. Each patch must be: theory name, what it says, a concrete Hermes rule (1-3 bullets), citation. Keep each block under 200 words. Do NOT add redundant content (check if ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_9beecb27/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Tech debt survey of Hermes skills modified in the last 48 hours AND runtime scripts. Produce structured report and apply fixable debt.\n\nSCOPE - read all these files with read_file():\n\nSkills:\n- /var/home/rainbow/.hermes/skills/superpowers/dispatching-parallel-agents/SKILL.md\n- /var/home/rainbow/.hermes/skills/autonomous-ai-agents/ralph-loops/SKILL.md\n- /var/home/rainbow/.hermes/skills/software-development/tech-debt-survey-and-refactor/SKILL.md\n- /var/home/rainbow/.hermes/skills/autonomous-ai-age",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_9beecb27/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Cold adversarial review and cohesion audit of Hermes skill and architecture changes from the last 48 hours. You have no prior context - read files fresh and find real problems.\n\nFILES TO REVIEW - read each with read_file() before reviewing:\n\nSkills:\n- /var/home/rainbow/.hermes/skills/superpowers/dispatching-parallel-agents/SKILL.md\n- /var/home/rainbow/.hermes/skills/autonomous-ai-agents/ralph-loops/SKILL.md\n- /var/home/rainbow/.hermes/skills/autonomous-ai-agents/hermes-context-hygiene/SKILL.md\n-",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_9beecb27/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 00:25:47"
+}

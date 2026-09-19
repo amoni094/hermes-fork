@@ -1,0 +1,1569 @@
+"""
+AIMD (Additive Increase/Multiplicative Decrease) concurrency controller.
+Migrated from worker.js to Python.
+
+Dynamically adjusts concurrency limits based on error and throttle rates.
+Extended in Phase 27 with per-node, per-provider controllers and backpressure.
+"""
+
+from __future__ import annotations
+
+import enum
+import logging
+import math
+import threading
+import time
+from contextlib import contextmanager
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# NodePriority enum
+# ---------------------------------------------------------------------------
+
+
+class NodePriority(enum.IntEnum):
+    """Priority levels for pipeline nodes. Higher = more important."""
+
+    LOW = 0
+    MEDIUM = 1
+    HIGH = 2
+
+
+# Default budgets per node (initial concurrency limit)
+_DEFAULT_BUDGETS: dict[str, int] = {
+    "extractor": 8,
+    "compiler": 4,
+    "profiler": 2,
+    "structural": 2,
+    "llm_checks": 2,
+}
+
+# Default priorities per node
+_NODE_PRIORITIES: dict[str, NodePriority] = {
+    "extractor": NodePriority.HIGH,
+    "compiler": NodePriority.MEDIUM,
+    "profiler": NodePriority.MEDIUM,
+    "structural": NodePriority.LOW,
+    "llm_checks": NodePriority.LOW,
+}
+
+# Default budget for unknown nodes
+_DEFAULT_BUDGET = 2
+_DEFAULT_PRIORITY = NodePriority.MEDIUM
+
+
+def _coerce_status_code(value: object) -> int:
+    """Best-effort integer coercion for HTTP status values."""
+    if isinstance(value, bool) or value is None:
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        value = value.strip()
+        if value.isdigit():
+            return int(value)
+    return 0
+
+
+def _extract_error_status_code(err: Exception) -> int:
+    """Support SDK errors that expose status on either the exception or response.
+
+    OpenAI SDK errors may attach an httpx ``Response`` object at ``err.response``,
+    which does not implement ``dict.get``. Botocore-style errors instead expose a
+    mapping with ``ResponseMetadata``. Handle both shapes safely.
+    """
+    for attr in ("status_code", "status"):
+        code = _coerce_status_code(getattr(err, attr, None))
+        if code:
+            return code
+
+    response = getattr(err, "response", None)
+    if response is None:
+        return 0
+
+    if isinstance(response, dict):
+        metadata = response.get("ResponseMetadata") or {}
+        return _coerce_status_code(
+            metadata.get("HTTPStatusCode") or response.get("status_code") or response.get("status")
+        )
+
+    for attr in ("status_code", "status"):
+        code = _coerce_status_code(getattr(response, attr, None))
+        if code:
+            return code
+
+    metadata = getattr(response, "ResponseMetadata", None) or getattr(response, "response_metadata", None)
+    if isinstance(metadata, dict):
+        return _coerce_status_code(metadata.get("HTTPStatusCode"))
+
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# ConcurrencyController (extended)
+# ---------------------------------------------------------------------------
+
+
+class ConcurrencyController:
+    """Thread-safe adaptive concurrency controller with priority and backpressure."""
+
+    def __init__(
+        self,
+        name: str,
+        initial: int,
+        min_limit: int,
+        max_limit: int,
+        priority: int = NodePriority.MEDIUM,
+        registry: ControllerRegistry | None = None,
+        provider: str = "",
+    ):
+        self.name = name
+        self.limit = initial
+        self.min_limit = min_limit
+        self.max_limit = max_limit
+
+        self._initial = initial
+        self._priority = priority
+        self._registry = registry
+        self._provider = provider
+
+        self._running = 0
+        self._window: list[dict] = []
+        self._window_size = 20
+        self._ops = 0
+
+        # Strogatz (Dynamical Systems) + Astrom-Murray (Feedback Control):
+        # Track limit history to detect convergence to a fixed point.
+        self._limit_history: list[float] = []
+
+        self._cond = threading.Condition()
+
+    def acquire(self, timeout: float = 30.0) -> None:
+        """Acquire a slot, blocking if the current limit is reached.
+
+        If this controller has LOW priority and its provider's health is
+        degraded (ratio < 0.5), the acquire blocks until health recovers
+        or the timeout expires.
+
+        Args:
+            timeout: Maximum seconds to wait. Raises TimeoutError on expiry.
+        """
+        deadline = time.monotonic() + timeout
+
+        # --- Backpressure check for LOW priority nodes ---
+        if self._priority <= NodePriority.LOW and self._registry and self._provider:
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(
+                        f"[BACKPRESSURE][{self._provider}] {self.name} timed out "
+                        f"waiting for provider health recovery (timeout={timeout}s)"
+                    )
+                health = self._registry.get_provider_health(self._provider)
+                if health["ratio"] >= 0.5:
+                    break
+                logger.info(
+                    "[BACKPRESSURE][%s] activated: delaying %s (ratio=%.2f)",
+                    self._provider,
+                    self.name,
+                    health["ratio"],
+                )
+                # Poll every 0.05s (short for tests, low overhead in production)
+                time.sleep(min(0.05, remaining))
+
+        # --- Standard slot acquisition with timeout ---
+        with self._cond:
+            while self._running >= self.limit:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(
+                        f"[{self.name}] acquire timed out after {timeout}s "
+                        f"(running={self._running}, limit={self.limit})"
+                    )
+                self._cond.wait(timeout=min(remaining, 0.1))
+            self._running += 1
+
+    def release(self, duration_ms: float = 0.0, error: bool = False, throttled: bool = False) -> None:
+        """Release a slot and update the sliding window of performance data."""
+        with self._cond:
+            self._window.append({"durationMs": duration_ms, "error": error, "throttled": throttled})
+            if len(self._window) > self._window_size:
+                self._window.pop(0)
+
+            self._running -= 1
+            self._ops += 1
+
+            if self._ops % 5 == 0:
+                self._adjust()
+
+            self._cond.notify_all()
+
+    def _adjust(self) -> None:
+        """Evaluate the window and adjust the concurrency limit."""
+        if len(self._window) < 5:
+            return
+
+        throttles = sum(1 for s in self._window if s["throttled"])
+        errors = sum(1 for s in self._window if s["error"])
+        prev = self.limit
+
+        if throttles >= 2:
+            # Aggressive decrease on rate limiting
+            self.limit = max(self.min_limit, self.limit // 2)
+        elif errors >= 3:
+            # Moderate decrease on general errors
+            self.limit = max(self.min_limit, int(self.limit * 0.7))
+        elif errors == 0 and throttles == 0 and len(self._window) >= self._window_size * 0.75:
+            # Additive increase when stable
+            self.limit = min(self.max_limit, self.limit + 1)
+
+        if self.limit != prev:
+            lats = sorted([s["durationMs"] for s in self._window])
+            p95 = lats[int(len(lats) * 0.95)] if lats else 0
+            logger.info(
+                "[ADAPTIVE][%s] %d -> %d (throttle=%d err=%d/%d p95=%dms)",
+                self.name,
+                prev,
+                self.limit,
+                throttles,
+                errors,
+                len(self._window),
+                int(p95),
+            )
+
+    def is_near_fixed_point(self, tolerance: float = 0.05) -> bool:
+        """Detect convergence to a dynamical fixed point.
+
+        Theory: Strogatz (Nonlinear Dynamics and Chaos) and Astrom-Murray
+        (Feedback Systems) predict that a stable AIMD system converges to a
+        fixed point where additive increases and multiplicative decreases
+        balance. This method detects that convergence by checking whether
+        the last three limit values are within *tolerance* of each other.
+
+        Args:
+            tolerance: Maximum relative deviation between consecutive values
+                       to be considered near a fixed point (default 0.05 = 5%).
+
+        Returns:
+            True if the controller's limit appears to have stabilised.
+        """
+        if len(self._limit_history) < 3:
+            return False
+        last3 = self._limit_history[-3:]
+        for a, b in zip(last3, last3[1:]):
+            if abs(a - b) / max(a, 1) >= tolerance:
+                return False
+        return True
+
+    def update_with_latency(
+        self,
+        observed_ms: float,
+        target_ms: float,
+        kp: float = 0.1,
+    ) -> None:
+        """Proportional-integral latency-driven limit update.
+
+        Theory: Astrom-Murray (Feedback Systems) proportional control law:
+          u(t) = kp * e(t)
+        where e(t) = target - observed. When observed < target (positive
+        error) we have spare capacity and increase the limit (additive).
+        When observed > target (negative error) we reduce the limit
+        (multiplicative), matching the AIMD decrease axiom.
+
+        The updated limit is recorded in _limit_history (max 5 entries) for
+        fixed-point detection via is_near_fixed_point().
+
+        Args:
+            observed_ms: Measured end-to-end latency in milliseconds.
+            target_ms:   SLO latency target in milliseconds.
+            kp:          Proportional gain (default 0.1).
+        """
+        error = target_ms - observed_ms
+        fraction = kp * abs(error) / max(target_ms, 1.0)
+        prev = self.limit
+        if error > 0:
+            # Additive increase toward max_limit
+            self.limit = min(self.max_limit, self.limit + fraction * (self.max_limit - self.limit))
+        elif error < 0:
+            # Multiplicative decrease toward min_limit
+            self.limit = max(self.min_limit, self.limit - fraction * (self.limit - self.min_limit))
+        # Clamp to [min_limit, max_limit]
+        self.limit = max(self.min_limit, min(self.max_limit, self.limit))
+        # Record in history (max 5 entries)
+        self._limit_history.append(self.limit)
+        if len(self._limit_history) > 5:
+            self._limit_history.pop(0)
+        if self.limit != prev:
+            logger.debug(
+                "[LATENCY][%s] limit %.2f -> %.2f (observed=%.1fms target=%.1fms)",
+                self.name,
+                prev,
+                self.limit,
+                observed_ms,
+                target_ms,
+            )
+
+    @contextmanager
+    def control(self):
+        """Context manager for using the controller."""
+        self.acquire()
+        start = time.monotonic()
+        try:
+            yield
+            self.release(duration_ms=(time.monotonic() - start) * 1000)
+        except Exception as err:
+            # Detect throttles (common HTTP status codes for quotas/rate limits)
+            # Or text matches from OpenAI/Anthropic
+            err_msg = str(err).lower()
+            throttled = False
+
+            # Check for botocore/SDK specific exceptions
+            status_code = _extract_error_status_code(err)
+            if status_code in (429, 503):
+                throttled = True
+
+            if "429" in err_msg or "rate_limit" in err_msg or "throttl" in err_msg or "insufficient_quota" in err_msg:
+                throttled = True
+
+            self.release(duration_ms=(time.monotonic() - start) * 1000, error=True, throttled=throttled)
+            raise
+
+
+def channel_capacity_estimate(success_rate: float, n_parallel: int) -> float:
+    """Estimate effective throughput capacity using Shannon's channel capacity formula.
+
+    Theory: Shannon (1948) 'A Mathematical Theory of Communication' defines
+    channel capacity as C = B * log2(1 + SNR) where SNR is the signal-to-noise
+    ratio. Here we model each parallel request slot as an independent binary
+    channel where 'signal' is a successful request and 'noise' is a failed one.
+    The aggregate capacity scales linearly with parallelism.
+
+    Args:
+        success_rate: Fraction of requests that succeed (0.0 – 1.0).
+        n_parallel:   Number of parallel request slots (concurrency limit).
+
+    Returns:
+        Estimated channel capacity in 'successful requests per slot-unit'.
+        Returns 0.0 when success_rate <= 0; n_parallel when success_rate >= 1.
+    """
+    if success_rate <= 0:
+        return 0.0
+    if success_rate >= 1:
+        return float(n_parallel)
+    snr = success_rate / max(1.0 - success_rate, 1e-9)
+    return n_parallel * math.log2(1.0 + snr)
+
+
+# ---------------------------------------------------------------------------
+# ControllerRegistry
+# ---------------------------------------------------------------------------
+
+
+class ControllerRegistry:
+    """Registry mapping (provider, node) pairs to independent ConcurrencyController instances.
+
+    Each pipeline node gets its own AIMD controller per provider, so throttling
+    OpenAI's extractor does not affect Anthropic's extractor or OpenAI's compiler.
+    """
+
+    def __init__(self):
+        self._controllers: dict[str, dict[str, ConcurrencyController]] = {}
+        self._lock = threading.Lock()
+        self._budgets = self._load_budgets()
+
+    @staticmethod
+    def _load_budgets() -> dict[str, int]:
+        """Load per-node budgets from config, falling back to defaults."""
+        budgets = dict(_DEFAULT_BUDGETS)
+        try:
+            from src.config import get_config
+
+            config = get_config()
+            budget_attrs = {
+                "extractor": "concurrency_extractor",
+                "compiler": "concurrency_compiler",
+                "profiler": "concurrency_profiler",
+                "structural": "concurrency_structural",
+                "llm_checks": "concurrency_llm_checks",
+            }
+            for node, attr in budget_attrs.items():
+                val = getattr(config, attr, None)
+                if val is not None:
+                    budgets[node] = val
+        except Exception:
+            logger.warning("Could not load config for concurrency budgets; using defaults")
+        return budgets
+
+    def get(self, provider: str, node: str) -> ConcurrencyController:
+        """Get or create a ConcurrencyController for the given (provider, node) pair.
+
+        Thread-safe. Returns the same instance for repeated calls with the
+        same arguments.
+        """
+        with self._lock:
+            if provider not in self._controllers:
+                self._controllers[provider] = {}
+
+            provider_map = self._controllers[provider]
+            if node not in provider_map:
+                budget = self._budgets.get(node, _DEFAULT_BUDGET)
+                priority = _NODE_PRIORITIES.get(node, _DEFAULT_PRIORITY)
+                ctrl = ConcurrencyController(
+                    name=f"{provider}:{node}",
+                    initial=budget,
+                    min_limit=1,
+                    max_limit=budget * 3,
+                    priority=priority,
+                    registry=self,
+                    provider=provider,
+                )
+                provider_map[node] = ctrl
+                logger.debug(
+                    "Created controller %s:%s (budget=%d, priority=%s)",
+                    provider,
+                    node,
+                    budget,
+                    NodePriority(priority).name,
+                )
+
+            return provider_map[node]
+
+    def get_provider_health(self, provider: str) -> dict:
+        """Calculate aggregate health for a provider across all its nodes.
+
+        Returns:
+            dict with keys: total_limit, total_initial, ratio
+            ratio = current total limit / initial total limit (1.0 = healthy)
+        """
+        with self._lock:
+            provider_map = self._controllers.get(provider, {})
+            if not provider_map:
+                return {"total_limit": 0, "total_initial": 0, "ratio": 1.0}
+
+            total_limit = sum(ctrl.limit for ctrl in provider_map.values())
+            total_initial = sum(ctrl._initial for ctrl in provider_map.values())
+
+            ratio = total_limit / total_initial if total_initial > 0 else 1.0
+            return {
+                "total_limit": total_limit,
+                "total_initial": total_initial,
+                "ratio": ratio,
+            }
+
+    def allocate_slots(self, total_slots: int) -> dict[str, int]:
+        """Priority-based slot allocation across all registered controllers.
+
+        Theory: Puterman (Markov Decision Processes, 1994) priority-based
+        resource allocation. Under constrained resources, HIGH-priority states
+        receive a guaranteed reservation, MEDIUM priorities share the remainder
+        fairly, and LOW priorities receive only leftover idle capacity. This
+        mirrors the MDP policy of preferring high-reward states under scarcity.
+
+        Allocation rules:
+          - HIGH: reserved_high = total_slots // 3 each, capped at controller.limit.
+          - MEDIUM: fair-share of remaining slots after HIGH allocation.
+          - LOW: only idle slots remaining after HIGH + MEDIUM.
+
+        Args:
+            total_slots: Total available concurrency slots to distribute.
+
+        Returns:
+            dict mapping controller name -> allocated slot count.
+        """
+        with self._lock:
+            # Flatten all controllers across all providers
+            all_ctrls = [
+                ctrl
+                for provider_map in self._controllers.values()
+                for ctrl in provider_map.values()
+            ]
+
+            high = [c for c in all_ctrls if c._priority >= NodePriority.HIGH]
+            medium = [c for c in all_ctrls if c._priority == NodePriority.MEDIUM]
+            low = [c for c in all_ctrls if c._priority <= NodePriority.LOW]
+
+            result: dict[str, int] = {}
+            reserved_per_high = total_slots // 3
+
+            # HIGH: each gets reserved_per_high, capped at their limit
+            high_used = 0
+            for ctrl in high:
+                alloc = min(reserved_per_high, int(ctrl.limit))
+                result[ctrl.name] = alloc
+                high_used += alloc
+
+            # MEDIUM: fair-share of remaining slots
+            remaining_after_high = max(0, total_slots - high_used)
+            if medium:
+                fair_share = remaining_after_high // len(medium)
+                medium_used = 0
+                for ctrl in medium:
+                    alloc = min(fair_share, int(ctrl.limit))
+                    result[ctrl.name] = alloc
+                    medium_used += alloc
+            else:
+                medium_used = 0
+
+            # LOW: only idle slots remaining
+            remaining_after_medium = max(0, remaining_after_high - medium_used)
+            if low:
+                low_share = remaining_after_medium // len(low)
+                for ctrl in low:
+                    alloc = min(low_share, int(ctrl.limit))
+                    result[ctrl.name] = alloc
+            else:
+                for ctrl in low:
+                    result[ctrl.name] = 0
+
+            return result
+
+
+# ---------------------------------------------------------------------------
+# Module-level registry access
+# ---------------------------------------------------------------------------
+
+_registry: ControllerRegistry | None = None
+_registry_lock = threading.Lock()
+
+
+def _get_registry() -> ControllerRegistry:
+    """Get or create the global ControllerRegistry. Thread-safe."""
+    global _registry
+    if _registry is None:
+        with _registry_lock:
+            if _registry is None:
+                _registry = ControllerRegistry()
+    return _registry
+
+
+def get_controller(provider: str, node: str) -> ConcurrencyController:
+    """Get a concurrency controller for the given provider and pipeline node.
+
+    This is the primary API for Phase 27+. Each (provider, node) pair gets
+    its own independent AIMD controller.
+
+    Args:
+        provider: LLM provider name (e.g., "openai", "anthropic")
+        node: Pipeline node name (e.g., "extractor", "compiler", "profiler", "structural", "llm_checks")
+
+    Returns:
+        ConcurrencyController with the appropriate budget and priority.
+    """
+    return _get_registry().get(provider, node)
+
+
+def reset_registry() -> None:
+    """Reset the global registry. Used by tests to ensure clean state."""
+    global _registry
+    with _registry_lock:
+        _registry = None
+    # Also reset config singleton so env var changes take effect
+    try:
+        import src.config as config_mod
+
+        config_mod._config = None
+    except Exception:
+        pass
+---BREAK---
+"""
+Circuit breaker for LLM provider calls (GAP-1.2).
+
+Tracks consecutive failures per provider and trips open after a threshold,
+preventing cascading slow/failing calls. Auto-resets after a cooldown period.
+
+Uses DynamoDB for global state across distributed Lambda workers.
+"""
+
+import enum
+import logging
+import math
+import os
+import time
+from decimal import Decimal
+
+try:
+    import boto3
+    from botocore.exceptions import ClientError
+except ImportError:
+    boto3 = None
+    ClientError = Exception
+
+logger = logging.getLogger(__name__)
+
+
+class CircuitState(enum.Enum):
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+
+class CircuitBreaker:
+    """Per-provider circuit breaker using DynamoDB for global state across workers."""
+
+    def __init__(self, threshold: int = 5, cooldown: int = 120, table_name: str | None = None):
+        self._threshold = threshold
+        self._cooldown = cooldown
+        from .config import get_config
+
+        config = get_config()
+        self.table_name = table_name or os.environ.get("RATE_LIMITS_TABLE", f"denuto-rate-limits-{config.environment}")
+        self.table = None
+
+        if boto3 and config.environment != "local" and not os.environ.get("DISABLE_DYNAMODB_CB"):
+            try:
+                dynamodb = boto3.resource("dynamodb", region_name=config.aws_region)
+                self.table = dynamodb.Table(self.table_name)
+            except Exception as e:
+                logger.warning("Could not initialize DynamoDB for CircuitBreaker: %s", e)
+
+        if not self.table:
+            logger.info("Using fallback in-memory circuit breaker (DynamoDB disabled or not available)")
+            self._local_state = {}
+
+    def _get_db_state(self, provider: str) -> dict:
+        if self.table is None:
+            st = self._local_state.get(provider, {"failures": 0, "state": "closed", "opened_at": 0.0})
+            if "state" not in st:
+                st["state"] = "closed"
+            return st
+
+        try:
+            response = self.table.get_item(Key={"PK": f"CB#{provider}", "SK": "STATE"})
+            item = response.get("Item")
+            if item:
+                return {
+                    "failures": int(item.get("failures", 0)),
+                    "state": item.get("state", "closed"),
+                    "opened_at": float(item.get("opened_at", 0.0)),
+                }
+        except ClientError as e:
+            logger.warning("Error reading circuit breaker state from DynamoDB: %s", e)
+
+        return {"failures": 0, "state": "closed", "opened_at": 0.0}
+
+    def _put_db_state(self, provider: str, failures: int, state: str, opened_at: float):
+        if self.table is None:
+            self._local_state[provider] = {"failures": failures, "state": state, "opened_at": opened_at}
+            return
+
+        try:
+            self.table.put_item(
+                Item={
+                    "PK": f"CB#{provider}",
+                    "SK": "STATE",
+                    "failures": failures,
+                    "state": state,
+                    "opened_at": Decimal(str(opened_at)),
+                    "ttl": int(time.time()) + (86400 * 7),  # Auto cleanup after 7 days
+                }
+            )
+        except ClientError as e:
+            logger.warning("Error writing circuit breaker state to DynamoDB: %s", e)
+
+    def record_success(self, provider: str) -> None:
+        """Record a successful call — resets failure count and closes the circuit."""
+        state = self._get_db_state(provider)
+        if state["state"] != "closed":
+            logger.info("Circuit breaker CLOSED for %s after successful probe", provider)
+        self._put_db_state(provider, 0, "closed", 0.0)
+
+    def record_failure(self, provider: str) -> None:
+        """Record a failed call — increments count and may trip the circuit open."""
+        if self.table is None:
+            # In-memory fallback is single-process; read-modify-write is fine.
+            state = self._get_db_state(provider)
+            failures = state["failures"] + 1
+            if state["state"] == "half_open":
+                self._put_db_state(provider, failures, "open", time.time())
+                logger.warning("Circuit breaker re-OPENED for %s (probe failed)", provider)
+            elif failures >= self._threshold and state["state"] == "closed":
+                self._put_db_state(provider, failures, "open", time.time())
+                logger.warning("Circuit breaker OPEN for %s after %d consecutive failures", provider, failures)
+            else:
+                self._put_db_state(provider, failures, state["state"], state["opened_at"])
+            return
+
+        # Distributed path: the increment must be atomic. A get-then-put here
+        # loses updates when two workers race (both read N, both write N+1), so
+        # a burst of concurrent failures could keep the count below threshold
+        # and the breaker would trip late or never.
+        try:
+            response = self.table.update_item(
+                Key={"PK": f"CB#{provider}", "SK": "STATE"},
+                UpdateExpression=(
+                    "ADD failures :one "
+                    "SET #st = if_not_exists(#st, :closed), "
+                    "opened_at = if_not_exists(opened_at, :zero), "
+                    "#ttl = :ttl"
+                ),
+                ExpressionAttributeNames={"#st": "state", "#ttl": "ttl"},
+                ExpressionAttributeValues={
+                    ":one": 1,
+                    ":closed": "closed",
+                    ":zero": Decimal("0"),
+                    ":ttl": int(time.time()) + (86400 * 7),
+                },
+                ReturnValues="ALL_NEW",
+            )
+        except ClientError as e:
+            logger.warning("Error recording circuit breaker failure to DynamoDB: %s", e)
+            return
+
+        item = response.get("Attributes", {})
+        failures = int(item.get("failures", 1))
+        current_state = item.get("state", "closed")
+
+        if current_state == "half_open":
+            # Probe failed — re-open
+            self._put_db_state(provider, failures, "open", time.time())
+            logger.warning("Circuit breaker re-OPENED for %s (probe failed)", provider)
+        elif failures >= self._threshold and current_state == "closed":
+            self._put_db_state(provider, failures, "open", time.time())
+            logger.warning("Circuit breaker OPEN for %s after %d consecutive failures", provider, failures)
+
+    def is_open(self, provider: str) -> bool:
+        """Return True if the circuit is currently open (tripped) for *provider*."""
+        state = self._get_db_state(provider)
+
+        if state["state"] == "closed":
+            return False
+
+        if state["state"] == "open":
+            # Check if cooldown has elapsed → transition to half-open
+            if time.time() - state["opened_at"] >= self._cooldown:
+                self._put_db_state(provider, state["failures"], "half_open", state["opened_at"])
+                return False  # allow one probe
+            return True
+
+        # HALF_OPEN — not "open" (allow the probe)
+        return False
+
+    def allow_request(self, provider: str) -> bool:
+        """Return True if a request to *provider* should be allowed."""
+        return not self.is_open(provider)
+
+    def get_state(self, provider: str) -> CircuitState:
+        """Return the current circuit state for *provider* (for testing/observability)."""
+        state_str = self._get_db_state(provider)["state"]
+        return CircuitState(state_str)
+
+    def get_failure_count(self, provider: str) -> int:
+        """Return the current consecutive failure count for *provider*."""
+        return self._get_db_state(provider)["failures"]
+
+    def lyapunov_stable(self, failure_history: list[bool], window: int = 10) -> bool:
+        """Lyapunov stability check on observed failure rates.
+
+        Theory: Khalil (Nonlinear Systems, 3rd ed.) Lyapunov stability theorem.
+        A system is stable at equilibrium if a Lyapunov function V(x) exists
+        that is positive definite and whose derivative V̇(x) ≤ 0 (non-increasing).
+        Here we treat the windowed failure rate as the Lyapunov candidate: the
+        circuit is stable if failure rates are monotone non-increasing across
+        successive windows (i.e., the system is recovering or at equilibrium).
+
+        Args:
+            failure_history: Ordered list of boolean outcomes (True = failure).
+            window:          Number of observations per analysis chunk (default 10).
+
+        Returns:
+            True if failure rates are monotone non-increasing (stable) or if
+            there are fewer than 2 complete windows (insufficient data → assume
+            stable).
+        """
+        if len(failure_history) < window * 2:
+            return True
+        chunks = [
+            failure_history[i : i + window]
+            for i in range(0, len(failure_history) - window + 1, window)
+        ]
+        if len(chunks) < 2:
+            return True
+        rates = [sum(c) / len(c) for c in chunks]
+        for prev_rate, curr_rate in zip(rates, rates[1:]):
+            if curr_rate > prev_rate:
+                return False
+        return True
+
+    def should_trip_early(self, failure_history: list[bool], alpha: float = 0.05) -> bool:
+        """Sequential Probability Ratio Test for early circuit trip.
+
+        Theory: Wald (Sequential Analysis, 1947) SPRT. Under H0 (normal
+        operation) the failure rate is p0=0.1; under H1 (broken) it is
+        p1=0.5. For each observation x the log-likelihood ratio is updated:
+          LLR += log P(x | H1) - log P(x | H0)
+        Trip if LLR > log((1-alpha)/alpha), i.e. the evidence strongly favours
+        the broken hypothesis. Return False if evidence is insufficient.
+
+        Args:
+            failure_history: Ordered list of boolean outcomes (True = failure).
+            alpha:           Type-I error bound (default 0.05 → trip threshold
+                             log(0.95/0.05) ≈ 2.94).
+
+        Returns:
+            True if the SPRT has accumulated enough evidence to trip early.
+        """
+        p0 = 0.1  # H0: normal failure rate
+        p1 = 0.5  # H1: broken failure rate
+        trip_threshold = math.log((1.0 - alpha) / alpha)
+        llr = 0.0
+        for x in failure_history:
+            p_h1 = p1 if x else (1.0 - p1)
+            p_h0 = p0 if x else (1.0 - p0)
+            llr += math.log(p_h1) - math.log(p_h0)
+        return llr > trip_threshold
+
+
+# Singleton
+_circuit_breaker: CircuitBreaker | None = None
+
+
+def get_circuit_breaker() -> CircuitBreaker:
+    """Return the global CircuitBreaker singleton, creating it on first call."""
+    global _circuit_breaker
+    if _circuit_breaker is None:
+        from .config import get_config
+
+        config = get_config()
+        _circuit_breaker = CircuitBreaker(
+            threshold=config.circuit_breaker_threshold,
+            cooldown=config.circuit_breaker_cooldown,
+        )
+    return _circuit_breaker
+
+
+def reset_circuit_breaker() -> None:
+    """Reset the singleton (for testing)."""
+    global _circuit_breaker
+    _circuit_breaker = None
+---BREAK---
+"""Performance metric calculators for the Denuto platform."""
+
+from __future__ import annotations
+
+import math
+import statistics
+from collections import deque
+from dataclasses import dataclass
+from datetime import datetime, timezone
+
+
+@dataclass
+class MetricResult:
+    """Result of a metric computation."""
+
+    value: float
+    confidence: float  # 0.0 - 1.0
+    sample_size: int
+    trend: str  # "improving", "stable", "declining", "insufficient_data"
+
+
+# ---------------------------------------------------------------------------
+# Productivity Metrics
+# ---------------------------------------------------------------------------
+
+
+def compute_weighted_throughput(jobs: list[dict], period_days: int = 30) -> MetricResult:
+    """Compute weighted throughput from completed jobs.
+
+    Each job dict should have: agreement_type, issue_count, page_count, completed_at
+    Weights: NDA=1.0, DPA=1.3, SaaS=1.5, MSA=2.0
+    Issue multiplier: 0-5=1.0, 6-10=1.2, 11-20=1.5, 21+=2.0
+    Page multiplier: 1-10=1.0, 11-30=1.2, 31-50=1.5, 51+=2.0
+    """
+    _ = period_days
+    if not jobs:
+        return MetricResult(value=0, confidence=0, sample_size=0, trend="insufficient_data")
+
+    base_weights = {"nda": 1.0, "dpa": 1.3, "saas": 1.5, "msa": 2.0}
+
+    total_weight = 0.0
+    for job in jobs:
+        base = base_weights.get(job.get("agreement_type", "").lower(), 1.0)
+
+        issue_count = job.get("issue_count", 0)
+        if issue_count > 20:
+            issue_mult = 2.0
+        elif issue_count > 10:
+            issue_mult = 1.5
+        elif issue_count > 5:
+            issue_mult = 1.2
+        else:
+            issue_mult = 1.0
+
+        page_count = job.get("page_count", 0)
+        if page_count > 50:
+            page_mult = 2.0
+        elif page_count > 30:
+            page_mult = 1.5
+        elif page_count > 10:
+            page_mult = 1.2
+        else:
+            page_mult = 1.0
+
+        total_weight += base * issue_mult * page_mult
+
+    confidence = min(1.0, len(jobs) / 10)  # Full confidence at 10+ jobs
+    return MetricResult(
+        value=total_weight,
+        confidence=confidence,
+        sample_size=len(jobs),
+        trend="insufficient_data",
+    )
+
+
+def compute_cycle_time(jobs: list[dict]) -> MetricResult:
+    """Compute cycle time stats from jobs with created_at and completed_at (as epoch ms)."""
+    durations = []
+    for job in jobs:
+        created = job.get("created_at_ms", 0)
+        completed = job.get("completed_at_ms", 0)
+        if created and completed and completed > created:
+            durations.append(completed - created)
+
+    if len(durations) < 3:
+        return MetricResult(
+            value=0,
+            confidence=0,
+            sample_size=len(durations),
+            trend="insufficient_data",
+        )
+
+    median_ms = statistics.median(durations)
+    confidence = min(1.0, len(durations) / 10)
+    return MetricResult(
+        value=median_ms,
+        confidence=confidence,
+        sample_size=len(durations),
+        trend="insufficient_data",
+    )
+
+
+def compute_first_touch_rate(jobs: list[dict]) -> MetricResult:
+    """Percentage of jobs completed without rework. Each job has 'had_rework' boolean.
+
+    Also supports 'had_escalation' boolean (False = first-touch success) for
+    reviewer-focused job dicts.
+    """
+    if len(jobs) < 5:
+        return MetricResult(
+            value=0,
+            confidence=0,
+            sample_size=len(jobs),
+            trend="insufficient_data",
+        )
+
+    # Support both had_rework (legacy) and had_escalation (reviewer) schemas.
+    def _is_first_touch(j: dict) -> bool:
+        if "had_escalation" in j:
+            return not j["had_escalation"]
+        return not j.get("had_rework", False)
+
+    no_rework = sum(1 for j in jobs if _is_first_touch(j))
+    rate = no_rework / len(jobs)
+    confidence = min(1.0, len(jobs) / 10)
+    return MetricResult(
+        value=rate,
+        confidence=confidence,
+        sample_size=len(jobs),
+        trend="insufficient_data",
+    )
+
+
+def compute_error_rate(total_issues: int, errors: int) -> MetricResult:
+    """Error rate = errors / total_issues."""
+    if total_issues < 10:
+        return MetricResult(
+            value=0,
+            confidence=0,
+            sample_size=total_issues,
+            trend="insufficient_data",
+        )
+    rate = errors / total_issues
+    confidence = min(1.0, total_issues / 20)
+    return MetricResult(
+        value=rate,
+        confidence=confidence,
+        sample_size=total_issues,
+        trend="insufficient_data",
+    )
+
+
+def compute_consistency_score(weekly_scores: list[float]) -> MetricResult:
+    """1 - coefficient_of_variation of weekly quality scores. Higher = more consistent."""
+    if len(weekly_scores) < 4:
+        return MetricResult(
+            value=0,
+            confidence=0,
+            sample_size=len(weekly_scores),
+            trend="insufficient_data",
+        )
+
+    mean_val = statistics.mean(weekly_scores)
+    if mean_val == 0:
+        return MetricResult(
+            value=0,
+            confidence=0,
+            sample_size=len(weekly_scores),
+            trend="insufficient_data",
+        )
+
+    std_dev = statistics.stdev(weekly_scores)
+    cv = std_dev / mean_val
+    score = max(0.0, 1.0 - cv)
+    confidence = min(1.0, len(weekly_scores) / 8)
+    return MetricResult(
+        value=score,
+        confidence=confidence,
+        sample_size=len(weekly_scores),
+        trend="insufficient_data",
+    )
+
+
+def compute_feature_utilization(features_used: set[str], all_features: dict[str, float]) -> MetricResult:
+    """Weighted feature utilization. all_features maps feature_name -> weight."""
+    if not all_features:
+        return MetricResult(value=0, confidence=0, sample_size=0, trend="insufficient_data")
+
+    total_weight = sum(all_features.values())
+    used_weight = sum(w for f, w in all_features.items() if f in features_used)
+    score = used_weight / total_weight if total_weight > 0 else 0
+    return MetricResult(
+        value=score,
+        confidence=min(1.0, len(features_used) / 3),
+        sample_size=len(features_used),
+        trend="insufficient_data",
+    )
+
+
+def compute_skill_velocity(weekly_skill_scores: list[float]) -> MetricResult:
+    """Linear regression slope of weekly skill scores, normalized by mean."""
+    if len(weekly_skill_scores) < 6:
+        return MetricResult(
+            value=0,
+            confidence=0,
+            sample_size=len(weekly_skill_scores),
+            trend="insufficient_data",
+        )
+
+    n = len(weekly_skill_scores)
+    x = list(range(n))
+    x_mean = statistics.mean(x)
+    y_mean = statistics.mean(weekly_skill_scores)
+
+    if y_mean == 0:
+        return MetricResult(value=0, confidence=0, sample_size=n, trend="insufficient_data")
+
+    numerator = sum((x[i] - x_mean) * (weekly_skill_scores[i] - y_mean) for i in range(n))
+    denominator = sum((x[i] - x_mean) ** 2 for i in range(n))
+
+    if denominator == 0:
+        return MetricResult(value=0, confidence=0, sample_size=n, trend="stable")
+
+    slope = numerator / denominator
+    normalized_velocity = slope / y_mean
+
+    if normalized_velocity > 0.02:
+        trend = "improving"
+    elif normalized_velocity < -0.02:
+        trend = "declining"
+    else:
+        trend = "stable"
+
+    confidence = min(1.0, n / 12)
+    return MetricResult(
+        value=normalized_velocity,
+        confidence=confidence,
+        sample_size=n,
+        trend=trend,
+    )
+
+
+def compute_active_days_ratio(active_days: int, business_days: int) -> MetricResult:
+    """Ratio of active days to business days."""
+    if business_days == 0:
+        return MetricResult(value=0, confidence=0, sample_size=0, trend="insufficient_data")
+    ratio = active_days / business_days
+    confidence = min(1.0, business_days / 10)
+    return MetricResult(
+        value=ratio,
+        confidence=confidence,
+        sample_size=business_days,
+        trend="insufficient_data",
+    )
+
+
+def compute_active_days_ratio_from_events(events: list[dict], period_days: int = 30) -> MetricResult:
+    """Count distinct days with events in the last *period_days*.
+
+    Each event must have a ``ts_ms`` key (Unix epoch milliseconds).
+    Returns MetricResult with value = distinct_active_days / period_days.
+    """
+    if not events:
+        return MetricResult(value=0.0, confidence=0.0, sample_size=0, trend="insufficient_data")
+
+    now_ms = datetime.now(tz=timezone.utc).timestamp() * 1000
+    cutoff_ms = now_ms - period_days * 86_400_000
+
+    active_date_strings: set[str] = set()
+    for ev in events:
+        ts = ev.get("ts_ms", 0)
+        if ts >= cutoff_ms:
+            dt = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
+            active_date_strings.add(dt.strftime("%Y-%m-%d"))
+
+    distinct_days = len(active_date_strings)
+    ratio = distinct_days / period_days if period_days > 0 else 0.0
+    confidence = min(1.0, distinct_days / 5)
+    return MetricResult(
+        value=ratio,
+        confidence=confidence,
+        sample_size=distinct_days,
+        trend="insufficient_data",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Trend Detection
+# ---------------------------------------------------------------------------
+
+
+def detect_trend(
+    recent_values: list[float],
+    baseline_values: list[float],
+    threshold: float = 0.15,
+) -> str:
+    """Compare recent vs baseline values to detect trend direction.
+
+    Returns: 'improving', 'declining', 'stable', or 'insufficient_data'
+    """
+    if len(recent_values) < 3 or len(baseline_values) < 3:
+        return "insufficient_data"
+
+    recent_mean = statistics.mean(recent_values)
+    baseline_mean = statistics.mean(baseline_values)
+
+    if baseline_mean == 0:
+        return "insufficient_data"
+
+    change = (recent_mean - baseline_mean) / abs(baseline_mean)
+
+    if change > threshold:
+        return "improving"
+    elif change < -threshold:
+        return "declining"
+    return "stable"
+
+
+# ---------------------------------------------------------------------------
+# Temporal Weighting
+# ---------------------------------------------------------------------------
+
+
+def temporal_weight(age_days: float, half_life_days: float = 7.0) -> float:
+    """Compute temporal decay weight using exponential half-life decay.
+
+    weight = 2^(-age_days / half_life_days)
+
+    This is equivalent to exp(-ln(2)/half_life * age) and is the standard
+    half-life formulation from radioactive decay / exponential smoothing.
+    Returns 1.0 for non-positive half_life_days (no decay).
+    """
+    if half_life_days <= 0:
+        return 1.0
+    return 2.0 ** (-age_days / half_life_days)
+
+
+# ---------------------------------------------------------------------------
+# Anti-Gaming Detection
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class GamingFlag:
+    flag_type: str
+    description: str
+    confidence: float
+
+
+def detect_gaming(
+    throughput_percentile: float,
+    complexity_percentile: float,
+    acceptance_rate: float,
+    avg_review_seconds: float,
+    idle_session_ratio: float,
+) -> list[GamingFlag]:
+    """Detect potential metric gaming patterns."""
+    flags: list[GamingFlag] = []
+
+    if throughput_percentile > 0.90 and complexity_percentile < 0.20:
+        flags.append(
+            GamingFlag(
+                flag_type="volume_inflation",
+                description="High throughput with very low complexity suggests cherry-picking",
+                confidence=0.7,
+            )
+        )
+
+    if acceptance_rate > 0.95 and avg_review_seconds < 5:
+        flags.append(
+            GamingFlag(
+                flag_type="quality_manipulation",
+                description="Near-total acceptance with very fast review times suggests rubber-stamping",
+                confidence=0.8,
+            )
+        )
+
+    if idle_session_ratio > 0.30:
+        flags.append(
+            GamingFlag(
+                flag_type="engagement_inflation",
+                description="High proportion of idle sessions suggests gaming active time",
+                confidence=0.6,
+            )
+        )
+
+    return flags
+
+
+# ---------------------------------------------------------------------------
+# Theory-Grounded Metrics (Theory citations in each docstring)
+# ---------------------------------------------------------------------------
+
+
+def bayesian_confidence_interval(
+    successes: int, trials: int, credible_mass: float = 0.9
+) -> tuple[float, float]:
+    """Compute a Bayesian credible interval for a binomial success rate.
+
+    Theory: Jaynes, *Probability Theory: The Logic of Science* (2003).
+    Uses a Beta(successes+1, failures+1) posterior (Laplace's rule of succession),
+    which is the Bayesian conjugate prior for binomial likelihoods.  The posterior
+    mean and variance are approximated with a Normal distribution for tractability
+    (no scipy dependency).
+
+    Approximation:
+        mean = (s+1) / (n+2)
+        var  = mean * (1-mean) / (n+3)
+        z    = 1.645  for 90% credible mass
+
+    Parameters
+    ----------
+    successes:
+        Number of observed successes.
+    trials:
+        Total number of trials (>= successes).
+    credible_mass:
+        Desired credible interval width (default 0.9 → 90%).
+
+    Returns
+    -------
+    (lower, upper) both clamped to [0, 1].
+    """
+    if trials < 0 or successes < 0 or successes > trials:
+        return (0.0, 1.0)
+
+    mean = (successes + 1) / (trials + 2)
+    var = mean * (1 - mean) / (trials + 3)
+    std = math.sqrt(var)
+
+    # z-score lookup: only 90% is requested in the spec; extend if needed.
+    z_map = {0.9: 1.645, 0.95: 1.960, 0.99: 2.576}
+    z = z_map.get(credible_mass, 1.645)
+
+    lower = max(0.0, mean - z * std)
+    upper = min(1.0, mean + z * std)
+    return (lower, upper)
+
+
+def mann_kendall_trend(values: list[float]) -> tuple[str, float]:
+    """Non-parametric Mann-Kendall trend test on a time series.
+
+    Theory: Grimmett & Stirzaker, *Probability and Random Processes* (2001),
+    ch. 9 (rank-based statistics).  The Mann-Kendall statistic τ (Kendall's tau)
+    counts concordant minus discordant pairs normalised by n*(n-1)/2.
+
+    Classification thresholds:
+        τ >  0.2 → 'increasing'
+        τ < -0.2 → 'decreasing'
+        else     → 'stable'
+
+    Parameters
+    ----------
+    values:
+        Ordered time-series observations (oldest first).
+
+    Returns
+    -------
+    (label, tau)  where label ∈ {'increasing', 'decreasing', 'stable'}.
+    """
+    n = len(values)
+    if n < 2:
+        return ("stable", 0.0)
+
+    concordant = 0
+    discordant = 0
+    for i in range(n - 1):
+        for j in range(i + 1, n):
+            diff = values[j] - values[i]
+            if diff > 0:
+                concordant += 1
+            elif diff < 0:
+                discordant += 1
+
+    denominator = n * (n - 1) / 2
+    tau = (concordant - discordant) / denominator if denominator > 0 else 0.0
+
+    if tau > 0.2:
+        label = "increasing"
+    elif tau < -0.2:
+        label = "decreasing"
+    else:
+        label = "stable"
+
+    return (label, tau)
+
+
+def sprt_regression_test(
+    observations: list[float],
+    h0_mean: float,
+    h1_mean: float,
+    alpha: float = 0.05,
+    beta: float = 0.10,
+) -> str:
+    """Sequential Probability Ratio Test (SPRT) for early regression detection.
+
+    Theory: Wald, *Sequential Analysis* (1947).  The SPRT is the most powerful
+    sequential test for distinguishing two simple hypotheses, offering a
+    logarithmic reduction in expected sample size compared to fixed-n tests.
+
+    H0: observations ~ N(h0_mean, σ²)
+    H1: observations ~ N(h1_mean, σ²)
+    σ  = max(|h1_mean - h0_mean| / 2, 0.01)   (shared std, conservative)
+
+    Thresholds (Wald 1947, eq. 3.1):
+        Accept H1 if cumulative LLR > log((1-β)/α)
+        Accept H0 if cumulative LLR < log(β/(1-α))
+        Otherwise continue collecting data.
+
+    Parameters
+    ----------
+    observations:
+        Sequential observations (in order of arrival).
+    h0_mean:
+        Null hypothesis mean.
+    h1_mean:
+        Alternative hypothesis mean (regression level).
+    alpha:
+        Type-I error bound (false positive rate, default 0.05).
+    beta:
+        Type-II error bound (false negative rate, default 0.10).
+
+    Returns
+    -------
+    'accept_h1' | 'accept_h0' | 'continue'
+    """
+    if not observations:
+        return "continue"
+
+    sigma = max(abs(h0_mean - h1_mean) / 2.0, 0.01)
+
+    upper = math.log((1 - beta) / alpha)
+    lower = math.log(beta / (1 - alpha))
+
+    llr = 0.0
+    for x in observations:
+        # log-likelihood ratio for one Gaussian observation
+        llr += (
+            -(x - h1_mean) ** 2 / (2 * sigma ** 2)
+            + (x - h0_mean) ** 2 / (2 * sigma ** 2)
+        )
+        if llr >= upper:
+            return "accept_h1"
+        if llr <= lower:
+            return "accept_h0"
+
+    return "continue"
+
+
+def entropy_consistency(weekly_scores: list[float], n_bins: int = 10) -> float:
+    """Entropy-based consistency score for a distribution of weekly scores.
+
+    Theory: Cover & Thomas, *Elements of Information Theory* (2006), ch. 2.
+    A perfectly consistent reviewer concentrates mass in one bin (H → 0),
+    yielding a score of 1.0.  A maximally spread reviewer has uniform mass
+    (H = log₂(n_bins)), yielding a score of 0.0.
+
+    Score = 1 - H / log₂(n_bins)
+
+    Scores are binned into *n_bins* equal-width bins over [0, 1].
+
+    Parameters
+    ----------
+    weekly_scores:
+        Quality scores in [0, 1], one per week.
+    n_bins:
+        Number of equal-width histogram bins (default 10).
+
+    Returns
+    -------
+    Consistency score in [0, 1].  Returns 1.0 for an empty list or
+    degenerate n_bins ≤ 1.
+    """
+    if not weekly_scores or n_bins <= 1:
+        return 1.0
+
+    counts = [0] * n_bins
+    for score in weekly_scores:
+        idx = min(int(score * n_bins), n_bins - 1)
+        counts[idx] += 1
+
+    total = len(weekly_scores)
+    h = 0.0
+    for c in counts:
+        if c > 0:
+            p = c / total
+            h -= p * math.log2(p)
+
+    max_entropy = math.log2(n_bins)
+    if max_entropy == 0:
+        return 1.0
+
+    return 1.0 - h / max_entropy
+
+
+# ---------------------------------------------------------------------------
+# Additional helper functions required by aggregation pipeline
+# ---------------------------------------------------------------------------
+
+
+def detect_trend_single(values: list[float]) -> str:
+    """Single-series Mann-Kendall trend label.
+
+    Wraps :func:`mann_kendall_trend` and returns the label only.
+    Maps 'increasing'/'decreasing' to 'improving'/'declining' to align
+    with the MetricResult.trend vocabulary used elsewhere in the platform.
+    """
+    label, _ = mann_kendall_trend(values)
+    mapping = {"increasing": "improving", "decreasing": "declining", "stable": "stable"}
+    return mapping.get(label, label)
+
+
+# ---------------------------------------------------------------------------
+# Event-stream Gaming Detection (Sweep 12, CDH patterns)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class EventGamingFlag:
+    """Gaming flag raised by the event-stream detector.
+
+    Attributes
+    ----------
+    is_suspicious:
+        True when a gaming pattern was detected.
+    reason:
+        Human-readable description of the pattern.
+    count:
+        The event/repeat count that triggered the flag.
+    """
+
+    is_suspicious: bool
+    reason: str
+    count: int
+
+
+def detect_gaming_events(
+    events: list[dict], window_hours: int = 24
+) -> EventGamingFlag:
+    """Detect reviewer metric-gaming patterns from an event stream.
+
+    Uses an O(n) deque-based sliding window to find burst submissions and
+    duplicate-content patterns as described in Sweep 12 CDH (Correlated
+    Duplicate Hash) analysis.
+
+    Flags raised:
+    1. **Burst**: > 5 events within any *window_hours* rolling window.
+    2. **Duplicate content**: an event's ``content_hash`` appears > 3 times
+       within the same window (identical analyses submitted in bursts).
+
+    Theory: Wald, *Sequential Analysis* (1947) — sequential anomaly detection
+    with configurable thresholds.
+
+    Parameters
+    ----------
+    events:
+        List of event dicts, each with at least ``ts_ms`` (epoch ms) and
+        optionally ``content_hash`` (str).
+    window_hours:
+        Rolling window size in hours (default 24).
+
+    Returns
+    -------
+    :class:`EventGamingFlag`
+    """
+    if not events:
+        return EventGamingFlag(is_suspicious=False, reason="", count=0)
+
+    window_ms = window_hours * 3_600_000
+
+    # Sort by timestamp ascending for sliding-window correctness.
+    sorted_events = sorted(events, key=lambda e: e.get("ts_ms", 0))
+
+    # --- Pass 1: burst detection (sliding window deque) ---
+    dq: deque[int] = deque()
+    max_burst = 0
+    for ev in sorted_events:
+        ts = ev.get("ts_ms", 0)
+        dq.append(ts)
+        # Evict events outside the window
+        while dq and ts - dq[0] > window_ms:
+            dq.popleft()
+        if len(dq) > max_burst:
+            max_burst = len(dq)
+
+    if max_burst > 5:
+        return EventGamingFlag(
+            is_suspicious=True,
+            reason=f"Burst of {max_burst} events detected within {window_hours}h window",
+            count=max_burst,
+        )
+
+    # --- Pass 2: content-hash duplicate detection within window ---
+    hash_window: deque[tuple[int, str]] = deque()  # (ts_ms, content_hash)
+    hash_counts: dict[str, int] = {}
+
+    for ev in sorted_events:
+        ts = ev.get("ts_ms", 0)
+        content_hash = ev.get("content_hash", "")
+        if not content_hash:
+            continue
+
+        hash_window.append((ts, content_hash))
+        hash_counts[content_hash] = hash_counts.get(content_hash, 0) + 1
+
+        # Evict old entries from window
+        while hash_window and ts - hash_window[0][0] > window_ms:
+            old_ts, old_hash = hash_window.popleft()
+            _ = old_ts
+            if old_hash in hash_counts:
+                hash_counts[old_hash] -= 1
+                if hash_counts[old_hash] <= 0:
+                    del hash_counts[old_hash]
+
+        max_repeats = max(hash_counts.values(), default=0)
+        if max_repeats > 3:
+            worst_hash = max(hash_counts, key=lambda h: hash_counts[h])
+            return EventGamingFlag(
+                is_suspicious=True,
+                reason=(
+                    f"Content hash '{worst_hash}' submitted {max_repeats} times "
+                    f"within {window_hours}h window (CDH pattern)"
+                ),
+                count=max_repeats,
+            )
+
+    return EventGamingFlag(is_suspicious=False, reason="", count=0)
+
+__HERMES_CWD_6c858c07a5d0__/tmp/hello_agent__HERMES_CWD_6c858c07a5d0__

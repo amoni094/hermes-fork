@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_295c9d4e",
+  "started": "2026-09-19 22:35:08",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Cold adversarial review of wave-13 fixes to hermes-fork scripts. Read the actual on-disk files and verify each claim with line-number evidence. Report PASS/FAIL/PARTIAL per claim. Flag any new issues introduced. Write a markdown report to /tmp/adversarial_wave13.md.\n\nClaims to verify:\n\n1. W13-A: jev_compaction.py L771 area — hardcoded 'profiles/fork/sessions' replaced with HERMES_HOME+HERMES_PROFILE env-var pattern. The function _load_session_messages should now derive sessions_dir from env vars",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_295c9d4e/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 22:36:46"
+}

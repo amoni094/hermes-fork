@@ -1,0 +1,14 @@
+[Submitted on 11 Aug 2026]
+
+# Title:Actionable Hallucination Detection: Translating Latent Uncertainty into Agentic Critique
+
+[View PDF](/pdf/2608.10430) [HTML (experimental)](https://arxiv.org/html/2608.10430v1)
+
+> Abstract:Large Language Models (LLMs) deployed as AI agents frequently exhibit user specification-grounding failures, executing hallucinated, undesired actions to force a resolution rather than expressing uncertainty. Existing detection methods fail to provide actionable, real-time correction as they either do not localize the hallucinations, or incur prohibitive inference latency. We introduce the Latent Critic, a lightweight low-rank adapter (LoRA) that operates concurrently with a frozen base LLM's generation to actively restructure the transformer's residual stream---amplifying latent grounding signals and translating them into localized, natural language feedback within a single sequence. By refining the base model's native uncertainty signals, this manipulation of the latent space enables reliable, granular detection without the overhead of secondary inference loops. Mechanistic analysis via activation patching and layer-wise probing shows that this rank-invariant behavior restructures pre-existing uncertainty geometry into a linearly separable representation that transfers more reliably than base model representations alone. Using tool-calling as an instantiation of granular hallucinations, we validate the detection and downstream improvements enabled by the Latent Critic architecture across Qwen and Llama-based models. Demonstrating superior real-time efficacy, our approach significantly outperforms equivalent-scale fine-tuned external detectors, semantic entropy baselines, and passive internal probes in isolating hallucinations, achieving 0.966 AUROC and >80% accuracy in localization (e.g., ungrounded: date). When deployed in a closed-loop ReAct environment, the Critic acts as a negligible latency guardrail, intercepting hallucinations before execution to prevent undesired actions while simultaneously leveraging this specific localized feedback to enable efficient agent self-correction.
+
+| Comments: | 22 pages, 6 figures |
+|---|---|
+| Subjects: | Machine Learning (cs.LG); Artificial Intelligence (cs.AI) |
+| Cite as: | [arXiv:2608.10430](https://arxiv.org/abs/2608.10430) [cs.LG] |
+| | (or [arXiv:2608.10430v1](https://arxiv.org/abs/2608.10430v1) [cs.LG] for this version) |
+| | [https://doi.org/10.48550/arXiv.2608.10430](https://doi.org/10.48550/arXiv.2608.10430) arXiv-issued DOI via DataCite (pending registration) |

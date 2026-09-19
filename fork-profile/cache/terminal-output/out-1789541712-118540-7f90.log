@@ -1,0 +1,1950 @@
+"""``execute_alr_run`` — the durable ALR run orchestrator core (plan §5-§6; ADR 0010).
+
+Ties together the versioned run request/result contracts
+(``src/contracts/alr_run.py``), the Phase 3.2 deterministic rules engine
+(``src/alr_engine/rules.py``), the Phase 3.5-3.7 AI-issue post-processing /
+model-stage deterministic boundary (``src/alr_engine/ai_issue_post.py``,
+``issue_quality.py``, ``model_stage.py``), the Phase 3.8 model-provider seam
+(``src/alr_run/model_invoker.py``), and the Phase 3.3 durable run ledger
+(``src/run_ledger``) into the ``run-advertising-legal-review-v1`` AgentCore
+action's core logic. ``src/alr_run/agentcore_action.py`` is the thin plain-
+dict-in/out wrapper around this module.
+
+No LLM/provider SDK imports, no ``backend/``/``frontend/`` imports, no direct
+``time.time()``/``datetime.now()``/``uuid.uuid4()``/bare
+``random.random()``/``random.randint()`` calls anywhere in this module: every
+timestamp flows through ``deps.clock`` (consumed indirectly via the ledger/
+audit-chain writer, both of which are already clock-injected) and every
+"random" value flows through ``deps.rng``. Model calls flow ONLY through the
+injected ``deps.model_invoker`` (``ModelInvoker`` Protocol) -- no provider SDK
+import here either.
+
+Phase 3.8 (model-stage wiring) is strictly additive: ``AlrRunDeps.model_invoker``
+defaults to ``None``, and when it is ``None`` every asset runs EXACTLY the four
+Phase 3.4 deterministic ledger stages (``normalize_context``,
+``deterministic_checks``, ``required_disclaimers``, ``contextual_rules``) as
+before -- zero model stages, byte-identical behaviour to Phase 3.4. When an
+invoker IS provided, ``_process_asset`` additionally runs the model-stage
+pipeline (``_run_model_stage_pipeline``): ComplianceSpec extraction (advisory)
+-> text review (conditional-required) -> suppress+prune (required,
+deterministic) -> LLM verify (advisory) -> ``finalize_issue_quality``
+(required, deterministic), mirroring the model-call slice of
+``runMarketingReviewOnManifest`` (backend/marketing-review.js) that follows
+Node's ``runDeterministicChecksWithRuleStudio``. See
+``src/alr_run/model_invoker.py``'s module docstring for the documented vision-
+review cut.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import random
+from collections.abc import Callable, Mapping
+from concurrent.futures import ThreadPoolExecutor, wait
+from dataclasses import dataclass, field
+from typing import Any
+
+from src.alr_engine import build_prompt_injection_issue
+from src.alr_engine.ai_issue_post import prune_overlapping_ai_issues, suppress_ai_issues
+from src.alr_engine.issue_quality import finalize_issue_quality, repair_issue_grounding
+from src.alr_engine.model_stage import (
+    LLMResponseParseError,
+    build_compliance_spec_extraction_prompt,
+    build_issue_verify_prompt,
+    build_text_review_prompt,
+    context_extraction_model_for,
+    default_marketing_review_pack,
+    normalize_ai_issues,
+    parse_ai_review_response,
+    resolve_marketing_review_model_family,
+    rewrite_model_for,
+    select_model_for_stage,
+)
+from src.alr_engine.rules import (
+    PolicyPack,
+    build_manifest,
+    detect_prompt_injection_signals,
+    evaluate_contextual_rules,
+    evaluate_deterministic_checks,
+    evaluate_required_disclaimers,
+    merge_issues,
+    normalize_review_context,
+    resolve_detector_config,
+)
+from src.alr_run.explanation import DETERMINISTIC_STAGE_IDS as _STAGE_IDS_DETERMINISTIC
+from src.alr_run.explanation import MODEL_STAGE_IDS as _STAGE_IDS_MODEL
+from src.alr_run.explanation import AssetExplainabilityInput
+from src.alr_run.explanation import build_candidate_lineage as _build_candidate_lineage
+from src.alr_run.explanation import build_decision_explanation as _build_decision_explanation
+from src.alr_run.explanation import build_review_conclusion_explanation as _build_review_conclusion_explanation
+from src.alr_run.explanation import build_review_coverage as _build_review_coverage
+from src.alr_run.model_invoker import (
+    ModelInvocation,
+    ModelInvocationError,
+    ModelInvocationResult,
+    ModelInvoker,
+)
+from src.contracts.alr_run import (
+    ALRRunRequestV1,
+    ALRRunResultCompletedV1,
+    ALRRunResultErrorV1,
+    CollateralItemV1,
+    RunCoverageSummaryV1,
+    RunProvenanceV1,
+)
+from src.contracts.audit import AuditManifestV1, DecisionAuditEventV1, ObjectRefV1
+from src.contracts.canonical import (
+    canonical_bytes,
+    canonical_model_bytes,
+    canonical_model_hash,
+    compact_for_content_hash,
+)
+from src.contracts.canonical import content_hash as canonical_content_hash
+from src.contracts.states import RunStateV1
+from src.run_ledger import AuditChainWriter, Clock, ContentStore, RetryPolicy, RunLedger, RunLedgerError
+from src.run_ledger import paths as ledger_paths
+from src.run_ledger.retry import should_abort_early
+from src.run_ledger.timestamps import iso_ms
+
+__all__ = ["ALR_ENGINE_CONTRACT_VERSION", "AlrRunDeps", "execute_alr_run"]
+
+# Idempotency-key `engine_contract_version` component (plan §6) — pinned to match
+# tests/run_ledger/conftest.py's `BASE_ACCEPT_KWARGS["engine_contract_version"]` convention.
+ALR_ENGINE_CONTRACT_VERSION = "alr.run.v1"
+
+_STAGE_SCHEMA_VERSION = "alr.run.v1"
+
+# Deterministic fallback content hash used when the request carries no
+# previous-issues snapshot (canonical encoding forbids null/None).
+_NO_PRIOR_ISSUES_HASH = canonical_content_hash({"prior_issues": "none"})
+
+
+@dataclass
+class AlrRunDeps:
+    """Runtime dependencies for ``execute_alr_run`` (plan §3.2 / ADR 0010 wiring).
+
+    ``content`` is included ADDITIONALLY to the RunLedger/policy/clock/rng/
+    text_provider fields the plan's design calls out by name because
+    ``RunLedger`` deliberately does not expose write helpers for anything
+    beyond its own stage/branch/completion objects (its ``_content``/
+    ``_coord`` attributes are private by design) -- this runner needs to
+    persist the assembled result/coverage/explanation-manifest documents and
+    read back a fixed-path ledger projection on idempotent replay. This is a
+    necessary, additive dependency, not a ``run_ledger`` semantics change.
+    """
+
+    ledger: RunLedger
+    audit: AuditChainWriter
+    content: ContentStore
+    policy_pack: PolicyPack
+    clock: Clock
+    rng: random.Random
+    text_provider: Callable[[CollateralItemV1], str]
+    lease_ttl_ms: int = 300_000
+    # Phase 3.8 (additive): the model-provider seam. ``None`` (the default)
+    # preserves EXACTLY Phase 3.4 behaviour -- zero model stages, every existing
+    # test passes unchanged. Providing an invoker enables the model-stage
+    # pipeline in ``_process_asset``, gated per stage by ``detector_config_overrides``
+    # (below) exactly like Node's ``resolvedDetectorConfig.enableContextExtraction``/
+    # ``enableLlmVerify``.
+    model_invoker: ModelInvoker | None = None
+    # Phase 3.8 (additive): overrides layered under ``resolve_detector_config``'s
+    # defaults (mirrors Node's ``requestedDetectorConfig`` -- e.g.
+    # ``{"enableLlmVerify": True, "enableContextExtraction": True}``). ``None``
+    # (the default) resolves to the same all-defaults-off detector config Phase
+    # 3.4 always used, so an omitted override is a no-op even when an invoker IS
+    # provided (model stages still gate off their individual "enable*" flags).
+    # The V2 run request contract (plan §4.1) carries no free-text/detector-config
+    # field by design (§2.1 "Caller-supplied free-text review context is retired
+    # in V2") -- this is a deploy-time/test-time override, not a per-request one.
+    detector_config_overrides: dict[str, Any] | None = None
+    # Phase 3.8 (additive): per-model-stage retry budget (ADR 0010 "Retry
+    # budgets"). Consumed only on a `retryable=True` ``ModelInvocationError``;
+    # exhaustion (or a `retryable=False` error) is an immediate classified
+    # failure. No wall-clock sleep ever happens for this budget (deterministic
+    # tests never wait) -- see ``_run_model_stage``.
+    model_retry_policy: RetryPolicy = field(default_factory=lambda: RetryPolicy(max_attempts=3, base_delay_ms=200))
+
+
+class _StageFailure(Exception):
+    """Module-private: a classified per-asset/per-stage compute failure (plan §5).
+
+    Raised only from within a per-asset worker's stage-compute step; the
+    ThreadPoolExecutor draining loop in ``_execute_alr_run_body`` inspects
+    ``future.exception()`` for this type specifically and converts it into an
+    ``analysis_incomplete`` result via ``RunLedger.fail_run``. It is NOT a
+    ``RunLedgerError`` subclass, so the top-level ``except RunLedgerError`` in
+    ``execute_alr_run`` never accidentally swallows it.
+    """
+
+    def __init__(self, asset_id: str, stage_id: str, failure_code: str, message: str) -> None:
+        self.asset_id = asset_id
+        self.stage_id = stage_id
+        self.failure_code = failure_code
+        self.message = message
+        super().__init__(f"asset={asset_id!r} stage={stage_id!r} failed ({failure_code}): {message}")
+
+
+class _TextProviderFailed(Exception):
+    """Module-private: distinguishes a ``text_provider`` failure from other
+    ``normalize_context`` compute failures so the recorded ``failure_code``
+    can be the specific ``alr_run.text_provider_failed`` the plan requires."""
+
+
+@dataclass
+class _AssetOutcome:
+    """One asset's in-memory processing result, returned by ``_process_asset``."""
+
+    asset_id: str
+    document_id: str
+    upload_order: int
+    final_issues: list[dict]
+    events: list[DecisionAuditEventV1] = field(default_factory=list)
+    # Phase 3.9 (additive, explainability -- plan §7-§8): everything
+    # ``src/alr_run/explanation.py`` needs beyond ``final_issues``/``events``
+    # to assemble per-issue ``DecisionExplanationV1`` packets, the coverage
+    # manifest, and candidate lineage. Empty/default for every field when
+    # ``deps.model_invoker is None`` (pure Phase 3.4 path) except
+    # ``manifest``/``text``, which every asset always computes.
+    manifest: dict | None = None
+    text: str = ""
+    ai_generated_issues: list[dict] = field(default_factory=list)
+    ai_suppressed_issues: list[dict] = field(default_factory=list)
+    ai_pruned_issues: list[dict] = field(default_factory=list)
+    ai_verify_dropped: list[dict] = field(default_factory=list)
+    ungrounded_suppressed_issues: list[dict] = field(default_factory=list)
+    quality_signals: dict[str, int] = field(default_factory=dict)
+
+
+def _stage_output_path(request: ALRRunRequestV1, run_id: str, content_hash_hex: str) -> str:
+    return ledger_paths.stage_output_object(
+        request.tenant_id, request.deal_id, request.version_id, request.mode, run_id, content_hash_hex
+    )
+
+
+def _put_hashed_json(content: ContentStore, path_fn: Callable[[str], str], doc: Any) -> tuple[str, str]:
+    """Canonicalize+hash ``doc``, write it at the content-addressed path ``path_fn(hash)``.
+
+    Returns ``(ref, hash)``.
+    """
+    body = canonical_bytes(compact_for_content_hash(doc))
+    hash_hex = hashlib.sha256(body).hexdigest()
+    ref = path_fn(hash_hex)
+    content.put_content(ref, body)
+    return ref, hash_hex
+
+
+def _run_stage(
+    deps: AlrRunDeps,
+    request: ALRRunRequestV1,
+    *,
+    run_id: str,
+    asset_id: str,
+    stage_id: str,
+    attempt: int,
+    lease_id: str,
+    chain_scope: str,
+    events: list[DecisionAuditEventV1],
+    compute: Callable[[], tuple[Any, Any]],
+    default_failure_code: str,
+) -> Any:
+    """Run one required per-asset ledger stage: start -> compute -> record -> audit.
+
+    ``compute`` returns ``(state_value, output_obj)``: ``state_value`` is
+    handed back to the caller (kept in-memory for the next stage / final
+    assembly); ``output_obj`` is the JSON-able shape whose canonical bytes are
+    durably recorded as the stage's output. On any ``compute`` exception, the
+    stage is recorded ``FAILED``, a ``stage_failed`` audit event is appended,
+    and a ``_StageFailure`` is raised to unwind out of the worker.
+    """
+    deps.ledger.start_stage(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+        asset_id=asset_id,
+        stage_id=stage_id,
+        attempt=attempt,
+        lease_id=lease_id,
+        classification="required",
+        tool_version=deps.policy_pack.pack_version,
+        schema_version=_STAGE_SCHEMA_VERSION,
+        policy_version=deps.policy_pack.pack_version,
+    )
+    try:
+        state_value, output_obj = compute()
+    except Exception as exc:
+        failure_code = "alr_run.text_provider_failed" if isinstance(exc, _TextProviderFailed) else default_failure_code
+        deps.ledger.record_stage_output(
+            tenant_id=request.tenant_id,
+            deal_id=request.deal_id,
+            version_id=request.version_id,
+            mode=request.mode,
+            run_id=run_id,
+            asset_id=asset_id,
+            stage_id=stage_id,
+            attempt=attempt,
+            lease_id=lease_id,
+            state="FAILED",
+            failure_code=failure_code,
+        )
+        event = deps.audit.append(
+            tenant_id=request.tenant_id,
+            deal_id=request.deal_id,
+            version_id=request.version_id,
+            mode=request.mode,
+            run_id=run_id,
+            chain_scope=chain_scope,
+            event_id=f"{chain_scope}:{stage_id}:{lease_id}:failed",
+            actor_type="deterministic_tool",
+            actor_id=f"alr_engine:{stage_id}",
+            action="stage_failed",
+            outcome="failed",
+            asset_id=asset_id,
+            stage_id=stage_id,
+            reason_code=failure_code,
+        )
+        events.append(event)
+        raise _StageFailure(asset_id, stage_id, failure_code, str(exc)[:280]) from exc
+
+    output_bytes = canonical_bytes(compact_for_content_hash(output_obj))
+    deps.ledger.record_stage_output(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+        asset_id=asset_id,
+        stage_id=stage_id,
+        attempt=attempt,
+        lease_id=lease_id,
+        state="SUCCEEDED",
+        output_bytes=output_bytes,
+        tool_version=deps.policy_pack.pack_version,
+        schema_version=_STAGE_SCHEMA_VERSION,
+        policy_version=deps.policy_pack.pack_version,
+    )
+    event = deps.audit.append(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+        chain_scope=chain_scope,
+        event_id=f"{chain_scope}:{stage_id}:{lease_id}:completed",
+        actor_type="deterministic_tool",
+        actor_id=f"alr_engine:{stage_id}",
+        action="stage_completed",
+        outcome="succeeded",
+        asset_id=asset_id,
+        stage_id=stage_id,
+    )
+    events.append(event)
+    return state_value
+
+
+# ── Phase 3.8: model-stage wiring ────────────────────────────────────────────
+
+
+def _map_compliance_spec_response(spec: Any) -> dict[str, Any] | None:
+    """Port of ``extractComplianceSpec``'s post-call field mapping
+    (backend/marketing-review.js:3145-3152) -- the part of that function NOT
+    ported into ``src/alr_engine/model_stage.py`` (see that module's docstring,
+    "explicitly OUT of scope": "this is async function orchestration around the
+    LLM call... not a 'prompt builder' or generic 'AI issue response
+    normalization'"). Lives here, in the runner, because it is orchestration
+    around a specific model call rather than a reusable deterministic-core
+    helper. Returns ``None`` for a falsy/non-dict ``spec`` (Node: ``if (!spec)
+    return null;``).
+    """
+    if not spec or not isinstance(spec, dict):
+        return None
+    mapped = dict(spec)
+    if mapped.get("consent_state") == "valid":
+        mapped["consent_state"] = "opt_in"
+    dncr_listed = mapped.get("dncr_listed")
+    if dncr_listed == "unwashed":
+        mapped["dncr_listed"] = True
+    elif dncr_listed == "washed":
+        mapped["dncr_listed"] = False
+    else:
+        mapped["dncr_listed"] = None
+    if mapped.get("hardship_segment") is True and not mapped.get("hardship_status"):
+        mapped["hardship_status"] = "active"
+    mapped["source"] = "llm_extracted"
+    return mapped
+
+
+def _existing_stage_record(
+    deps: AlrRunDeps, request: ALRRunRequestV1, *, run_id: str, asset_id: str, stage_id: str
+) -> Mapping[str, Any] | None:
+    """Read-only peek at a stage's CURRENT coordination record, regardless of
+    which run ``attempt`` wrote it.
+
+    Used ONLY by the model-stage path (``_run_model_stage``) to guarantee ADR
+    0010's "retrying the same run_id resumes completed stages" for calls that
+    cost real money/latency: a lease-expiry resume takes a NEW, higher
+    ``attempt`` id (``RunLedger.acquire_lease``), and ``start_stage`` does not
+    itself skip re-computation for a higher attempt (by design, for the four
+    Phase 3.4 deterministic stages, where re-computation is pure/idempotent and
+    the added coordination-read cost is not worth paying). A model stage MUST
+    NOT pay for a second live provider call just because the run's lease
+    expired after the first call already succeeded, so this reads the stage
+    head directly -- the same read pattern
+    ``tests/alr_run/test_end_to_end.py`` already uses via
+    ``deps.ledger._coord.get(...)`` -- rather than adding a new public
+    ``RunLedger`` read method (this phase's "additive outside new files"
+    constraint: no behaviour change to ``run_ledger``).
+    """
+    stage_path = ledger_paths.stage_head(
+        request.tenant_id, request.deal_id, request.version_id, request.mode, run_id, asset_id, stage_id
+    )
+    return deps.ledger._coord.get(stage_path)
+
+
+def _record_skipped_stage(
+    deps: AlrRunDeps,
+    request: ALRRunRequestV1,
+    *,
+    run_id: str,
+    asset_id: str,
+    stage_id: str,
+    attempt: int,
+    lease_id: str,
+    chain_scope: str,
+    events: list[DecisionAuditEventV1],
+    classification: str,
+    condition_reason: str,
+) -> None:
+    """Records a ``SKIPPED`` ledger stage: the stage's applicability condition
+    (plan §5 "conditional"/"advisory" rows) was not met on this run -- feature
+    disabled, or nothing to do (no text / no AI issues). Never raises; a
+    skipped stage never blocks the run. Idempotent across resume: re-evaluating
+    the same (deterministic) condition on a later attempt just re-records the
+    same ``SKIPPED`` state, never invoking a model.
+    """
+    deps.ledger.start_stage(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+        asset_id=asset_id,
+        stage_id=stage_id,
+        attempt=attempt,
+        lease_id=lease_id,
+        classification=classification,
+        condition_reason=condition_reason,
+        tool_version=deps.policy_pack.pack_version,
+        schema_version=_STAGE_SCHEMA_VERSION,
+        policy_version=deps.policy_pack.pack_version,
+    )
+    deps.ledger.record_stage_output(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+        asset_id=asset_id,
+        stage_id=stage_id,
+        attempt=attempt,
+        lease_id=lease_id,
+        state="SKIPPED",
+    )
+    event = deps.audit.append(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+        chain_scope=chain_scope,
+        event_id=f"{chain_scope}:{stage_id}:{lease_id}:skipped",
+        actor_type="system",
+        actor_id=f"alr_run.runner:{stage_id}",
+        action="stage_skipped",
+        outcome="skipped",
+        asset_id=asset_id,
+        stage_id=stage_id,
+        reason_code=condition_reason,
+    )
+    events.append(event)
+
+
+def _run_model_stage(
+    deps: AlrRunDeps,
+    request: ALRRunRequestV1,
+    *,
+    run_id: str,
+    asset_id: str,
+    stage_id: str,
+    attempt: int,
+    lease_id: str,
+    chain_scope: str,
+    events: list[DecisionAuditEventV1],
+    classification: str,
+    requested_provider: str | None,
+    requested_model: str | None,
+    build_invocation: Callable[[], ModelInvocation],
+    parse_and_compute: Callable[[ModelInvocationResult], tuple[Any, Any]],
+    rehydrate_state: Callable[[Any], Any],
+    default_failure_code: str,
+    blocking: bool,
+) -> tuple[Any, str]:
+    """Runs one model-invoking ledger stage with the stage retry budget (ADR
+    0010 "Retry budgets" / ``deps.model_retry_policy``) and resume-safe
+    invocation-skip (see ``_existing_stage_record``). Returns ``(state_value,
+    final_state)`` where ``final_state`` is one of ``"SUCCEEDED"``/``"DEGRADED"``.
+
+    - Resume: if this ``(asset_id, stage_id)`` already has a terminal stage
+      record from an EARLIER attempt, its recorded output is rehydrated
+      (``rehydrate_state``) and returned WITHOUT invoking ``deps.model_invoker``
+      again -- a committed model stage is never double-invoked.
+    - Retry: a ``retryable=True`` ``ModelInvocationError`` consumes one unit of
+      ``deps.model_retry_policy`` (no wall-clock sleep -- deterministic tests
+      never wait) and retries within the SAME stage attempt/lease.
+    - ``blocking=True`` (conditional-required, e.g. ``text_review``): a
+      terminal error, budget exhaustion, or a malformed-JSON parse failure
+      (``LLMResponseParseError``) records the stage ``FAILED`` with its own
+      ``failure_code`` and raises ``_StageFailure`` -- the SAME classified-
+      failure path a deterministic stage takes (plan §5: conditional-required
+      failure -> ``analysis_incomplete``).
+    - ``blocking=False`` (advisory, e.g. ``extract_compliance_spec``/
+      ``verify_ai_issues``): ANY failure (including a parse failure) is
+      recorded ``DEGRADED`` and returned to the caller as ``(None,
+      "DEGRADED")`` -- never raises, mirroring Node's "best-effort, never
+      block the review" swallow-errors semantics for these two stages
+      (``extractComplianceSpec``'s ``catch { return null; }`` /
+      ``verifyAiIssues``'s "Never drop issues on verifier failure").
+    """
+    existing = _existing_stage_record(deps, request, run_id=run_id, asset_id=asset_id, stage_id=stage_id)
+    if existing is not None and existing.get("state") in ("SUCCEEDED", "DEGRADED", "FAILED"):
+        if existing["state"] == "SUCCEEDED":
+            output_ref = existing.get("output_ref")
+            output_bytes = deps.content.get(output_ref) if output_ref else None
+            output_obj = json.loads(output_bytes) if output_bytes is not None else None
+            return rehydrate_state(output_obj), "SUCCEEDED"
+        if existing["state"] == "DEGRADED":
+            return None, "DEGRADED"
+        raise _StageFailure(
+            asset_id,
+            stage_id,
+            existing.get("failure_code") or default_failure_code,
+            "resumed an already-FAILED model stage from an earlier attempt",
+        )
+
+    deps.ledger.start_stage(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+        asset_id=asset_id,
+        stage_id=stage_id,
+        attempt=attempt,
+        lease_id=lease_id,
+        classification=classification,
+        tool_version=deps.policy_pack.pack_version,
+        schema_version=_STAGE_SCHEMA_VERSION,
+        policy_version=deps.policy_pack.pack_version,
+        requested_provider=requested_provider,
+        requested_model=requested_model,
+    )
+
+    model_attempt = 1
+    retry_reason: str | None = None
+    failure_code = default_failure_code
+    last_error: BaseException | None = None
+    last_result: ModelInvocationResult | None = None
+    failure_history: list[bool] = []  # True = failed attempt (for SPRT early-abort)
+
+    while True:
+        invocation = build_invocation()
+        try:
+            result = deps.model_invoker.invoke(invocation)
+        except ModelInvocationError as exc:
+            last_error = exc
+            failure_history.append(True)
+            # SPRT early-abort (Wald 1947): abort immediately when failure stream
+            # is detectably systematic, even before the retry budget is exhausted.
+            if should_abort_early(failure_history):
+                failure_code = f"{default_failure_code}_systematic"
+                break
+            if exc.retryable and not deps.model_retry_policy.is_exhausted(model_attempt):
+                retry_reason = f"retryable_model_error:attempt={model_attempt}"
+                deps.audit.append(
+                    tenant_id=request.tenant_id,
+                    deal_id=request.deal_id,
+                    version_id=request.version_id,
+                    mode=request.mode,
+                    run_id=run_id,
+                    chain_scope=chain_scope,
+                    event_id=f"{chain_scope}:{stage_id}:{lease_id}:retry:{model_attempt}",
+                    actor_type="model",
+                    actor_id=f"alr_engine:{stage_id}",
+                    action="stage_retried",
+                    outcome="retrying",
+                    asset_id=asset_id,
+                    stage_id=stage_id,
+                    reason_code=retry_reason,
+                )
+                model_attempt += 1
+                continue
+            failure_code = default_failure_code if exc.retryable else f"{default_failure_code}_terminal"
+            break
+        else:
+            failure_history.append(False)
+        last_result = result
+        try:
+            state_value, output_obj = parse_and_compute(result)
+        except LLMResponseParseError as exc:
+            last_error = exc
+            failure_code = f"{default_failure_code}_parse_failed"
+            break
+
+        output_bytes = canonical_bytes(compact_for_content_hash(output_obj))
+        deps.ledger.record_stage_output(
+            tenant_id=request.tenant_id,
+            deal_id=request.deal_id,
+            version_id=request.version_id,
+            mode=request.mode,
+            run_id=run_id,
+            asset_id=asset_id,
+            stage_id=stage_id,
+            attempt=attempt,
+            lease_id=lease_id,
+            state="SUCCEEDED",
+            output_bytes=output_bytes,
+            tool_version=deps.policy_pack.pack_version,
+            schema_version=_STAGE_SCHEMA_VERSION,
+            policy_version=deps.policy_pack.pack_version,
+            actual_provider=result.actual_provider,
+            actual_model=result.actual_model,
+            provider_request_id=result.provider_request_id,
+            retry_reason=retry_reason,
+        )
+        event = deps.audit.append(
+            tenant_id=request.tenant_id,
+            deal_id=request.deal_id,
+            version_id=request.version_id,
+            mode=request.mode,
+            run_id=run_id,
+            chain_scope=chain_scope,
+            event_id=f"{chain_scope}:{stage_id}:{lease_id}:completed",
+            actor_type="model",
+            actor_id=f"alr_engine:{stage_id}",
+            action="stage_completed",
+            outcome="succeeded",
+            asset_id=asset_id,
+            stage_id=stage_id,
+            provider=result.actual_provider,
+            model=result.actual_model,
+            provider_request_id=result.provider_request_id,
+        )
+        events.append(event)
+        return state_value, "SUCCEEDED"
+
+    # Failure path: either a terminal/exhausted ModelInvocationError, or a
+    # malformed-JSON parse failure on an otherwise-successful invocation.
+    actual_provider = last_result.actual_provider if last_result is not None else None
+    actual_model = last_result.actual_model if last_result is not None else None
+    provider_request_id = last_result.provider_request_id if last_result is not None else None
+    final_state = "FAILED" if blocking else "DEGRADED"
+    deps.ledger.record_stage_output(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+        asset_id=asset_id,
+        stage_id=stage_id,
+        attempt=attempt,
+        lease_id=lease_id,
+        state=final_state,
+        failure_code=failure_code,
+        actual_provider=actual_provider,
+        actual_model=actual_model,
+        provider_request_id=provider_request_id,
+        retry_reason=retry_reason,
+    )
+    event = deps.audit.append(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+        chain_scope=chain_scope,
+        event_id=f"{chain_scope}:{stage_id}:{lease_id}:{'failed' if blocking else 'degraded'}",
+        actor_type="model",
+        actor_id=f"alr_engine:{stage_id}",
+        action="stage_failed" if blocking else "stage_degraded",
+        outcome="failed" if blocking else "degraded",
+        asset_id=asset_id,
+        stage_id=stage_id,
+        reason_code=failure_code,
+        provider=actual_provider,
+        model=actual_model,
+        provider_request_id=provider_request_id,
+    )
+    events.append(event)
+
+    if blocking:
+        raise _StageFailure(asset_id, stage_id, failure_code, str(last_error)[:280] if last_error else failure_code)
+    return None, "DEGRADED"
+
+
+@dataclass
+class _ModelPipelineResult:
+    """Phase 3.9 (additive): everything ``_run_model_stage_pipeline`` computed,
+    not just the final merged issue list -- captures the AI-issue candidate
+    lineage (generated/suppressed/pruned/verify-dropped/ungrounded-suppressed)
+    and the ``finalize_issue_quality`` quality signals for explainability
+    assembly (``src/alr_run/explanation.py``), without changing what
+    ``final_issues`` itself contains."""
+
+    final_issues: list[dict]
+    ai_generated_issues: list[dict]
+    ai_suppressed_issues: list[dict]
+    ai_pruned_issues: list[dict]
+    ai_verify_dropped: list[dict]
+    ungrounded_suppressed_issues: list[dict]
+    quality_signals: dict[str, int]
+
+
+def _run_model_stage_pipeline(
+    deps: AlrRunDeps,
+    request: ALRRunRequestV1,
+    *,
+    run_id: str,
+    asset_id: str,
+    lease_id: str,
+    attempt: int,
+    chain_scope: str,
+    events: list[DecisionAuditEventV1],
+    stage: Callable[[str, Callable[[], tuple[Any, Any]], str], Any],
+    text: str,
+    manifest: dict,
+    detector_config: dict,
+    pack: dict,
+    deterministic_issues: list[dict],
+) -> _ModelPipelineResult:
+    """Phase 3.8 model-stage pipeline (plan §5/§14), entered ONLY when
+    ``deps.model_invoker is not None``. Mirrors the model-call slice of
+    ``runMarketingReviewOnManifest`` (backend/marketing-review.js) that runs
+    AFTER Node's ``runDeterministicChecksWithRuleStudio`` (== the four
+    already-ledgered deterministic stages this asset just ran):
+    ComplianceSpec extraction (advisory) -> text review (conditional-required)
+    -> [vision review: CUT, see ``src/alr_run/model_invoker.py``] -> suppress+
+    prune (required, deterministic) -> LLM verify (advisory) ->
+    ``finalize_issue_quality`` (required, deterministic).
+
+    ``deterministic_issues`` is this asset's already-committed, deduped
+    deterministic result (the ``contextual_rules`` stage's output) -- the same
+    value Node's ``deterministicIssues`` local holds by the point it starts the
+    model-call slice.
+
+    Cut/simplification (documented, not fixed in this phase): the extracted
+    ComplianceSpec feeds the text-review/verify prompts (mirroring
+    ``buildComplianceSpec``'s role there) but does NOT loop back into the four
+    deterministic ledger stages, which already ran (with ``review_context=
+    None``) before this pipeline starts -- full parity would require
+    reordering stage execution so context extraction runs first, which is a
+    larger structural change deferred to a later increment; this matches the
+    stage's ``advisory`` classification ("it may not clear a rule", plan §5).
+    Likewise, ``previous_issues`` is passed as ``[]`` to the prompt builders:
+    this runner does not yet resolve ``request.previous_issues_ref`` content
+    (only its hash, for the idempotency key) -- a documented cut, not a silent
+    behaviour gap, since Phase 3.4 never loaded that content either.
+    """
+
+    def _telemetry_metadata(workflow_stage: str) -> dict[str, str]:
+        return {"app": "denuto", "surface": "marketing_review", "workflow_stage": workflow_stage}
+
+    # -- ComplianceSpec extraction (advisory) --------------------------------
+    review_context: dict[str, Any] | None = None
+    if detector_config.get("enableContextExtraction") and text.strip():
+        requested_model = context_extraction_model_for(pack, detector_config)
+        requested_provider = resolve_marketing_review_model_family(requested_model)
+
+        def _build_context_extraction_invocation() -> ModelInvocation:
+            return ModelInvocation(
+                prompt=build_compliance_spec_extraction_prompt(text, "Submitted collateral"),
+                requested_model=requested_model,
+                max_tokens=1500,
+                stage_id="extract_compliance_spec",
+                schema_name="marketing_compliance_spec",
+                reasoning_effort="minimal",
+                metadata=_telemetry_metadata("context_extraction"),
+            )
+
+        def _parse_context_extraction(result: ModelInvocationResult) -> tuple[Any, Any]:
+            spec = parse_ai_review_response(result.response_text)
+            mapped = _map_compliance_spec_response(spec)
+            return mapped, {"review_context": mapped}
+
+        review_context, _ = _run_model_stage(
+            deps,
+            request,
+            run_id=run_id,
+            asset_id=asset_id,
+            stage_id="extract_compliance_spec",
+            attempt=attempt,
+            lease_id=lease_id,
+            chain_scope=chain_scope,
+            events=events,
+            classification="advisory",
+            requested_provider=requested_provider,
+            requested_model=requested_model,
+            build_invocation=_build_context_extraction_invocation,
+            parse_and_compute=_parse_context_extraction,
+            rehydrate_state=lambda obj: obj.get("review_context") if isinstance(obj, dict) else None,
+            default_failure_code="alr_run.context_extraction_failed",
+            blocking=False,
+        )
+    else:
+        condition_reason = (
+            "context_extraction_disabled" if not detector_config.get("enableContextExtraction") else "no_text"
+        )
+        _record_skipped_stage(
+            deps,
+            request,
+            run_id=run_id,
+            asset_id=asset_id,
+            stage_id="extract_compliance_spec",
+            attempt=attempt,
+            lease_id=lease_id,
+            chain_scope=chain_scope,
+            events=events,
+            classification="advisory",
+            condition_reason=condition_reason,
+        )
+
+    # -- Text review (conditional-required) ----------------------------------
+    ai_issues: list[dict] = []
+    if text.strip():
+        requested_model = select_model_for_stage("text_review", pack, detector_config)
+        requested_provider = resolve_marketing_review_model_family(requested_model)
+
+        def _build_text_review_invocation() -> ModelInvocation:
+            return ModelInvocation(
+                prompt=build_text_review_prompt(manifest, pack, review_context, detector_config, []),
+                requested_model=requested_model,
+                max_tokens=16384,
+                stage_id="text_review",
+                schema_name="marketing_review_text",
+                reasoning_effort="minimal",
+                metadata=_telemetry_metadata("text_review"),
+            )
+
+        def _parse_text_review(result: ModelInvocationResult) -> tuple[Any, Any]:
+            parsed = parse_ai_review_response(result.response_text)
+            raw_issues = parsed.get("issues") if isinstance(parsed, dict) else None
+            issues = normalize_ai_issues(raw_issues, manifest, "llm_text", pack, detector_config)
+            return issues, {"issues": issues}
+
+        ai_issues, _ = _run_model_stage(
+            deps,
+            request,
+            run_id=run_id,
+            asset_id=asset_id,
+            stage_id="text_review",
+            attempt=attempt,
+            lease_id=lease_id,
+            chain_scope=chain_scope,
+            events=events,
+            classification="conditional",
+            requested_provider=requested_provider,
+            requested_model=requested_model,
+            build_invocation=_build_text_review_invocation,
+            parse_and_compute=_parse_text_review,
+            rehydrate_state=lambda obj: obj.get("issues") if isinstance(obj, dict) else [],
+            default_failure_code="alr_run.text_review_failed",
+            blocking=True,
+        )
+    else:
+        _record_skipped_stage(
+            deps,
+            request,
+            run_id=run_id,
+            asset_id=asset_id,
+            stage_id="text_review",
+            attempt=attempt,
+            lease_id=lease_id,
+            chain_scope=chain_scope,
+            events=events,
+            classification="conditional",
+            condition_reason="no_text",
+        )
+
+    # -- Suppress + prune (required, deterministic) --------------------------
+    # Phase 3.9 (additive): the closure captures its own suppressed/pruned
+    # lists into these caller-scope holders purely for explainability
+    # (candidate lineage) -- ``_stage``'s deterministic-stage contract only
+    # returns the ONE state_value the pipeline needs (``kept``); holders are
+    # the established way this module threads a second observation out of a
+    # ``_stage``-wrapped compute closure without changing that contract.
+    suppressed_holder: list[dict] = []
+    pruned_holder: list[dict] = []
+
+    def _compute_suppress_and_prune() -> tuple[Any, Any]:
+        suppression = suppress_ai_issues(ai_issues, manifest, review_context, detector_config)
+        overlap = prune_overlapping_ai_issues(suppression["kept"], deterministic_issues, detector_config)
+        kept = overlap["kept"]
+        suppressed_holder[:] = suppression["suppressed"]
+        pruned_holder[:] = overlap["pruned"]
+        return kept, {
+            "issues": kept,
+            "suppressed_count": len(suppression["suppressed"]),
+            "pruned_count": len(overlap["pruned"]),
+        }
+
+    ai_issues_after_prune: list[dict] = stage(
+        "suppress_and_prune_ai_issues", _compute_suppress_and_prune, "alr_run.suppress_and_prune_failed"
+    )
+
+    # -- LLM verify (advisory) ------------------------------------------------
+    ai_verify_dropped: list[dict] = []
+    if detector_config.get("enableLlmVerify") and ai_issues_after_prune:
+        requested_model = rewrite_model_for(pack, detector_config)
+        requested_provider = resolve_marketing_review_model_family(requested_model)
+
+        def _build_verify_invocation() -> ModelInvocation:
+            return ModelInvocation(
+                prompt=build_issue_verify_prompt(ai_issues_after_prune, manifest, review_context),
+                requested_model=requested_model,
+                max_tokens=4000,
+                stage_id="verify_ai_issues",
+                schema_name="marketing_review_verify",
+                reasoning_effort="low",
+                metadata=_telemetry_metadata("issue_verify"),
+            )
+
+        def _parse_verify(result: ModelInvocationResult) -> tuple[Any, Any]:
+            parsed = parse_ai_review_response(result.response_text)
+            verdicts = parsed.get("verdicts") if isinstance(parsed, dict) else None
+            # Phase 3.9 (additive): keep the verdict's own "reason" text
+            # alongside the drop decision -- both persisted in the stage's
+            # recorded output (``dropped_reasons``), so a later resume can
+            # recover it too, not just the live/non-resumed path.
+            drop_reasons: dict[int, str | None] = {}
+            for verdict in verdicts or []:
+                if isinstance(verdict, dict) and verdict.get("keep") is False:
+                    issue_index = verdict.get("issue_index")
+                    if isinstance(issue_index, int):
+                        drop_reasons[issue_index] = verdict.get("reason")
+            drop_indices = set(drop_reasons)
+            kept = [issue for index, issue in enumerate(ai_issues_after_prune) if index not in drop_indices]
+            dropped = [issue for index, issue in enumerate(ai_issues_after_prune) if index in drop_indices]
+            dropped_reasons = [
+                drop_reasons.get(index) for index, issue in enumerate(ai_issues_after_prune) if index in drop_indices
+            ]
+            payload = {"kept": kept, "dropped": dropped, "dropped_reasons": dropped_reasons}
+            return payload, payload
+
+        def _rehydrate_verify(obj: Any) -> dict:
+            if isinstance(obj, dict):
+                return {
+                    "kept": obj.get("kept") or [],
+                    "dropped": obj.get("dropped") or [],
+                    "dropped_reasons": obj.get("dropped_reasons") or [],
+                }
+            return {"kept": list(ai_issues_after_prune), "dropped": [], "dropped_reasons": []}
+
+        verify_result, verify_state = _run_model_stage(
+            deps,
+            request,
+            run_id=run_id,
+            asset_id=asset_id,
+            stage_id="verify_ai_issues",
+            attempt=attempt,
+            lease_id=lease_id,
+            chain_scope=chain_scope,
+            events=events,
+            classification="advisory",
+            requested_provider=requested_provider,
+            requested_model=requested_model,
+            build_invocation=_build_verify_invocation,
+            parse_and_compute=_parse_verify,
+            rehydrate_state=_rehydrate_verify,
+            default_failure_code="alr_run.verify_failed",
+            blocking=False,
+        )
+        # Node semantics (verifyAiIssues' catch-all): "Never drop issues on
+        # verifier failure" -- a DEGRADED verify stage keeps every AI issue
+        # exactly as suppress+prune left them.
+        if verify_state == "DEGRADED":
+            ai_issues_after_verify = ai_issues_after_prune
+        else:
+            ai_issues_after_verify = verify_result["kept"]
+            dropped_issues = verify_result.get("dropped") or []
+            dropped_reasons = verify_result.get("dropped_reasons") or []
+            ai_verify_dropped = [
+                {"issue": issue, "reason": (dropped_reasons[index] if index < len(dropped_reasons) else None)}
+                for index, issue in enumerate(dropped_issues)
+            ]
+    else:
+        condition_reason = "verify_disabled" if not detector_config.get("enableLlmVerify") else "no_ai_issues"
+        _record_skipped_stage(
+            deps,
+            request,
+            run_id=run_id,
+            asset_id=asset_id,
+            stage_id="verify_ai_issues",
+            attempt=attempt,
+            lease_id=lease_id,
+            chain_scope=chain_scope,
+            events=events,
+            classification="advisory",
+            condition_reason=condition_reason,
+        )
+        ai_issues_after_verify = ai_issues_after_prune
+
+    # -- finalize_issue_quality (required, deterministic) --------------------
+    # Phase 3.9 (additive): recover WHICH merged candidates
+    # ``finalize_issue_quality`` suppressed as ungrounded, by calling the same
+    # already-exported pure function (``repair_issue_grounding``) a second
+    # time over the identical inputs -- deterministic/pure, so this is
+    # byte-identical to the decision ``finalize_issue_quality`` already made
+    # internally, not a second (possibly divergent) judgment. Explainability
+    # only; ``final_issues`` below still comes from the one real call.
+    quality_signals_holder: dict[str, int] = {}
+    ungrounded_holder: list[dict] = []
+
+    def _compute_finalize() -> tuple[Any, Any]:
+        merged_raw = merge_issues([deterministic_issues, ai_issues_after_verify], detector_config)
+        finalized = finalize_issue_quality(merged_raw, manifest, detector_config)
+        final_issues = finalized["issues"]
+        quality_signals_holder.update(finalized["quality_signals"])
+        ungrounded_holder[:] = [
+            issue for issue in merged_raw if repair_issue_grounding(issue, manifest, detector_config)["issue"] is None
+        ]
+        return final_issues, {"issues": final_issues, "quality_signals": finalized["quality_signals"]}
+
+    final_issues = stage("finalize_issue_quality", _compute_finalize, "alr_run.finalize_issue_quality_failed")
+
+    return _ModelPipelineResult(
+        final_issues=final_issues,
+        ai_generated_issues=ai_issues,
+        ai_suppressed_issues=suppressed_holder,
+        ai_pruned_issues=pruned_holder,
+        ai_verify_dropped=ai_verify_dropped,
+        ungrounded_suppressed_issues=ungrounded_holder,
+        quality_signals=quality_signals_holder,
+    )
+
+
+def _process_asset(
+    item: CollateralItemV1,
+    request: ALRRunRequestV1,
+    deps: AlrRunDeps,
+    *,
+    run_id: str,
+    lease_id: str,
+    attempt: int,
+) -> _AssetOutcome:
+    """Sequentially runs the four required per-asset stages (plan §5): normalize_context,
+    deterministic_checks, required_disclaimers, contextual_rules. Raises ``_StageFailure``
+    (via ``_run_stage``) on the first classified failure; lets any ``RunLedgerError`` from
+    the ledger/audit-chain calls propagate unwrapped (different classification, Step 6).
+    """
+    asset_id = item.asset_handle
+    chain_scope = f"{run_id}:{asset_id}"
+    events: list[DecisionAuditEventV1] = []
+
+    def _stage(stage_id: str, compute: Callable[[], tuple[Any, Any]], default_failure_code: str) -> Any:
+        return _run_stage(
+            deps,
+            request,
+            run_id=run_id,
+            asset_id=asset_id,
+            stage_id=stage_id,
+            attempt=attempt,
+            lease_id=lease_id,
+            chain_scope=chain_scope,
+            events=events,
+            compute=compute,
+            default_failure_code=default_failure_code,
+        )
+
+    def _compute_normalize_context() -> tuple[Any, Any]:
+        try:
+            text = deps.text_provider(item)
+        except Exception as exc:
+            raise _TextProviderFailed(str(exc)) from exc
+        manifest = build_manifest(text)
+        detector_config = resolve_detector_config(deps.detector_config_overrides or {}, deps.policy_pack)
+        ctx = normalize_review_context(None, manifest)
+        return (text, manifest, detector_config, ctx), {"context": ctx}
+
+    text, manifest, detector_config, _ctx = _stage(
+        "normalize_context", _compute_normalize_context, "alr_run.normalize_context_failed"
+    )
+
+    def _compute_deterministic_checks() -> tuple[Any, Any]:
+        screening = detect_prompt_injection_signals(text)
+        det_issues = evaluate_deterministic_checks(text, pack=deps.policy_pack, detector_config=detector_config)
+        if screening["has_high_confidence_signals"]:
+            injection_issue = build_prompt_injection_issue(manifest, deps.policy_pack, screening, detector_config)
+            combined = [injection_issue, *det_issues]
+        else:
+            combined = det_issues
+        return combined, {"issues": combined}
+
+    combined_det = _stage("deterministic_checks", _compute_deterministic_checks, "alr_run.deterministic_checks_failed")
+
+    def _compute_required_disclaimers() -> tuple[Any, Any]:
+        req_issues = evaluate_required_disclaimers(text, pack=deps.policy_pack, detector_config=detector_config)
+        return req_issues, {"issues": req_issues}
+
+    req_issues = _stage("required_disclaimers", _compute_required_disclaimers, "alr_run.required_disclaimers_failed")
+
+    def _compute_contextual_rules() -> tuple[Any, Any]:
+        ctx_issues = evaluate_contextual_rules(
+            None, text, pack=deps.policy_pack, detector_config=detector_config, manifest=manifest
+        )
+        final_issues = merge_issues([combined_det + req_issues, ctx_issues], detector_config)
+        return final_issues, {"issues": final_issues}
+
+    final_issues = _stage("contextual_rules", _compute_contextual_rules, "alr_run.contextual_rules_failed")
+
+    # Phase 3.8 (additive): only when an invoker is wired in does this asset run
+    # any model stage at all -- ``deps.model_invoker is None`` reproduces Phase
+    # 3.4 byte-for-byte (see module docstring).
+    model_pipeline_result: _ModelPipelineResult | None = None
+    if deps.model_invoker is not None:
+        pack = default_marketing_review_pack(deps.policy_pack)
+        model_pipeline_result = _run_model_stage_pipeline(
+            deps,
+            request,
+            run_id=run_id,
+            asset_id=asset_id,
+            lease_id=lease_id,
+            attempt=attempt,
+            chain_scope=chain_scope,
+            events=events,
+            stage=_stage,
+            text=text,
+            manifest=manifest,
+            detector_config=detector_config,
+            pack=pack,
+            deterministic_issues=final_issues,
+        )
+        final_issues = model_pipeline_result.final_issues
+
+    outcome = _AssetOutcome(
+        asset_id=asset_id,
+        document_id=item.document_id,
+        upload_order=item.upload_order,
+        final_issues=final_issues,
+        events=events,
+        manifest=manifest,
+        text=text,
+    )
+    # Phase 3.9 (additive, explainability): thread the model-stage candidate
+    # lineage/quality signals through -- empty defaults when the model
+    # pipeline never ran (``model_pipeline_result is None``).
+    if model_pipeline_result is not None:
+        outcome.ai_generated_issues = model_pipeline_result.ai_generated_issues
+        outcome.ai_suppressed_issues = model_pipeline_result.ai_suppressed_issues
+        outcome.ai_pruned_issues = model_pipeline_result.ai_pruned_issues
+        outcome.ai_verify_dropped = model_pipeline_result.ai_verify_dropped
+        outcome.ungrounded_suppressed_issues = model_pipeline_result.ungrounded_suppressed_issues
+        outcome.quality_signals = model_pipeline_result.quality_signals
+    return outcome
+
+
+def _error_result(
+    request: ALRRunRequestV1,
+    run_id: str,
+    *,
+    status: str,
+    error_code: str,
+    retryable: bool,
+    safe_user_action: str,
+    last_durable_stage: str | None = None,
+    redacted_detail: str | None = None,
+) -> ALRRunResultErrorV1:
+    fields: dict[str, Any] = {
+        "contract_version": "alr.result.v1",
+        "status": status,
+        "tenant_id": request.tenant_id,
+        "deal_id": request.deal_id,
+        "version_id": request.version_id,
+        "run_id": run_id,
+        "error_code": error_code,
+        "retryable": retryable,
+        "safe_user_action": safe_user_action,
+        "support_correlation_id": run_id,
+    }
+    if last_durable_stage is not None:
+        fields["last_durable_stage"] = last_durable_stage
+    if redacted_detail is not None:
+        fields["redacted_detail"] = redacted_detail
+    return ALRRunResultErrorV1(**fields)
+
+
+def _reconstruct_ledger_projection(
+    request: ALRRunRequestV1, run_id: str, manifest: AuditManifestV1, deps: AlrRunDeps, decision_trace_ref: str
+) -> bytes:
+    """Self-heal the crash window between B6 commit (``RunLedger.complete_run``) and the
+    later ``ledger.json`` write: rebuild this non-authoritative read projection (ADR 0010:
+    "never the concurrency or recovery authority") purely from data the completed run
+    already committed durably. Mirrors ``src/tdr_run/runner.py::_result_from_manifest``'s
+    crash-window self-heal for the equivalent window.
+
+    Unlike TDR's reconstruction (which cannot recover its ``stage_count`` field exactly and
+    instead marks the projection ``reconstructed_on_replay``), ALR's ``stage_count`` IS
+    recoverable byte-for-byte: the original write derives it as
+    ``sum(len(outcome.events) for outcome in asset_outcomes.values())``, and that is exactly
+    ``(total entries across every chain_scope) - 1`` (the ``-1`` for the one
+    ``run_accepted_event`` recorded before any asset stage) in the immutable
+    ``decision_trace_doc`` this run already committed at
+    ``manifest.decision_trace_root_hash`` -- so the count is read back, not re-derived by
+    rerunning any stage.
+    """
+    decision_trace_bytes = deps.content.get(decision_trace_ref)
+    if decision_trace_bytes is None:
+        raise RunLedgerError(
+            f"replay: missing decision trace object at {decision_trace_ref!r} needed to rebuild "
+            f"the ledger projection for completed run {run_id!r}"
+        )
+    decision_trace_doc = json.loads(decision_trace_bytes)
+    chain_scopes = decision_trace_doc.get("chain_scopes", {})
+    total_events = sum(len(entries) for entries in chain_scopes.values())
+    stage_count = max(total_events - 1, 0)
+
+    ledger_projection = {
+        "run_id": run_id,
+        "tenant_id": request.tenant_id,
+        "deal_id": request.deal_id,
+        "version_id": request.version_id,
+        "mode": request.mode,
+        "state": "completed",
+        "branch_heads": dict(manifest.branch_heads or {}),
+        "stage_count": stage_count,
+    }
+    return canonical_bytes(compact_for_content_hash(ledger_projection))
+
+
+def _reconstruct_run_completed_reason_code(request: ALRRunRequestV1, run_id: str, deps: AlrRunDeps) -> str | None:
+    """Best-effort recovery of the ``reason_code`` recorded on this run's terminal
+    ``run_completed`` audit event (chain_scope ``f"{run_id}:run"``), for the Step 0.75
+    terminal-state replay guard above.
+
+    The event's ``event_id`` is lease-derived, so a redelivery -- which never learns the
+    original lease id -- cannot look it up by key directly. Instead this reads the SAME
+    ``chain_head`` pointer ``AuditChainWriter.append`` itself maintains (the latest
+    ``(sequence, event_hash)`` for the chain_scope) and fetches that event's body from the
+    content store by its content address -- the identical read path ``verify_chain``/every
+    other replay in this module already uses, not a new coordination mechanism. Returns
+    ``None`` (never raises) if the chain has no head yet, the referenced body is missing, or
+    the latest event on the run chain does not carry a ``reason_code`` -- callers fall back
+    to a documented generic reason in that case; the STATUS itself is never in question here.
+    """
+    chain_scope = f"{run_id}:run"
+    head_item = deps.ledger._coord.get(
+        ledger_paths.chain_head(request.tenant_id, request.deal_id, request.version_id, request.mode, chain_scope)
+    )
+    if head_item is None:
+        return None
+    body_bytes = deps.content.get(
+        ledger_paths.decision_trace_object(
+            request.tenant_id,
+            request.deal_id,
+            request.version_id,
+            request.mode,
+            run_id,
+            head_item["sequence"],
+            head_item["event_hash"],
+        )
+    )
+    if body_bytes is None:
+        return None
+    event = DecisionAuditEventV1.model_validate_json(body_bytes)
+    if event.action != "run_completed":
+        return None
+    return event.reason_code
+
+
+def _replay_terminal_failure_result(
+    request: ALRRunRequestV1, run_id: str, deps: AlrRunDeps, current_state: str
+) -> ALRRunResultErrorV1:
+    """Build the classified result for a redelivery that finds the run already at a
+    terminal, non-cancelled ``RunStateV1`` (``analysis_incomplete``/``failed``) -- see the
+    Step 0.75 guard in ``_execute_alr_run_body``. Never touches the lease/stage/join/complete
+    coordination surface: this is a pure read-and-report path.
+    """
+    reason_code = _reconstruct_run_completed_reason_code(request, run_id, deps)
+    status = "analysis_incomplete" if current_state == RunStateV1.ANALYSIS_INCOMPLETE.value else "failed"
+    error_code = reason_code if reason_code is not None else f"alr_run.{status}_terminal_replay"
+    detail = (
+        f"replay: run {run_id!r} already reached terminal state {current_state!r} in a prior attempt "
+        "(this delivery joined the existing run per B1 idempotency and is reporting that run's durable "
+        "outcome, not re-executing it). A genuine retry of a transient failure requires a new request whose "
+        "B1 idempotency inputs actually differ -- the same idempotency key always resolves to this same run."
+    )
+    return _error_result(
+        request,
+        run_id,
+        status=status,
+        error_code=error_code,
+        retryable=True,
+        safe_user_action="retry_or_escalate",
+        redacted_detail=detail[:280],
+    )
+
+
+def _result_from_manifest(
+    request: ALRRunRequestV1, run_id: str, manifest: AuditManifestV1, deps: AlrRunDeps
+) -> ALRRunResultCompletedV1:
+    """Reconstruct a completed result purely from a committed ``AuditManifestV1`` plus the
+    one fixed-path ledger projection object -- used by BOTH the Step 0.5 idempotent-replay
+    path and the normal Step 4 completion path. Never re-renders/re-writes the result/
+    coverage/explanation/decision-trace documents: those are immutable once committed.
+
+    Self-heals one additional crash window ``RunLedger.complete_run`` itself already
+    tolerates on RE-ENTRY (a crash between its completion-record write and its own
+    ``RUNNING -> COMPLETED`` head write leaves the head stuck at ``running`` even though
+    the completion record is durably committed) but that this module's Step 0.5
+    short-circuit would otherwise never revisit, since it skips straight past
+    ``complete_run`` on replay -- coordination readers and the lease watchdog would then
+    see a stuck active run forever even though the run genuinely finished. Mirrors
+    ``src/tdr_run/runner.py::_result_from_manifest``'s identical self-heal: re-calling
+    ``complete_run`` with the head's OWN still-recorded ``lease_id`` (read via the same
+    "peek a coordination record ``RunLedger`` does not expose a dedicated getter for"
+    pattern ``_existing_stage_record`` above establishes) is safe -- ``complete_run`` finds
+    the completion record already exists and reuses it, its ONLY side effect being the
+    head's overdue ``COMPLETED`` write.
+    """
+    if (
+        deps.ledger.get_run_state(
+            tenant_id=request.tenant_id,
+            deal_id=request.deal_id,
+            version_id=request.version_id,
+            mode=request.mode,
+            run_id=run_id,
+        )
+        == RunStateV1.RUNNING.value
+    ):
+        stuck_head = deps.ledger._coord.get(
+            ledger_paths.run_head(request.tenant_id, request.deal_id, request.version_id, request.mode, run_id)
+        )
+        deps.ledger.complete_run(
+            tenant_id=request.tenant_id,
+            deal_id=request.deal_id,
+            version_id=request.version_id,
+            mode=request.mode,
+            run_id=run_id,
+            lease_id=stuck_head["lease_id"],
+            result_hash=manifest.result_hash,
+            coverage_hash=manifest.coverage_hash,
+            explanation_manifest_hash=manifest.explanation_manifest_hash,
+            decision_trace_root_hash=manifest.decision_trace_root_hash,
+        )
+
+    result_ref = _stage_output_path(request, run_id, manifest.result_hash)
+    explanation_ref = _stage_output_path(request, run_id, manifest.explanation_manifest_hash)
+    decision_trace_ref = _stage_output_path(request, run_id, manifest.decision_trace_root_hash)
+
+    # Coverage is immutable, content-addressed, committed content (unlike the
+    # ledger.json read projection below, it is B6-authoritative, not a
+    # self-healable projection): its absence is an integrity error, not a
+    # crash window to self-heal. Read the SAME document the first response
+    # built (Step 4 above writes it to this exact path keyed by
+    # `manifest.coverage_hash` before `complete_run` is even called) so a
+    # replay reports byte-identical `degraded_stages`/`failed_stages`
+    # instead of silently downgrading a degraded run to a clean one.
+    coverage_ref = _stage_output_path(request, run_id, manifest.coverage_hash)
+    coverage_bytes = deps.content.get(coverage_ref)
+    if coverage_bytes is None:
+        raise RunLedgerError(
+            f"replay: missing coverage object at {coverage_ref!r} needed to reconstruct "
+            f"the result for completed run {run_id!r}"
+        )
+    coverage = RunCoverageSummaryV1.model_validate(json.loads(coverage_bytes))
+    audit_manifest_ref = ledger_paths.commit_object(
+        request.tenant_id, request.deal_id, request.version_id, request.mode, run_id
+    )
+    audit_manifest_hash = canonical_model_hash(manifest)
+
+    ledger_ref = ledger_paths.ledger_projection_object(
+        request.tenant_id, request.deal_id, request.version_id, request.mode, run_id
+    )
+    ledger_bytes = deps.content.get(ledger_ref)
+    if ledger_bytes is None:
+        # Crash-window self-heal (mirrors src/tdr_run/runner.py): B6 (`complete_run`)
+        # committed but the process died before the ledger projection write below ever
+        # ran. Rebuild it from the committed manifest/decision-trace and persist it so
+        # this and every future replay finds it directly, without rerunning any stage.
+        ledger_bytes = _reconstruct_ledger_projection(request, run_id, manifest, deps, decision_trace_ref)
+        deps.content.put_content(ledger_ref, ledger_bytes)
+    ledger_hash = hashlib.sha256(ledger_bytes).hexdigest()
+
+    return ALRRunResultCompletedV1(
+        contract_version="alr.result.v1",
+        status="completed",
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        run_id=run_id,
+        collateral_set_hash=request.collateral_set_hash,
+        ledger_ref=ledger_ref,
+        ledger_hash=ledger_hash,
+        result_ref=result_ref,
+        result_hash=manifest.result_hash,
+        explanation_manifest_ref=explanation_ref,
+        explanation_manifest_hash=manifest.explanation_manifest_hash,
+        decision_trace_ref=decision_trace_ref,
+        decision_trace_root_hash=manifest.decision_trace_root_hash,
+        audit_manifest_ref=audit_manifest_ref,
+        audit_manifest_hash=audit_manifest_hash,
+        coverage=coverage,
+        # routes.model_stages: Node's marketing-review shadow resolver
+        # (backend/intake-worker.js resolveMarketingReviewShadowResult)
+        # requires this field to be exactly "enabled"/"disabled" -- any other
+        # value (including the field being absent) makes it treat the
+        # completed shadow result as incomparable. Keep the two strings
+        # identical to Node's check.
+        provenance=RunProvenanceV1(
+            engine_version=ALR_ENGINE_CONTRACT_VERSION,
+            policy_version=f"{deps.policy_pack.pack_id}@{deps.policy_pack.pack_version}",
+            explanation_schema_version="decision.explanation.v1",
+            routes={"model_stages": "enabled" if deps.model_invoker is not None else "disabled"},
+        ),
+    )
+
+
+def _execute_alr_run_body(
+    request: ALRRunRequestV1, deps: AlrRunDeps, run_id: str
+) -> ALRRunResultCompletedV1 | ALRRunResultErrorV1:
+    # Step 0.5 — idempotent replay: a committed completion record for this run
+    # means every stage/lease/join/complete call below is skipped entirely.
+    existing_manifest = deps.ledger.get_completed_manifest(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+    )
+    if existing_manifest is not None:
+        return _result_from_manifest(request, run_id, existing_manifest, deps)
+
+    # Step 0.75 — terminal-state replay guard (fixes a P2: a redelivery of the
+    # SAME idempotency key joining a run (B1) that already reached a TERMINAL
+    # non-committed ``RunStateV1`` -- ``analysis_incomplete``, ``failed``, or
+    # ``cancelled`` -- must never fall through to ``acquire_lease`` below.
+    # None of those three states has an outgoing edge in ``RUN_TRANSITIONS``,
+    # so ``acquire_lease``'s implicit ``-> RUNNING`` transition is always
+    # illegal there and raises ``IllegalRunTransition`` (a ``RunLedgerError``
+    # subclass); the ``except RunLedgerError`` in ``execute_alr_run`` then
+    # masked that as a generic ``alr_run.ledger_error`` FOREVER, instead of
+    # the run's actual, already-classified outcome. ``expired`` is
+    # intentionally NOT intercepted here: ``EXPIRED -> RUNNING`` IS a legal
+    # edge, so ``acquire_lease`` itself resumes it correctly. ``cancel_requested``
+    # is also left alone: it is caught by the ``checkpoint_cancellation`` calls
+    # further down, not here.
+    #
+    # A caller wanting a GENUINE retry of a transient failure (not merely a
+    # redelivery of the identical request) must mint a request whose B1
+    # idempotency inputs actually differ (e.g. a new ``collateral_set_hash``)
+    # -- the same idempotency key always resolves to this SAME run identity
+    # (B1), so this replay path can only ever report what that run identity
+    # already, durably, decided.
+    current_state = deps.ledger.get_run_state(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+    )
+    if current_state == RunStateV1.CANCELLED.value:
+        return _error_result(
+            request,
+            run_id,
+            status="cancelled",
+            error_code="alr_run.cancelled",
+            retryable=True,
+            safe_user_action="retry",
+        )
+    if current_state in (RunStateV1.ANALYSIS_INCOMPLETE.value, RunStateV1.FAILED.value):
+        return _replay_terminal_failure_result(request, run_id, deps, current_state)
+
+    # Step 1 — lease (B2): rng-derived lease id only, never uuid/secrets/wall-clock.
+    lease_id = f"alr-run-lease-{deps.rng.getrandbits(64):016x}"
+    head = deps.ledger.acquire_lease(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+        lease_id=lease_id,
+        lease_ttl_ms=deps.lease_ttl_ms,
+    )
+    attempt = head.attempt
+
+    run_chain_scope = f"{run_id}:run"
+    run_accepted_event = deps.audit.append(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+        chain_scope=run_chain_scope,
+        event_id=f"{run_id}:run_accepted:{lease_id}",
+        actor_type="system",
+        actor_id="alr_run.runner",
+        action="run_accepted",
+        outcome="accepted",
+    )
+
+    # Step 2 — cancellation checkpoint #1 (before submitting the pool).
+    head = deps.ledger.checkpoint_cancellation(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+    )
+    if head.state == RunStateV1.CANCELLED.value:
+        return _error_result(
+            request,
+            run_id,
+            status="cancelled",
+            error_code="alr_run.cancelled",
+            retryable=True,
+            safe_user_action="retry",
+        )
+
+    ordered_items = sorted(request.collateral, key=lambda c: c.upload_order)
+    max_workers = min(8, len(ordered_items))
+    ordered_futures: list[tuple[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        for item in ordered_items:
+            future = pool.submit(_process_asset, item, request, deps, run_id=run_id, lease_id=lease_id, attempt=attempt)
+            ordered_futures.append((item.asset_handle, future))
+        wait([future for _, future in ordered_futures])
+
+    # Step 2 — cancellation checkpoint #2 (after all futures complete, before join).
+    head = deps.ledger.checkpoint_cancellation(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+    )
+    if head.state == RunStateV1.CANCELLED.value:
+        return _error_result(
+            request,
+            run_id,
+            status="cancelled",
+            error_code="alr_run.cancelled",
+            retryable=True,
+            safe_user_action="retry",
+        )
+
+    # Classify failures in frozen upload order: a genuine RunLedgerError (or any
+    # other non-_StageFailure exception, e.g. a fault-injection SimulatedCrash)
+    # always wins and propagates un-classified; only when none occurred do we look
+    # for the first _StageFailure.
+    first_stage_failure: _StageFailure | None = None
+    first_other_exc: BaseException | None = None
+    for _asset_id, future in ordered_futures:
+        exc = future.exception()
+        if exc is None:
+            continue
+        if isinstance(exc, _StageFailure):
+            if first_stage_failure is None:
+                first_stage_failure = exc
+        elif first_other_exc is None:
+            first_other_exc = exc
+    if first_other_exc is not None:
+        raise first_other_exc
+
+    if first_stage_failure is not None:
+        deps.ledger.fail_run(
+            tenant_id=request.tenant_id,
+            deal_id=request.deal_id,
+            version_id=request.version_id,
+            mode=request.mode,
+            run_id=run_id,
+            lease_id=lease_id,
+            to_state=RunStateV1.ANALYSIS_INCOMPLETE.value,
+            failure_reason=first_stage_failure.failure_code,
+        )
+        deps.audit.append(
+            tenant_id=request.tenant_id,
+            deal_id=request.deal_id,
+            version_id=request.version_id,
+            mode=request.mode,
+            run_id=run_id,
+            chain_scope=run_chain_scope,
+            event_id=f"{run_id}:run_completed:{lease_id}:analysis_incomplete",
+            actor_type="system",
+            actor_id="alr_run.runner",
+            action="run_completed",
+            outcome="analysis_incomplete",
+            # Recorded so a LATER redelivery's terminal-state replay guard
+            # (``_reconstruct_run_completed_reason_code``) can recover a
+            # classified reason without re-executing any stage.
+            reason_code=first_stage_failure.failure_code,
+        )
+        return _error_result(
+            request,
+            run_id,
+            status="analysis_incomplete",
+            error_code=f"alr_run.stage_failed.{first_stage_failure.stage_id}",
+            retryable=True,
+            safe_user_action="retry_or_escalate",
+            last_durable_stage=first_stage_failure.stage_id,
+            redacted_detail=first_stage_failure.message[:280],
+        )
+
+    asset_outcomes: dict[str, _AssetOutcome] = {}
+    for asset_id, future in ordered_futures:
+        asset_outcomes[asset_id] = future.result()
+
+    # Step 3 — join (B5): branch_stage_ids is a frozen-order dict; join_branches sorts internally.
+    # The branch head must be each asset's ACTUAL terminal stage: when the model
+    # pipeline runs (``deps.model_invoker is not None``), every asset's pipeline
+    # continues past ``contextual_rules`` through suppress/prune, optional verify,
+    # and ``finalize_issue_quality`` -- the latter is the last required/deterministic
+    # stage and its output is what ``result_doc``'s ``final_issues`` actually reflects
+    # (see ``_process_asset``: ``final_issues = model_pipeline_result.final_issues``).
+    # ``finalize_issue_quality`` always runs to a SUCCEEDED record with an
+    # ``output_hash`` by this point -- it is a "required" stage (``_run_stage``
+    # classification), so any failure there raises ``_StageFailure`` and this join is
+    # never reached (Step 3's failure classification above returns early). This holds
+    # even when intermediate advisory model stages (``extract_compliance_spec``,
+    # ``verify_ai_issues``) were DEGRADED/SKIPPED, since those are independent of
+    # whether the terminal deterministic stage runs. This choice depends only on the
+    # run-level ``deps.model_invoker`` configuration (not on any asset's runtime
+    # outcome), so a crash/resume re-derivation of ``branch_stage_ids`` is always
+    # identical across attempts, and ``join_branches`` itself is idempotent
+    # (``put_if_absent`` reuses the already-computed join on re-entry).
+    terminal_stage_id = "finalize_issue_quality" if deps.model_invoker is not None else "contextual_rules"
+    branch_stage_ids = {item.asset_handle: terminal_stage_id for item in ordered_items}
+    joined_branch_heads = deps.ledger.join_branches(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+        branch_stage_ids=branch_stage_ids,
+    )
+
+    # Step 4 — complete (B6): assemble result/coverage/explanation/decision-trace documents.
+    result_doc = {
+        "contract_version": "alr.result.v1",
+        "tenant_id": request.tenant_id,
+        "deal_id": request.deal_id,
+        "version_id": request.version_id,
+        "run_id": run_id,
+        "mode": request.mode,
+        "collateral_set_hash": request.collateral_set_hash,
+        "assets": [
+            {
+                "asset_handle": item.asset_handle,
+                "document_id": asset_outcomes[item.asset_handle].document_id,
+                "upload_order": item.upload_order,
+                "issues": asset_outcomes[item.asset_handle].final_issues,
+            }
+            for item in ordered_items
+        ],
+    }
+    result_ref, result_hash = _put_hashed_json(
+        deps.content, lambda h: _stage_output_path(request, run_id, h), result_doc
+    )
+
+    total_issue_count = sum(len(outcome.final_issues) for outcome in asset_outcomes.values())
+
+    # Step 4 (Phase 3.9, plan §7-§8): full explainability assembly. Every
+    # packet below is built PURELY from data this runner already produced
+    # during Steps 1-3 (issue dicts, StageRecordV1 coordination records,
+    # quality-finalization signals) -- no model call is made here, per plan
+    # §7.1 "no separate model call may invent a post-hoc explanation".
+    # ``created_at`` is read from the injected clock exactly once so every
+    # packet in this run shares one timestamp (keeps the manifest hash a
+    # pure function of the run's frozen inputs, not of wall-clock jitter).
+    created_at = iso_ms(deps.clock.now_ms())
+    model_stages_enabled = deps.model_invoker is not None
+    known_stage_ids = list(_STAGE_IDS_DETERMINISTIC) + (list(_STAGE_IDS_MODEL) if model_stages_enabled else [])
+
+    asset_inputs: list[AssetExplainabilityInput] = []
+    for item in ordered_items:
+        outcome = asset_outcomes[item.asset_handle]
+        stage_records: dict[str, dict] = {}
+        for stage_id in known_stage_ids:
+            record = _existing_stage_record(deps, request, run_id=run_id, asset_id=item.asset_handle, stage_id=stage_id)
+            if record is not None:
+                stage_records[stage_id] = dict(record)
+        asset_inputs.append(
+            AssetExplainabilityInput(
+                asset_id=item.asset_handle,
+                document_id=outcome.document_id,
+                object_version=item.object_version,
+                manifest=outcome.manifest,
+                text=outcome.text,
+                final_issues=outcome.final_issues,
+                events=outcome.events,
+                ai_generated_issues=outcome.ai_generated_issues,
+                ai_suppressed_issues=outcome.ai_suppressed_issues,
+                ai_pruned_issues=outcome.ai_pruned_issues,
+                ai_verify_dropped=outcome.ai_verify_dropped,
+                ungrounded_suppressed_issues=outcome.ungrounded_suppressed_issues,
+                quality_signals=outcome.quality_signals,
+                stage_records=stage_records,
+            )
+        )
+
+    # Candidate lineage (plan §7.2): one content-addressed document per run,
+    # referenced from every DecisionExplanationV1 and from the explanation
+    # manifest -- retained/suppressed/pruned/verify-dropped/ungrounded-
+    # suppressed candidates are all represented (see explanation.py's module
+    # docstring for the one documented exception: consolidation-collapsed
+    # duplicates, which the deterministic engine does not return objects for).
+    candidate_lineage_records = [
+        record
+        for asset_input in asset_inputs
+        for record in _build_candidate_lineage(
+            asset_input, engine_version=ALR_ENGINE_CONTRACT_VERSION, detector_config=None
+        )
+    ]
+    candidate_lineage_doc = {
+        "run_id": run_id,
+        "records": [record.model_dump(mode="json", exclude_none=True) for record in candidate_lineage_records],
+    }
+    candidate_lineage_ref, candidate_lineage_doc_hash = _put_hashed_json(
+        deps.content, lambda h: _stage_output_path(request, run_id, h), candidate_lineage_doc
+    )
+
+    decision_explanation_entries: list[dict[str, str]] = []
+    for asset_input in asset_inputs:
+        for issue in asset_input.final_issues:
+            packet = _build_decision_explanation(
+                issue,
+                asset_input,
+                tenant_id=request.tenant_id,
+                deal_id=request.deal_id,
+                version_id=request.version_id,
+                run_id=run_id,
+                engine_version=ALR_ENGINE_CONTRACT_VERSION,
+                policy_pack=deps.policy_pack,
+                created_at=created_at,
+                candidate_lineage_ref=candidate_lineage_ref,
+            )
+            packet_ref, packet_hash = _put_hashed_json(
+                deps.content,
+                lambda h: _stage_output_path(request, run_id, h),
+                packet.model_dump(mode="json", exclude_none=True),
+            )
+            decision_explanation_entries.append({"issue_id": issue["issue_id"], "ref": packet_ref, "hash": packet_hash})
+    decision_explanation_entries.sort(key=lambda entry: entry["issue_id"])
+
+    review_coverage = _build_review_coverage(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        run_id=run_id,
+        assets=asset_inputs,
+        model_stages_enabled=model_stages_enabled,
+    )
+    review_coverage_ref, review_coverage_doc_hash = _put_hashed_json(
+        deps.content,
+        lambda h: _stage_output_path(request, run_id, h),
+        review_coverage.model_dump(mode="json", exclude_none=True),
+    )
+
+    review_conclusion = _build_review_conclusion_explanation(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        run_id=run_id,
+        collateral_set_hash=request.collateral_set_hash,
+        policy_pack=deps.policy_pack,
+        assets=asset_inputs,
+        coverage=review_coverage,
+        total_final_issue_count=total_issue_count,
+    )
+    review_conclusion_ref, review_conclusion_doc_hash = _put_hashed_json(
+        deps.content,
+        lambda h: _stage_output_path(request, run_id, h),
+        review_conclusion.model_dump(mode="json", exclude_none=True),
+    )
+
+    explanation_doc = {
+        "contract_version": "decision.explanation.v1",
+        "run_id": run_id,
+        "issue_count": total_issue_count,
+        "decision_explanations": decision_explanation_entries,
+        "candidate_lineage": {"ref": candidate_lineage_ref, "hash": candidate_lineage_doc_hash},
+        "review_coverage": {"ref": review_coverage_ref, "hash": review_coverage_doc_hash},
+        "review_conclusion": {"ref": review_conclusion_ref, "hash": review_conclusion_doc_hash},
+    }
+    explanation_ref, explanation_hash = _put_hashed_json(
+        deps.content, lambda h: _stage_output_path(request, run_id, h), explanation_doc
+    )
+
+    degraded_stage_ids = sorted(
+        {f"{e.asset_id}:{e.stage_id}" for e in review_coverage.entries if e.final_state == "DEGRADED"}
+    )
+    failed_stage_ids = sorted(
+        {f"{e.asset_id}:{e.stage_id}" for e in review_coverage.entries if e.final_state == "FAILED"}
+    )
+    coverage_fields: dict[str, Any] = {"required_complete": review_coverage.summary != "analysis_incomplete"}
+    if degraded_stage_ids:
+        coverage_fields["degraded_stages"] = degraded_stage_ids
+    if failed_stage_ids:
+        coverage_fields["failed_stages"] = failed_stage_ids
+    coverage = RunCoverageSummaryV1(**coverage_fields)
+    coverage_body = canonical_model_bytes(coverage)
+    coverage_hash = canonical_model_hash(coverage)
+    deps.content.put_content(_stage_output_path(request, run_id, coverage_hash), coverage_body)
+
+    appended_so_far: list[DecisionAuditEventV1] = [run_accepted_event]
+    for item in ordered_items:
+        appended_so_far.extend(asset_outcomes[item.asset_handle].events)
+
+    chain_scopes: dict[str, list[dict[str, Any]]] = {}
+    for event in appended_so_far:
+        chain_scopes.setdefault(event.chain_scope, []).append(
+            {"event_id": event.event_id, "sequence": event.sequence, "event_hash": event.event_hash}
+        )
+    decision_trace_doc = {"chain_scopes": chain_scopes}
+    decision_trace_ref, decision_trace_hash = _put_hashed_json(
+        deps.content, lambda h: _stage_output_path(request, run_id, h), decision_trace_doc
+    )
+
+    manifest = deps.ledger.complete_run(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+        lease_id=lease_id,
+        result_hash=result_hash,
+        coverage_hash=coverage_hash,
+        explanation_manifest_hash=explanation_hash,
+        decision_trace_root_hash=decision_trace_hash,
+    )
+    audit_manifest_hash = canonical_model_hash(manifest)
+    audit_manifest_ref = ledger_paths.commit_object(
+        request.tenant_id, request.deal_id, request.version_id, request.mode, run_id
+    )
+
+    stage_count = sum(len(outcome.events) for outcome in asset_outcomes.values())
+    ledger_projection = {
+        "run_id": run_id,
+        "tenant_id": request.tenant_id,
+        "deal_id": request.deal_id,
+        "version_id": request.version_id,
+        "mode": request.mode,
+        "state": "completed",
+        "branch_heads": joined_branch_heads,
+        "stage_count": stage_count,
+    }
+    ledger_ref = ledger_paths.ledger_projection_object(
+        request.tenant_id, request.deal_id, request.version_id, request.mode, run_id
+    )
+    ledger_body = canonical_bytes(compact_for_content_hash(ledger_projection))
+    deps.content.put_content(ledger_ref, ledger_body)
+    ledger_hash = hashlib.sha256(ledger_body).hexdigest()
+
+    caused_by = [
+        asset_outcomes[item.asset_handle].events[-1].event_id
+        for item in ordered_items
+        if asset_outcomes[item.asset_handle].events
+    ]
+    # Phase 3.9 (additive): the run-completed event now also carries the
+    # explanation-manifest reference/hash (plan §8.3 "alr_analysis_run_
+    # recorded with result, coverage, explanation-manifest ... root hashes")
+    # -- extends the event's existing ``output_objects``, does not replace
+    # any field a prior phase relied on (``caused_by`` is unchanged above).
+    deps.audit.append(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        mode=request.mode,
+        run_id=run_id,
+        chain_scope=run_chain_scope,
+        event_id=f"{run_id}:run_completed:{lease_id}:completed",
+        actor_type="system",
+        actor_id="alr_run.runner",
+        action="run_completed",
+        outcome="completed",
+        caused_by=caused_by or None,
+        output_objects=[
+            ObjectRefV1(ref=result_ref, hash=result_hash),
+            ObjectRefV1(ref=explanation_ref, hash=explanation_hash),
+            ObjectRefV1(ref=review_coverage_ref, hash=review_coverage_doc_hash),
+        ],
+    )
+
+    return ALRRunResultCompletedV1(
+        contract_version="alr.result.v1",
+        status="completed",
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        version_id=request.version_id,
+        run_id=run_id,
+        collateral_set_hash=request.collateral_set_hash,
+        ledger_ref=ledger_ref,
+        ledger_hash=ledger_hash,
+        result_ref=result_ref,
+        result_hash=result_hash,
+        explanation_manifest_ref=explanation_ref,
+        explanation_manifest_hash=explanation_hash,
+        decision_trace_ref=decision_trace_ref,
+        decision_trace_root_hash=decision_trace_hash,
+        audit_manifest_ref=audit_manifest_ref,
+        audit_manifest_hash=audit_manifest_hash,
+        coverage=coverage,
+        provenance=RunProvenanceV1(
+            engine_version=ALR_ENGINE_CONTRACT_VERSION,
+            policy_version=f"{deps.policy_pack.pack_id}@{deps.policy_pack.pack_version}",
+            explanation_schema_version="decision.explanation.v1",
+            routes={"model_stages": "enabled" if model_stages_enabled else "disabled"},
+        ),
+    )
+
+
+def execute_alr_run(request: ALRRunRequestV1, deps: AlrRunDeps) -> ALRRunResultCompletedV1 | ALRRunResultErrorV1:
+    """Execute (or idempotently join/replay) one ALR run (plan §3.2/§5/§6; ADR 0010).
+
+    Accepts the run (B1) first -- outside the classification boundary below,
+    per spec: only the work AFTER a successful ``accept_run`` is wrapped.
+    Everything from Step 0.5 onward is wrapped in ``except RunLedgerError``
+    ONLY (never a bare ``except Exception``), so a fault-injection
+    ``SimulatedCrash`` (or any other genuinely unexpected error) propagates
+    out of this function untouched -- it must reach the caller so a
+    subsequent, separate call can be the "resume" that converges.
+    """
+    head = deps.ledger.accept_run(
+        tenant_id=request.tenant_id,
+        deal_id=request.deal_id,
+        review_version_id=request.version_id,
+        input_set_hash=request.collateral_set_hash,
+        prior_issues_hash=request.previous_issues_hash
+        if request.previous_issues_hash is not None
+        else _NO_PRIOR_ISSUES_HASH,
+        release_set_hash=request.policy_snapshot_hash,
+        engine_contract_version=ALR_ENGINE_CONTRACT_VERSION,
+        mode=request.mode,
+        candidate_run_id=request.run_id,
+    )
+    run_id = head.run_id
+
+    try:
+        return _execute_alr_run_body(request, deps, run_id)
+    except RunLedgerError as exc:
+        return _error_result(
+            request,
+            run_id,
+            status="failed",
+            error_code="alr_run.ledger_error",
+            retryable=True,
+            safe_user_action="retry",
+            redacted_detail=str(exc)[:280],
+        )
+
+__HERMES_CWD_98a24a3abcfa__/tmp/hello_agent__HERMES_CWD_98a24a3abcfa__

@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_95caf226",
+  "started": "2026-09-15 15:43:45",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Implement OT-2, OT-5, OT-8, OT-10, OT-12, OT-13, and VIL-3 — all depend on the OT-1 Sinkhorn foundation now in occam-skill-ranker.py.\n\nOT-2 (KEEP — occam-skill-ranker.py): Add a --sinkhorn-sym flag to the score subcommand that computes debiased Sinkhorn divergence: S_eps(a,b) = OT(a,b) - 0.5*OT(a,a) - 0.5*OT(b,b). This makes the similarity score symmetric and zero when a==b. Add this as an option alongside --sinkhorn.\n\nOT-5 (KEEP — occam-skill-ranker.py dp-route): Modify the dp-route subcommand ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_95caf226/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 15:49:30"
+}

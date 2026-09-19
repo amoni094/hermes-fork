@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_eea2e59c",
+  "started": "2026-09-19 20:39:15",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Cold adversarial review of wave-11 fixes to hermes-fork scripts. Read the actual on-disk files and verify each claim. Report PASS/FAIL/PARTIAL per claim with line-number evidence. Flag any new issues introduced. Write a JSON report to /tmp/adversarial_wave11.md.\n\nClaims to verify:\n\n1. G1: skillspector_guard.py — the non-atomic write of skill-integrity.json and skill-merkle.json is now done via tmp+replace (not bare write_text). Check that the tmp path is created with .with_suffix('.tmp'), writte",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_eea2e59c/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 20:45:13"
+}

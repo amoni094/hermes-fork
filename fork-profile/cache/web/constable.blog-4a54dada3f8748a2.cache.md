@@ -1,0 +1,17 @@
+# Acknowledgement: We would like to thank Zachery Irving for his collaboration on a previous manuscript on relevance realization and general intelligence. His work on that paper helped to generate ideas for this paper.
+URL: https://constable.blog/wp-content/uploads/RRNeuroSubmission.pdf
+Author: John Vervaeke
+
+Relevance Realization and the Neurodynamics and Neuroconnectivity of 1General Intelligence By John Vervaeke and Leonardo Ferraro
+
+Abstract
+
+In this paper we review arguments for the central nature of the problem of relevance, as well as arguing that relevance realization is the basis for general intelligence, supporting this position with recent findings in neurodynamics and neuroanatomy, as well as machine learning and graph theory. Keywords: relevance, neurodynamics, small-world networks, self-organizing criticality, general intelligence, dynamical systems.
+
+1 Introduction This paper will present five linked arguments. The first argument will out line the centrality of the problem of relevance, and how it is becoming the focus of an emerging framework in cognitive science. The second argu ment will explore some of the central features needed in an account of relevance. This exploration will lead to our third argument, namely that there cannot be a scientific theory of relevance. However, this will not be cause for despair, because once we abandon a search for an account of relevance we can successfully pursue a theory of relevance realization. The fourth argument will outline such a theory in terms of the bioeconom ics of relevance realization. Finally, the fifth argument will show how this theory of bioeconomical relevance realization provides a basis for an ex planation of general intelligence in terms of the neurodynamics and of neu roconnectivity in the brain. This set of arguments will help to reveal the self-organizing and plastic nature of general intelligence in a way that would help to lay the foundations for the autonomous agents that are cen tral to the SmartData vision. 2 The centrality of the problem of relevance Vervaeke, Lillicrap, and Richards (2012) argued that the problem of how agents zero in on relevant information was emerging as the central issue driving many different difficulties in cognitive science. The paper re-
+
+Acknowledgement: We would like to thank Zachery Irving for his collaboration on a previous manuscript on relevance realization and general intelligence. His work on that paper helped to generate ideas for this paper.
+
+John Vervaeke 5/9/12 9:58 AM Formatted: Indent: First line: 0 cm
+
+2 RELEVANCE REALIZATION AND GENERAL INTELLIGENCE viewed dilemmas within problem solving, categorization, communication, robotic interaction, and rationality to show that all these issues converged on the problem of how cognitive agents determine the relevance of infor mation. Here, we will briefly review the case for the centrality of the prob lem of relevance by exploring the literature on problem solving, an ability that is central to being an autonomous intelligent agent. Three related areas within the psychology of problem solving articulate the central importance of relevance. These are the issues of combinatorial ex plosion, the ill-definedness of real-world problems, and the need for in sight within problem solving. Combina

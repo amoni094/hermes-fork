@@ -1,0 +1,38 @@
+{
+  "delegation_id": "deleg_8ac7a698",
+  "started": "2026-09-19 18:15:52",
+  "task_count": 4,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Recursive bottleneck audit — DOMAIN: SECURITY + TRUST + AUTH scripts. Cold adversarial read.\n\nFiles to audit (read every one fully, paginate 200-line chunks):\n  ~/.hermes/scripts/browser_act_guard.py (668 lines)\n  ~/.hermes/scripts/dangerous_command_patterns.py (193 lines)\n  ~/.hermes/scripts/tool-auth-gate.py (464 lines) [covered by plugins subagent but re-check integration]\n  ~/.hermes/scripts/appa-path-taint.py (517 lines)\n  ~/.hermes/scripts/mcp-privilege-audit.py (414 lines)\n  ~/.hermes/scr",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_8ac7a698/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Recursive bottleneck audit — DOMAIN: COMPACTION + CONTEXT MANAGEMENT scripts. Cold adversarial read.\n\nFiles to audit (read every one fully, paginate 200-line chunks):\n  ~/.hermes/scripts/segment_level_compactor.py (447 lines)\n  ~/.hermes/scripts/focus_compress.py (257 lines)\n  ~/.hermes/scripts/embedding-based-context-compactor.py (143 lines)\n  ~/.hermes/scripts/compaction_utils.py (75 lines)\n  ~/.hermes/scripts/token-budget-controller.py (591 lines)\n  ~/.hermes/scripts/context-budget-potential-",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_8ac7a698/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Recursive bottleneck audit — DOMAIN: SKILL MANAGEMENT + ROUTING scripts. Cold adversarial read.\n\nFiles to audit (read every one fully, paginate 200-line chunks):\n  ~/.hermes/scripts/skill-graph-walk.py (895 lines — paginate)\n  ~/.hermes/scripts/skill-yield-tracker.py (594 lines — paginate)\n  ~/.hermes/scripts/skill-routing-bounds.py (393 lines)\n  ~/.hermes/scripts/skill-persistent-homology.py (393 lines)\n  ~/.hermes/scripts/skill-graph-reachability-verifier.py (231 lines)\n  ~/.hermes/scripts/ski",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_8ac7a698/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Recursive bottleneck audit — DOMAIN: MONITORS + CALIBRATION + AGENT LOOP scripts. Cold adversarial read.\n\nFiles to audit (read every one fully, paginate 200-line chunks):\n  ~/.hermes/scripts/calibration_loop.py (511 lines — paginate)\n  ~/.hermes/scripts/confidence_tracker.py (423 lines)\n  ~/.hermes/scripts/proper_scoring.py (412 lines)\n  ~/.hermes/scripts/retention_consistency_check.py (309 lines)\n  ~/.hermes/scripts/constraint-binding-lint.py (413 lines)\n  ~/.hermes/scripts/constraint-validator",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_8ac7a698/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 18:26:34"
+}

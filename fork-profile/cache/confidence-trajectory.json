@@ -1,0 +1,43 @@
+{
+  "tools": {
+    "gate": {
+      "tool_name": "gate",
+      "n": 80,
+      "ema_alpha": 0.0952,
+      "ema_current": 0.8753,
+      "ema_start": 0.8996,
+      "ema_window_start": 0.8994,
+      "drift_detected": false,
+      "drift_delta": -0.0241,
+      "drift_explanation": "EMA drop=-0.0241 over last 20 calls (threshold=0.15)",
+      "overconfident": true,
+      "mean_conf": 0.895,
+      "ece": 0.19502,
+      "warnings": [
+        "WARNING: overconfidence detected for tool='gate': mean_conf=0.8950 (threshold>0.85), ECE=0.1950 (threshold>0.08). Announcements are systematically higher than empirical frequency (Jaynes Ch.13). Run calibration_loop.py --force-refit."
+      ]
+    },
+    "verify_fn": {
+      "tool_name": "verify_fn",
+      "n": 80,
+      "ema_alpha": 0.0952,
+      "ema_current": 0.6127,
+      "ema_start": 0.8671,
+      "ema_window_start": 0.6908,
+      "drift_detected": false,
+      "drift_delta": -0.078,
+      "drift_explanation": "EMA drop=-0.0780 over last 20 calls (threshold=0.15)",
+      "overconfident": false,
+      "mean_conf": 0.7272,
+      "ece": 0.08118,
+      "warnings": []
+    }
+  },
+  "global_warnings": [
+    "WARNING: overconfidence detected for tool='gate': mean_conf=0.8950 (threshold>0.85), ECE=0.1950 (threshold>0.08). Announcements are systematically higher than empirical frequency (Jaynes Ch.13). Run calibration_loop.py --force-refit."
+  ],
+  "n_tools": 2,
+  "n_records": 160,
+  "window": 20,
+  "generated_at": "2026-09-18T09:54:33Z"
+}

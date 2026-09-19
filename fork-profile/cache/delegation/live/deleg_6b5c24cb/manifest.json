@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_6b5c24cb",
+  "started": "2026-09-15 14:01:22",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Run a cold adversarial review of all wave-2 through wave-7 HIGH implementations in the Hermes recursive research pass. You are a cold adversarial reviewer — no prior context, no stake in the decisions. Your job is to find real issues: dead code, contradictions between skill sections, broken promises (skill says X, code does Y), overclaiming, missing wiring.\n\nSCOPE — only review what was implemented in waves 2-7 of today's session (2026-09-15). Do NOT review wave-1 items (already adversarially re",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_6b5c24cb/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 14:04:05"
+}

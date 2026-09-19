@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_c3a5a89d",
+  "started": "2026-09-16 13:03:52",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are an adversarial reviewer for the temporal and causal reasoning modules in Denuto. Be maximally skeptical — find real bugs, incorrect math, violated theory, wrong citations, misleading results.\n\nRead all source from /tmp/theory_research_src.json (keys: temporal_engine, causal_engine, test_temporal, test_causal).\n\nFor each issue found classify as:\n- CRITICAL: wrong output / crash / data corruption\n- HIGH: theoretically wrong / contract violation / misleading result\n- MEDIUM: edge case / doc",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_c3a5a89d/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "You are an adversarial reviewer for the active learning and deontic engine modules in Denuto. Be maximally skeptical — find real bugs, wrong theory, violated contracts, misleading results.\n\nRead all source from /tmp/theory_research_src.json (keys: active_learning_engine, deontic_engine, test_active, test_deontic).\n\nFor each issue found classify as:\n- CRITICAL: wrong output / crash / data corruption\n- HIGH: theoretically wrong / contract violation / misleading result\n- MEDIUM: edge case / docstri",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_c3a5a89d/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "You are a cohesion auditor for the full reasoning module suite in Denuto (legal-tech AI, Australian financial services). You must assess whether ALL NINE modules (relevance, defeasible, analogical, abductive, temporal, causal, active_learning, deontic) form a coherent, integrated, theoretically grounded system.\n\nRead all source from /tmp/theory_research_src.json (keys: temporal_engine, causal_engine, active_learning_engine, deontic_engine, test_temporal, test_causal, test_active, test_deontic). ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_c3a5a89d/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-16 13:17:29"
+}

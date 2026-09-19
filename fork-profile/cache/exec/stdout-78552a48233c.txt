@@ -1,0 +1,1748 @@
+
+================================================================================
+FILE: /var/home/rainbow/.hermes/scripts/skillspector_guard.py  (total lines: 612)
+================================================================================
+1|#!/usr/bin/env python3
+2|import argparse
+3|import hashlib
+4|import json
+5|import os
+6|import shutil
+7|import subprocess
+8|import sys
+9|from collections import Counter
+10|from dataclasses import dataclass
+11|from datetime import datetime, timezone
+12|from pathlib import Path
+13|from typing import Any
+14|
+15|_hermes_profile = os.environ.get("HERMES_PROFILE", "")
+16|_hermes_home = Path(os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes")))
+17|_hermes_root = (_hermes_home / "profiles" / _hermes_profile) if _hermes_profile and "profiles" not in str(_hermes_home) else _hermes_home
+18|SKILLS_ROOT = Path(os.environ.get("HERMES_SKILLS_ROOT", str(_hermes_root / "skills")))
+19|SECURITY_ROOT = Path(os.environ.get("HERMES_SKILLS_SECURITY_ROOT", os.path.expanduser("~/.hermes/skills-security")))
+20|REPORTS_ROOT = SECURITY_ROOT / "reports"
+21|STATE_PATH = SECURITY_ROOT / "state.json"
+22|ALLOWLIST_PATH = SECURITY_ROOT / "allowlist.json"
+23|PENDING_PATH = SECURITY_ROOT / "pending_quarantine.json"
+24|QUARANTINE_ROOT = Path(os.environ.get("HERMES_SKILLS_QUARANTINE_ROOT", os.path.expanduser("~/.hermes/skills-quarantine")))
+25|SKILLSPECTOR_BIN = os.environ.get("SKILLSPECTOR_BIN", os.path.expanduser("~/.local/bin/skillspector"))
+26|DEFAULT_THRESHOLD = int(os.environ.get("HERMES_SKILLS_QUARANTINE_SCORE", "60"))
+27|
+28|
+29|@dataclass
+30|class SkillResult:
+31|    rel: str
+32|    path: Path
+33|    name: str
+34|    bundled: bool
+35|    hash: str
+36|    scan_exit: int
+37|    score: int | None
+38|    severity: str | None
+39|    recommendation: str | None
+40|    findings: int
+41|    raw: dict[str, Any]
+42|    stdout_path: Path
+43|    quarantined_to: str | None = None
+44|    baseline_trusted: bool = False
+45|    allowlisted: bool = False
+46|    quarantine_proposed: bool = False
+47|
+48|
+49|def now_iso() -> str:
+50|    return datetime.now(timezone.utc).isoformat()
+51|
+52|
+53|def ensure_dirs() -> None:
+54|    REPORTS_ROOT.mkdir(parents=True, exist_ok=True)
+55|    QUARANTINE_ROOT.mkdir(parents=True, exist_ok=True)
+56|
+57|
+58|def load_bundled_names() -> set[str]:
+59|    manifest = SKILLS_ROOT / ".bundled_manifest"
+60|    bundled = set()
+61|    if manifest.exists():
+62|        for line in manifest.read_text().splitlines():
+63|            if ":" in line:
+64|                bundled.add(line.split(":", 1)[0].strip())
+65|    return bundled
+66|
+67|
+68|def find_skill_dirs() -> list[Path]:
+69|    seen = set()
+70|    skill_dirs = []
+71|    for p in SKILLS_ROOT.rglob("SKILL.md"):
+72|        rel_parts = p.relative_to(SKILLS_ROOT).parts[:-1]
+73|        if any(part.startswith(".") for part in rel_parts):
+74|            continue
+75|        parent = p.parent
+76|        if parent not in seen:
+77|            seen.add(parent)
+78|            skill_dirs.append(parent)
+79|    return sorted(skill_dirs)
+80|
+81|
+82|def result_from_cache(path: Path, bundled_names: set[str], cached: dict[str, Any], file_hash_value: str) -> SkillResult:
+83|    rel = path.relative_to(SKILLS_ROOT).as_posix()
+84|    report = Path(str(cached.get("report", REPORTS_ROOT / (rel.replace("/", "__") + ".json"))))
+85|    raw: dict[str, Any] = {}
+86|    if report.exists():
+87|        try:
+88|            loaded = json.loads(report.read_text())
+89|            if isinstance(loaded, dict):
+90|                raw = loaded
+91|        except Exception:
+92|            raw = {"cache_read_error": True}
+93|    findings_raw = raw.get("findings", [])
+94|    findings = findings_raw if isinstance(findings_raw, list) else []
+95|    return SkillResult(
+96|        rel=rel,
+97|        path=path,
+98|        name=path.name,
+99|        bundled=path.name in bundled_names,
+100|        hash=file_hash_value,
+101|        scan_exit=int(cached.get("scan_exit", 0)),
+102|        score=cached.get("score") if isinstance(cached.get("score"), int) else None,
+103|        severity=cached.get("severity") if isinstance(cached.get("severity"), str) else None,
+104|        recommendation=cached.get("recommendation") if isinstance(cached.get("recommendation"), str) else None,
+105|        findings=len(findings),
+106|        raw=raw,
+107|        stdout_path=report,
+108|        quarantined_to=cached.get("quarantined_to") if isinstance(cached.get("quarantined_to"), str) else None,
+109|    )
+110|
+111|def file_hash(path: Path) -> str:
+112|    h = hashlib.sha256()
+113|    for p in sorted(x for x in path.rglob("*") if x.is_file() and ".hub" not in x.parts):
+114|        rel = p.relative_to(path).as_posix().encode()
+115|        h.update(rel)
+116|        h.update(b"\0")
+117|        h.update(p.read_bytes())
+118|        h.update(b"\0")
+119|    return h.hexdigest()
+120|
+121|
+122|def load_state() -> dict[str, Any]:
+123|    if STATE_PATH.exists():
+124|        return json.loads(STATE_PATH.read_text())
+125|    return {
+126|        "version": 1,
+127|        "created_at": now_iso(),
+128|        "approved_hashes": {},
+129|        "last_results": {},
+130|        "last_run": None,
+131|    }
+132|
+133|
+134|def save_state(state: dict[str, Any]) -> None:
+135|    SECURITY_ROOT.mkdir(parents=True, exist_ok=True)
+136|    _tmp = STATE_PATH.with_suffix(".tmp")
+137|    _tmp.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+138|    _tmp.rename(STATE_PATH)
+139|
+140|
+141|def load_allowlist() -> dict[str, Any]:
+142|    if ALLOWLIST_PATH.exists():
+143|        data = json.loads(ALLOWLIST_PATH.read_text())
+144|        if isinstance(data, dict):
+145|            return data
+146|    return {
+147|        "version": 1,
+148|        "updated_at": now_iso(),
+149|        "skills": {},
+150|    }
+151|
+152|
+153|def save_allowlist(allowlist: dict[str, Any]) -> None:
+154|    allowlist["updated_at"] = now_iso()
+155|    _tmp = ALLOWLIST_PATH.with_suffix(".tmp")
+156|    _tmp.write_text(json.dumps(allowlist, indent=2, sort_keys=True) + "\n")
+157|    _tmp.rename(ALLOWLIST_PATH)
+158|
+159|
+160|def load_pending() -> dict[str, Any]:
+161|    if PENDING_PATH.exists():
+162|        data = json.loads(PENDING_PATH.read_text())
+163|        if isinstance(data, dict):
+164|            return data
+165|    return {"version": 1, "updated_at": now_iso(), "proposals": {}}
+166|
+167|
+168|def save_pending(pending: dict[str, Any]) -> None:
+169|    pending["updated_at"] = now_iso()
+170|    _tmp = PENDING_PATH.with_suffix(".tmp")
+171|    _tmp.write_text(json.dumps(pending, indent=2, sort_keys=True) + "\n")
+172|    _tmp.rename(PENDING_PATH)
+173|
+174|
+175|def is_allowlisted(result: SkillResult, allowlist: dict[str, Any]) -> bool:
+176|    skill_entry = allowlist.get("skills", {}).get(result.rel)
+177|    if not isinstance(skill_entry, dict):
+178|        return False
+179|    hashes = skill_entry.get("hashes", [])
+180|    return isinstance(hashes, list) and result.hash in hashes
+181|
+182|
+183|def populate_allowlist_from_flagged(results: list[SkillResult], allowlist: dict[str, Any], threshold: int) -> dict[str, Any]:
+184|    skills = allowlist.setdefault("skills", {})
+185|    for r in results:
+186|        if r.bundled or (r.score or 0) < threshold:
+187|            continue
+188|        entry = skills.setdefault(r.rel, {})
+189|        entry["hashes"] = sorted(set(entry.get("hashes", [])) | {r.hash})
+190|        entry["reason"] = entry.get("reason") or "Explicitly exempted current flagged skill pending manual review"
+191|        entry["last_score"] = r.score
+192|        entry["last_severity"] = r.severity
+193|        entry["recommendation"] = r.recommendation
+194|        entry["report"] = str(r.stdout_path)
+195|    return allowlist
+196|
+197|
+198|def remove_allowlisted_from_baseline(state: dict[str, Any], allowlist: dict[str, Any]) -> None:
+199|    approved = state.setdefault("approved_hashes", {})
+200|    for rel in allowlist.get("skills", {}):
+201|        approved.pop(rel, None)
+202|
+203|
+204|def scan_skill(path: Path, bundled_names: set[str]) -> SkillResult:
+205|    rel = path.relative_to(SKILLS_ROOT).as_posix()
+206|    out_path = REPORTS_ROOT / (rel.replace("/", "__") + ".json")
+207|    proc = subprocess.run(
+208|        [SKILLSPECTOR_BIN, "scan", str(path), "--no-llm", "--format", "json"],
+209|        capture_output=True,
+210|        text=True,
+211|        timeout=180,
+212|    )
+213|    data: dict[str, Any]
+214|    if proc.stdout.strip():
+215|        try:
+216|            parsed = json.loads(proc.stdout)
+217|            data = parsed if isinstance(parsed, dict) else {"raw": parsed}
+218|        except json.JSONDecodeError:
+219|            data = {
+220|                "parse_error": True,
+221|                "stdout_prefix": proc.stdout[:2000],
+222|                "stderr_prefix": proc.stderr[:2000],
+223|            }
+224|    else:
+225|        data = {"stderr_prefix": proc.stderr[:2000]}
+226|    out_path.parent.mkdir(parents=True, exist_ok=True)
+227|    _tmp_out = out_path.with_suffix(".tmp")
+228|    _tmp_out.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+229|    _tmp_out.replace(out_path)
+230|    risk_raw = data.get("risk_assessment", {})
+231|    risk = risk_raw if isinstance(risk_raw, dict) else {}
+232|    findings_raw = data.get("findings", [])
+233|    findings = findings_raw if isinstance(findings_raw, list) else []
+234|    return SkillResult(
+235|        rel=rel,
+236|        path=path,
+237|        name=path.name,
+238|        bundled=path.name in bundled_names,
+239|        hash=file_hash(path),
+240|        scan_exit=proc.returncode,
+241|        score=risk.get("score") if isinstance(risk.get("score"), int) else None,
+242|        severity=risk.get("severity") if isinstance(risk.get("severity"), str) else None,
+243|        recommendation=risk.get("recommendation") if isinstance(risk.get("recommendation"), str) else None,
+244|        findings=len(findings),
+245|        raw=data,
+246|        stdout_path=out_path,
+247|    )
+248|
+249|
+250|def should_quarantine(result: SkillResult, state: dict[str, Any], allowlist: dict[str, Any], threshold: int) -> bool:
+251|    approved = state.get("approved_hashes", {})
+252|    if result.bundled:
+253|        return False
+254|    if result.allowlisted:
+255|        return False
+256|    if result.scan_exit not in (0, 1):
+257|        return False
+258|    if (result.score or 0) < threshold:
+259|        return False
+260|    if approved.get(result.rel) == result.hash:
+261|        return False
+262|    return True
+263|
+264|
+265|def quarantine_skill(result: SkillResult) -> str:
+266|    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+267|    dest = QUARANTINE_ROOT / ts / result.rel
+268|    dest.parent.mkdir(parents=True, exist_ok=True)
+269|    shutil.move(str(result.path), str(dest))
+270|    return str(dest)
+271|
+272|
+273|def propose_quarantine(result: SkillResult, pending: dict[str, Any]) -> None:
+274|    """Stage a quarantine proposal WITHOUT moving anything. A true-positive
+275|    verdict (e.g. from an adversarial-review pass) must confirm via
+276|    --confirm-quarantine before quarantine_skill() actually runs."""
+277|    proposals = pending.setdefault("proposals", {})
+278|    proposals[result.rel] = {
+279|        "hash": result.hash,
+280|        "score": result.score,
+281|        "severity": result.severity,
+282|        "recommendation": result.recommendation,
+283|        "report": str(result.stdout_path),
+284|        "path": str(result.path),
+285|        "proposed_at": now_iso(),
+286|    }
+287|
+288|
+289|def prune_stale_pending(pending: dict[str, Any], results: list[SkillResult]) -> None:
+290|    """Drop pending proposals whose skill vanished or whose hash changed
+291|    since the proposal was staged (the file was edited/replaced, so the old
+292|    proposal no longer describes what's on disk)."""
+293|    proposals = pending.setdefault("proposals", {})
+294|    current_hashes = {r.rel: r.hash for r in results}
+295|    for rel in list(proposals.keys()):
+296|        if rel not in current_hashes or current_hashes[rel] != proposals[rel].get("hash"):
+297|            proposals.pop(rel, None)
+298|
+299|
+300|def confirm_quarantine(rel_paths: list[str], pending: dict[str, Any], results: list[SkillResult]) -> list[dict[str, Any]]:
+301|    """Actually move skill(s) into quarantine, but ONLY if there is a matching
+302|    pending proposal whose hash still matches the file on disk. This is the
+303|    step that should run only after an adversarial scan has confirmed the
+304|    flag is a true positive, not a false positive."""
+305|    proposals = pending.setdefault("proposals", {})
+306|    by_rel = {r.rel: r for r in results}
+307|    outcomes = []
+308|    for rel in rel_paths:
+309|        proposal = proposals.get(rel)
+310|        result = by_rel.get(rel)
+311|        if proposal is None:
+312|            outcomes.append({"skill": rel, "status": "error", "reason": "no pending proposal for this skill"})
+313|            continue
+314|        if result is None or result.hash != proposal.get("hash"):
+315|            outcomes.append({"skill": rel, "status": "error", "reason": "hash mismatch or skill missing; re-run scan before confirming"})
+316|            continue
+317|        dest = quarantine_skill(result)
+318|        result.quarantined_to = dest
+319|        proposals.pop(rel, None)
+320|        outcomes.append({"skill": rel, "status": "quarantined", "to": dest})
+321|    return outcomes
+322|
+323|
+324|def reject_quarantine(rel_paths: list[str], pending: dict[str, Any], results: list[SkillResult], allowlist: dict[str, Any], reason: str) -> list[dict[str, Any]]:
+325|    """Mark pending proposal(s) as false positives: add to the allowlist so
+326|    they won't be re-proposed on future runs, and clear the pending entry."""
+327|    proposals = pending.setdefault("proposals", {})
+328|    by_rel = {r.rel: r for r in results}
+329|    skills = allowlist.setdefault("skills", {})
+330|    outcomes = []
+331|    for rel in rel_paths:
+332|        proposal = proposals.get(rel)
+333|        result = by_rel.get(rel)
+334|        if proposal is None and result is None:
+335|            outcomes.append({"skill": rel, "status": "error", "reason": "no pending proposal and skill not found"})
+336|            continue
+337|        h = (proposal or {}).get("hash") or (result.hash if result else None)
+338|        entry = skills.setdefault(rel, {})
+339|        entry["hashes"] = sorted(set(entry.get("hashes", [])) | ({h} if h else set()))
+340|        entry["reason"] = reason
+341|        if result is not None:
+342|            entry["last_score"] = result.score
+343|            entry["last_severity"] = result.severity
+344|            entry["recommendation"] = result.recommendation
+345|            entry["report"] = str(result.stdout_path)
+346|        proposals.pop(rel, None)
+347|        outcomes.append({"skill": rel, "status": "allowlisted"})
+348|    return outcomes
+349|
+350|
+351|def summarize(results: list[SkillResult], threshold: int) -> dict[str, Any]:
+352|    return {
+353|        "skills": len(results),
+354|        "bundled": sum(1 for r in results if r.bundled),
+355|        "non_bundled": sum(1 for r in results if not r.bundled),
+356|        "severity_counts": dict(Counter((r.severity or "UNKNOWN") for r in results)),
+357|        "allowlisted": [
+358|            {
+359|                "skill": r.rel,
+360|                "score": r.score,
+361|                "severity": r.severity,
+362|                "report": str(r.stdout_path),
+363|            }
+364|            for r in results if r.allowlisted
+365|        ],
+366|        "quarantined": [
+367|            {"skill": r.rel, "score": r.score, "severity": r.severity, "to": r.quarantined_to}
+368|            for r in results if r.quarantined_to
+369|        ],
+370|        "pending_quarantine": [
+371|            {"skill": r.rel, "score": r.score, "severity": r.severity, "report": str(r.stdout_path)}
+372|            for r in results if r.quarantine_proposed
+373|        ],
+374|        "flagged": [
+375|            {
+376|                "skill": r.rel,
+377|                "score": r.score,
+378|                "severity": r.severity,
+379|                "recommendation": r.recommendation,
+380|                "bundled": r.bundled,
+381|                "baseline_trusted": r.baseline_trusted,
+382|                "allowlisted": r.allowlisted,
+383|                "report": str(r.stdout_path),
+384|            }
+385|            for r in results if (r.score or 0) >= threshold
+386|        ],
+387|    }
+388|
+389|
+390|def main() -> int:
+391|    parser = argparse.ArgumentParser(description="Scan Hermes skills with SkillSpector and optionally quarantine risky future additions.")
+392|    parser.add_argument("--refresh-baseline", action="store_true", help="Trust the current hashes of all existing skills and reset approved baseline.")
+393|    parser.add_argument("--enforce", action="store_true", help="Stage new or changed non-bundled skills whose score meets the threshold as quarantine PROPOSALS (does not move files). A confirm step is required before anything is actually quarantined.")
+394|    parser.add_argument("--threshold", type=int, default=DEFAULT_THRESHOLD, help="Score threshold for quarantine in enforce mode.")
+395|    parser.add_argument("--sync-allowlist-from-flagged", action="store_true", help="Write current flagged non-bundled skills into the explicit allowlist and remove them from baseline trust.")
+396|    parser.add_argument("--confirm-quarantine", nargs="+", metavar="REL_PATH", help="After an adversarial scan has confirmed a pending proposal is a true positive, actually move the given skill(s) (by rel path, e.g. software-development/foo) from skills/ into quarantine. Fails if the skill has no matching pending proposal or its hash has changed since proposal.")
+397|    parser.add_argument("--reject-quarantine", nargs="+", metavar="REL_PATH", help="Mark pending proposal(s) as false positives: add to the allowlist (so they are not re-proposed) and clear the pending entry. Use --reject-reason to record why.")
+398|    parser.add_argument("--reject-reason", default="Adversarial review: false positive", help="Reason recorded in the allowlist for --reject-quarantine entries.")
+399|    args = parser.parse_args()
+400|
+401|    ensure_dirs()
+402|    state = load_state()
+403|    allowlist = load_allowlist()
+404|    pending = load_pending()
+405|    bundled_names = load_bundled_names()
+406|    skill_dirs = find_skill_dirs()
+407|    previous_approved = state.get("approved_hashes", {})
+408|    cached_results = state.get("last_results", {})
+409|    results: list[SkillResult] = []
+410|    for path in skill_dirs:
+411|        rel = path.relative_to(SKILLS_ROOT).as_posix()
+412|        current_hash = file_hash(path)
+413|        cached = cached_results.get(rel)
+414|        report_path = Path(str(cached.get("report", ""))) if isinstance(cached, dict) else None
+415|        allowlisted_hashes = allowlist.get("skills", {}).get(rel, {}).get("hashes", [])
+416|        can_reuse_cache = (
+417|            not args.refresh_baseline
+418|            and isinstance(cached, dict)
+419|            and cached.get("hash") == current_hash
+420|            and report_path is not None
+421|            and report_path.exists()
+422|        )
+423|        if can_reuse_cache:
+424|            results.append(result_from_cache(path, bundled_names, cached, current_hash))
+425|        else:
+426|            results.append(scan_skill(path, bundled_names))
+427|
+428|    if args.refresh_baseline:
+429|        state["approved_hashes"] = {r.rel: r.hash for r in results}
+430|    else:
+431|        state.setdefault("approved_hashes", {})
+432|        for r in results:
+433|            if previous_approved.get(r.rel) == r.hash:
+434|                r.baseline_trusted = True
+435|
+436|    if args.sync_allowlist_from_flagged:
+437|        allowlist = populate_allowlist_from_flagged(results, allowlist, args.threshold)
+438|        save_allowlist(allowlist)
+439|        remove_allowlisted_from_baseline(state, allowlist)
+440|
+441|    for r in results:
+442|        r.allowlisted = is_allowlisted(r, allowlist)
+443|
+444|    prune_stale_pending(pending, results)
+445|
+446|    confirm_outcomes: list[dict[str, Any]] = []
+447|    reject_outcomes: list[dict[str, Any]] = []
+448|
+449|    if args.confirm_quarantine:
+450|        confirm_outcomes = confirm_quarantine(args.confirm_quarantine, pending, results)
+451|
+452|    if args.reject_quarantine:
+453|        reject_outcomes = reject_quarantine(args.reject_quarantine, pending, results, allowlist, args.reject_reason)
+454|        save_allowlist(allowlist)
+455|
+456|    if args.enforce:
+457|        newly_proposed = []
+458|        for r in results:
+459|            if should_quarantine(r, state, allowlist, args.threshold):
+460|                r.quarantine_proposed = True
+461|                propose_quarantine(r, pending)
+462|                newly_proposed.append(r.rel)
+463|        # Automatically run adversarial review on all pending proposals so
+464|        # cron output surfaces FP verdicts without requiring a manual step.
+465|        if newly_proposed:
+466|            import subprocess as _sp
+467|            _adv = Path(__file__).parent / "adversarial_quarantine_review.py"
+468|            if _adv.exists():
+469|                _res = _sp.run(
+470|                    ["python3", str(_adv), "--all-pending"],
+471|                    capture_output=True, text=True, timeout=120,
+472|                )
+473|                if _res.stdout.strip():
+474|                    print("\n--- Adversarial review of new quarantine proposals ---")
+475|                    print(_res.stdout.strip())
+476|                if _res.returncode not in (0, 1):
+477|                    print(f"WARN: adversarial_quarantine_review.py exited {_res.returncode}: {_res.stderr[:200]}")
+478|
+479|    save_pending(pending)
+480|
+481|    state["last_results"] = {
+482|        r.rel: {
+483|            "hash": r.hash,
+484|            "score": r.score,
+485|            "severity": r.severity,
+486|            "recommendation": r.recommendation,
+487|            "bundled": r.bundled,
+488|            "scan_exit": r.scan_exit,
+489|            "report": str(r.stdout_path),
+490|            "quarantined_to": r.quarantined_to,
+491|            "allowlisted": r.allowlisted,
+492|        }
+493|        for r in results
+494|    }
+495|    state["last_run"] = now_iso()
+496|    save_state(state)
+497|
+498|    summary = summarize(results, args.threshold)
+499|    summary_path = SECURITY_ROOT / "last-summary.json"
+500|    _summary_tmp = summary_path.with_suffix(".tmp")
+501|    _summary_tmp.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+502|    _summary_tmp.rename(summary_path)
+503|
+504|    lines = [
+505|        f"skills={summary['skills']} bundled={summary['bundled']} non_bundled={summary['non_bundled']}",
+506|        f"severity_counts={json.dumps(summary['severity_counts'], sort_keys=True)}",
+507|        f"allowlisted={len(summary['allowlisted'])}",
+508|        f"quarantined={len(summary['quarantined'])}",
+509|        f"pending_quarantine={len(summary['pending_quarantine'])}",
+510|        f"flagged={len(summary['flagged'])}",
+511|        f"summary={summary_path}",
+512|        f"allowlist={ALLOWLIST_PATH}",
+513|        f"pending={PENDING_PATH}",
+514|    ]
+515|    if confirm_outcomes:
+516|        for o in confirm_outcomes:
+517|            if o["status"] == "quarantined":
+518|                lines.append(f"CONFIRMED+QUARANTINED {o['skill']} -> {o['to']}")
+519|            else:
+520|                lines.append(f"CONFIRM FAILED {o['skill']}: {o['reason']}")
+521|    if reject_outcomes:
+522|        for o in reject_outcomes:
+523|            if o["status"] == "allowlisted":
+524|                lines.append(f"REJECTED (false positive, allowlisted) {o['skill']}")
+525|            else:
+526|                lines.append(f"REJECT FAILED {o['skill']}: {o['reason']}")
+527|    if summary["quarantined"]:
+528|        for item in summary["quarantined"]:
+529|            lines.append(f"QUARANTINED {item['skill']} score={item['score']} severity={item['severity']} -> {item['to']}")
+530|    if summary["pending_quarantine"]:
+531|        for item in summary["pending_quarantine"]:
+532|            lines.append(
+533|                f"PENDING QUARANTINE (not moved yet) {item['skill']} score={item['score']} severity={item['severity']} "
+534|                f"report={item['report']} -- run an adversarial scan against this report before deciding; then "
+535|                f"--confirm-quarantine {item['skill']} (true positive) or --reject-quarantine {item['skill']} (false positive)"
+536|            )
+537|    if not (args.enforce or args.confirm_quarantine or args.reject_quarantine):
+538|        if args.sync_allowlist_from_flagged:
+539|            lines.append("Explicit allowlist synced from current flagged non-bundled skills and removed from baseline trust.")
+540|        elif args.refresh_baseline:
+541|            lines.append("Baseline refreshed; current skills trusted by hash for future drift detection.")
+542|        else:
+543|            changed_high_risk = [
+544|                r for r in results
+545|                if not r.baseline_trusted and not r.allowlisted and (r.score or 0) >= args.threshold and not r.bundled
+546|            ]
+547|            if changed_high_risk:
+548|                for r in changed_high_risk:
+549|                    lines.append(f"FLAGGED {r.rel} score={r.score} severity={r.severity} report={r.stdout_path}")
+550|            else:
+551|                lines = []
+552|    if lines:
+553|        print("\n".join(lines))
+554|
+555|    # Fix C: consume skill-integrity.json and skill-merkle.json
+556|    _base_c = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+557|    _profile_c = os.environ.get("HERMES_PROFILE", "")
+558|    _cache_root = (
+559|        (_base_c / "profiles" / _profile_c)
+560|        if _profile_c and "profiles" not in str(_base_c)
+561|        else _base_c
+562|    ) / "cache"
+563|    _drift_count = 0
+564|    try:
+565|        _integrity_path = _cache_root / "skill-integrity.json"
+566|        if _integrity_path.exists():
+567|            _integrity_data = json.loads(_integrity_path.read_text())
+568|            # Support both a list of entries or a dict keyed by skill
+569|            if isinstance(_integrity_data, list):
+570|                _integrity_items = _integrity_data
+571|            elif isinstance(_integrity_data, dict):
+572|                _integrity_items = [
+573|                    dict(skill=k, **v) if isinstance(v, dict) else {"skill": k, "status": v}
+574|                    for k, v in _integrity_data.items()
+575|                ]
+576|            else:
+577|                _integrity_items = []
+578|            for _item in _integrity_items:
+579|                if _item.get("status", "ok") != "ok":
+580|                    _skill = _item.get("skill", _item.get("name", "unknown"))
+581|                    _reason = _item.get("reason", _item.get("status", "unknown"))
+582|                    print(f"INTEGRITY-FAIL: {_skill} ({_reason})")
+583|                    _drift_count += 1
+584|    except Exception:
+585|        pass
+586|
+587|    try:
+588|        _merkle_path = _cache_root / "skill-merkle.json"
+589|        if _merkle_path.exists():
+590|            _merkle_data = json.loads(_merkle_path.read_text())
+591|            if isinstance(_merkle_data, list):
+592|                _merkle_items = _merkle_data
+593|            elif isinstance(_merkle_data, dict):
+594|                _merkle_items = [
+595|                    dict(skill=k, **v) if isinstance(v, dict) else {"skill": k}
+596|                    for k, v in _merkle_data.items()
+597|                ]
+598|            else:
+599|                _merkle_items = []
+600|            for _item in _merkle_items:
+601|                if _item.get("drift") or _item.get("changed"):
+602|                    _skill = _item.get("skill", _item.get("name", "unknown"))
+603|                    print(f"MERKLE-DRIFT: {_skill}")
+604|                    _drift_count += 1
+605|    except Exception:
+606|        pass
+607|
+608|    return 1 if _drift_count > 0 else 0
+609|
+610|
+611|if __name__ == "__main__":
+612|    sys.exit(main())
+
+================================================================================
+FILE: /var/home/rainbow/.hermes/scripts/skill-graph-reachability-verifier.py  (total lines: 233)
+================================================================================
+1|#!/usr/bin/python3
+2|"""
+3|skill-graph-reachability-verifier.py
+4|
+5|Enables offline verification that multi-skill orchestration plans will
+6|actually reach their intended goal state — catches dead-end skill chains
+7|before execution wastes budget.
+8|
+9|Math basis: reachability in a typed directed skill graph
+10|  Nodes: skills (identified by name)
+11|  Edges: skill A → skill B if A's postconditions satisfy B's preconditions
+12|  Goal: given a start skill and target skill, is target reachable via BFS?
+13|  Additional check: no-exit nodes (skills with no outgoing edges and
+14|  non-terminal postconditions) signal dead-ends in the plan.
+15|
+16|Usage:
+17|  python3 skill-graph-reachability-verifier.py --from SKILL --to SKILL
+18|  python3 skill-graph-reachability-verifier.py --plan plan.json
+19|  python3 skill-graph-reachability-verifier.py --audit-all
+20|  python3 skill-graph-reachability-verifier.py --dry-run
+21|"""
+22|from __future__ import annotations
+23|
+24|import argparse
+25|import json
+26|import re
+27|import sys
+28|from collections import defaultdict, deque
+29|from datetime import datetime, timezone
+30|from pathlib import Path
+31|
+32|HOME       = Path.home()
+33|SKILLS_DIR = HOME / ".hermes/skills"
+34|FORK_SKILLS = HOME / ".hermes/profiles/fork/skills"
+35|CACHE_DIR  = HOME / ".hermes/cache/monitors"
+36|CACHE_DIR.mkdir(parents=True, exist_ok=True)
+37|OUT_FILE      = CACHE_DIR / "skill-graph-reachability-report.json"
+38|BASELINE_FILE = CACHE_DIR / "skill-graph-reachability-baseline.json"
+39|
+40|# Keyword sets for postcondition/precondition matching
+41|POSTCOND_HEADERS = re.compile(r"(?i)^#{1,4}\s*(after|output|result|produces?|postcondition)")
+42|PRECOND_HEADERS  = re.compile(r"(?i)^#{1,4}\s*(before|requires?|precondition|setup|input)")
+43|TERMINAL_WORDS   = {"done", "complete", "finished", "deployed", "saved", "written", "verified"}
+44|
+45|
+46|def _extract_skill_meta(path: Path) -> dict:
+47|    """Extract name, precondition keywords, postcondition keywords."""
+48|    try:
+49|        text  = path.read_text()
+50|        lines = text.splitlines()
+51|    except Exception:
+52|        return {}
+53|
+54|    name = path.parent.name if path.name == "SKILL.md" else path.stem
+55|    pre_kw: set[str] = set()
+56|    post_kw: set[str] = set()
+57|    mode = None
+58|
+59|    for line in lines:
+60|        if PRECOND_HEADERS.match(line):
+61|            mode = "pre"
+62|        elif POSTCOND_HEADERS.match(line):
+63|            mode = "post"
+64|        elif line.startswith("#"):
+65|            mode = None
+66|
+67|        if mode and not line.startswith("#"):
+68|            words = set(re.findall(r"[a-z]{4,}", line.lower()))
+69|            if mode == "pre":
+70|                pre_kw |= words
+71|            else:
+72|                post_kw |= words
+73|
+74|    # Fallback: extract from description line (first non-header line)
+75|    if not pre_kw and not post_kw:
+76|        for line in lines[:20]:
+77|            if line.strip() and not line.startswith("#"):
+78|                pre_kw = set(re.findall(r"[a-z]{4,}", line.lower()))
+79|                break
+80|
+81|    return {"name": name, "pre": pre_kw, "post": post_kw, "path": str(path)}
+82|
+83|
+84|def _build_graph(skills: list[dict]) -> dict[str, list[str]]:
+85|    """Build adjacency list: skill → list of skills it enables."""
+86|    graph: dict[str, list[str]] = defaultdict(list)
+87|
+88|    for i, a in enumerate(skills):
+89|        for j, b in enumerate(skills):
+90|            if i == j:
+91|                continue
+92|            # Edge A→B if A's postconditions overlap B's preconditions
+93|            overlap = a["post"] & b["pre"]
+94|            if len(overlap) >= 2:   # require ≥2 keyword overlap
+95|                graph[a["name"]].append(b["name"])
+96|
+97|    return dict(graph)
+98|
+99|
+100|def _bfs_reachable(graph: dict[str, list[str]], start: str) -> set[str]:
+101|    visited = {start}
+102|    queue   = deque([start])
+103|    while queue:
+104|        node = queue.popleft()
+105|        for nb in graph.get(node, []):
+106|            if nb not in visited:
+107|                visited.add(nb)
+108|                queue.append(nb)
+109|    return visited
+110|
+111|
+112|def _find_dead_ends(skills: list[dict], graph: dict[str, list[str]]) -> list[str]:
+113|    dead_ends = []
+114|    for skill in skills:
+115|        name = skill["name"]
+116|        if name not in graph or not graph[name]:
+117|            # No outgoing edges — check if postconditions look terminal
+118|            post_text = " ".join(skill["post"])
+119|            if not any(w in post_text for w in TERMINAL_WORDS):
+120|                dead_ends.append(name)
+121|    return dead_ends
+122|
+123|
+124|def run(from_skill: str | None, to_skill: str | None,
+125|        plan_file: Path | None, audit_all: bool, dry_run: bool) -> int:
+126|    now = datetime.now(timezone.utc).isoformat()
+127|
+128|    # Load skills
+129|    skill_files: list[Path] = []
+130|    for base in [SKILLS_DIR, FORK_SKILLS]:
+131|        if base.exists():
+132|            skill_files.extend(base.rglob("SKILL.md"))
+133|
+134|    skills = [_extract_skill_meta(f) for f in skill_files]
+135|    skills = [s for s in skills if s.get("name")]
+136|
+137|    print(f"\n=== Skill Graph Reachability Verifier — {now[:10]} ===")
+138|    print(f"Skills loaded: {len(skills)}")
+139|
+140|    graph     = _build_graph(skills)
+141|    edge_count = sum(len(v) for v in graph.values())
+142|    print(f"Graph: {len(graph)} nodes with edges, {edge_count} total edges")
+143|
+144|    results: list[dict] = []
+145|
+146|    if from_skill and to_skill:
+147|        # Point-to-point reachability
+148|        reachable = _bfs_reachable(graph, from_skill)
+149|        ok        = to_skill in reachable
+150|        print(f"\n  {from_skill} → {to_skill}: {'REACHABLE' if ok else 'UNREACHABLE'}")
+151|        print(f"  ({len(reachable)} skills reachable from {from_skill})")
+152|        results.append({"from": from_skill, "to": to_skill, "reachable": ok})
+153|        alarm_exit = 0 if ok else 1
+154|
+155|    elif plan_file and plan_file.exists():
+156|        plan   = json.loads(plan_file.read_text())
+157|        chain  = plan.get("skills", plan.get("steps", []))
+158|        broken = []
+159|        for i in range(len(chain) - 1):
+160|            a, b   = chain[i], chain[i+1]
+161|            reach  = _bfs_reachable(graph, a)
+162|            if b not in reach:
+163|                broken.append((a, b))
+164|        if broken:
+165|            print(f"\nBroken links in plan:")
+166|            for a, b in broken:
+167|                print(f"  {a} ↛ {b}")
+168|            alarm_exit = 1
+169|        else:
+170|            print(f"\nPlan is fully reachable ({len(chain)} skills)")
+171|            alarm_exit = 0
+172|        results.append({"plan": str(plan_file), "broken": broken})
+173|
+174|    else:
+175|        # Audit: find all dead-end skills and connectivity stats
+176|        dead_ends     = _find_dead_ends(skills, graph)
+177|        isolated      = [s["name"] for s in skills if s["name"] not in graph]
+178|        largest_comp  = max((len(_bfs_reachable(graph, s["name"])) for s in skills[:20]), default=0)
+179|
+180|        print(f"Dead-end skills (no outgoing edges, non-terminal): {len(dead_ends)}")
+181|        print(f"Isolated skills (no edges at all): {len(isolated)}")
+182|        print(f"Largest reachable component (sample): {largest_comp} skills")
+183|
+184|        if dead_ends[:5]:
+185|            print(f"Sample dead-ends: {dead_ends[:5]}")
+186|
+187|        results.append({
+188|            "dead_ends": len(dead_ends),
+189|            "isolated":  len(isolated),
+190|            "largest_component": largest_comp,
+191|        })
+192|        alarm_exit = 0
+193|        # Only alarm if dead-end count has INCREASED from baseline (not just the permanent baseline state)
+194|        baseline_dead = 0
+195|        if BASELINE_FILE.exists():
+196|            try:
+197|                bl = json.loads(BASELINE_FILE.read_text())
+198|                baseline_dead = bl.get("dead_ends", 0)
+199|            except Exception:
+200|                pass
+201|        else:
+202|            # First run: write baseline, don't alarm
+203|            _bl_tmp = BASELINE_FILE.with_suffix(".tmp")
+204|            _bl_tmp.write_text(json.dumps({"dead_ends": len(dead_ends), "ts": now}, indent=2))
+205|            _bl_tmp.replace(BASELINE_FILE)
+206|            baseline_dead = len(dead_ends)
+207|
+208|        new_dead = len(dead_ends) - baseline_dead
+209|        if new_dead > 5:   # alarm only when 5+ new dead-ends appear beyond baseline
+210|            alarm_exit = 1
+211|            print(f"\nALARM: yes — {new_dead} new dead-end skills since baseline (total={len(dead_ends)}, baseline={baseline_dead})")
+212|        else:
+213|            print(f"\nALARM: no — dead-end count stable (total={len(dead_ends)}, baseline={baseline_dead}, delta={new_dead:+d})")
+214|
+215|    if not dry_run:
+216|        OUT_FILE.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+217|
+218|    return alarm_exit
+219|
+220|
+221|def main() -> None:
+222|    p = argparse.ArgumentParser()
+223|    p.add_argument("--from",      dest="from_skill", default=None)
+224|    p.add_argument("--to",        dest="to_skill",   default=None)
+225|    p.add_argument("--plan",      type=Path,         default=None)
+226|    p.add_argument("--audit-all", action="store_true")
+227|    p.add_argument("--dry-run",   action="store_true")
+228|    args = p.parse_args()
+229|    sys.exit(run(args.from_skill, args.to_skill, args.plan, args.audit_all, args.dry_run))
+230|
+231|
+232|if __name__ == "__main__":
+233|    main()
+
+================================================================================
+FILE: /var/home/rainbow/.hermes/scripts/spec-semantic-graph-builder.py  (total lines: 230)
+================================================================================
+1|#!/usr/bin/python3
+2|"""
+3|spec-semantic-graph-builder.py
+4|
+5|Enables automated detection of missing security guards and state-transition
+6|invariants in Hermes skill/plan specifications by building a semantic
+7|dependency graph from SKILL.md and plan files.
+8|
+9|CS SPIKE basis (CS wave5 — spec semantic analysis):
+10|  LLM-generated code and skill specs lack formal intent verification.
+11|  This script builds a directed graph from skill preconditions, postconditions,
+12|  tool dependencies, and guard clauses — then detects:
+13|  (a) Missing security guards (skill invokes destructive tool with no guard)
+14|  (b) Unreachable postconditions (no path from precondition to postcondition)
+15|  (c) State-transition gaps (required prior state never established)
+16|
+17|Math basis: semantic graph as a typed directed hypergraph
+18|  Nodes: {precondition, action, postcondition, guard}
+19|  Edges: REQUIRES, PRODUCES, GUARDS, CONFLICTS_WITH
+20|  Invariant check: for every PRODUCES edge (a→p), there must exist a
+21|  reachable GUARDS edge (g→a) when action `a` is destructive.
+22|  Gap detection: BFS from initial state; unreachable postconditions flagged.
+23|
+24|Usage:
+25|  python3 spec-semantic-graph-builder.py              # scan all skills
+26|  python3 spec-semantic-graph-builder.py --skill NAME # single skill
+27|  python3 spec-semantic-graph-builder.py --export graph.json
+28|  python3 spec-semantic-graph-builder.py --dry-run
+29|"""
+30|
+31|from __future__ import annotations
+32|
+33|import argparse
+34|import json
+35|import re
+36|import sys
+37|from collections import defaultdict, deque
+38|from datetime import datetime, timezone
+39|from pathlib import Path
+40|
+41|HOME       = Path.home()
+42|SKILLS_DIR = HOME / ".hermes/skills"
+43|FORK_SKILLS = HOME / ".hermes/profiles/fork/skills"
+44|PLANS_DIR  = HOME / ".hermes/plans"
+45|CACHE_DIR  = HOME / ".hermes/cache/monitors"
+46|CACHE_DIR.mkdir(parents=True, exist_ok=True)
+47|OUT_FILE      = CACHE_DIR / "spec-semantic-graph.json"
+48|BASELINE_FILE = CACHE_DIR / "spec-semantic-graph-baseline.json"
+49|
+50|# Patterns for extracting semantic elements from SKILL.md
+51|GUARD_PATTERNS = [
+52|    r"(?i)\b(check|verify|validate|assert|ensure|guard|require|must)\b[^.\n]{0,60}",
+53|    r"(?i)\b(if .{0,30} then|only if|unless|except when)\b[^.\n]{0,60}",
+54|    r"(?i)\b(auth|permission|access|token|credential)\b[^.\n]{0,40}",
+55|]
+56|DESTRUCTIVE_KEYWORDS = {
+57|    "delete", "remove", "drop", "truncate", "overwrite", "destroy",
+58|    "kill", "terminate", "wipe", "reset", "purge", "rmdir", "unlink",
+59|}
+60|PRECONDITION_HEADERS  = re.compile(r"(?i)^#{1,4}\s*(precondition|prerequisite|requires?|before|setup)")
+61|POSTCONDITION_HEADERS = re.compile(r"(?i)^#{1,4}\s*(postcondition|produces?|output|result|after|effect)")
+62|ACTION_HEADERS        = re.compile(r"(?i)^#{1,4}\s*(step|action|procedure|workflow|usage|use when)")
+63|
+64|
+65|def _extract_nodes(text: str, source: str) -> dict:
+66|    lines  = text.splitlines()
+67|    nodes: dict[str, list[str]] = {
+68|        "preconditions": [], "postconditions": [], "actions": [], "guards": [],
+69|    }
+70|    mode = None
+71|    for line in lines:
+72|        if PRECONDITION_HEADERS.match(line):
+73|            mode = "preconditions"
+74|        elif POSTCONDITION_HEADERS.match(line):
+75|            mode = "postconditions"
+76|        elif ACTION_HEADERS.match(line):
+77|            mode = "actions"
+78|        elif line.startswith("#"):
+79|            mode = None
+80|
+81|        if mode and line.strip() and not line.startswith("#"):
+82|            nodes[mode].append(line.strip()[:120])
+83|
+84|        for pat in GUARD_PATTERNS:
+85|            m = re.search(pat, line)
+86|            if m:
+87|                nodes["guards"].append(m.group()[:80])
+88|
+89|    return nodes
+90|
+91|
+92|def _find_destructive_actions(nodes: dict) -> list[str]:
+93|    destructive = []
+94|    for action in nodes.get("actions", []):
+95|        words = set(re.findall(r"[a-z]+", action.lower()))
+96|        if words & DESTRUCTIVE_KEYWORDS:
+97|            destructive.append(action[:80])
+98|    return destructive
+99|
+100|
+101|def _check_guard_coverage(nodes: dict) -> list[dict]:
+102|    """Flag destructive actions that have no associated guard."""
+103|    issues = []
+104|    guards_text = " ".join(nodes.get("guards", [])).lower()
+105|    for action in _find_destructive_actions(nodes):
+106|        # Check if any guard keyword appears near this action's key terms
+107|        action_words = set(re.findall(r"[a-z]{4,}", action.lower()))
+108|        covered = any(w in guards_text for w in action_words)
+109|        if not covered:
+110|            issues.append({
+111|                "type":   "MISSING_GUARD",
+112|                "action": action,
+113|                "detail": "destructive action with no guard clause found in spec",
+114|            })
+115|    return issues
+116|
+117|
+118|def _check_postcondition_reachability(nodes: dict) -> list[dict]:
+119|    """Flag postconditions that have no matching action producing them."""
+120|    issues = []
+121|    actions_text = " ".join(nodes.get("actions", [])).lower()
+122|    for pc in nodes.get("postconditions", []):
+123|        pc_words = set(re.findall(r"[a-z]{4,}", pc.lower()))
+124|        reachable = any(w in actions_text for w in pc_words)
+125|        if not reachable and pc_words:
+126|            issues.append({
+127|                "type":        "UNREACHABLE_POSTCONDITION",
+128|                "postcondition": pc[:80],
+129|                "detail":      "postcondition has no action that produces it",
+130|            })
+131|    return issues
+132|
+133|
+134|def analyse_skill(path: Path) -> dict:
+135|    try:
+136|        text = path.read_text()
+137|    except Exception as e:
+138|        return {"path": str(path), "error": str(e), "issues": []}
+139|
+140|    nodes  = _extract_nodes(text, str(path))
+141|    issues = (
+142|        _check_guard_coverage(nodes) +
+143|        _check_postcondition_reachability(nodes)
+144|    )
+145|
+146|    return {
+147|        "path":   str(path),
+148|        "name":   path.parent.name if path.name == "SKILL.md" else path.stem,
+149|        "nodes":  {k: len(v) for k, v in nodes.items()},
+150|        "issues": issues,
+151|    }
+152|
+153|
+154|def run(skill_name: str | None, export: Path | None, dry_run: bool) -> int:
+155|    now = datetime.now(timezone.utc).isoformat()
+156|
+157|    # Collect skill files
+158|    skill_files: list[Path] = []
+159|    for base in [SKILLS_DIR, FORK_SKILLS]:
+160|        if base.exists():
+161|            skill_files.extend(base.rglob("SKILL.md"))
+162|    if PLANS_DIR.exists():
+163|        skill_files.extend(PLANS_DIR.glob("*.md"))
+164|
+165|    if skill_name:
+166|        skill_files = [f for f in skill_files if skill_name.lower() in str(f).lower()]
+167|
+168|    print(f"\n=== Spec Semantic Graph Builder — {now[:10]} ===")
+169|    print(f"Analysing {len(skill_files)} spec files...")
+170|
+171|    results    = [analyse_skill(f) for f in skill_files]
+172|    all_issues = [i for r in results for i in r.get("issues", [])]
+173|
+174|    by_type: dict[str, int] = defaultdict(int)
+175|    for issue in all_issues:
+176|        by_type[issue["type"]] += 1
+177|
+178|    print(f"Files analysed: {len(results)}")
+179|    print(f"Total issues:   {len(all_issues)}")
+180|    for t, c in sorted(by_type.items()):
+181|        print(f"  {t}: {c}")
+182|
+183|    critical = [i for i in all_issues if i["type"] == "MISSING_GUARD"]
+184|    if critical[:3]:
+185|        print("\nTop MISSING_GUARD issues:")
+186|        for i in critical[:3]:
+187|            print(f"  ! {i['action'][:70]}")
+188|
+189|    # Only alarm on NEW issues beyond baseline (static structural issues are permanent noise)
+190|    baseline_count = 0
+191|    if BASELINE_FILE.exists():
+192|        try:
+193|            baseline_count = json.loads(BASELINE_FILE.read_text()).get("issue_count", 0)
+194|        except Exception:
+195|            pass
+196|    else:
+197|        _bl_tmp = BASELINE_FILE.with_suffix(".tmp")
+198|        _bl_tmp.write_text(json.dumps({"issue_count": len(all_issues), "ts": now}, indent=2))
+199|        _bl_tmp.replace(BASELINE_FILE)
+200|        baseline_count = len(all_issues)
+201|
+202|    new_issues = len(all_issues) - baseline_count
+203|    if new_issues > 5:
+204|        print(f"\nALARM: yes — {new_issues} new spec issues since baseline (total={len(all_issues)}, baseline={baseline_count})")
+205|        alarm_exit = 1
+206|    else:
+207|        print(f"\nALARM: no — issue count stable (total={len(all_issues)}, baseline={baseline_count}, delta={new_issues:+d})")
+208|        alarm_exit = 0
+209|
+210|    if not dry_run:
+211|        payload = {"ts": now, "files": len(results), "issues": all_issues, "by_type": dict(by_type)}
+212|        OUT_FILE.write_text(json.dumps(payload, indent=2))
+213|        if export:
+214|            export.write_text(json.dumps({"results": results}, indent=2))
+215|            print(f"Graph exported: {export}")
+216|
+217|    return alarm_exit
+218|
+219|
+220|def main() -> None:
+221|    parser = argparse.ArgumentParser()
+222|    parser.add_argument("--skill",  default=None)
+223|    parser.add_argument("--export", type=Path, default=None)
+224|    parser.add_argument("--dry-run", action="store_true")
+225|    args = parser.parse_args()
+226|    sys.exit(run(skill_name=args.skill, export=args.export, dry_run=args.dry_run))
+227|
+228|
+229|if __name__ == "__main__":
+230|    main()
+
+================================================================================
+FILE: /var/home/rainbow/.hermes/profiles/fork/cron/jobs.json  (total lines: 271)
+================================================================================
+1|{
+2|  "jobs": [
+3|    {
+4|      "id": "shadow-gate-0001",
+5|      "schedule": {
+6|        "kind": "cron",
+7|        "expr": "0 8 * * *"
+8|      },
+9|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/shadow-gate-nightly.py",
+10|      "no_agent": true,
+11|      "description": "Nightly shadow flag evaluation",
+12|      "next_run_at": "2026-09-20T08:00:00+10:00",
+13|      "env": {
+14|        "HERMES_PROFILE": "fork"
+15|      }
+16|    },
+17|    {
+18|      "id": "calibration-threshold-updater-0001",
+19|      "schedule": {
+20|        "kind": "cron",
+21|        "expr": "0 6 * * *"
+22|      },
+23|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/calibration-threshold-updater.py",
+24|      "no_agent": true,
+25|      "description": "Daily Condorcet threshold EMA update",
+26|      "next_run_at": "2026-09-20T06:00:00+10:00",
+27|      "env": {
+28|        "HERMES_PROFILE": "fork"
+29|      }
+30|    },
+31|    {
+32|      "id": "recall-miss-ttl-adjuster-0001",
+33|      "schedule": {
+34|        "kind": "cron",
+35|        "expr": "0 5 * * *"
+36|      },
+37|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/recall-miss-ttl-adjuster.py",
+38|      "no_agent": true,
+39|      "description": "Daily MRAS adaptive TTL adjustment (bottleneck #8)",
+40|      "next_run_at": "2026-09-20T05:00:00+10:00",
+41|      "env": {
+42|        "HERMES_PROFILE": "fork"
+43|      }
+44|    },
+45|    {
+46|      "id": "routing-weight-updater-0001",
+47|      "schedule": {
+48|        "kind": "cron",
+49|        "expr": "0 7 * * *"
+50|      },
+51|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-weight-updater.py",
+52|      "no_agent": true,
+53|      "description": "Daily FTRL routing weight update (bottleneck #2)",
+54|      "next_run_at": "2026-09-20T07:00:00+10:00",
+55|      "env": {
+56|        "HERMES_PROFILE": "fork"
+57|      },
+58|      "display": "daily at 09:00"
+59|    },
+60|    {
+61|      "id": "pre-compact-annotate-0001",
+62|      "schedule": {
+63|        "kind": "cron",
+64|        "expr": "*/15 * * * *"
+65|      },
+66|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/pre-compact-annotate.py",
+67|      "no_agent": true,
+68|      "description": "Every 15m R-D compaction advisory",
+69|      "next_run_at": "2026-09-19T20:45:00+10:00",
+70|      "env": {
+71|        "HERMES_PROFILE": "fork"
+72|      },
+73|      "last_dispatch": {
+74|        "scheduled_at": "2026-09-19T20:30:00+10:00",
+75|        "dispatched_at": "2026-09-19T20:30:09.244667+10:00",
+76|        "lateness_seconds": 9.2,
+77|        "kind": "on_time"
+78|      },
+79|      "fire_claim": null,
+80|      "last_run_at": "2026-09-19T20:30:09.989542+10:00",
+81|      "last_status": "ok",
+82|      "failure_streak": 0,
+83|      "last_delivery_error": null,
+84|      "state": "scheduled",
+85|      "last_error": null
+86|    },
+87|    {
+88|      "id": "skillspector-guard-0001",
+89|      "schedule": {
+90|        "kind": "cron",
+91|        "expr": "0 */4 * * *"
+92|      },
+93|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skillspector_guard.py",
+94|      "no_agent": true,
+95|      "description": "Every 4h skill integrity scan (H-I1 reactive gate)",
+96|      "next_run_at": "2026-09-20T00:00:00+10:00",
+97|      "env": {
+98|        "HERMES_PROFILE": "fork"
+99|      },
+100|      "last_dispatch": {
+101|        "scheduled_at": "2026-09-19T20:00:00+10:00",
+102|        "dispatched_at": "2026-09-19T20:00:06.256629+10:00",
+103|        "lateness_seconds": 6.3,
+104|        "kind": "on_time"
+105|      },
+106|      "fire_claim": null,
+107|      "last_run_at": "2026-09-19T20:00:09.827982+10:00",
+108|      "last_status": "ok",
+109|      "last_error": null,
+110|      "failure_streak": 0,
+111|      "last_delivery_error": null,
+112|      "state": "scheduled"
+113|    },
+114|    {
+115|      "id": "fork-state-vacuum-0001",
+116|      "schedule": {
+117|        "kind": "cron",
+118|        "expr": "0 3 * * 0"
+119|      },
+120|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/fork-state-vacuum.py",
+121|      "no_agent": true,
+122|      "description": "Weekly SQLite VACUUM on fork state.db",
+123|      "next_run_at": "2026-09-20T03:00:00+10:00",
+124|      "env": {
+125|        "HERMES_PROFILE": "fork"
+126|      }
+127|    },
+128|    {
+129|      "id": "memory-ttl-purge-0001",
+130|      "schedule": {
+131|        "kind": "cron",
+132|        "expr": "0 4 * * *"
+133|      },
+134|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-ttl-purge.py",
+135|      "no_agent": true,
+136|      "description": "Daily TTL purge of staged memories",
+137|      "next_run_at": "2026-09-20T04:00:00+10:00",
+138|      "env": {
+139|        "HERMES_PROFILE": "fork"
+140|      }
+141|    },
+142|    {
+143|      "id": "concept-lattice-rebuild-0001",
+144|      "schedule": {
+145|        "kind": "cron",
+146|        "expr": "0 2 * * *"
+147|      },
+148|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/concept-lattice-index.py",
+149|      "no_agent": true,
+150|      "description": "Nightly concept lattice rebuild (skill router semantic fallback)",
+151|      "next_run_at": "2026-09-20T02:00:00+10:00",
+152|      "env": {
+153|        "HERMES_PROFILE": "fork"
+154|      }
+155|    },
+156|    {
+157|      "id": "omni-skill-scan-0001",
+158|      "schedule": {
+159|        "kind": "cron",
+160|        "expr": "0 1 * * *"
+161|      },
+162|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/omni_skill_scan.py",
+163|      "no_agent": true,
+164|      "description": "Nightly skill scan and variance tracking",
+165|      "next_run_at": "2026-09-20T01:00:00+10:00",
+166|      "env": {
+167|        "HERMES_PROFILE": "fork"
+168|      }
+169|    },
+170|    {
+171|      "id": "spike-queue-actuator-0001",
+172|      "schedule": {
+173|        "kind": "cron",
+174|        "expr": "0 10 * * *"
+175|      },
+176|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/spike-queue-actuator.py",
+177|      "no_agent": true,
+178|      "description": "Daily SPIKE queue actuator — dispatch research spikes as improvement proposals",
+179|      "env": {
+180|        "HERMES_PROFILE": "fork"
+181|      },
+182|      "display": "daily at 10:00",
+183|      "next_run_at": "2026-09-20T10:00:00+10:00"
+184|    },
+185|    {
+186|      "id": "cross-calibration-monitor-0001",
+187|      "schedule": {
+188|        "kind": "cron",
+189|        "expr": "0 11 * * *"
+190|      },
+191|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cross-calibration-monitor.py",
+192|      "no_agent": true,
+193|      "description": "Daily cross-calibration drift monitor (DRIFT_ALARM + TREND_DIVERGENCE)",
+194|      "next_run_at": "2026-09-20T11:00:00+10:00",
+195|      "env": {
+196|        "HERMES_PROFILE": "fork"
+197|      }
+198|    },
+199|    {
+200|      "id": "monitor-suite-runner-0001",
+201|      "schedule": {
+202|        "kind": "cron",
+203|        "expr": "0 */2 * * *"
+204|      },
+205|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/monitor-suite-runner.py",
+206|      "no_agent": true,
+207|      "description": "Every 2h monitor suite run — collects alarm JSON for alarm-aggregator",
+208|      "env": {
+209|        "HERMES_PROFILE": "fork"
+210|      },
+211|      "next_run_at": "2026-09-19T22:00:00+10:00",
+212|      "last_dispatch": {
+213|        "scheduled_at": "2026-09-19T20:00:00+10:00",
+214|        "dispatched_at": "2026-09-19T20:00:06.256629+10:00",
+215|        "lateness_seconds": 6.3,
+216|        "kind": "on_time"
+217|      },
+218|      "fire_claim": null,
+219|      "last_run_at": "2026-09-19T20:00:12.276829+10:00",
+220|      "last_status": "ok",
+221|      "last_error": null,
+222|      "failure_streak": 0,
+223|      "last_delivery_error": null,
+224|      "state": "scheduled"
+225|    },
+226|    {
+227|      "id": "mcp-privilege-audit-0001",
+228|      "schedule": {
+229|        "kind": "cron",
+230|        "expr": "0 3 * * 1"
+231|      },
+232|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/mcp-privilege-audit.py",
+233|      "no_agent": true,
+234|      "description": "Weekly MCP least-privilege audit (cs-mcp-overpriv / arXiv:2603.21641)",
+235|      "env": {
+236|        "HERMES_PROFILE": "fork"
+237|      },
+238|      "next_run_at": "2026-09-21T03:00:00+10:00"
+239|    },
+240|    {
+241|      "id": "gate-audit-0001",
+242|      "schedule": {
+243|        "kind": "cron",
+244|        "expr": "30 6 * * *"
+245|      },
+246|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/gate_audit.py",
+247|      "no_agent": true,
+248|      "description": "Daily gate audit output capture",
+249|      "env": {
+250|        "HERMES_PROFILE": "fork"
+251|      },
+252|      "next_run_at": "2026-09-20T06:30:00+10:00"
+253|    },
+254|    {
+255|      "id": "hermes-gateway-prestart-0001",
+256|      "schedule": {
+257|        "kind": "cron",
+258|        "expr": "0 4 * * *"
+259|      },
+260|      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-gateway-prestart.py",
+261|      "no_agent": true,
+262|      "env": {
+263|        "HERMES_PROFILE": "fork"
+264|      },
+265|      "failure_streak": 0,
+266|      "description": "Pre-gateway: WAL checkpoint + retired-wal cleanup before state.db opens",
+267|      "next_run_at": "2026-09-20T04:00:00+10:00"
+268|    }
+269|  ],
+270|  "updated_at": "2026-09-19T20:38:10.078429+10:00"
+271|}
+
+================================================================================
+FILE: /var/home/rainbow/.hermes/profiles/fork/ARCHITECTURE.md  (total lines: 382)
+================================================================================
+1|# Hermes Architecture — Canonical Reference
+2|
+3|Patterns ported from Denuto (jesterG1979/hello_agent) + Hermes-native patterns.
+4|This is the authoritative single source of truth for how Hermes is structured,
+5|what rules are enforced, and what the invariants are.
+6|
+7|Last updated: 2026-09-16 (wiring sprint 2 + book-to-skill ingestion)
+8|
+9|---
+10|
+11|## Tier System
+12|
+13|Rules are split into two tiers (borrowed from Denuto's architecture contract):
+14|
+15|Tier 1 — Enforced Invariants: hard rules. Each names the check that enforces it
+16|  (a script, test, or hook). An agent may not weaken or route around a Tier-1 rule
+17|  in a normal change. If a rule has no gate, it is marked GATE GAP.
+18|
+19|Tier 2 — Operating Posture: non-binding guidance. Real, but not mechanically
+20|  checkable. An agent must NOT cite a Tier-2 statement to claim a change is "verified."
+21|
+22|Honesty rule: if a rule has no gate today, mark it GATE GAP (proposed: ...) rather
+23|than implying it runs. Gate gaps accumulate into a backlog.
+24|
+25|---
+26|
+27|## Tier 1 — Enforced Invariants
+28|
+29|### H-I1 — Skills are the single source of truth for agent procedures
+30|- Skills in ~/.hermes/profiles/fork/skills/ are canonical.
+31|- User-owned skills require `hermes curator adopt` before any curator write.
+32|- No procedure lives only in memory or in session history.
+33|- GATE: skillspector_guard.py runs on cron every 235m (post-facto batch scan).
+34|- GATE (H-I1: skillspector pre-commit hook): CLOSED — pre-commit hook installed at
+35|  ~/.hermes/hermes-fork/.git/hooks/pre-commit; scans staged SKILL.md files via
+36|  `HERMES_PROFILE=fork python3 ~/.hermes/scripts/skillspector_guard.py --enforce`
+37|  and blocks the commit (exit 1) on high-risk findings. Fail-open: absent guard → warn + exit 0.
+38|
+39|### H-I2 — Memory surfaces have strict ownership (one writer per fact class)
+40|- skills: reusable procedures and task-specific patterns
+41|- memory: facts that apply to EVERY session regardless of task (who the user is, env facts, conventions)
+42|- session history: within-session recall, transient state
+43|- Overlapping stores with no ownership rule = four places a stale claim can survive.
+44|- No mirroring: a fact lives in exactly one store. Cross-reference by link; never copy.
+45|
+46|### H-I3 — Evidence over assertion
+47|- Claims about tool results, file writes, deploys, and fixes must include verifiable output.
+48|- "Implemented, not yet tested" is a valid status. An unqualified success claim without evidence is not.
+49|- Report failures faithfully. Never round a partial pass up to "passing."
+50|- State skipped steps: if a required step was skipped, name it and say why.
+51|- Source: Denuto golden-principles.md #2, agent-operating-rules.md Progress Reporting section.
+52|
+53|### H-I4 — No same feedback twice
+54|- Corrective user steering is a high-signal defect report against the agent operating system.
+55|- Convert repeated or behavior-level feedback into a durable control: skill update, memory update,
+56|  config change, script, or cron job.
+57|- Empty assurances ("I will remember", "going forward") are not a fix unless backed by a durable control.
+58|- Source: Denuto golden-principles.md #11, agent-steering-feedback-loop.md.
+59|
+60|### H-I5 — Small, reversible changes
+61|- Prefer narrow changes that are easy to review, test, and roll back.
+62|- Especially before touching config.yaml, plugin hooks, or runtime scripts.
+63|- Source: Denuto golden-principles.md #3.
+64|
+65|### H-I6 — Hermes scripts must be stdlib-only unless explicitly approved
+66|- Scripts in ~/.hermes/scripts/ must not introduce new pip deps without explicit approval.
+67|- Exception: lyapunov-analysis.py uses numpy/scipy (pre-approved, analysis-only, never on critical path).
+68|- Use execute_code + Path.write_text() to write scripts (write_file false-alarms on scripts/).
+69|- Source: local convention, discovered 2026-09-16.
+70|
+71|### H-I7 — Shadow paths never raise; annotation only
+72|- Any shadow/telemetry/middleware annotation path MUST swallow all exceptions.
+73|- A shadow failure must not contaminate the live path.
+74|- Source: Denuto shadow_telemetry.py design constraint.
+75|
+76|### H-I8 — Improvement proposals are risk-classified before execution
+77|- LOW (skill_update, skill_create, memory_update): auto-approved.
+78|- MEDIUM (script_add, script_modify, cron_add): needs 1 reviewer.
+79|- HIGH (config_change, plugin_update, cron_modify): needs 2 senior approvals + 24h cooldown after rollback.
+80|- These targets always escalate to HIGH: config.yaml, plugin_stream_hooks, conversation_compression,
+81|  api_request_hooks, gateway, compression.
+82|- CLI: python3 ~/.hermes/scripts/improvement_governance.py propose --change-type TYPE --target TARGET --description DESC
+83|- GATE (H-I8 advisory): tool_guardrails.py _governance_pre_check() fires for HIGH-risk .hermes writes;
+84|  fail-open advisory (does not hard-block). Full GATE GAP: no hard-blocking auto-call exists yet in agent runtime.
+85|
+86|---
+87|
+88|## Tier 2 — Operating Posture
+89|
+90|### Agent loop design
+91|- Deterministic control plane wrapping nondeterministic LLM nodes is the textbook-correct shape.
+92|- Keep deterministic logic and LLM judgment physically separated where possible.
+93|- Source: Denuto I5 invariant + AWS GenAI Lens guidance.
+94|
+95|### Ponytail (lazy senior dev mode)
+96|Before writing any agent code or skill, stop at the first rung that holds:
+97|  1. Does this need to be built at all? (YAGNI)
+98|  2. Does the standard library already do this?
+99|  3. Does a native Hermes feature cover it?
+100|  4. Does an already-installed dependency solve it?
+101|  5. Can this be one line?
+102|  6. Only then: write the minimum that works.
+103|
+104|Not lazy about: input validation at trust boundaries, error handling that prevents
+105|data loss, security, and anything explicitly requested.
+106|Source: Denuto ponytail-lazy-senior-dev.md.
+107|
+108|### Memory division of labour
+109|- Session history: what we just tried, why we backed out. Do NOT write durable facts here.
+110|- memory: who the user is, env facts, standing conventions. Max 2200 chars — consolidate aggressively.
+111|- skills: task-specific procedures, patterns, pitfalls, tool commands. Load only when relevant.
+112|- Citation rule: any claim that changes a skill or config must cite a tool result from this session.
+113|- Promotion rule: a fact recalled from session history that matters gets written to skill/memory in the same session.
+114|- No-mirroring rule: a fact lives in exactly one store. Two copies = one of them is wrong.
+115|Source: Denuto harness-and-memory-contract.md.
+116|
+117|### Concurrency (AIMD controller)
+118|- Use ~/.hermes/scripts/aimd_controller.py for bounded parallel subagent dispatch.
+119|- AIMD limitation: each subagent has independent state — no cross-agent convergence.
+120|- For truly concurrent work, prefer delegate_task with explicit output contracts.
+121|
+122|### Skill routing
+123|- Primary: BM25 index (skill-router-index.py, build_tfidf with k1=1.5, b=0.75).
+124|- Semantic fallback: when BM25 top-2 score gap < 0.12, concept-lattice-index.py is called
+125|  via subprocess --query to re-rank candidates. Output flags semantic_reranked=True.
+126|- Known failure: concept-lattice requires a warm Hindsight cache; falls back to pure BM25 if cold.
+127|
+128|### Loop stability (PID + internal Lyapunov check)
+129|- loop-pid.py implements discrete linear PID with anti-windup and an internal Lyapunov decrease
+130|  check (cmd_lyapunov_check, citing KHALIL-1/KHALIL-7). This is self-contained in loop-pid.py.
+131|- lyapunov-analysis.py is a SEPARATE standalone tool (requires numpy/scipy) for offline phase-portrait
+132|  and bifurcation analysis. It is NOT called by loop-pid.py. Use it manually for stability diagnosis.
+133|- Do NOT claim "loop-pid is wired to lyapunov-analysis" — they are independent instruments.
+134|
+135|### Middleware stack
+136|- See ~/.hermes/profiles/fork/skills/hermes-llm-middleware-stack/SKILL.md for composable middleware.
+137|- Loop detection: MD5-hash responses per (session_id, stage). Catches syntactically identical loops.
+138|- Rephrased-loop detection: _is_rephrased_loop() in metacognitive-harness.py — 4-gram Jaccard
+139|  similarity over last 5 history items (threshold=0.85). Catches semantically equivalent paraphrases.
+140|- Cost guard: redirect to cheaper model when cumulative cost > threshold.
+141|- Grounding: verify quoted strings against source text. Annotate only, never retry.
+142|
+143|### Shadow evaluation
+144|- See ~/.hermes/profiles/fork/skills/hermes-shadow-evaluation/SKILL.md.
+145|- New features ship behind shadow_<feature>: false flags before going live.
+146|- Gate script at ~/.hermes/scripts/shadow_telemetry.py evaluates JSONL telemetry.
+147|- Nightly report: shadow-gate-nightly.py cron job (0 8 * * *, no_agent=True, id=shadow-gate-0001).
+148|  Reads ~/.hermes/cache/shadow-telemetry/*.jsonl; prints promote/disable/keep-shadow per flag.
+149|
+150|### Improvement governance
+151|- See ~/.hermes/profiles/fork/skills/hermes-improvement-governance/SKILL.md.
+152|- Gate script at ~/.hermes/scripts/improvement_governance.py classifies risk and tracks proposals.
+153|- CLI subcommands: propose, approve, rollback, list.
+154|- GATE GAP: agent runtime does not call this automatically before HIGH-risk writes.
+155|
+156|### Run ledger
+157|- See ~/.hermes/scripts/run_ledger.py for durable agent task state with OCC conditional writes.
+158|- Hash-chain audit log, clock injection, IllegalRunTransition on invalid state machine transitions.
+159|- CLI subcommands: create, complete, fail, status.
+160|
+161|### Consistency scoring
+162|- See ~/.hermes/scripts/consistency_scorer.py for calibrated LLM confidence.
+163|- N=3 Condorcet majority: 3/3=1.0, 2/3=0.5, 1/3=0.2, 0/3=0.05 (conservative, not prob-theoretically derived).
+164|- Wired into metacognitive-harness.py cmd_gate() for L2/L3 scope factual claims (MH_CONSISTENCY=1 env var).
+165|- Calibration logging: (predicted_confidence, query_hash, scope) appended to ~/.hermes/cache/calibration-log.jsonl.
+166|
+167|### Context compression advisory
+168|- rd-compaction-advisor.py is called by pre-compact-annotate.py (runs every 15m, no_agent=True).
+169|- Estimates aggressiveness [0,1] from current token count vs threshold (R-D curve shape, k=3).
+170|- Appended to annotation output as: "Compaction advisory: aggressiveness=X.XX, focus=TOPIC".
+171|- NOTE: rd-compaction-advisor.py is NOT wired into context_compressor.py directly — it is an advisory
+172|  annotation only. The compressor does not read the annotation and adapt its salvage pass.
+173|
+174|### Dead config sections (confirmed 2026-09-16)
+175|The following config.yaml sections have zero AGENT-RUNTIME consumers in agent/*.py. They are documented aspirations,
+176|not enforced gates in the agent loop. Do NOT cite them as active enforcement:
+177|  - calibration_gate: commitment_threshold defined but never evaluated in agent runtime
+178|  - constraint_freshness: config key read by memory-ttl-purge only (not agent routing) — now profile-aware via HERMES_HOME
+179|  - durable_file_write_gate: 0 agent/*.py consumers
+180|  - skill_state: 0 agent/*.py consumers (read by skill-state.py standalone script)
+181|  - tool_slo: 0 agent/*.py consumers (am-sentry.py implements SLO detection independently)
+182|  - loop_harness: 0 agent/*.py consumers (reasoning-hooks.py reads via env-aware HERMES_HOME)
+183|
+184|---
+185|
+186|## Runtime Scripts Reference
+187|
+188|~/.hermes/scripts/:
+189|  aimd_controller.py         - AIMD concurrency controller for parallel subagent dispatch
+190|  consistency_scorer.py      - Calibrated LLM confidence via N=3 Condorcet; wired into metacognitive-harness
+191|  shadow_telemetry.py        - Shadow-mode feature flag evaluation and JSONL telemetry
+192|  shadow-gate-nightly.py     - Nightly cron wrapper: evaluates all shadow flags, prints promote/disable report
+193|  improvement_governance.py  - Risk-classified self-improvement proposal lifecycle; CLI: propose/approve/rollback/list
+194|  run_ledger.py              - Durable agent task state with OCC conditional writes + hash-chain audit; CLI: create/complete/fail/status
+195|  rd-compaction-advisor.py   - R-D shaped compaction aggressiveness advisor; called from pre-compact-annotate.py
+196|  concept-lattice-index.py   - Nightly concept lattice over Hindsight facts; --query CLI for semantic reranking
+197|  skill-router-index.py      - BM25 skill router + concept-lattice semantic fallback (gap < 0.12 → rerank)
+198|  loop-pid.py                - Discrete linear PID + internal Lyapunov decrease check (KHALIL-1/7)
+199|  lyapunov-analysis.py       - STANDALONE offline phase-portrait/bifurcation tool (numpy/scipy); NOT called by loop-pid
+200|  memory-ttl-purge.py        - TTL purge for staged memories; fixed 2026-09-16 (forward-ref NameError resolved)
+201|  tool-auth-shim.py          - Tool-call authorisation shim (inspection-game mixed strategy; wired into unified-recall.py EXTERNAL tier — wiring sprint 2)
+202|  calibration-threshold-updater.py - Reads calibration-log.jsonl; updates Condorcet thresholds; EMA now seeds from prior run (wiring sprint 2)
+203|  context-pressure-reader.py - Reads context token pressure; advisory annotation (wiring sprint 2)
+204|  recall-miss-ttl-adjuster.py - MRAS adaptive TTL adjuster; reads recall-misses.jsonl; closes bottleneck #8 (wiring sprint 2)
+205|
+206|---
+207|
+208|## Key Skills (Denuto-derived)
+209|
+210|  hermes-llm-middleware-stack    - Loop detection, grounding, cost guard, few-shot injection
+211|  hermes-shadow-evaluation       - Shadow feature flags + promotion gate
+212|  hermes-improvement-governance  - Self-improvement lifecycle with risk gating
+213|  comment-sicko                  - Adversarial comment audit (Denuto-ported)
+214|
+215|---
+216|
+217|## Gap Backlog — verified status as of 2026-09-19
+218|
+219|### OPEN (genuinely unresolved)
+220|
+221|  H-I8 (governance auto-call): improvement_governance.py is not called automatically
+222|    before HIGH-risk agent writes. tool_guardrails.py fires it as a pre-check for
+223|    writes to .hermes paths, but only as a fire-and-forget advisory (fail-open).
+224|    No hard block exists in agent/*.py. GATE GAP annotation on H-I8 in Tier 1 is correct.
+225|    Status: PARTIAL — advisory wired, hard gate absent.
+226|
+227|  l1-extract.py source zeroed: running unauditable bytecode from __pycache__.
+228|    l1-extract-recovered.py was written with RECOVERED FROM BYTECODE header and
+229|    per-function pseudocode. The inner 662-line payload requires pycdc/decompile3
+230|    for full source recovery.
+231|    Status: DOCUMENTED — bytecode stub confirmed identical to shim; decompile pending.
+232|
+233|  82 dark output files: scripts that write JSON files never read by any consumer.
+234|    These are standalone metric/research scripts. alarm-aggregator.py handles the
+235|    alarm-format subset (*-alarm.json). Non-alarm dark outputs are accepted as
+236|    standalone observability instruments with no live consumer.
+237|    Status: ACCEPTED — non-alarm dark outputs are out-of-scope for wiring.
+238|
+239|  state-wal-checkpoint.py WAL checkpoint is a no-op: state.db uses journal_mode=DELETE,
+240|    so PRAGMA wal_checkpoint(TRUNCATE) has no effect. VACUUM is still useful.
+241|    Status: ACCEPTED LIMITATION — fixing requires migrating state.db to WAL mode
+242|    (risky schema migration). Script renamed intent to VACUUM-only in comments (F-10).
+243|
+244|### CLOSED (verified on-disk, not hypothetical)
+245|
+246|  H-I1 pre-commit hook: installed at ~/.hermes/hermes-fork/.git/hooks/pre-commit;
+247|    scans staged SKILL.md files via skillspector_guard.py --enforce (HERMES_PROFILE=fork);
+248|    blocks on high-risk findings (exit 1); fail-open when guard absent.
+249|    Wave 8. Adversarial pass: PASS.
+250|
+251|  H-I8 advisory gate: tool_guardrails.py _governance_pre_check() wired as pre-check
+252|    for HIGH-risk tool calls on .hermes paths. Fire-and-forget, fail-open.
+253|    Hard auto-block remains OPEN above.
+254|
+255|  M3 focus_compress.py phantom tool refs: start_focus / complete_focus appear in
+256|    documentation strings and template text only. focus_compress.py --mode reminder
+257|    prints text; it does NOT call any tools at runtime. pre-compact-annotate.py
+258|    calls it as a subprocess safely. The backlog claim was a false positive — the
+259|    15 refs are doc-only. CLOSED: false positive.
+260|
+261|  M4 H2ObstructionLedger dark write: l1-gmemory-consolidation.py reads
+262|    h2-obstructions.json in a post-consolidation step (L541-563), logs unresolved
+263|    obstructions to stderr, profile-aware path, fail-open. Wave 7.
+264|
+265|  M5 disconnected skill routers: skill-router-index.py route() has a full ensemble
+266|    layer (L510-620) calling soft-bellman, kl-skill-prior, pareto-phase,
+267|    privacy-constrained, and online-threshold via subprocess (timeout=5, fail-open)
+268|    when BM25 top score < 0.4. All 5 routers have callers. Wave 7.
+269|
+270|  B2 unified-recall.py hardcoded lifecycle.db path: _hermes_root() helper added;
+271|    7 path sites (lifecycle.db x2, recall-log, FTRL state, bandit state,
+272|    experience-cache x2) now use HERMES_HOME env var. Wave 10 + adversarial pass.
+273|
+274|  B5 mcp-privilege-audit.py always returned 0: now returns 1 when total_flags > 0;
+275|    writes mcp-privilege-alarm.json for alarm-aggregator pickup.
+276|    Adversarial NI-1 (pathlib.Path NameError in alarm block) fixed same session.
+277|
+278|  M6 skillspector_guard.py drift suppressed: _drift_count tracks INTEGRITY-FAIL and
+279|    MERKLE-DRIFT events; main() returns 1 if _drift_count > 0. Wave 10.
+280|
+281|  M7 hermes-memory-drift-audit.py drift suppressed: returns 1 after printing
+282|    exact/near/overgrowth/stale_refs/rule_leakage findings. Adversarial NI-2
+283|    (rule_leakage missing from exit condition) fixed same session. Wave 10.
+284|
+285|  dual-backend-memory-fuser.py hardcoded stubs: _backend_a() calls unified-recall.py
+286|    via subprocess; _backend_b() calls skill-router-index.py via subprocess;
+287|    both timeout=10, fail-open. Wave 7.
+288|
+289|  H2ObstructionLedger (profinite-thread-check.py): writes h2-obstructions.json;
+290|    consumed by l1-gmemory-consolidation.py post-consolidation step. Wave 7.
+291|
+292|  ContentStore.put() non-atomic write (run_ledger.py): content-addressed store;
+293|    SHA-256 key makes double-write idempotent; if-not-exists guard at L114
+294|    prevents partial overwrites. ACCEPTED: not a real atomicity risk.
+295|
+296|  GATE_RECALL_UPLIFT_PP unused: symbol no longer present in unified-recall.py.
+297|    False positive — already removed.
+298|
+299|  routing-weight-updater hardcoded route list: _DEFAULT_ROUTES is a seed only;
+300|    _load_known_routes() does dynamic discovery from calibration log at runtime.
+301|    False positive.
+302|
+303|  tool-auth-shim blanket except: L51 wraps JSONL shadow-logging (fail-open by design,
+304|    H-I7); L73 wraps injection detector (returns UNKNOWN verdict, not pass-through).
+305|    Both are correct. ACCEPTED.
+306|
+307|  skill-yield-tracker feedback dark: yield metrics in state.db not read by any router.
+308|    ACCEPTED: yield tracking is an observability instrument; router coupling would
+309|    create circular dependency on session DB. Out of scope.
+310|
+311|  All prior wave closures (waves 1-9, sprint 2-3): see Wave 7, Wave 8, and sprint
+312|    closure tables below.
+313|
+314|### ACCEPTED LIMITATIONS (architectural — not fixable by script patch)
+315|
+316|  Rate-limit persistence across subprocess callers: improvement_governance.py and
+317|    similar scripts use in-process rate-limit state; each subprocess invocation
+318|    resets the window. Fixing requires caller-side durable state wired at every
+319|    call site. Out of scope.
+320|
+321|  retry-budget-guard in-process only: AUTH/RESOURCE cross-restart budgets tracked
+322|    in cache/retry-budget-state.json (PersistentBudgetState, Wave 8). TRANSIENT/
+323|    SEMANTIC/FATAL remain in-process only — fixing those requires redesigning callers.
+324|
+325|  rd-compaction-advisor annotation-only: aggressiveness advisory is appended to
+326|    pre-compact-annotate.py output but context_compressor.py does not read it.
+327|    Wiring it into the compressor salvage pass requires agent/*.py changes.
+328|    Partial closure only.
+329|
+330|
+331|## Wave 7 Closures (2026-09-19)
+332|
+333|| Gap | Fix | Status |
+334||-----|-----|--------|
+335|| skill-router-index scan_skills() relative_to hardcoded path | Changed relative_to(Path.home()/".hermes"/"skills") → relative_to(SKILLS_ROOT); fork profile now builds non-empty index | CLOSED |
+336|| 5 disconnected skill routers (soft-bellman, kl-skill-prior, pareto-phase, privacy-constrained, online-threshold) | Wired into skill-router-index.py route() as post-hoc ensemble layer (fires when BM25 score < 0.4); each called via subprocess timeout=5 fail-open | CLOSED |
+337|| dual-backend-memory-fuser.py hardcoded stubs | Replaced _backend_a() with real subprocess call to unified-recall.py; _backend_b() with real call to skill-router-index.py; both timeout=10 fail-open | CLOSED |
+338|| H-I8: governance.py never called before HIGH-risk agent writes | _governance_pre_check() added to tool_guardrails.py before_call(); fires for write_file/patch/terminal/execute_code on .hermes/hermes-fork/ paths; fail-open | CLOSED |
+339|| _HIGH_RISK_PATH_INDICATORS too broad (any "agent/" path) | Tightened to ".hermes/hermes-fork/agent/", ".hermes/profiles/", ".hermes/plugins/", ".hermes/scripts/", "config.yaml" | CLOSED |
+340|| l1-extract.py source zeroed / unauditable bytecode | l1-extract-recovered.py written with RECOVERED FROM BYTECODE header; bytecode pseudocode per function documented; outer shim confirmed identical to stub | DOCUMENTED (inner 662-line payload requires pycdc/decompile3) |
+341|| H2ObstructionLedger dark write never consumed | l1-gmemory-consolidation.py post-consolidation step reads h2-obstructions.json; logs unresolved obstructions to stderr; profile-aware path; fail-open | CLOSED |
+342|| focus_compress.py phantom tools never injected | pre-compact-annotate.py now calls focus_compress.py --mode reminder; appends output as "## Focus Agent Reminder" annotation section | CLOSED |
+343|| Dead config gates (calibration_gate, durable_file_write_gate, skill_state, tool_slo, loop_harness) | Marked ACCEPTED: removed from scope; comment added to config.yaml; ARCHITECTURE.md updated | CLOSED |
+344|| pre-compact-annotate.py SQLite connection leak on early exit | Replaced multiple con.close() calls before sys.exit() with try/finally block ensuring always-closed | CLOSED |
+345|
+346|## Wave 8 Closures (2026-09-19)
+347|
+348|| Gap | Fix | Status |
+349||-----|-----|--------|
+350|| alarm-summary.json dark (no consumer) | monitor-suite-runner.py reads alarm-summary.json at end of main(); prints [monitor-suite] ALARMS: N active (HIGH: M MEDIUM: P); fail-open | CLOSED |
+351|| gate-audit.json dark (no consumer) | alarm-aggregator.py: _gate_audit_alarms() reads gate-audit.json <2h old; REVIEW verdict → HIGH alarm entry; n_records==0 → MEDIUM; flows into alarm-summary.json | CLOSED |
+352|| skill-integrity.json dark (no consumer) | skillspector_guard.py end-of-main block reads skill-integrity.json; prints INTEGRITY-FAIL: SKILL (REASON) for status!='ok'; fail-open | CLOSED |
+353|| skill-merkle.json dark (no consumer) | skillspector_guard.py end-of-main block reads skill-merkle.json; prints MERKLE-DRIFT: SKILL for drift/changed==True; fail-open | CLOSED |
+354|| BN-08: retry-budget-guard in-process only (restart resets AUTH/RESOURCE budgets) | PersistentBudgetState class added; AUTH+RESOURCE tracked cross-restart in cache/retry-budget-state.json; 24h window expiry; atomic save; TRANSIENT/SEMANTIC/FATAL remain in-process only | CLOSED |
+355|| H-I1: skillspector-guard pre-commit hook (cron batch scan != pre-commit hook) | POSIX sh hook written to ~/.hermes/hermes-fork/.git/hooks/pre-commit; scans staged SKILL.md files; runs skillspector_guard.py --enforce with HERMES_PROFILE=fork; fail-open if guard absent; chmod +x | CLOSED |
+356|
+357|Adversarial cold pass (Task 4): 5/5 PASS — no HIGH/CRITICAL findings. LOW observations: cron ordering for alarm-summary (scheduling, not a code defect); HERMES_PROFILE=fork hardcoded in hook (correct for this repo). No patches required.
+358|
+359|## Wave 11 Closures (2026-09-19)
+360|
+361|| Finding | Fix |
+362||---------|-----|
+363|| G1 HIGH: skillspector_guard.py non-atomic write (skill-integrity.json, skill-merkle.json) | tmp+replace pattern; crash-safe baseline |
+364|| G2 MED: skill-graph-reachability-verifier.py non-atomic baseline write | tmp+replace pattern |
+365|| G3 MED: spec-semantic-graph-builder.py non-atomic baseline write | tmp+replace pattern |
+366|| G4 MED: hermes-gateway-prestart.py never called | cron entry added (hermes-gateway-prestart-0001, daily 0 4 * * *) |
+367|| G6 LOW: dark output count stale (70 → 82) | ARCHITECTURE.md updated |
+368|
+369|Accepted (architectural / no single wiring point):
+370|  G5 MED: real-options-deployment-gate.py — always returns 0, no callers.
+371|    Caller-invoked on-demand gate for subagent fan-out commitment decisions.
+372|    No single insertion point in the agent runtime. Accepted as manual-invocation tool.
+373|
+374|False positives eliminated this wave:
+375|  - 6 alarm files (*-alarm.json) already caught by alarm-aggregator glob — not dark
+376|  - fuse_results, _update_bandit_state, check_grant, _issue_pet, rq_kmeans_assign — all have internal call sites
+377|  - browser_act_guard, routing-convergence-guard, retry-budget-guard — CLI multi-subcommand tools, return-0-only is correct
+378|  - cobra-skip-guard — uses sys.exit(0/1) correctly; PASS 3 regex missed it
+379|  - skill_prune_audit — caller-only audit library; return values are data, not gate verdicts
+380|  - memory-redundancy-gate — manual-invocation CLI gate, no cron warranted
+381|  - All cron paths clean (fork/scripts/ prefix confirmed); failure streaks all 0
+382|

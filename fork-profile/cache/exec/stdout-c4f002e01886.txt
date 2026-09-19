@@ -1,0 +1,1560 @@
+
+============================================================
+FILE: agent_agentcore (18072B) — /tmp/denuto/agent_agentcore.py
+1|"""
+2|Hello World Strands Agent - AgentCore Version with Session Memory
+3|
+4|This version is structured for deployment to Amazon Bedrock AgentCore Runtime.
+5|Can be run locally or deployed to AWS.
+6|
+7|Features:
+8|- Session-based conversation memory (persists across requests)
+9|- Utility tools (math, text, time, temperature, memory)
+10|- GitHub issue filing tools (monitor payloads, bug reports)
+11|- AgentCore Runtime compatible
+12|
+13|Tool modules:
+14|- Utility/demo tools: defined inline below
+15|- GitHub issue tools: ``src.tools.github_issue_tools``
+16|"""
+17|
+18|import os
+19|import random
+20|from datetime import datetime, timezone
+21|from pathlib import Path
+22|from typing import Any, Dict
+23|
+24|from dotenv import dotenv_values
+25|
+26|# Load environment variables FIRST
+27|env_path = Path(__file__).parent / ".env"
+28|config = dotenv_values(env_path)
+29|os.environ.update(config)
+30|
+31|from bedrock_agentcore.runtime import BedrockAgentCoreApp
+32|from strands import Agent, tool
+33|from strands.models.anthropic import AnthropicModel
+34|from strands.session.file_session_manager import FileSessionManager
+35|
+36|from src.tools.github_issue_tools import GITHUB_ISSUE_TOOLS
+37|from src.tools.math_tools import _safe_eval
+38|
+39|# Tool catalog for the routing-relevance judge — short descriptions only.
+40|# Kept in sync with ``ALL_TOOLS`` below.
+41|_TOOL_CATALOG: Dict[str, str] = {
+42|    "greet": "Personalized greeting given a name.",
+43|    "add_numbers": "Add two numbers.",
+44|    "calculate": "Evaluate a math expression (supports +, -, *, /, ^, sqrt, %).",
+45|    "get_current_time": "Return the current date/time in a given timezone.",
+46|    "generate_random": "Generate a random integer in a range.",
+47|    "reverse_string": "Reverse a string.",
+48|    "count_words": "Word/character/sentence counts for a string.",
+49|    "convert_temperature": "Convert between Celsius and Fahrenheit.",
+50|    "remember_fact": "Store a fact in session memory.",
+51|    "recall_facts": "Recall facts from session memory.",
+52|    "list_available_tools": "Show the available tools.",
+53|    "build_code_issue_finding_from_monitor_payload": "Convert a monitor payload to a finding JSON.",
+54|    "process_monitor_payload_to_github_code_issue": "End-to-end monitor payload → GitHub code issue.",
+55|    "analyze_user_bug_report": "Triage a user bug report; run validations.",
+56|    "process_bug_report_to_github_code_issue": "End-to-end bug report → GitHub code issue.",
+57|    "draft_github_code_issue": "Draft a GitHub code issue from a finding (no network).",
+58|    "submit_github_code_issue": "Create or update a GitHub code issue (network).",
+59|}
+60|
+61|# Initialize the AgentCore app
+62|app = BedrockAgentCoreApp()
+63|
+64|# Session storage directory
+65|SESSIONS_DIR = Path(__file__).parent / "sessions"
+66|SESSIONS_DIR.mkdir(exist_ok=True)
+67|
+68|# In-memory fact storage (simple memory for demo - in production use AgentCore Memory)
+69|_fact_store: Dict[str, list] = {}
+70|
+71|
+72|#
+
+============================================================
+FILE: agent (2146B) — /tmp/denuto/agent.py
+1|"""
+2|Hello World Strands Agent
+3|
+4|A simple agent demonstrating:
+5|- Basic agent creation
+6|- Custom tool definition
+7|- Using Anthropic Claude as the model provider
+8|"""
+9|
+10|import os
+11|from pathlib import Path
+12|
+13|from dotenv import dotenv_values
+14|
+15|# Load environment variables FIRST (before any other imports that might use them)
+16|# Using dotenv_values instead of load_dotenv due to Python 3.14 compatibility
+17|env_path = Path(__file__).parent / ".env"
+18|config = dotenv_values(env_path)
+19|os.environ.update(config)
+20|
+21|from strands import Agent, tool
+22|from strands.models.anthropic import AnthropicModel
+23|
+24|
+25|# Define a custom tool using the @tool decorator
+26|@tool
+27|def greet(name: str) -> str:
+28|    """
+29|    Generate a personalized greeting.
+30|
+31|    Args:
+32|        name: The name of the person to greet
+33|
+34|    Returns:
+35|        A friendly greeting message
+36|    """
+37|    return f"Hello, {name}! Welcome to the world of Strands Agents!"
+38|
+39|
+40|@tool
+41|def add_numbers(a: int, b: int) -> int:
+42|    """
+43|    Add two numbers together.
+44|
+45|    Args:
+46|        a: First number
+47|        b: Second number
+48|
+49|    Returns:
+50|        The sum of a and b
+51|    """
+52|    return a + b
+53|
+54|
+55|def create_agent():
+56|    """Create and return the agent (ensures env vars are loaded first)."""
+57|    api_key = os.environ.get("ANTHROPIC_API_KEY")
+58|    if not api_key:
+59|        raise ValueError("ANTHROPIC_API_KEY not found. Please set it in .env file.")
+60|
+61|    model = AnthropicModel(
+62|        client_args={
+63|            "api_key": api_key,
+64|        },
+65|        model_id="claude-sonnet-4-5-20250929",
+66|        max_tokens=1024,
+67|    )
+68|
+69|    return Agent(
+70|        model=model,
+71|        tools=[greet, add_numbers],
+72|        system_prompt="You are a friendly assistant that helps users with greetings and simple math.",
+73|    )
+74|
+75|
+76|if __name__ == "__main__":
+77|    print("=" * 50)
+78|    print("Hello World Strands Agent")
+79|    print("=" * 50)
+80|    print()
+
+============================================================
+FILE: run_ledger (47867B) — /tmp/denuto/src/run_ledger/ledger.py
+1|"""``RunLedger`` -- the durable run ledger core (ADR 0010, plan §5-§6).
+2|
+3|Implements ADR 0010 crash boundaries 1-7 (Node-side boundaries 8-11 are out
+4|of scope). Every mutation is a strictly conditional write against the
+5|injected ``CoordinationStore``/``ContentStore`` ports; nothing here calls
+6|``time.time()`` (an injected ``Clock`` drives every timestamp/expiry
+7|decision) or imports an LLM provider SDK.
+8|
+9|Run-state changes always go through ``src/contracts/states.py::
+10|is_legal_transition`` ("run" machine): an illegal transition raises
+11|``IllegalRunTransition`` rather than being silently applied. Durable stage
+12|records are always validated through ``StageRecordV1``
+13|(``src/contracts/audit.py``) before being persisted.
+14|
+15|Phase 3.4 additive methods (``src/alr_run``, flagged for supervisor review):
+16|``get_completed_manifest`` (pure read of the B6 completion record, used for
+17|idempotent-replay detection) and ``fail_run`` (the missing ``RUNNING ->
+18|analysis_incomplete|failed`` terminal transition -- no prior method reached
+19|those two states). Both are pure additions; no existing method's behaviour
+20|changed.
+21|"""
+22|
+23|from __future__ import annotations
+24|
+25|import hashlib
+26|import random
+27|from collections.abc import Mapping
+28|from dataclasses import dataclass
+29|from typing import Any
+30|
+31|from src.contracts.audit import AuditManifestV1, StageClassificationV1, StageRecordV1, StageStateV1
+32|from src.contracts.canonical import canonical_model_bytes
+33|from src.contracts.idempotency import derive_run_idempotency_key
+34|from src.contracts.states import RunStateV1, is_legal_transition
+35|from src.run_ledger import paths
+36|from src.run_ledger.errors import (
+37|    BranchesNotJoined,
+38|    BranchNotReady,
+39|    ContentMismatch,
+40|    IllegalRunTransition,
+41|    LeaseConflict,
+42|    LeaseMismatch,
+43|    PackageHeadConflict,
+44|    RunNotFound,
+45|    StageNotStarted,
+46|    StaleAttempt,
+47|)
+48|from src.run_ledger.ports import Clock, ConditionFailed, ContentStore, CoordinationStore
+49|from src.run_ledger.timestamps import iso_ms
+50|
+51|__all__ = ["RunHead", "RunLedger"]
+52|
+53|_TERMINAL_STAGE_STATES = frozenset({"SUCCEEDED", "DEGRADED", "FAILED", "SKIPPED"})
+54|
+55|
+56|def _drop_none(fields: Mapping[str, Any]) -> dict[str, Any]:
+57|    """Contract models forbid explicit ``None`` -- omit absent fields instead of passing them."""
+58|    return {key: value for key, value in fields.items() if value is not None}
+59|
+60|
+61|@dataclass(frozen=True)
+62|class RunHead:
+63|    """One run's coordination-truth state/lease record (not a contract model: internal ledger state)."""
+64|
+65|    run_id: str
+66|    idempotency_key: str
+67|    tenant_id: str
+68|    deal_id: str
+69|    version_id: str
+70|    mode: str
+71|    state: str
+72|    lease_id: str | None
+73|    attempt: int
+74|    expires_at_ms: int | None
+75|    revision: str
+76|    created_at_ms: int
+77|    updated_at_ms: int
+78|
+79|    @classmethod
+80|    def fro
+
+============================================================
+FILE: run_ledger_ports (5007B) — /tmp/denuto/src/run_ledger/ports.py
+1|"""Storage ports for the durable run ledger (ADR 0010: "Authority split").
+2|
+3|Two ports model the split authority the ADR requires:
+4|
+5|- ``CoordinationStore`` -- DynamoDB-shaped coordination truth. Every mutation
+6|  is strictly conditional (``put_if_absent`` / ``update_if``); there is no
+7|  unconditional write on this port at all, so a caller can never silently
+8|  clobber concurrent state.
+9|- ``ContentStore`` -- immutable, versioned content truth. Objects are
+10|  content-addressed where the plan's object layout says so
+11|  (``put_content``) or write-once at a fixed path (``put_if_none_match``);
+12|  there is deliberately no delete or overwrite operation on this port --
+13|  supersession is always a new object plus a new coordination head.
+14|
+15|``Clock`` is a third, tiny port: ``now_ms()`` only. Ledger logic (see
+16|``ledger.py`` / ``audit_chain.py``) never calls ``time.time()`` directly so
+17|lease/expiry/backoff behaviour is deterministic under test.
+18|"""
+19|
+20|from __future__ import annotations
+21|
+22|from collections.abc import Mapping
+23|from typing import Any, Protocol, runtime_checkable
+24|
+25|__all__ = [
+26|    "Clock",
+27|    "ConditionFailed",
+28|    "ContentStore",
+29|    "CoordinationStore",
+30|    "ObjectAlreadyExists",
+31|]
+32|
+33|
+34|class ConditionFailed(Exception):
+35|    """A ``CoordinationStore`` conditional write lost the race.
+36|
+37|    Carries the item currently stored at ``key`` (``None`` when the key does
+38|    not exist, e.g. an ``update_if`` against a never-created key) so callers
+39|    can decide idempotent-return vs. hard failure without a second read.
+40|    """
+41|
+42|    def __init__(self, key: str, current: Mapping[str, Any] | None) -> None:
+43|        self.key = key
+44|        self.current = current
+45|        super().__init__(f"condition failed for key {key!r}")
+46|
+47|
+48|class ObjectAlreadyExists(Exception):
+49|    """A ``ContentStore.put_if_none_match`` call found the path already written."""
+50|
+51|    def __init__(self, path: str) -> None:
+52|        self.path = path
+53|        super().__init__(f"object already exists at path {path!r}")
+54|
+55|
+56|@runtime_checkable
+57|class Clock(Protocol):
+58|    """Injected time source. ``ledger.py``/``audit_chain.py`` never read wall-clock time."""
+59|
+60|    def now_ms(self) -> int:
+61|        """Current time in epoch milliseconds, as understood by the caller's clock."""
+62|        ...
+63|
+64|
+65|@runtime_checkable
+66|class CoordinationStore(Protocol):
+67|    """DynamoDB-shaped coordination truth: conditional writes only.
+68|
+69|    Every stored item is a plain mapping the caller controls, including its
+70|    own ``"revision"`` string field where the ledger uses one as a
+71|    compare-and-swap token (``StageRecordV1.revision`` is the contract
+72|    example; internal ledger records follow the same convention). ``get``
+73|    is a consistent read: it always reflects the most recently applied
+74|    conditional write.
+75|    """
+76|
+77|    def put_if_
+
+============================================================
+FILE: run_ledger_retry (1958B) — /tmp/denuto/src/run_ledger/retry.py
+1|"""Deterministic per-stage retry budget (ADR 0010: "Retry budgets").
+2|
+3|Exponential backoff with full jitter, computed from an explicitly passed
+4|``random.Random`` -- never the module-global ``random`` functions -- so
+5|retry timing is reproducible under test given the same seed/attempt
+6|sequence. Exhaustion is a pure function of ``attempt``/``max_attempts``; the
+7|ledger (``RunLedger.record_stage_output``) is what durably records the
+8|resulting classified failure (``failure_code`` on ``StageRecordV1``).
+9|"""
+10|
+11|from __future__ import annotations
+12|
+13|import random
+14|from dataclasses import dataclass
+15|
+16|__all__ = ["RetryPolicy"]
+17|
+18|
+19|@dataclass(frozen=True)
+20|class RetryPolicy:
+21|    """Per-stage attempt cap plus exponential-backoff-with-jitter parameters."""
+22|
+23|    max_attempts: int
+24|    base_delay_ms: int
+25|    multiplier: float = 2.0
+26|    max_delay_ms: int = 60_000
+27|
+28|    def __post_init__(self) -> None:
+29|        if self.max_attempts < 1:
+30|            raise ValueError("max_attempts must be >= 1")
+31|        if self.base_delay_ms < 0:
+32|            raise ValueError("base_delay_ms must be >= 0")
+33|        if self.multiplier <= 0:
+34|            raise ValueError("multiplier must be > 0")
+35|        if self.max_delay_ms < 0:
+36|            raise ValueError("max_delay_ms must be >= 0")
+37|
+38|    def is_exhausted(self, attempt: int) -> bool:
+39|        """True once ``attempt`` (1-based, the attempt that just failed) has used the budget."""
+40|        if attempt < 1:
+41|            raise ValueError("attempt must be >= 1")
+42|        return attempt >= self.max_attempts
+43|
+44|    def backoff_ms(self, attempt: int, rng: random.Random) -> int:
+45|        """Deterministic exponential-backoff-with-full-jitter delay before the attempt after ``attempt``."""
+46|        if attempt < 1:
+47|            raise ValueError("attempt must be >= 1")
+48|        raw = min(float(self.max_delay_ms), self.base_delay_ms * (self.multiplier ** (attempt - 1)))
+49|        if raw <= 0:
+50|            return 0
+51|        return int(rng.uniform(0, raw))
+
+============================================================
+FILE: harness_middleware (7229B) — /tmp/denuto/src/harness/middleware.py
+1|"""
+2|Composable middleware stack for LLM calls.
+3|
+4|This module provides the base types for the Denuto harness middleware chain.
+5|Middlewares wrap ``invoke_with_fallback`` to enable cross-cutting concerns such
+6|as grounding verification, loop detection, cost guarding, and few-shot
+7|injection — without modifying the core provider-routing logic.
+8|
+9|Usage
+10|-----
+11|Build a stack and pass it to ``invoke_with_fallback``, or set it as the
+12|active stack via ``set_middleware_stack`` so it is picked up automatically
+13|by every ``invoke_with_fallback`` call within the current context::
+14|
+15|    from src.harness.middleware import MiddlewareStack, set_middleware_stack
+16|    from src.harness.grounding_middleware import GroundingMiddleware
+17|    from src.harness.loop_detection_middleware import LoopDetectionMiddleware
+18|
+19|    stack = MiddlewareStack([LoopDetectionMiddleware(), GroundingMiddleware()])
+20|    token = set_middleware_stack(stack)
+21|    try:
+22|        ...  # all invoke_with_fallback calls in this context use the stack
+23|    finally:
+24|        _middleware_stack_var.reset(token)
+25|
+26|Design
+27|------
+28|- ``MiddlewareContext`` is the single request/response carrier.  Every
+29|  middleware receives and returns the same object, mutating it in place.
+30|- ``Middleware`` is a structural Protocol — any callable matching the
+31|  signature qualifies.
+32|- ``MiddlewareStack.execute`` threads the chain: each middleware calls
+33|  ``await next(ctx)`` to hand off to the next layer; the innermost ``next``
+34|  is the actual LLM handler.
+35|"""
+36|
+37|from __future__ import annotations
+38|
+39|import contextvars
+40|import logging
+41|from collections.abc import Awaitable, Callable
+42|from dataclasses import dataclass, field
+43|from typing import Any, Protocol, runtime_checkable
+44|
+45|logger = logging.getLogger(__name__)
+46|
+47|# Type alias for the "next" callable each middleware receives
+48|NextFn = Callable[["MiddlewareContext"], Awaitable["MiddlewareContext"]]
+49|
+50|# Contextvar holding the active middleware stack for the current request.
+51|# Mirrors the pattern used by src/billing/cost_tracker.py.
+52|_middleware_stack_var: contextvars.ContextVar[MiddlewareStack | None] = contextvars.ContextVar(
+53|    "middleware_stack", default=None
+54|)
+55|
+56|
+57|def get_middleware_stack() -> MiddlewareStack | None:
+58|    """Return the active middleware stack for the current context, if any."""
+59|    return _middleware_stack_var.get(None)
+60|
+61|
+62|def set_middleware_stack(stack: MiddlewareStack | None) -> contextvars.Token:
+63|    """Set the active middleware stack for the current context.
+64|
+65|    Returns the reset token so the caller can restore the previous value::
+66|
+67|        token = set_middleware_stack(stack)
+68|        try:
+69|            ...
+70|        finally:
+71|            _middleware_stack_var.reset(token)
+72|    """
+73|    return _middleware_stack_var.set(stack)
+74|
+75|
+76|@dataclass
+77|class MiddlewareContext:
+78|    """Ca
+
+============================================================
+FILE: harness_state (6592B) — /tmp/denuto/src/harness/state_manager.py
+1|"""Harness state persistence and transition orchestration helpers."""
+2|
+3|from __future__ import annotations
+4|
+5|from collections.abc import Callable
+6|from datetime import UTC, datetime
+7|from typing import Any
+8|
+9|from src.harness.events import TransitionEvent
+10|from src.harness.models import ArtifactRecord, HarnessState, StartupRun, TaskProposal
+11|from src.persistence.harness_store import HarnessStateStore, InMemoryHarnessStateStore
+12|
+13|STATE_MANAGER_METADATA_KEY = "state_manager_v1"
+14|STATE_MANAGER_METADATA_DEFAULTS = {
+15|    "schema_version": "v1",
+16|    "storage_pattern": "record_meta_envelope",
+17|}
+18|
+19|
+20|def _utc_now_iso() -> str:
+21|    """Return a stable UTC timestamp format used by harness state records."""
+22|
+23|    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+24|
+25|
+26|class HarnessStateManager:
+27|    """High-level manager for state lifecycle, transitions, and manifest lookups."""
+28|
+29|    def __init__(
+30|        self,
+31|        store: HarnessStateStore | None = None,
+32|        now_provider: Callable[[], str] | None = None,
+33|    ) -> None:
+34|        self._store = store or InMemoryHarnessStateStore()
+35|        self._now_provider = now_provider or _utc_now_iso
+36|
+37|    @staticmethod
+38|    def _normalize_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+39|        normalized = dict(metadata or {})
+40|        existing = normalized.get(STATE_MANAGER_METADATA_KEY)
+41|        if isinstance(existing, dict):
+42|            merged = dict(STATE_MANAGER_METADATA_DEFAULTS)
+43|            merged.update(existing)
+44|        else:
+45|            merged = dict(STATE_MANAGER_METADATA_DEFAULTS)
+46|        normalized[STATE_MANAGER_METADATA_KEY] = merged
+47|        return normalized
+48|
+49|    def load_state(self, work_id: str) -> HarnessState | None:
+50|        """Load the persisted state for ``work_id`` if present."""
+51|
+52|        return self._store.get_state(work_id)
+53|
+54|    def load_or_bootstrap_state(
+55|        self,
+56|        work_id: str,
+57|        *,
+58|        metadata: dict[str, Any] | None = None,
+59|        created_at: str | None = None,
+60|    ) -> HarnessState:
+61|        """Load state for ``work_id`` or create a deterministic default state."""
+62|
+63|        existing = self._store.get_state(work_id)
+64|        if existing is not None:
+65|            return existing
+66|
+67|        timestamp = created_at or self._now_provider()
+68|        state = HarnessState(
+69|            work_id=work_id,
+70|            created_at=timestamp,
+71|            updated_at=timestamp,
+72|            metadata=self._normalize_metadata(metadata),
+73|        )
+74|        return self._store.put_state(state)
+75|
+76|    def update_state(self, work_id: str, **changes: Any) -> HarnessState:
+77|        """Update persisted state fields for ``work_id`` and return the new state."""
+78|
+79|        incoming_work_id = changes.pop("work_id", work_id)
+80|        if incoming_work_id != work_i
+
+============================================================
+FILE: harness_contracts (3013B) — /tmp/denuto/src/harness/contracts.py
+1|"""Shared governed artifact contract definitions for the harness runtime."""
+2|
+3|from __future__ import annotations
+4|
+5|from typing import Any
+6|
+7|from pydantic import Field, field_validator, model_validator
+8|
+9|from src.harness.models import ArtifactTypeV1, HarnessModel
+10|
+11|
+12|class ArtifactContract(HarnessModel):
+13|    """Contract metadata describing a governed artifact type/version pair."""
+14|
+15|    artifact_type: ArtifactTypeV1 = Field(description="Governed artifact type")
+16|    version: str = Field(default="v1", description="Contract version tag")
+17|    description: str = Field(description="Human-readable description of the contract")
+18|    required_fields: list[str] = Field(default_factory=list, description="Fields that must be present on the artifact")
+19|    optional_fields: list[str] = Field(default_factory=list, description="Fields permitted but not required")
+20|    evidence_required_fields: list[str] = Field(
+21|        default_factory=list,
+22|        description="Fields that require supporting evidence before verification",
+23|    )
+24|    verification_rules: list[str] = Field(
+25|        default_factory=list,
+26|        description="Rule identifiers or descriptions that govern verification",
+27|    )
+28|    approval_policy: str = Field(default="standard_review", description="Approval policy metadata")
+29|    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional implementation-specific metadata")
+30|
+31|    @field_validator("version")
+32|    @classmethod
+33|    def version_must_be_tagged(cls, value: str) -> str:
+34|        if not value.startswith("v"):
+35|            raise ValueError("version must start with 'v'")
+36|        return value
+37|
+38|    @field_validator(
+39|        "required_fields",
+40|        "optional_fields",
+41|        "evidence_required_fields",
+42|        "verification_rules",
+43|    )
+44|    @classmethod
+45|    def entries_must_be_non_empty_and_unique(cls, value: list[str]) -> list[str]:
+46|        if any(not item.strip() for item in value):
+47|            raise ValueError("list entries must not be blank")
+48|        if len(value) != len(set(value)):
+49|            raise ValueError("list entries must be unique")
+50|        return value
+51|
+52|    @field_validator("approval_policy")
+53|    @classmethod
+54|    def approval_policy_must_not_be_blank(cls, value: str) -> str:
+55|        if not value:
+56|            raise ValueError("approval_policy must not be blank")
+57|        return value
+58|
+59|    @model_validator(mode="after")
+60|    def validate_contract_shape(self) -> ArtifactContract:
+61|        overlap = set(self.required_fields) & set(self.optional_fields)
+62|        if overlap:
+63|            raise ValueError(f"required_fields and optional_fields overlap: {sorted(overlap)}")
+64|
+65|        allowed_schema_fields = set(self.required_fields) | set(self.optional_fields)
+66|        missing_schema_fields = set(self.evidence_required_fields) - allowed_schema_fields
+67|     
+
+============================================================
+FILE: harness_cost_guard (4690B) — /tmp/denuto/src/harness/cost_guard_middleware.py
+1|"""
+2|Cost guard middleware — budget-aware model downgrade for LLM calls.
+3|
+4|Reads cumulative cost from ``src/billing/cost_tracker.py`` before each LLM
+5|call.  When the running total exceeds the configured threshold, it sets
+6|``ctx.model_id_override`` to a cheaper model so the innermost handler can use
+7|it.
+8|
+9|This is a *pre-call* middleware: the decision is made before ``next(ctx)`` is
+10|awaited.  If no ``RequestCostTracker`` is active in the current context
+11|(i.e., ``get_cost_tracker()`` returns ``None``), the middleware is a no-op and
+12|lets the call proceed normally.
+13|
+14|Metadata written
+15|----------------
+16|``cost_guard.current_cost_usd``: float — cumulative cost at decision time.
+17|``cost_guard.threshold_usd``: float — the configured threshold.
+18|``cost_guard.triggered``: bool — whether the downgrade was activated.
+19|``cost_guard.original_model_id``: str | None — model before downgrade.
+20|``cost_guard.downgrade_model_id``: str | None — model substituted.
+21|``cost_guard.skipped_reason``: str | None — if check was skipped.
+22|"""
+23|
+24|from __future__ import annotations
+25|
+26|import logging
+27|
+28|from src.harness.middleware import MiddlewareContext, NextFn
+29|
+30|logger = logging.getLogger(__name__)
+31|
+32|# Default fallback model when a downgrade is needed.  Overridden in the
+33|# constructor to allow per-stack configuration.
+34|_DEFAULT_DOWNGRADE_MODEL = "claude-haiku-4-5-20251001"
+35|
+36|
+37|class CostGuardMiddleware:
+38|    """Pre-call middleware that downgrades the model when budget is exceeded.
+39|
+40|    Reads the ``RequestCostTracker`` from the contextvar set by
+41|    ``src/billing/cost_tracker.py``.  If the cumulative cost exceeds
+42|    ``max_cost_usd``, it sets ``ctx.model_id_override`` to ``downgrade_model``
+43|    so the innermost LLM handler uses the cheaper alternative.
+44|
+45|    The middleware does NOT cancel the call — it only redirects it.  The
+46|    caller retains full control over whether to honor the override.
+47|
+48|    Args:
+49|        max_cost_usd: Budget ceiling in USD.  When cumulative cost exceeds
+50|            this, a model downgrade is triggered.  Defaults to 2.0.
+51|        downgrade_model: The model ID to substitute.  Defaults to Haiku.
+52|        skip_stages: Agent stages that should never be downgraded (e.g.,
+53|            ``["compiler"]`` to always use the full model for compilation).
+54|    """
+55|
+56|    def __init__(
+57|        self,
+58|        *,
+59|        max_cost_usd: float = 2.0,
+60|        downgrade_model: str = _DEFAULT_DOWNGRADE_MODEL,
+61|        skip_stages: list[str] | None = None,
+62|    ) -> None:
+63|        self._max_cost_usd = max_cost_usd
+64|        self._downgrade_model = downgrade_model
+65|        self._skip_stages: frozenset[str] = frozenset(skip_stages or [])
+66|
+67|    async def __call__(self, ctx: MiddlewareContext, next: NextFn) -> MiddlewareContext:
+68|        # Import here to avoid circular dependencies at module load time
+69|        from src.billing.c
+
+============================================================
+FILE: harness_loop_detection (4369B) — /tmp/denuto/src/harness/loop_detection_middleware.py
+1|"""
+2|Loop detection middleware — break retry loops caused by repeated LLM responses.
+3|
+4|Tracks the MD5 hash of each response across invocations sharing the same
+5|``session_id + agent_stage`` key.  If the same response hash appears a
+6|second time, the middleware short-circuits subsequent retries and annotates
+7|the context instead of calling the LLM again.
+8|
+9|This complements the existing ``CircuitBreaker`` (which handles provider-level
+10|failures) by catching identical-output loops that the circuit breaker would
+11|not detect: a stuck agent that returns coherent but wrong output on every retry
+12|would not trip the circuit breaker but would waste tokens and time.
+13|
+14|Metadata written
+15|----------------
+16|``loop_detection.hash``: str — MD5 hex digest of the response.
+17|``loop_detection.loop_detected``: bool — ``True`` when a duplicate was found.
+18|``loop_detection.loop_count``: int — how many times this hash has appeared.
+19|``loop_detection.skipped_reason``: str | None — if check was skipped.
+20|
+21|State
+22|-----
+23|Each ``LoopDetectionMiddleware`` instance tracks state per
+24|``session_id:agent_stage`` key.  For multi-instance (Lambda) deployments the
+25|check is local per-instance, which is sufficient for the common case of a
+26|single retry loop within one Lambda invocation.
+27|"""
+28|
+29|from __future__ import annotations
+30|
+31|import hashlib
+32|import logging
+33|from collections import defaultdict
+34|
+35|from src.harness.middleware import MiddlewareContext, NextFn
+36|
+37|logger = logging.getLogger(__name__)
+38|
+39|
+40|def _response_hash(text: str) -> str:
+41|    """Return a short MD5 hex digest of ``text``."""
+42|    return hashlib.md5(text.encode("utf-8"), usedforsecurity=False).hexdigest()
+43|
+44|
+45|class LoopDetectionMiddleware:
+46|    """Post-call middleware that detects repeated LLM responses.
+47|
+48|    On each call, the response hash is recorded for the
+49|    ``session_id:agent_stage`` key.  If the same hash recurs, a warning is
+50|    logged and ``ctx.metadata["loop_detection.loop_detected"]`` is set to
+51|    ``True``.  The response is NOT replaced — callers decide how to handle
+52|    the flag.
+53|
+54|    Args:
+55|        max_occurrences: How many times the same hash may appear before the
+56|            loop is considered detected.  Defaults to 1 (any repeat triggers
+57|            the flag).
+58|    """
+59|
+60|    def __init__(self, *, max_occurrences: int = 1) -> None:
+61|        self._max_occurrences = max_occurrences
+62|        # key: "session_id:agent_stage" → list of hashes seen
+63|        self._seen: dict[str, list[str]] = defaultdict(list)
+64|
+65|    def _state_key(self, ctx: MiddlewareContext) -> str:
+66|        return f"{ctx.session_id}:{ctx.agent_stage}"
+67|
+68|    async def __call__(self, ctx: MiddlewareContext, next: NextFn) -> MiddlewareContext:
+69|        # Run the LLM call first (post-call middleware)
+70|        ctx = await next(ctx)
+71|
+72|        if not ctx.response:
+73|            ctx.metadata
+
+============================================================
+FILE: auto_approve_hook (1907B) — /tmp/denuto/.claude/hooks/auto-approve-safe.py
+1|#!/usr/bin/env python3
+2|"""PermissionRequest hook: auto-approves known-safe Bash commands.
+3|
+4|Reads JSON from stdin. If the command matches a safe prefix, returns
+5|a JSON decision to allow it without prompting the user.
+6|Otherwise exits 0 silently (falls through to normal permission flow).
+7|"""
+8|
+9|import json
+10|import sys
+11|
+12|SAFE_PREFIXES = [
+13|    # Testing
+14|    "npm test",
+15|    "npm run test",
+16|    "npm run lint",
+17|    "npx tsc --noEmit",
+18|    "npx jest",
+19|    "pytest",
+20|    "python -m pytest",
+21|    "python3 -m pytest",
+22|    # Git read-only
+23|    "git status",
+24|    "git log",
+25|    "git diff",
+26|    "git show",
+27|    "git branch",
+28|    "git stash list",
+29|    "git fetch",
+30|    # File listing / inspection
+31|    "ls ",
+32|    "ls\n",
+33|    "tree ",
+34|    "wc ",
+35|    "head ",
+36|    "tail ",
+37|    "cat ",
+38|    "file ",
+39|    "which ",
+40|    "command -v",
+41|    # Package inspection
+42|    "pip show",
+43|    "pip list",
+44|    "pip3 show",
+45|    "pip3 list",
+46|    "npm list",
+47|    "npm ls",
+48|    "npm outdated",
+49|    "npm view",
+50|    # Build
+51|    "npm run build",
+52|    "npx next build",
+53|    # Formatting
+54|    "npx prettier",
+55|    "ruff format",
+56|    "ruff check",
+57|]
+58|
+59|
+60|def main():
+61|    try:
+62|        input_data = json.load(sys.stdin)
+63|    except (json.JSONDecodeError, ValueError):
+64|        sys.exit(0)
+65|
+66|    tool_name = input_data.get("tool_name", "")
+67|    if tool_name != "Bash":
+68|        sys.exit(0)
+69|
+70|    command = input_data.get("tool_input", {}).get("command", "").strip()
+71|
+72|    for prefix in SAFE_PREFIXES:
+73|        if command.startswith(prefix) or command == prefix.strip():
+74|            output = {
+75|                "hookSpecificOutput": {
+76|                    "hookEventName": "PermissionRequest",
+77|                    "decision": {"behavior": "allow"},
+78|                }
+79|            }
+80|            print(json.dumps(output))
+
+============================================================
+FILE: block_dangerous (2659B) — /tmp/denuto/.claude/hooks/block-dangerous-commands.py
+1|#!/usr/bin/env python3
+2|"""PreToolUse hook: blocks dangerous shell commands before execution.
+3|
+4|Reads JSON from stdin with tool_name and tool_input.
+5|Returns exit code 2 to block, 0 to allow.
+6|"""
+7|import json
+8|import sys
+9|import re
+10|
+11|DANGEROUS_PATTERNS = [
+12|    # Destructive file operations
+13|    r'\brm\s+.*-[a-z]*r[a-z]*f',       # rm -rf
+14|    r'\brm\s+-[a-z]*r[a-z]*\s',         # rm -r (recursive delete)
+15|    r'sudo\s+rm\b',                      # sudo rm anything
+16|    r'\bchmod\s+777\b',                  # world-writable permissions
+17|    r'\bchmod\s+-R\s+777\b',            # recursive world-writable
+18|
+19|    # Dangerous git operations on main/master
+20|    r'git\s+push\s+--force\s+.*\b(main|master)\b',   # force push to main
+21|    r'git\s+push\s+-f\s+.*\b(main|master)\b',        # force push to main (short flag)
+22|    r'git\s+reset\s+--hard',             # hard reset (loses uncommitted work)
+23|    r'git\s+clean\s+-[a-z]*f',           # git clean -f (deletes untracked files)
+24|    r'git\s+branch\s+-D\s+main\b',      # delete main branch
+25|    r'git\s+branch\s+-D\s+master\b',    # delete master branch
+26|
+27|    # System-level danger
+28|    r'sudo\s+chmod\b',                   # sudo chmod
+29|    r'mkfs\b',                           # format filesystem
+30|    r'dd\s+if=',                         # raw disk write
+31|    r'>\s*/dev/sd[a-z]',                 # overwrite disk device
+32|    r'curl\s+.*\|\s*sh',                # pipe curl to shell
+33|    r'curl\s+.*\|\s*bash',              # pipe curl to bash
+34|    r'wget\s+.*\|\s*sh',               # pipe wget to shell
+35|
+36|    # AWS destructive operations
+37|    r'aws\s+s3\s+rb\b',                 # remove S3 bucket
+38|    r'aws\s+s3\s+rm\s+.*--recursive',   # recursive S3 delete
+39|    r'aws\s+ec2\s+terminate-instances',  # terminate EC2
+40|    r'aws\s+rds\s+delete-db-instance',   # delete RDS
+41|    r'aws\s+cloudformation\s+delete-stack', # delete CFN stack
+42|]
+43|
+44|def main():
+45|    try:
+46|        input_data = json.load(sys.stdin)
+47|    except (json.JSONDecodeError, ValueError):
+48|        sys.exit(0)
+49|
+50|    if input_data.get('tool_name') != 'Bash':
+51|        sys.exit(0)
+52|
+53|    command = input_data.get('tool_input', {}).get('command', '')
+54|
+55|    for pattern in DANGEROUS_PATTERNS:
+56|        if re.search(pattern, command, re.IGNORECASE):
+57|            msg = f"BLOCKED: Dangerous command pattern detected: {pattern}"
+58|            print(msg, file=sys.stderr)
+59|            output = {
+60|                "systemMessage": f"Blocked dangerous command. Pattern matched: {pattern}. If you need to run this, ask the user for explicit confirmation first."
+61|            }
+62|            print(json.dumps(output))
+63|            sys.exit(2)
+64|
+65|    sys.exit(0)
+66|
+67|if __name__ == '__main__':
+68|    main()
+
+============================================================
+FILE: playbook_authority (3986B) — /tmp/denuto/src/playbook_authority/authority.py
+1|"""lookup_position — resolve the exact authored position text (AUTH-01/02).
+2|
+3|Every consult goes through the ``PlaybookReadPort`` (AUTH-01): there is NO
+4|prompt-constant fallback. On a miss ``lookup_position`` raises
+5|``PositionNotFound`` — it never falls back to ``rulesets.py`` or any hardcoded
+6|string.
+7|"""
+8|
+9|from __future__ import annotations
+10|
+11|from .errors import PositionNotFound
+12|from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+13|from .ports import PlaybookReadPort
+14|from .positions import Position, PositionKind
+15|from .version_pin import resolve_pinned_version
+16|
+17|_DEFAULT_PORT: PlaybookReadPort | None = None
+18|
+19|
+20|def get_default_port() -> PlaybookReadPort:
+21|    """Production default read port = ``AgentCorePlaybookReadPort`` (D2b).
+22|
+23|    Offline/test callers pass ``port=OfflinePlaybookReadPort(...)`` explicitly;
+24|    tests NEVER rely on the default resolving to a cloud surface. The default
+25|    is constructed lazily (and cached) so merely importing this module does
+26|    not require the ``agentcore_app`` runtime.
+27|    """
+28|    global _DEFAULT_PORT
+29|    if _DEFAULT_PORT is None:
+30|        from .ports import AgentCorePlaybookReadPort
+31|
+32|        _DEFAULT_PORT = AgentCorePlaybookReadPort()
+33|    return _DEFAULT_PORT
+34|
+35|
+36|def lookup_position(
+37|    playbook_id: str,
+38|    version: str | None,
+39|    section_id: str,
+40|    position_kind: PositionKind | str,
+41|    *,
+42|    port: PlaybookReadPort | None = None,
+43|) -> Position:
+44|    """Resolve the EXACT attorney-authored position text for a pinned section.
+45|
+46|    Resolves only through the read port (AUTH-01/02). On miss (no such section
+47|    or no such kind within the section) raises ``PositionNotFound`` — no
+48|    prompt-constant fallback.
+49|
+50|    ``position_kind`` accepts a ``PositionKind`` or its string value
+51|    (``"standard"|"acceptable"|"unacceptable"``).
+52|    """
+53|    port = port or get_default_port()
+54|    kind = position_kind if isinstance(position_kind, PositionKind) else PositionKind(position_kind)
+55|
+56|    resolved_version = resolve_pinned_version(playbook_id, version, port=port)
+57|    markdown = port.read_playbook_markdown(playbook_id, resolved_version)
+58|
+59|    # Flattened parse output loses parent/child nesting, so rebuild grouping
+60|    # positionally: track the most recent scorable level-2 section and assign
+61|    # each following level-3 entry to it until the next level-2.
+62|    current_section_id: str | None = None
+63|    current_section_title: str | None = None
+64|    in_target_section = False
+65|
+66|    for entry in iter_sections(markdown):
+67|        header = entry["header"]
+68|        level = entry["level"]
+69|
+70|        if level == 2:
+71|            if is_appendix(header):
+72|                current_section_id = None
+73|                current_section_title = None
+74|                in_target_section = False
+75|                continue
+76|          
+
+============================================================
+FILE: playbook_loop_debrief (5199B) — /tmp/denuto/src/playbook_loop/debrief.py
+1|"""LOOP-01 — signed-deal DEBRIEF capture model + file store.
+2|
+3|A ``SignedDealDebrief`` records the outcome of a signed (or lost) deal plus the
+4|per-position deviations observed against the CITED playbook positions. Each
+5|``PositionDeviation`` carries a text-free ``PolicyReference`` (XCUT-02 —
+6|references-and-hashes-only) plus ``observed`` / ``proposed_text`` strings that
+7|are *review-surface only*: they live in the local debrief JSON for the
+8|draft-review UI, never in a governance ledger payload.
+9|
+10|File store mirrors ``negotiation_session_store``: one JSON per debrief at
+11|``{root}/{debrief_id}.json``; ``root`` defaults to
+12|``runtime/data/debriefs`` and is created lazily. Tests pass ``root=tmp_path``.
+13|"""
+14|
+15|from __future__ import annotations
+16|
+17|import json
+18|from dataclasses import dataclass
+19|from enum import Enum
+20|from pathlib import Path
+21|
+22|from src.playbook_authority import (
+23|    PolicyReference,
+24|    decode_policy_reference,
+25|    encode_policy_reference,
+26|)
+27|
+28|
+29|def _default_debrief_root() -> Path:
+30|    # <worktree>/runtime/data/debriefs — this file is at
+31|    # <worktree>/src/playbook_loop/debrief.py, so the worktree root is two up.
+32|    return Path(__file__).resolve().parents[2] / "runtime" / "data" / "debriefs"
+33|
+34|
+35|class DealOutcome(str, Enum):  # noqa: UP042 — match DESIGN §1.2 str-Enum convention
+36|    """Outcome of a signed-deal debrief."""
+37|
+38|    SIGNED_AS_CITED = "signed_as_cited"
+39|    SIGNED_WITH_DEVIATIONS = "signed_with_deviations"
+40|    LOST = "lost"
+41|
+42|
+43|@dataclass(frozen=True)
+44|class PositionDeviation:
+45|    """One observed deviation against a CITED playbook position.
+46|
+47|    ``policy_reference`` reuses the AUTH-04 text-free ``PolicyReference``
+48|    (carries ``playbook_id, playbook_version, section_id, position_kind``).
+49|    ``observed`` / ``proposed_text`` are review-surface only (never a ledger
+50|    payload); ``note`` is optional reviewer context.
+51|    """
+52|
+53|    policy_reference: PolicyReference
+54|    observed: str
+55|    proposed_text: str
+56|    note: str | None = None
+57|
+58|
+59|@dataclass(frozen=True)
+60|class SignedDealDebrief:
+61|    """A captured signed-deal debrief (LOOP-01).
+62|
+63|    ``playbook_version`` is the PINNED version the deal was reviewed under (the
+64|    decision-time pin), so the debrief always diffs against the right
+65|    historical content even after the playbook later bumps.
+66|    """
+67|
+68|    debrief_id: str
+69|    deal_id: str
+70|    playbook_id: str
+71|    playbook_version: str  # the PINNED version at decision time
+72|    outcome: DealOutcome
+73|    deviations: list[PositionDeviation]
+74|    created_at: str
+75|
+76|
+77|# --------------------------------------------------------------------------- #
+78|# JSON (de)serialization                                                       #
+79|# --------------------------------------------------------------------------- #
+80|
+
+============================================================
+FILE: playbook_loop_diff (8784B) — /tmp/denuto/src/playbook_loop/diff.py
+1|"""LOOP-02 — diff vs the PINNED positions; propose a DRAFT new version.
+2|
+3|``diff_debrief`` resolves each deviation's CITED position through the authority
+4|(``lookup_position`` over the pinned version) and diffs the exact authored text
+5|(LHS) against the deviation's ``proposed_text`` (RHS). ``propose_draft`` wraps
+6|the changed sections into a ``PlaybookDraft`` artifact that carries the
+7|``base_version`` / ``proposed_version`` / ``parent_version`` lineage — the
+8|smallest correct seam for the version-bump model (AI-SPEC §0): the published
+9|``.md`` / row is NEVER mutated (XCUT-03). No write to ``playbooks/*.md``; no
+10|call to ``update_playbook``.
+11|
+12|Only the ``SectionDiff`` text (``pinned_text`` / ``proposed_text`` / ``unified``)
+13|is review-surface; it is never placed in a governance payload (XCUT-02).
+14|"""
+15|
+16|from __future__ import annotations
+17|
+18|import difflib
+19|import json
+20|from dataclasses import dataclass
+21|from pathlib import Path
+22|
+23|from src.playbook_authority import PlaybookReadPort, lookup_position
+24|from src.playbook_authority.reference import decode_policy_reference, encode_policy_reference
+25|
+26|from .debrief import SignedDealDebrief
+27|from .version import bump_minor
+28|
+29|
+30|def _default_draft_root() -> Path:
+31|    return Path(__file__).resolve().parents[2] / "runtime" / "data" / "playbook_drafts"
+32|
+33|
+34|@dataclass(frozen=True)
+35|class SectionDiff:
+36|    """A reviewable per-section diff (review-surface only; XCUT-02).
+37|
+38|    ``change_kind``: ``"modified"`` (text differs), ``"unchanged"`` (proposed
+39|    equals pinned), or ``"added"`` (no pinned text resolved). ``unified`` is the
+40|    ``difflib.unified_diff`` rendering for the review UI.
+41|    """
+42|
+43|    section_id: str
+44|    section_title: str
+45|    position_kind: str
+46|    pinned_text: str
+47|    proposed_text: str
+48|    change_kind: str  # "modified" | "added" | "unchanged"
+49|    unified: str
+50|
+51|
+52|@dataclass(frozen=True)
+53|class PlaybookDraft:
+54|    """A proposed DRAFT new playbook version (LOOP-02 / XCUT-03).
+55|
+56|    Lineage lives on the artifact (``base_version`` / ``proposed_version`` /
+57|    ``parent_version``) rather than a retrofitted DB column — the smallest
+58|    correct seam per AI-SPEC §0. ``status`` is always ``"draft"``; a published
+59|    version is never mutated to produce it.
+60|    """
+61|
+62|    draft_id: str
+63|    playbook_id: str
+64|    base_version: str
+65|    proposed_version: str
+66|    parent_version: str
+67|    status: str  # always "draft"
+68|    section_diffs: list[SectionDiff]
+69|    source_debrief_id: str
+70|    created_at: str
+71|
+72|
+73|def _unified(pinned_text: str, proposed_text: str, *, label: str) -> str:
+74|    return "".join(
+75|        difflib.unified_diff(
+76|            pinned_text.splitlines(keepends=True),
+77|            proposed_text.splitlines(keepends=True),
+78|            fromfile=f"{label} (pinned)",
+79|            tofile=f"{label} (proposed)",
+80|        )
+
+============================================================
+FILE: improvement_governance (29538B) — /tmp/denuto/src/improvement/governance.py
+1|"""Improvement governance for the Denuto HITL self-improvement system.
+2|
+3|Manages the full lifecycle of pipeline improvement proposals: creation,
+4|evaluation gating, human approval, deployment, and rollback. Enforces
+5|configurable rate limits and cooldown periods to prevent runaway changes.
+6|
+7|Architecture:
+8|    - ``ImprovementRiskLevel``: LOW / MEDIUM / HIGH classification for a proposal.
+9|    - ``ImprovementPolicy``: frozen dataclass of all configurable governance
+10|      thresholds (reviewer counts, rate limits, cooldown, gate requirements).
+11|    - ``ImprovementProposal``: dataclass capturing a single improvement's full
+12|      lifecycle state (status, eval results, approvers, timestamps).
+13|    - ``ImprovementGovernor``: stateful, thread-safe manager that enforces the
+14|      policy across all proposals.
+15|    - ``classify_change_risk()``: pure function mapping change type / target to
+16|      a risk level.
+17|
+18|Thread-safe: ``ImprovementGovernor`` state is guarded by ``threading.Lock``.
+19|"""
+20|
+21|from __future__ import annotations
+22|
+23|import logging
+24|import threading
+25|from dataclasses import dataclass, field
+26|from datetime import UTC, datetime, timedelta
+27|from typing import Any
+28|
+29|from src.compat import StrEnum
+30|from src.models.intake import generate_ulid
+31|
+32|logger = logging.getLogger("denuto.improvement.governance")
+33|
+34|# ---------------------------------------------------------------------------
+35|# Helpers
+36|# ---------------------------------------------------------------------------
+37|
+38|_SENIOR_REVIEWER_PREFIX = "senior:"
+39|
+40|
+41|def _now() -> datetime:
+42|    return datetime.now(UTC)
+43|
+44|
+45|def _now_iso() -> str:
+46|    return _now().isoformat()
+47|
+48|
+49|# ---------------------------------------------------------------------------
+50|# Enums
+51|# ---------------------------------------------------------------------------
+52|
+53|
+54|class ImprovementRiskLevel(StrEnum):
+55|    """Risk classification for an improvement proposal."""
+56|
+57|    LOW = "low"
+58|    MEDIUM = "medium"
+59|    HIGH = "high"
+60|
+61|
+62|# ---------------------------------------------------------------------------
+63|# Policy
+64|# ---------------------------------------------------------------------------
+65|
+66|
+67|@dataclass(frozen=True)
+68|class ImprovementPolicy:
+69|    """Configurable thresholds governing improvement governance.
+70|
+71|    Attributes:
+72|        low_risk_auto_approve: If True, LOW-risk proposals are automatically
+73|            approved once their eval results pass (no human reviewer needed).
+74|        medium_risk_reviewers: Minimum number of reviewer approvals required
+75|            for MEDIUM-risk proposals before deployment is allowed.
+76|        high_risk_reviewers: Minimum number of reviewer approvals required
+77|            for HIGH-risk proposals before deployment is allowed.
+78|        high_risk_requires_senior: If True, at least one approver for HIGH-risk
+79|            pro
+
+============================================================
+FILE: consistency_scorer (10849B) — /tmp/denuto/src/pipeline/consistency_scorer.py
+1|"""Consistency-sampled calibrated confidence for compiler findings.
+2|
+3|Research (`LLM_Legal_Contract_Analysis_Failure_Modes_Research.md` §10) shows that
+4|self-reported LLM confidence is systematically overconfident (GPT-4 assigned its
+5|highest confidence score to 87% of responses, including factually wrong ones)
+6|and recommends consistency-based methods instead.
+7|
+8|This module runs N cheap re-verification calls against a lightweight model
+9|asking a yes/no question — "Given this quote and context, does this finding
+10|hold?" — then maps the agreement rate to a calibrated confidence score.
+11|
+12|The feature is shipped behind ``Config.enable_consistency_scoring`` (default
+13|False) so it can be turned on in shadow mode or A/B testing before replacing
+14|the compiler-LLM self-report as the routing signal.
+15|"""
+16|
+17|from __future__ import annotations
+18|
+19|import logging
+20|import re
+21|import threading
+22|import time
+23|from dataclasses import dataclass, field
+24|from itertools import pairwise
+25|from typing import Any
+26|
+27|from src.agent import call_with_timeout, get_agent
+28|from src.config import Config
+29|from src.pipeline.agent_response import extract_message_text
+30|from src.security.input_sanitizer import sanitize_contract_text
+31|
+32|logger = logging.getLogger(__name__)
+33|
+34|
+35|# ---------------------------------------------------------------------------
+36|# Public types
+37|# ---------------------------------------------------------------------------
+38|
+39|
+40|@dataclass
+41|class ConsistencyScore:
+42|    """Calibrated consistency signal derived from N re-verification votes.
+43|
+44|    ``agree_rate`` is the fraction of samples that returned ``yes`` — samples
+45|    that error out or return ``null`` count as disagreement (conservative).
+46|    ``calibrated_confidence`` is the agree_rate rounded to the fixed mapping
+47|    in ``_AGREEMENT_TO_CONFIDENCE``.
+48|    """
+49|
+50|    agree_rate: float
+51|    calibrated_confidence: float
+52|    sample_votes: list[str | None] = field(default_factory=list)
+53|    sample_reasons: list[str] = field(default_factory=list)
+54|    model_id: str = ""
+55|    n: int = 0
+56|    error_count: int = 0
+57|    latency_ms: int = 0
+58|
+59|    def to_dict(self) -> dict[str, Any]:
+60|        return {
+61|            "agree_rate": self.agree_rate,
+62|            "calibrated_confidence": self.calibrated_confidence,
+63|            "sample_votes": list(self.sample_votes),
+64|            "sample_reasons": list(self.sample_reasons),
+65|            "model_id": self.model_id,
+66|            "n": self.n,
+67|            "error_count": self.error_count,
+68|            "latency_ms": self.latency_ms,
+69|        }
+70|
+71|
+72|# ---------------------------------------------------------------------------
+73|# Agreement-rate -> calibrated confidence mapping
+74|#
+75|# For N=3:
+76|#   3/3 yes  -> 1.00   (unanimous agreement)
+77|#   2/3 yes  -> 0.50   (split majority — weak signal, route to potential_issues)
+78|#   1/3 yes
+
+============================================================
+FILE: coverage_audit (7237B) — /tmp/denuto/src/pipeline/coverage_audit.py
+1|"""
+2|Post-compile coverage audit.
+3|
+4|For contracts with >=10 top-level clauses, verifies that every top-level
+5|clause is referenced by at least one compiled finding. Clauses with zero
+6|findings are surfaced as soft ``potential_issues`` so reviewers catch
+7|"silent" omission failures — the CLAUSE benchmark's Perini Corp category
+8|(see ``LLM_Legal_Contract_Analysis_Failure_Modes_Research.md`` §7).
+9|
+10|Default-off: called from ``src/entrypoint_core.py`` only when
+11|``config.enable_coverage_audit`` is True.
+12|"""
+13|
+14|from __future__ import annotations
+15|
+16|import re
+17|from dataclasses import asdict, dataclass, field
+18|from typing import Any
+19|
+20|from src.pipeline.chunker import ClauseChunk
+21|
+22|# Threshold below which we do not bother emitting coverage warnings — signal
+23|# to noise is too low on short deals and the primary path already reads them
+24|# end-to-end without risk of middle-loss.
+25|_MIN_CLAUSES_FOR_AUDIT = 10
+26|
+27|_ISSUE_LIST_KEYS = (
+28|    "critical_issues",
+29|    "high_issues",
+30|    "medium_issues",
+31|    "low_issues",
+32|)
+33|
+34|_SYNTHETIC_RULE_NAME = "Coverage Audit: Silent Clause"
+35|
+36|
+37|@dataclass
+38|class CoverageReport:
+39|    total_top_level_clauses: int
+40|    covered_clauses: list[str] = field(default_factory=list)
+41|    silent_clauses: list[str] = field(default_factory=list)
+42|    skipped_reason: str | None = None
+43|
+44|
+45|def _iter_top_level_chunks(clause_chunks: list[ClauseChunk]):
+46|    """Yield ``(clause_id, heading, chunk)`` for top-level (depth <=1) chunks.
+47|
+48|    Skips synthetic entries like the preamble and the single-chunk fallback
+49|    for short documents.
+50|    """
+51|    for chunk in clause_chunks or []:
+52|        if chunk.clause_id in {"preamble", "whole_document"}:
+53|            continue
+54|        if chunk.depth > 1:
+55|            continue
+56|        yield chunk.clause_id, chunk.heading, chunk
+57|
+58|
+59|def _issue_text_bundle(issue: dict[str, Any]) -> str:
+60|    """Flatten issue fields into a single lowercased haystack for matching."""
+61|    parts = [
+62|        issue.get("verbatim_quote") or "",
+63|        issue.get("rule_name") or "",
+64|        issue.get("details") or "",
+65|    ]
+66|    return "\n".join(str(p) for p in parts).lower()
+67|
+68|
+69|def _normalise_reference_tokens(chunk: ClauseChunk) -> list[str]:
+70|    """Produce substrings the audit will look for inside issue text."""
+71|    tokens: list[str] = []
+72|    heading = (chunk.heading or "").strip()
+73|    clause_id = (chunk.clause_id or "").strip()
+74|    if heading:
+75|        tokens.append(heading.lower())
+76|    if clause_id and clause_id.lower() not in [t.lower() for t in tokens]:
+77|        tokens.append(clause_id.lower())
+78|    return tokens
+79|
+80|
+
+============================================================
+FILE: chunker (10732B) — /tmp/denuto/src/pipeline/chunker.py
+1|"""
+2|Clause-indexed chunking for long contracts.
+3|
+4|Mitigates the "lost-in-the-middle" / omission failure mode documented in
+5|``LLM_Legal_Contract_Analysis_Failure_Modes_Research.md`` by giving downstream
+6|consumers (re-analysis, coverage audit) stable, heading-anchored slices of
+7|the extracted contract text.
+8|
+9|Default behaviour is OFF: nothing in the primary pipeline imports this module
+10|unless ``config.enable_clause_chunking`` (or a flag that implies it) is True.
+11|
+12|The chunker intentionally does not alter how the structural agent emits its
+13|findings. It accepts a light-weight ``ClauseHeading`` contract (see
+14|``src/pipeline/chunker.py`` module docstring) and can also reconstruct
+15|headings from raw text using the same regexes the structural agent uses.
+16|"""
+17|
+18|from __future__ import annotations
+19|
+20|import re
+21|from collections.abc import Iterable
+22|from dataclasses import dataclass, field
+23|from typing import TypedDict
+24|
+25|# Mirror the heading regexes from src/pipeline/agents/structural.py so the
+26|# chunker does not depend on the structural module's internals.
+27|_HEADING_PREFIX_RE = re.compile(
+28|    r"^\s*(?P<kind>Section|Clause|Article|Schedule|Appendix|Appendices|Annex(?:ure)?|Exhibit|Part)\s+"
+29|    r"(?P<token>[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*(?:\([A-Za-z0-9ivxIVX]+\))*)(?=[\s.,:;\-]|$)",
+30|    re.IGNORECASE,
+31|)
+32|_HEADING_BARE_RE = re.compile(
+33|    r"^\s*(?P<token>\d+(?:\.\d+)*(?:\([A-Za-z0-9ivxIVX]+\))*)\b(?=[\s.,:;\-]|$)",
+34|)
+35|
+36|# Docs shorter than this get a single chunk — chunking buys nothing when the
+37|# whole document already fits comfortably in a prompt.
+38|_SHORT_DOC_THRESHOLD_CHARS = 4_000
+39|
+40|
+41|class ClauseHeading(TypedDict, total=False):
+42|    """Canonical clause-heading record consumed by the chunker.
+43|
+44|    ``char_start`` is required; everything else is inferred when missing.
+45|    """
+46|
+47|    heading: str
+48|    clause_id: str
+49|    depth: int
+50|    char_start: int
+51|
+52|
+53|@dataclass
+54|class ClauseChunk:
+55|    """A contiguous slice of the extracted contract text anchored to a heading."""
+56|
+57|    clause_id: str
+58|    heading: str
+59|    text: str
+60|    char_start: int
+61|    char_end: int
+62|    depth: int = 0
+63|
+64|
+65|@dataclass
+66|class ChunkStats:
+67|    total_chunks: int
+68|    total_chars: int
+69|    coverage_ratio: float
+70|    deepest_depth: int
+71|    middle_chunk_count: int = 0
+72|    middle_chars: int = 0
+73|    headings_used: int = 0
+74|    short_doc: bool = False
+75|    details: dict = field(default_factory=dict)
+76|
+77|
+78|def _token_depth(token: str) -> int:
+79|    """Return the nesting depth of a numeric clause token.
+80|
+
+============================================================
+FILE: discovery (14166B) — /tmp/denuto/src/pipeline/discovery.py
+1|"""Post-compilation discovery pass -- finds 0-5 unusual risks outside the extraction schema.
+2|
+3|The discovery pass runs after the compiler produces its standard risk analysis.
+4|An LLM reviews the full contract text for unusual/non-standard clauses that
+5|the extraction schema does not cover, with mandatory verbatim quotes.
+6|
+7|Findings are deduplicated against existing compiled issues and unevaluable rules
+8|using fuzzy title matching (80%) and fuzzy quote matching (85%).
+9|
+10|Exports:
+11|    discovery_pass          -- Main entry point
+12|    DiscoveryFinding        -- Pydantic model for a single finding
+13|    DiscoveryFindings       -- Pydantic model wrapping list of findings (max 5)
+14|    _deduplicate_discovery  -- Internal dedup function (exported for testing)
+15|"""
+16|
+17|from __future__ import annotations
+18|
+19|import logging
+20|from typing import Any
+21|
+22|from pydantic import BaseModel, Field
+23|from thefuzz import fuzz
+24|
+25|from src.agent import invoke_with_fallback
+26|from src.pipeline.context_pack import get_full_contract_text, update_context_provenance
+27|from src.pipeline.utils import smart_truncate
+28|from src.security.input_sanitizer import sanitize_contract_text
+29|
+30|logger = logging.getLogger(__name__)
+31|
+32|
+33|# ---------------------------------------------------------------------------
+34|# Pydantic models
+35|# ---------------------------------------------------------------------------
+36|
+37|
+38|class DiscoveryFinding(BaseModel):
+39|    """A single discovery finding with mandatory verbatim quote."""
+40|
+41|    rule_name: str = Field(description="Short descriptive name for the finding")
+42|    details: str = Field(description="Description of the unusual/non-standard clause")
+43|    verbatim_quote: str = Field(description="Exact verbatim quote from the contract text")
+44|    severity: str = Field(description="Severity: critical, high, medium, or low")
+45|    recommendation: str = Field(default="", description="Recommended action")
+46|    confidence: float = Field(default=0.6, ge=0.0, le=1.0, description="Calibrated confidence (0.0-1.0)")
+47|    confidence_reason: str = Field(default="", description="Brief reason for confidence level")
+48|
+49|
+50|class DiscoveryFindings(BaseModel):
+51|    """Container for discovery findings, capped at 5."""
+52|
+53|    findings: list[DiscoveryFinding] = Field(
+54|        default_factory=list,
+55|        max_length=5,
+56|        description="List of 0-5 discovery findings",
+57|    )
+58|
+59|
+60|# ---------------------------------------------------------------------------
+61|# Discovery prompt
+62|# ---------------------------------------------------------------------------
+63|
+64|_DISCOVERY_PROMPT = """You are a senior contract lawyer performing a final review of a {agreement_type} agreement.
+65|
+66|The standard risk analysis has already identified these issues:
+67|{existing_issues}
+68|
+69|The following rules could not be evaluated (missing data):
+70|{unevaluable_rules}
+71|
+72|Your t

@@ -1,0 +1,1471 @@
+
+================================================================================
+SKILL: dispatching-parallel-agents
+================================================================================
+---
+name: dispatching-parallel-agents
+related_skills:
+  - using-superpowers
+  - subagent-driven-development
+  - autonomous-ai-agents
+  - hermes-swarm-consensus
+  - merge-reconciler
+  - adversarial-review
+
+depends_on: [using-superpowers]
+provides: [fan-out-delegation, parallel-tasks, independent-workstreams]
+triggers:
+  - multiple independent investigations or workstreams that can run concurrently with no shared mutable state
+  - user wants to parallelize research or implementation across 3+ subtasks with no inter-dependencies
+  - fan-out delegation pattern needed (different failing tests, separate subsystems, independent research tracks)
+  - user wants to parallelize verification work across isolated problem domains
+description: Use when multiple independent investigations or implementation tasks can be delegated concurrently (fan-out, no shared mutable state). Not for choosing which multi-agent skill applies (use autonomous-ai-agents as router).
+version: 1.0.2
+author: Hermes Agent (adapted from obra/superpowers)
+license: MIT
+platforms: [linux, macos, windows]
+metadata:
+  hermes:
+    tags: [subagents, delegation, parallelism, orchestration]
+    related_skills: [using-superpowers, subagent-driven-development, autonomous-ai-agents, hermes-swarm-consensus, merge-reconciler, adversarial-review]
+---
+
+# Dispatching Parallel Agents
+
+Use one subagent per independent problem domain.
+
+If the task is broadly about multi-agent orchestration and it is not yet clear which specialized agent/orchestration skill applies, load `autonomous-ai-agents` first as the router skill, then follow it to the right child skill.
+
+## Good fit
+
+- different failing test files with unrelated causes
+- separate subsystems
+- independent research tracks
+- parallelizable verification work
+
+## Bad fit
+
+- shared mutable state
+- overlapping file edits without coordination
+- tasks that require the full parent context
+
+## Worker Pool Sizing
+
+WEF/1/t queuing result (parent-turn tool fan-out only): for same-turn bootstrap searches/extractions run in parallel, cap at 2 concurrent web_search/web_extract calls. This <30s path is where overloading causes non-linear slowdown. This cap does NOT apply to delegate_task children with expected runtime >30s — those are independent workers and should be parallelized freely.
+
+## Pandora Dispatch Sizing (math-005) — SPIKE_PARTIAL
+
+Spike result: fixed k=3 beats greedy when reviewer quality variance is low. Live T/q measurement needed before fixed k can be set. Do not apply fixed k=3 or p-threshold rules until variance is measured per reviewer pool. Status: SPIKE_PARTIAL — blocked on live reviewer accuracy ledger. Revisit trigger: cobra-outcome-logger has labeled reviewer-accuracy data.
+
+## Hermes process
+
+1. Partition the work into independent domains.
+   **Optional but valuable when the decomposition itself is non-obvious** (6+ parallel
+   clusters, genuinely ambiguous topic boundaries, or the user explicitly asked for an
+   escalated orchestrator): before dispatching, get a critique of your proposed cluster
+   list from a stronger model — don't just dispatch your first-draft split. `delegate_task`
+   has no per-task model override in this environment (children use `delegation.model`,
+   currently whatever `delegation.model` is set to — they do **not** inherit the parent session model);
+   the way to get an Opus-tier decomposition check without pinning every worker to
+   Opus is a one-shot `terminal` call to a separately-invoked `hermes chat` process, e.g.
+   `hermes chat -q "critique this decomposition: <list clusters>. What's missing, what's
+   redundant, what should be added?" -m <escalation model from claude-routing-hierarchy> --provider anthropic -Q`. This
+   matches `claude-routing-hierarchy`'s escalation policy (escalate the decomposition/
+   reconciliation step only, not the whole pipeline) — keep every dispatched worker on the
+   default leaf, spend the escalated call only on the plan review. Confirmed useful July
+   2026: a 6-cluster research-topic split got a critique flagging 3 missing comparator
+   regimes and a redundant pairing between two clusters before dispatch, which would have
+   otherwise required a second dispatch round to catch after the fact. The subprocess call
+   also prints a benign trailing stack trace to stderr on exit (`Exception ignored in:
+   <coroutine object MCPServerTask.run ...>` / `RuntimeError: Event loop is closed`) —
+   cosmetic asyncio-teardown noise, not a failure; ignore it.
+2. Give each subagent a self-contained goal, context, constraints, and expected output.
+   State the expected **output artifact type** explicitly (e.g. JSON findings, diff,
+   summary paragraph) — this enables downstream routing without hardcoded pipelines.
+3. Launch them in a single `delegate_task(tasks=[...])` batch when possible. **Simultaneously run 2–4 targeted bootstrap searches or extractions in the same turn** — these confirm key anchors (papers, GitHub repos, tool versions, key facts) before the subagents return. This guards against the subagents returning empty-handed on the most important leads, and gives the orchestrator independently-verified anchors to use during synthesis. Don't wait for subagents to do all the discovery; use the dispatch turn productively. Confirmed July 2026 (neurosymbolic AI research): dispatching 3 subagents + running 2 web_searches + 2 arXiv web_extracts in the same turn confirmed 3 key papers independently before any subagent completed.
+4. On results: pass only the **output artifact** to downstream stages, not the full subagent transcript. If a downstream stage needs context, attach a compact context packet — not a raw conversation dump.
+   **Result size control:** if a subagent's output will be large (multi-page vision audits, bulk research), tell it to write findings to a file (e.g. `/tmp/result-TASKNAME.txt`) and return only the path. The parent reads with `read_file(offset=..., limit=...)` in chunks. This prevents the result landing as a large atomic message that overflows the parent context window.
+5. **Cross-agent integration gap (CRITICAL):** When one agent produces a build artifact
+   and another produces research findings, the build agent cannot see the research agent's
+   results — they have isolated contexts. After both complete, the orchestrator MUST:
+   - Read all research outputs
+   - Identify findings the build agent couldn't have known (new data, proxy caveats, key differentiators)
+   - Patch those findings into the build artifact directly before declaring done
+
+   Common failure mode: build agent produces a technically correct artifact missing the
+   most important domain finding, because it only had the spec. The research agent returns
+   the key result, but it sits unintegrated in a separate file. Only the orchestrator can
+   close this gap — it is not automatic.
+
+6. Before synthesising fan-out results, score each output 1–3 (not useful / partial /
+   essential). Weight or exclude scores below 1.5 from synthesis.
+   **Adversarial verification of subagent claims:** subagents often use proxy heuristics
+   (grep, count, pattern-match) to reach structural conclusions. These produce false
+   positives that look authoritative. Before acting on a finding like "15 files have broken X"
+   or "N% of Y are misconfigured", verify by direct inspection (parse the actual structure,
+   read the actual files) rather than trusting the reported count. See adversarial-review
+   for the concrete structural-parse pattern.
+   **When multiple subagents reach conflicting verdicts** (e.g. 2 say SAFE, 1 says RISKY),
+   do not break ties by majority vote alone — load `hermes-swarm-consensus` for the
+   Verbalized Sampling pattern that prevents judge mode-collapse on homogeneous panels.
+   For cross-agent contradictions on factual outputs, load `merge-reconciler`.
+7. Independently verify any claimed side effects before reporting success.
+8. After results arrive, record a topology note in `~/.hermes/agent-workspace/topology-memory.md`
+   using the Preserve / Modify / Avoid format defined in `hermes-role-pipelines`.
+
+## Pitfall: template marker injection in goal/context strings
+
+The `delegate_task` renderer detects two families of unexpanded template markers and refuses to dispatch if it finds one:
+
+**Angle-bracket placeholders** (e.g. `<Full Title>`, `<slug>`, `<NN>`) — two distinct sources:
+- *Forgotten template field* (copying from a skill/doc): `Task 0 goal contains an unexpanded template marker ('<Full Title>'). Substitute the real value before calling delegate_task.`
+- *Pseudocode notation* — angle-brackets used to denote a slot in inline Python-style pseudocode inside the goal/context string, e.g. `session_type: <classified type>`. The renderer treats these identically to template fields and refuses. Error: `Task 0 goal contains an unexpanded template marker ('<classified type>').`
+
+  **Fix for pseudocode notation:** Replace `<classified type>` with a concrete example value (e.g. `'research'`) or a description string (e.g. `"the session_type string (e.g. 'research', 'code', 'mixed')"`). Never use angle-bracket syntax for slots inside goal/context strings — they fire the same guard regardless of intent.
+- Always scan goal/context strings for any `<Word>` patterns before dispatching. Substitute every one with its real value or a concrete example.
+
+**Curly-brace placeholders** (e.g. `{variable}`, `${HOME}`) — fires when:
+- The goal or context contains Python f-string literals (e.g. `f'/proc/{pid}/stat'`)
+- Shell variable references (e.g. `${HOME}`, `${CONTAINER}`)
+- Any curly-brace syntax from code examples, config snippets, or JSON inline in the prompt
+- Error: `Task 0 goal contains an unexpanded template marker ('{variable}'). Substitute the real value before calling delegate_task.`
+
+Workarounds (in order of preference):
+1. Write the goal/context as a file (`write_file('/tmp/task-goal.txt', content)`) and reference it as context: `"Read the goal from /tmp/task-goal.txt"`. Best for code-heavy context.
+2. Build the string in `execute_code` with explicit escaping (double braces: `{{` and `}}` for literal braces) and pass the result to `delegate_task`.
+3. For short snippets: replace all `{` with `(` and `}` with `)` in code examples inside the prompt, with a note that it's pseudocode.
+
+Never hand-compute curly-brace counts — write a check:
+```python
+import re
+if re.search(r'\{\w+\}', goal_text):
+    raise ValueError("goal contains template markers; escape or file-offload before dispatch")
+```
+
+## Interaction Tax — Independent Proposals Before Full Exchange (arXiv:2608.23541) ★ HIGH <!-- why: full-solution exchange collapses multi-model diversity within one round; independent proposals preserve the reason you spawned multiple agents -->
+
+Different model families find structurally different solutions, but when agents read each
+other's *complete* outputs their proposals converge within one round — erasing the diversity
+that justified multi-agent dispatch. That cost is the **interaction tax**.
+
+**Hermes rule for parallel `delegate_task`:**
+1. Dispatch workers with **isolated contexts** (default). Do not inject peer full solutions
+   into sibling `context=` fields mid-batch.
+2. Collect **independent proposals** first (findings JSON / short verdicts / ranked options).
+3. Only then run a **bounded synthesis** step (parent or one synthesizer leaf) that sees
+   the proposal set — not iterative full-solution debate between peers.
+4. If a second round is needed, pass **deltas / disagreements / open questions**, not the
+   entire prior peer transcript.
+5. Same-model panels already co-fail (phi≈0.9); full-solution exchange makes that worse.
+   Prefer model diversity OR independent sampling + parent merge over peer-to-peer critique loops.
+
+**Anti-pattern:** chain A→B where B's `context=` is A's full answer "so B can improve it"
+on the first pass. That burns the diversity budget immediately.
+
+## Reasoning Type Selection Before Dispatch
+
+For L2+ tasks, run select-frameworks before writing task goal files. The output determines which reasoning gates each subagent should invoke:
+  ```
+  python3 ~/.hermes/scripts/reasoning-complexity-classifier.py select-frameworks \
+    --task "<overall fan-out goal>" --level <L>
+  ```
+  Include the primary framework list in each subagent context packet so workers apply the right gates.
+
+After fan-out, if subagents return conflicting *action* verdicts (PROCEED vs BLOCK)
+on the same gated step, run conflict-resolve first. Do NOT also send that pair
+into hermes-swarm-consensus — that skill is for multi-agent *epistemic* disagreement
+(what is true), not for framework action-verdict conflicts. Swarm-consensus may
+mention conflict-resolve as a pre-wire; that is one-way, not a circular call.
+  ```
+  python3 ~/.hermes/scripts/metacognitive-harness.py conflict-resolve \
+    --framework-a lookahead --framework-b boundary-check \
+    --verdict-a '<agent-A verdict json>' --verdict-b '<agent-B verdict json>' \
+    --task "<question>"
+  ```
+  Then, only if agents disagree on facts/confidence (not action gates), apply
+  hermes-swarm-consensus. Route: action-verdict → conflict-resolve; epistemic → swarm.
+
+## Node Prompt Contract (from OMH ultrawork discipline — mandatory for implementation lanes)
+
+Every implementation lane prompt must contain these five markers in order (this extends the general Prompt pattern section below with mandatory structure for multi-agent implementation work):
+
+1. TASK: one imperative assignment
+2. DELIVERABLE: the exact artifact or result
+3. SCOPE: exact read/write file boundaries and forbidden changes
+4. VERIFY: the literal command or action plus one binary pass/fail observable
+5. STOP WHEN: the observable state that ends the lane
+
+Missing markers, vague scopes, or non-binary verification are definition defects — fix before dispatch. For general research or single-agent tasks, the lighter Prompt pattern section below is sufficient.
+
+Shape selection before dispatch:
+- One owner: work coupled by a shared invariant or inseparable edit boundary
+- Ordered dependency edges: separable work whose downstream unit cannot start until named producers finish
+- Dependency-ready parallel frontier: independent units with disjoint write scopes
+
+One unit owns a deliverable end to end, including its proof. Never split implementation and tests for the same files across concurrent owners.
+
+## File-Ownership Map Before Dispatch (mandatory for implementation waves)
+
+Before dispatching any batch where agents write to files, build an explicit ownership map:
+
+```python
+from collections import defaultdict
+ownership = {
+    "Agent-A": ["scripts/foo.py", "skills/skill-a/SKILL.md"],
+    "Agent-B": ["scripts/bar.py", "scripts/baz.py"],
+    "Agent-C": ["config.yaml", "skills/skill-b/SKILL.md"],
+}
+count = defaultdict(list)
+for agent, files in ownership.items():
+    for f in files:
+        count[f].append(agent)
+conflicts = {k: v for k, v in count.items() if len(v) > 1}
+if conflicts:
+    raise ValueError(f"FILE CONFLICTS before dispatch: {conflicts}")
+```
+
+Assign each file to exactly ONE agent. If two findings both need the same file,
+merge both into a single agent's scope — do not dispatch them separately.
+Do this check BEFORE writing goal files or dispatching; fixing it after dispatch
+requires steer/stop, which is lossy.
+
+## Concurrent same-.py file patch conflict (parallel implementation waves)
+
+**Steer-to-read-first pattern (for in-flight same-file conflicts):**
+If two agents are writing to the same .py script and the conflict is detected mid-flight,
+steer the LATER agent immediately via `delegate_task(action='steer', ...)`:
+
+  'Read CURRENT state of <script.py> before writing — another agent has already patched it.
+   Use the patch tool for targeted edits only, not full-file rewrite.'
+
+Send the steer as soon as the conflict appears in the live transcript. By the time the
+agent finishes its first write, the overwrite may already have happened.
+
+When multiple implementation agents target the SAME Python script with DIFFERENT
+patches (e.g. one adds retrieval_value to l1-extract.py, another adds hash-chain
+to l1-extract.py), the second agent patches OVER what the first wrote. Unlike the
+SKILL.md conflict above (which produces incoherent interleaving), same-file .py
+patches that don't touch the same function typically succeed but whichever runs
+second silently loses the first agent's changes if it does a full-file rewrite,
+or produces a double-patched mess if both use targeted patch().
+
+Prevention:
+- Before dispatching implementation batches, map each Finding → Target File →
+  Agent and confirm no file appears in two agents' scopes.
+- If two findings target the same file, merge both into a single agent's scope.
+- If batches are already dispatched and overlap is detected, use
+  `delegate_task(action='steer', message='skip <filename>, already being patched
+  by another agent')` to redirect the second agent.
+
+This is distinct from the SKILL.md interleaving case: SKILL.md conflicts produce
+corrupt merged content; same-.py conflicts produce silent overwrites where the
+first agent's changes disappear. Both require exclusive per-file ownership.
+
+## Concurrent same-SKILL.md patch conflict (parallel skill synthesis)
+
+**Pre-dispatch scope conflict check (mandatory before any skill-patch fan-out):**
+Build a cluster→target-skill map and scan for duplicates before dispatching:
+
+```python
+from collections import defaultdict
+cluster_targets = {
+    "SA-0": ["skill-a", "skill-b"],
+    "SA-1": ["skill-b", "skill-c"],  # skill-b conflict!
+}
+count = defaultdict(list)
+for agent, skills in cluster_targets.items():
+    for skill in skills:
+        count[skill].append(agent)
+conflicts = {k: v for k, v in count.items() if len(v) > 1}
+if conflicts:
+    raise ValueError(f"SCOPE CONFLICTS — merge before dispatch: {conflicts}")
+```
+
+Do NOT try to steer mid-flight; by the time a conflict is detected from a live log the
+second agent has already begun patching.
+
+**Post-dispatch detection (if conflicts slipped through):** After all agents complete,
+check each conflicted skill for `###` subsections under an unexpected `##` parent.
+This is the canonical signature of concurrent-write interleave: one agent's section
+became a nested child of the other's instead of a peer. Promote the misplaced section
+from `###` to `##` to restore correct peer hierarchy.
+
+When multiple synthesis subagents are each tasked with patching the SAME skill file
+(e.g., two agents assigned overlapping clusters both update `agent-memory-consolidation`),
+the result is not a merge — it is incoherent interleaving. The second agent's `skill_manage
+patch` operates on what the first agent left, producing: duplicate section headers, conflicting
+instructions in adjacent paragraphs ("distill into a skill file" vs "do not auto-patch skills"),
+and mismatched version numbers.
+
+This is categorically different from the output-file write-timing pitfall below. That one is
+about last-writer-wins on fresh content. This one produces content that is BOTH writers' changes
+simultaneously, incoherently merged.
+
+**Observed Aug 2026:** Agents A and F were both assigned to patch `agent-memory-consolidation`.
+A patched it first (v1.10.1). F read the skill, then patched over A's changes (nominal v1.10.0).
+Result: duplicate MemSIF sections, contradictory AMD guidance, two conflicting `context=` uses,
+and empty stub headings that one agent added and the other ignored. An adversarial review agent
+found 3 CRITICALs and 2 MAJORs in the merged result.
+
+**Prevention:**
+- Assign each skill to AT MOST ONE synthesis agent. If two clusters have findings for the same
+  skill, merge those findings into a single agent's scope before dispatch.
+- Alternatively: use the gather-then-synthesize pattern — gather agents write raw findings to
+  separate files; one reconciling agent reads all findings and writes a single coherent patch.
+- When assigning 5+ agents that all touch the skill library, pre-map cluster → target skills
+  and verify no skill appears in two agents' scopes before dispatching.
+
+**Recovery pattern when it happens:**
+1. Read the corrupted skill in full
+2. Identify which sections came from which agent (usually visible by content theme)
+3. Dispatch ONE repair agent with: full adversarial report + the corrupted skill + explicit
+   instruction to produce ONE coherent version (not to re-patch, but to rewrite the affected sections)
+4. Verify the repair with a second adversarial read before considering it done
+
+## Write-timing conflict pitfall (parallel writes to shared files)
+
+When multiple subagents write to the same file (e.g. a shared findings.md or blackboard),
+the last writer wins and earlier results are silently overwritten. Use `hermes-agent-sync`
+for structured parallel-write patterns: typed JSON findings + blackboard apply step that
+merges results idempotently rather than overwriting.
+
+When the orchestrator dispatches subagents AND also writes to files in the same turn,
+both sets of writes can land on the same files in unpredictable order. Observed Jul 2026:
+
+- Orchestrator dispatched 3 subagents (memory, workflows, skills files)
+- Orchestrator also wrote its own versions of those files in the same turn
+- Subagents completed later and overwrote the orchestrator's files
+- Git commit then captured the subagents' versions (longer, richer content)
+- The orchestrator's writes were silently clobbered, producing a confusing file-size discrepancy
+
+**Rule:** If you dispatch subagents to write file X, do NOT also write file X yourself in the
+same turn. Pick one author per file: either the subagent writes it, or the orchestrator writes it.
+
+**Pattern when you want orchestrator + subagent content in the same file:**
+- Subagents write their sections to separate files (e.g. `memory-draft.md`, `workflows-draft.md`)
+- Orchestrator merges after all subagents return
+- Never let two writers target the same path concurrently
+
+## Reasoning-model proxy timeout (deep-reasoning models on large tasks)
+
+Deep-reasoning models (for example grok-4.6) hold an idle thinking phase before emitting the
+first content token. If this exceeds the upstream proxy's idle timeout (typically 120s for
+first byte), the session produces no SSE events and fails with `[Errno 32] Broken pipe`
+or `Codex stream produced no SSE events for 120s after first byte`.
+
+**Pattern:** fails on tasks with broad scope (10+ sub-topics, 3+ source types, 30+ tool
+calls). Each worker independently times out — all 3 fail in the same batch.
+
+Mitigation in priority order:
+1. **Before re-dispatching a failed spike, check if it is pure computation.** If yes,
+   run it directly in `execute_code` — same Python code, no delegation overhead, no
+   stream-stall risk. This is almost always faster and always more reliable.
+   A task that failed 2+ times with `Codex stream produced no SSE events` is a strong
+   signal the task is too narrow/mechanical for a reasoning model: run it locally.
+   **Do not re-dispatch a stalled spike a third time.** Two stall failures on the same
+   task means the task shape is incompatible with the reasoning model's idle phase; every
+   subsequent re-dispatch will stall for the same reason. Convert to execute_code instead.
+2. **Do not delegate large research surveys to deep-reasoning workers.** Use execute_code
+   with batched web_search + web_extract calls directly — faster, zero delegation overhead,
+   same quality for structured research with clear sub-topic lists.
+3. If delegation is needed, cap each task to a single domain (≤5 sub-topics) and increase
+   `stale_timeout_seconds` on that provider/model in config (example key shape:
+   `providers.<provider>.models.<model>.stale_timeout_seconds: 900`).
+4. Route research sub-tasks to a non-reasoning `delegation.model`; reserve a reasoning
+   model only for tasks that require deep synthesis.
+
+**Rule of thumb:** if the task fits in a well-structured execute_code Python script (batched
+searches, extractions, a write_file at the end), do it directly. Delegate only when the task
+requires genuine multi-turn tool-call reasoning that cannot be scripted.
+
+## Loop-cap and retry pitfalls
+
+Two distinct failure modes produce thin or empty subagent output files:
+
+| Signal | Loop cap | Context exhaustion |
+|--------|----------|--------------------|
+| api_calls | <15 | >15 |
+| todos status | incomplete | complete |
+| log endpoint | mid-research, no write_file | after todos done, no write_file |
+| cause | repeated same query hits guardrail | ran out of tokens before final write |
+| fix | add "at most 2 attempts per topic, vary queries" | add "CRITICAL: write file before stopping" |
+
+### Check-before-retry (mandatory)
+
+Before dispatching a retry, always run:
+```
+terminal("wc -l /tmp/<output-file>.md")
+```
+A batch result may be delivered before a subagent's late `write_file` completes. The output
+file may already exist and be complete by the time you check. Retrying without checking produces
+a red
+[...TRUNCATED FOR DISPLAY...]
+
+================================================================================
+SKILL: adversarial-review
+================================================================================
+---
+name: adversarial-review
+version: 1.5.0
+author: Hermes Agent
+depends_on: [requesting-code-review, verification-before-completion]
+provides: [adversarial-review, cross-platform-consistency, contradiction-detection]
+description: 'Use when: adversarial review is needed before merging multi-part refactors or cross-platform specs. Systematic
+  review for self-contradictions, broken references, portability gaps, and inconsistencies.'
+keywords:
+- qa
+- cross-platform
+- porting
+- contradiction-checking
+- self-consistency
+- verifiability
+license: MIT
+metadata:
+  hermes:
+    related_skills:
+    - requesting-code-review
+    - risk-based-review
+    - verification-before-completion
+    - hermes-skill-library-consolidation-audit
+    - claude-routing-hierarchy
+    tags:
+    - review
+    - qa
+    - adversarial
+    - consistency
+    - portability
+    - pre-merge
+platforms:
+- linux
+- macos
+- windows
+skills-to-load-first:
+- verification-before-completion
+title: Adversarial Review
+triggers:
+- Porting code, config, or agent specifications across platforms (e.g., Hermes → Cowork, macOS ↔ Windows, Docker → Podman)
+- Reviewing multi-file refactors or large config ports for internal consistency
+- Pre-merge QA when feature descriptions might contradict implementation
+- Checking task prompts or docs for unfollowable references, literal placeholders, or platform-incompatible instructions
+- Scientific paper synthesis — recursively reviewing molecular/clinical claims for false equivalence, proxy limitations, in
+  vitro-to-clinical translation gaps, and funding bias before presenting findings
+- Research/knowledge corpus synthesis — reviewing cross-tradition or cross-domain synthesis findings for semantic equivalence
+  over-claim, factual errors in specific text strata, analytical framework scope over-application, source quality asymmetry,
+  and hermeneutic loop bias. Run the five intellectual attack vectors below.
+- Reviewing an AI/agent system design spec (evaluation methodology, autonomy/governance framework, agent rollout plan) against
+  domain standards (NIST AI RMF, professional-supervision guidance, OWASP LLM Top 10) before build
+- Running a full system adversarial pass across Hermes runtime, config, code, memory topology, and workflows — beyond skills alone: audit config.yaml for silent cost leaks (e.g. MoA enabled after experimentation), script dedup logic vs research findings, MEMORY.md content-type discipline, orphan script archaeology, cron/script consistency, schema design-vs-implementation coherence, and documentation drift vs live system state
+- Reviewing a Python utility library after a consolidation refactor — checking for API/docstring contract mismatches, mixed-type
+  serialization crashes, sandbox escape vectors, and single-hop vs. transitive logic bugs
+- Reviewing a research/analysis deliverable for citation accuracy, fabricated product names, count consistency, dangling gap
+  references, and severity-label cohesion — use the recursive loop until no HIGH or MEDIUM findings remain
+- Reviewing a research-to-runtime implementation patch (e.g. paper → compressor rule, arXiv → skill preamble, IT concept →
+  agent config) — apply the inference-time feasibility gate, proxy overclaim scan, over-eviction risk check, and internal
+  consistency check from references/research-citation-checklist.md § Inference-Time Constraint + Proxy Implementation Review
+- Reviewing a financial model document (revenue acceleration, NII pull-forward, ROI scenario tables) for formula basis ≠ table
+  basis mismatches, hidden multiplier assumptions, and per-loan vs portfolio-level calculation inconsistencies
+- Reviewing ML training/evaluation code for holdout discipline, data leakage, temporal leakage, pipeline order correctness,
+  and shadow/A/B gate completeness — use the ML holdout checklist in the operating rules below
+- Reviewing test suite changes for regression test quality: snapshot auto-accept anti-pattern, mutation testing scope, property
+    test invariant adequacy, flaky test introduction, and fuzz corpus discipline
+- Reviewing a batch of concurrent skill patches from parallel synthesis agents — checking
+  for incoherent same-skill merges (two agents patched the same SKILL.md), write-owner
+  circular loops (multiple skills can independently call skill_manage on the same failure),
+  human-gate bypasses (interactive session treated as human approval), and over-hardening
+  (gates that would block normal non-hazard work)
+- Improving or auditing any recursive self-critique / self-review loop design (RCI, Reflexion, Self-RAG pattern variants)
+- Reviewing a multi-agent implementation of new reasoning framework subcommands (causal-check,
+  boundary-check, lookahead, subplan-verify, hypothesize) — apply projected-state, post-revision
+  action, exit-code contract, argparse consistency, docstring currency, and config-script parity
+  checks (see references/reasoning-type-taxonomy.md § Adversarial Attack Vectors)
+related_skills:
+- requesting-code-review
+- risk-based-review
+- verification-before-completion
+- hermes-skill-library-consolidation-audit
+- claude-routing-hierarchy
+- adaptive-agent-reasoning
+---
+
+
+# Adversarial Review
+
+## Deep Module Design Vocabulary
+
+When reviewing or designing code structure, use this precise vocabulary (from Ousterhout / mattpocock/skills):
+
+- **Module**: anything with an interface and implementation — a function, class, package, or tier-spanning slice.
+- **Interface**: everything a caller must know to use it correctly — type signature AND invariants, ordering constraints, error modes, required config, perf characteristics. NOT just the TypeScript `interface` keyword.
+- **Depth**: leverage at the interface — amount of behaviour a caller can exercise per unit of interface they must learn. Deep = lots of behaviour behind a small interface. Shallow = interface nearly as complex as implementation (avoid).
+- **Seam** (Feathers): place where you can alter behaviour without editing at that place — the location at which an interface lives. Say "seam", not "boundary" (overloaded with DDD).
+- **Adapter**: a concrete thing satisfying an interface at a seam. Describes role, not substance.
+- **Leverage**: what callers get from depth. One implementation pays back across N call sites.
+- **Locality**: what maintainers get from depth. Fix once, fixed everywhere.
+
+Key tests:
+- **Deletion test**: imagine deleting the module. If complexity vanishes, it was a pass-through. If complexity reappears across N callers, it was earning its keep.
+- **One adapter means hypothetical seam; two adapters means real one.** Don't introduce a seam unless something actually varies across it.
+- **Interface is the test surface.** If you want to test past the interface, the module is the wrong shape.
+
+When reviewing code: flag shallow modules (large interface, thin implementation), tight coupling to internal structure, and seams placed at the wrong level.
+
+## When to use
+
+Use this skill when you've built or ported something large (5+ files, multi-layer config, cross-platform spec, agent rules, or docs) and need to catch self-contradictions, portability claims that don't hold, and broken references before shipping.
+
+Also use the **recursive review loop** (below) when the user asks for issues to be fixed and re-reviewed until clean — a single review pass is never sufficient for complex artifacts.
+
+**Not a full test suite.** This is systematic QA for consistency and breakage, not functional verification. Pair with domain-specific test suites if they exist.
+
+**Model (live, `claude-routing-hierarchy`):** this skill is a *procedure*, not a router.
+Run it in the current parent session. For a cross-family adversarial pass on our own
+routing/config, start a dedicated session `gpt-5.6-sol` via `openai-api` (NOT `custom:openai` — that causes HTTP 400 and silently falls back to Grok; see claude-routing-hierarchy critical fix). Do not set `delegation.model` to Sol (multiplies cost). Do not use Grok to grade Grok.
+
+## Recursive Fix-and-Re-Review Loop
+
+When the user says "fix all issues and re-review until clean," run this loop rather than a single pass:
+
+```
+PASS N:
+  1. CRITIQUE phase (adversarial stance — do not fix yet):
+     a. Review the artifact across all attack vectors (see Operating rules below)
+     b. Produce a findings table: severity (HIGH / MEDIUM / LOW), category,
+        description, EXACT LOCATION (section heading / line number / token span)
+     c. For each finding, state which error class it belongs to
+        (contradiction / false_claim / gap / label_drift / structural / count_drift / etc.)
+     d. Cross-check: did any of these error classes appear in a prior pass?
+        If yes, mark it OSCILLATING — a fix in pass N-1 re-introduced it.
+  2. FIX phase (switch to fixer role — not the critic):
+     a. Fix ALL findings — high, medium, and low — in the same pass
+     b. Re-read the sections you changed to verify the fix didn't introduce new issues.
+        EXCEPTION — label/count/heading normalisation fixes propagate silently. If the fix
+        changes a token that appears in more than one place (a severity label, a count, a
+        renamed heading, a cross-reference), grep the WHOLE artifact for both old and new
+        token BEFORE moving on — do not defer this to the next pass.
+     c. Update the error-class carry-forward log (see below)
+  3. Run PASS N+1 on the full artifact
+  4. STOP when: no HIGH or MEDIUM findings remain in a full pass
+     (LOW findings in the final pass are acceptable if they don't affect correctness)
+  5. ALSO STOP and escalate to human review if:
+     - The same finding (same error class + same location) appears in 3+ passes (oscillation)
+     - Still finding MEDIUM issues after 6 passes (structural problem, not a patch problem)
+```
+
+**Role-split discipline (RCI + Reflexion, 2023):** The critique phase and the fix phase
+are distinct mental stances. During critique, take an adversarial position — assume the
+artifact is wrong and look for evidence. During fix, switch to a constructive position.
+Blending the two in a single cognitive act collapses the adversarial stance and produces
+weaker findings. Run them as sequential sub-steps even when the same agent does both.
+
+**Error-class carry-forward log:** After each pass, append to a running log:
+```
+Pass N findings: [error_class_1 at location_A, error_class_2 at location_B, ...]
+Pass N fixes:    [what was changed to address each]
+```
+Example after a first pass:
+```
+Pass 1 findings: [label_drift at "findings table header row", gap at "Verification section — no command"]
+Pass 1 fixes:    [normalised all severity labels to HIGH/MEDIUM/LOW; added python verify script]
+```
+Before starting pass N+1, read the log. If an error class reappears at the same location,
+it was not fully fixed — mark it OSCILLATING and escalate, do not just patch again.
+Concrete pattern (Reflexion, arXiv:2303.11366): verbal trace memory prevents the agent
+from repeating the same class of mistake by making prior failures visible at inference time.
+
+**Critique specificity mandate:** Every finding must cite an exact location — section
+heading, line range, or quoted token span. Vague findings ("this section is unclear")
+are not actionable and should be rejected from the findings table and rewritten before
+the fix phase begins. Exact-location citations also enable automated oscillation detection
+(same location + same class across passes = oscillation signal).
+
+Also see **Research basis for recursive adversarial loop design** (bottom of this skill) for
+the RCI, Reflexion, Self-RAG, and CoT-step-length papers that underpin the loop design.
+
+### Recursive implementation improvement cycle (parallel sweep + cold review)
+
+For large implementation tasks spanning many files and domains, use this cycle pattern instead of a single pass:
+
+```
+CYCLE N:
+  1. SWEEP phase — dispatch parallel subagents, one per domain cluster.
+     Each gets a concrete task spec (what to read, what to implement, compile+test commands,
+     where to write the commit). Run cold — no shared state between sweep agents.
+  2. REVIEW phase — dispatch a COLD adversarial reviewer concurrently with the sweep,
+     or immediately after commit. Reviewer reads the diff from scratch (no summary coaching).
+     Require: read every changed file, cite line numbers, give confirmed/false_positive verdict.
+  3. FIX phase — triage all confirmed HIGH+ findings from the reviewer. Apply fixes directly
+     in the parent session (not another subagent) for precision. Compile + test after each fix.
+  4. Commit and push. Begin CYCLE N+1.
+  5. SATURATION: stop when the cold reviewer says SATURATING (< 2 confirmed HIGH+ findings
+     in a full pass). Final state: only MEDIUM/LOW findings remain or none at all.
+```
+
+Key discipline:
+- Run sweep and reviewer CONCURRENTLY when the sweep commits first — give the reviewer the
+  post-commit SHA explicitly. If they run against the same base, the reviewer finds bugs the
+  sweep is already fixing, inflating the confirmed-bug count (stale-snapshot bug).
+- Apply HIGH fixes in the PARENT session, not a new subagent — a fixer subagent introduces
+  another round-trip and may re-introduce bugs the parent can see directly.
+- **'Wait for it' on skill/config patches**: when reviewing a batch of skill patches (not code), dispatch the cold reviewer as a background `delegate_task` and run deterministic parent-side cohesion checks in parallel — do not start fixing yet. Wait for the full reviewer report, then apply ALL confirmed findings in one shot. Splitting into partial-fixes-before-report hides bugs the reviewer would have caught.
+- **Deterministic parent checks run while reviewer is waiting**: grep the changed files immediately after patching for mechanically-detectable corruption — literal `\n\n` escape sequences, headings embedded in comment lines, section-placement errors (a section in the wrong skill), duplicate heading names. These are structurally obvious and catch artifact-level defects the LLM reviewer may miss or rate LOW when they are actually HIGH. Run these checks while the cold reviewer is in flight so no time is lost; a literal `\n\n` in a SKILL.md body is a corruption (HIGH), not a style issue (LOW).
+- Each cycle's domain list should grow: domains E/F/G/H in cycle 1, I/J/K/L in cycle 2, etc.
+  Stop adding domains when you run out of high-value theory-to-practice mappings, not just
+  when the adversarial reviewer saturates.
+- 'Wait for it' still applies: do not start fixing HIGH findings until the full reviewer report
+  arrives. Partial fixes before the report hides bugs the reviewer would have caught.
+- Saturation signal is adversarial-reviewer-driven, not sweep-driven. A sweep can always find
+  more to implement; the reviewer's <2 HIGH signal is the exit criterion.
+
+Key discipline for the loop:
+
+- Fix ALL severities each pass, not just high first then medium — low issues introduced in a fix cycle compound across passes.
+- **RCI + CoT step-out**: before writing the fix, explicitly state "the flaw is X at location Y, the correct form is Z" — this one-sentence critique-then-fix articulation reliably improves fix quality (RCI, arXiv:2303.17491; CoT step-length, arXiv:2401.04925). Do not skip directly from "finding" to "edit."
+- After each fix, re-read the changed sections for immediate regressions before moving to the next pass. For label/count/heading normalisation fixes that touch tokens appearing in multiple places, also grep the whole artifact (see step 2b in the loop above).
+- Categorise each finding consistently (correctness, false claim, gap, contradiction) so you can tell if the same category keeps producing issues — that's a structural problem, not a one-off.
+- A pass that finds only LOW issues is a near-clean pass. One more pass to confirm is sufficient.
+- Typical convergence: complex artifacts (skills, specs, multi-section docs) converge in 4–6 passes. If you're still finding MEDIUM issues after 6 passes, the artifact has a structural problem — pause and flag it rather than continuing to patch.
+
+Common new-issue sources when fixing code in docs/skills:
+- Pasting two patterns as sequential assignments to the same variable (second silently overwrites first) — use distinct variable names
+- Adding a new code example that references an import not present in the block — every code block must be self-contained or explicitly note its dependencies
+- Introducing a new method call that doesn't exist in the target library (e.g. `.clear()` on a python-docx paragraph)
+- **Projected-state vs actual-state mismatch** — a function computes a projected/speculative state (e.g. `projected = apply(current, action)`) but then passes the ORIGINAL state to the constraint check (e.g. `check(action, self._state)` instead of `check(action, projected)`). The projection becomes dead code, defeating the purpose of lookahead logic. When reviewing any function that: (a) computes a projected or hypothetical state, (b) then checks constraints or guards — verify the check uses the PROJECTED state, not the original. Pattern: grep for `new_state = f(old_state, ...)` and confirm every downstream check in that scope uses `new_state`, not `old_state`. Concrete case (Jul 2026): `ATPGate.propose()` projected state correctly then checked `check_fn(action, self._state)` — constraints ran against committed state, not committed+proposed. This is especially subtle in admission-control, speculative-execution, and pre-flight-check patterns where the whole value proposition depends on checking projected state.
+
+- **Post-revision execution uses the pre-revision action** — a gate that calls `revise(proposed)` to fix a rejected action, then wraps with `execute(proposed_action)` or `commit(proposed_action)` rather than `execute(result["action"])`, silently runs the original rejected draft. The revised action is computed but never used. Pattern: whenever a function calls a `revise()`/`fix()`/`retry()` helper and gets back a result, verify that all downstream `execute`/`commit`/`apply` calls consume the result's output, not the original input variable. Concrete case (Sep 2026): `ATPGate.wrap()` called `revise()` on Step 3 failure but then executed `proposed_action` — the revision became dead code, committing the originally-rejected action. Complementary to the projected-state check: that one is about constraint evaluation; this one is about which action actually gets executed.
+
+## LLM Observer Unreliability — Use Deterministic Scoring (arXiv:2609.04198, Sep 2026) ★ HIGH
+
+Preregistered study: same-window LLM judge repeat rankings agree at Spearman 0.40 against a
+required 0.90. Black-box LLM observers on shared endpoints are unreliable quality gates.
+
+**Concrete finding:** Using an LLM-as-judge on a shared API endpoint to score output quality
+produces rankings that are reproducible at only r=0.40 Spearman correlation on repeat runs.
+This is catastrophically below the r=0.90 threshold required for a credible quality gate.
+
+**Hermes rule:** For any quality gate, eval scoring, or adversarial review step that requires
+consistent verdicts across runs:
+- Use deterministic scoring (fixed seed, local model, rule-based metrics) NOT black-box LLM judges
+- If an LLM judge is unavoidable: pin model + seed + system prompt + temperature=0; log hash of
+  all three before each scoring run so drift is detectable
+- Never use a shared/production endpoint for eval gates — endpoint-level variation dominates
+- Treat any LLM-scored quality metric as directional, not precise. The ±25% and >0.3 margin
+  figures are not derived from this paper — they are conservative heuristics. Do not quote them
+  as established thresholds. The paper's finding is that repeat rankings agree at r=0.40, not
+  that any specific numerical margin is safe.
+
+**Applies to:**
+- `adversarial-review` subagent verdict aggregation
+- `hermes-swarm-consensus` voting where an LLM grades peer outputs
+- Any cron job that uses Claude/GPT to assess its own output quality
+- Math/CS paper interpreter confidence scores (note: these are LLM-generated and carry this variance)
+
+## Coalition Reviewer Selection (arXiv:2608.28754)
+
+Greedy coverage-based reviewer selection (k=3) beat random k=5 on catch rate in that paper
+(0.968 vs 0.930 — **paper-specific, not a timeless threshold**). Apply only when reviewers
+cover distinct decision types; homogeneous same-model reviewers degenerate to random.
+
+**BoN certification is not a practical quality gate** when N_high > 2 (spike 003, invalidated
+2026-09-08). Report P_cert with the verdict; do not claim "sufficient coverage."
+
+## Reviewer Pool Quality
+
+DP threshold policy (math-008, paper-only): in a calibrated reviewer pool, threshold at p>0.70 per voter has cost ratio 0.944. Hermes has no per-reviewer accuracy ledger today. Practical application: use heterogeneous-model majority vote (e.g. grok-4.6 + claude-sonnet-4-6 + gpt-5.6) until a reviewer accuracy log exists. Revisit trigger: cobra-outcome logs grow a reviewer-accuracy field.
+
+## Operating rules
+
+1. **Identify contradiction vectors** — categories where the code or config could contradict itself:
+   - Stated compatibility vs. actual platform checks
+   - API/endpoint references vs. documented unreachability
+   - Count claims ("5 jobs") vs. actual enumeration
+   - Placeholder syntax (YYYY-MM-DD) in code that should be concrete
+   - Task prompts referencing endpoints that connectors explicitly forbid
+
+2. **Build a portability matrix** — for cross-platform ports, list each component and mark portable/non-portable:
+   - Hermes-specific cron jobs → non-portable to Cowork/Claude Cowork
+   - Linux-CLI tools (rootless-podman, silverblue-*) → non-portable to macOS/Windows
+   - macOS-only skills (`apple-notes`, `apple-reminders`, `findmy`, `imessage`, `macos-computer-use`) → macOS only; present on Linux hosts = dead weight
+   - Hermes cron `no_agent: true` + `prompt` field → prompt is dead code (see pitfall below)
+   - localhost services → blocked in isolated VMs
+   - Browser-based Computer Use → works everywhere once port syntax is right
+
+3. **Validate placeholder patterns** — if docs use placeholders (YYYY-MM-DD, <TODAY>, [TOPIC]), ensure:
+   - No placeholder appears bare in code blocks without a nearby substitution instruction
+   - All references to the placeholder are consistent (not sometimes `YYYY-MM-DD`, sometimes `[DATE]`)
+   - Task prompts don't ask the user to substitute while the example shows a literal
+
+4. **Enumerate and verify counts** — if docs claim "N items", spot-check:
+   - Count actual items in the source
+   - Check all stated items are mentioned in all documents that reference them
+   - Flag discrepancies before merge
+
+5. **Check for unfollowable references** — scan task prompts and instructions for:
+   - API references that don't exist in the target platform (e.g., "list session artifacts" → no such API in Cowork)
+   - Endpoints documented as unreachable in the same repo
+   - Steps that assume a feature that was explicitly ruled out elsewhere
+
+6. **ML holdout and regression-test attack vectors** — when reviewing ML training/eval
+   code or test-quality claims, load
+   `skill_view(name='requesting-code-review', file_path='references/regression-testing-and-model-runs.md')`.
+   Headline checks (do not treat paper % as timeless): no preprocess-before-split; no
+   `train_test_split(shuffle=True)` on time-ordered data; mutation score over raw coverage;
+   do not auto-accept snapshots to green CI. Quantified leakage/flaky-test figures live in
+   that reference and must be re-verified against the cited papers before quoting.
+
+8. **Skill/agent integrity: CDH (Convergent Detour Hijacking) check** — when reviewing a skill, agent prompt, or multi-agent workflow spec (arXiv:2608.12273, Sweep 12):
+
+   **What CDH is:** A skill or agent whose *description* correctly matches the trigger intent, but whose *body* routes through unrelated tool calls before completing the task. The task succeeds and the output is correct — but token cost and latency spike because the body detours through unnecessary work. Evidence: CDH attack causes +66.91% token overhead, +92.45% latency, 80.02% coordinator selection rate even when output is correct. <!-- why: prevents treating correct output as proof of uncompromised trajectory in skill-review sessions -->
+
+   **Key principle:** Correct task output does NOT equal trajectory integrity. A skill that produces the right answer via an unnecessary detour through 3 extra benign skills has still been compromised.
+
+   **3-point CDH checklist (HIGH severity when any point fires):**
+   1. Does the skill body's first 2–3 tool calls semantically match the declared trigger semantics? If not, flag as detour candidate.
+      - A skill that triggers on "search arXiv" should open with `web_search`/`arxiv` calls — not a file read, memory write, or code execution
+      - A skill that triggers on "review a PR" should open with `gh pr view` or similar — not a
+[...TRUNCATED FOR DISPLAY...]
+
+================================================================================
+SKILL: hermes-swarm-consensus
+================================================================================
+---
+name: hermes-swarm-consensus
+depends_on: [dispatching-parallel-agents]
+provides: [consensus-verdict, confidence-score, arbiter-escalation, verbalized-sampling]
+triggers:
+  - After any parallel fan-out, before merging verdicts — including unanimous rounds
+  - Need a single-arbiter escalation path when parallel agents disagree
+  - Running a confidence-weighted consensus across parallel agent conclusions
+  - Conflicting or unanimous parallel-agent results must be reduced to a single actionable verdict
+description: >
+  Use after any parallel fan-out before merging verdicts, INCLUDING unanimous rounds. Deterministic verdict/confidence reducer with single-arbiter escalation.
+version: 1.2.0
+author: Hermes
+tags: [multi-agent, delegation, consensus, verdict, arbitration, fan-in]
+related_skills: [hermes-role-pipelines, hermes-agent-sync, hermes-context-packet]
+---
+
+# Hermes Swarm Consensus
+
+A deterministic way to reduce conflicting conclusions from a parallel agent
+fan-out into a single verdict — with a defined escalation path when agents
+genuinely disagree.
+
+## When to use
+
+Use after any parallel fan-out before merging verdicts, INCLUDING unanimous rounds
+(e.g. "is this vulnerable?", "is the test flaky?", "which root cause?").
+Do not skip this skill when agents agree.
+
+For pre-planning adversarial review of contested proposals (BEFORE a plan exists), see the `adversarial-review` skill — it carries the full 5-seat roster and 3-round protocol (independent findings → cross-attack → defend/refine/concede).
+
+## Verdict finding schema
+
+Each agent contributes one or more verdict findings:
+
+```json
+{
+  "claim": "string — the proposition being judged",
+  "confidence": 0.0,
+  "evidence_refs": ["file:line, URL, or workspace path"],
+  "agent_id": "string — which agent produced this"
+}
+```
+
+`confidence` is a float in `[0.0, 1.0]`. Group findings by normalized `claim`
+before reducing.
+
+## Reduction algorithm
+
+Diversity gate BEATS skip-if-agree. Unanimous + >=2 distinct evidence refs = accept. Unanimous + paraphrases of one chain = steelman round, then reduce.
+
+For each claim group:
+
+1. **>= 3 agents → majority rule.** Take the verdict held by the most agents.
+   Tie-break by summed confidence across agreeing agents.
+2. **Exactly 2 agents → highest confidence wins.**
+3. **Escalate to an arbiter when EITHER:**
+   - the winning verdict's confidence (or summed confidence for majority) is
+     **< 0.6**, OR
+   - there is a **direct contradiction** (mutually exclusive verdicts on the same
+     claim that the rules above can't cleanly separate).
+
+A clean, high-confidence majority/winner is accepted without escalation.
+
+## Copying-behavior diversity gate (arXiv:2609.09150)
+
+Wild agents copy whatever the environment shows (page in front, then the recent stream). Whoever writes first sets the convention. Early unanimous agreement is **not** evidence — it is a copying-behavior risk.
+
+**Gate (run before aggregating votes):**
+1. Require **at least 2 distinct reasoning paths** in the ballot set. Distinct means different evidence refs **or** a different causal chain — not a paraphrase of the same argument.
+2. Unanimous + >=2 distinct evidence refs = accept. Unanimous + paraphrases of one chain = do not tally; treat as copying-behavior risk and run steelman.
+3. Inject a round-2 prompt to at least one agent (preferably a different model/framing):
+
+```
+Steelman the opposition. Assume the round-1 majority is wrong.
+Produce an independent case against it with evidence the others did not cite.
+Do not reuse the round-1 reasoning path.
+```
+
+4. Only after round 2 has ≥2 distinct paths may you reduce. Identical round-2 text still fails the gate — escalate to the arbiter with reasoning stripped.
+
+This is stricter than the temperature/framing diversity gate later in this file. Temperature diversity is a formation control; this gate is a **vote-admission** control. Use both.
+
+## Competence-Based Panel Allocation (AGORA, arXiv:2607.09600)
+<!-- why: reduction currently tie-breaks and 2-agent-wins on raw self-reported confidence; Agora allocates on calibrated competence, not hallucinated certainty. Sweep cited 2605.13690 (unresolved); verified paper is 2607.09600. -->
+
+Allocate **panel slots** (who is invited to the ballot) on demonstrated competence/calibration, not raw confidence. This is the calibration complement to the diversity gate above (diversity admits *votes*; competence admits *seats*). Consilience (hidden-profile) is evidence-coverage, not competence.
+
+**Rules:**
+- Prefer agents with a demonstrated track record on the task class over agents with high self-reported confidence.
+- Proxy for competence in Hermes: model-family diversity (use at least 2 different model families); prior success on similar tasks if cobra logs exist.
+- Do **NOT** use an agent's own confidence claim as the allocation criterion.
+- Reduction still consumes `confidence` for tally/escalation; do not let that field choose who sits on the panel.
+
+## How to escalate to the arbiter
+
+Spawn a **single** arbiter agent (do not re-fan-out):
+
+- Model: session parent model is the arbiter unless `claude-routing-hierarchy` specifies a live second family. Do not treat `claude-opus-4-8` or GPT-4o as implied defaults. `claude-fable-5` only on explicit user ask via `fable-orchestrate` Pattern B.
+- Context: assemble a `hermes-context-packet` whose `prior_findings_refs` point at
+  **all** conflicting verdict findings, with `objective` = "resolve the contested
+  claim and return a single verdict + confidence + reasoning".
+- The arbiter's output is authoritative and replaces the contested group.
+
+## Silo Problem + Epistemic Inertia (Habr/RU, arXiv:2608.03421, Aug 2026) <!-- rationale: names two MAS memory failure modes not covered by existing per-agent guards; provenance tracking is the mitigation -->
+
+**Silo problem (силосность)**: lessons learned by one agent in a portfolio do not propagate to others. Naive auto-propagation is intentionally avoided because ~50% of per-agent lessons are stack-specific and auto-propagation creates garbage memory in other agents. Manual human-gated promotion is the correct posture.
+
+Hermes pattern: lessons from subagent runs belong in Hindsight tagged `[swarm-skill, agent_role]` — not immediately in MEMORY.md or shared Graphiti. The orchestrator reviews and selects which lessons transfer. This is already the policy for delegate_task outputs; this finding names and validates why.
+
+**Epistemic inertia**: once a belief is widely represented in a memory corpus, the system resists updating it even with contradicting evidence. Named after the historical case of Vulcan (hypothetical planet) — the observation anomaly (Mercury's precession) was real, but the consensus belief (Newtonian gravity is correct) was so entrenched it resisted the correct explanation for decades.
+
+For multi-agent Hermes systems: an agent whose output contradicts the majority stored belief will be discounted by the reduction step. The inertia is self-reinforcing because the majority belief keeps getting confirmed by retrieval.
+
+**Critical finding (arXiv:2608.03421)**: in a 5-agent team, honest agents continue propagating false data after the lying source agent is removed. The contamination persists in memory.
+
+**Hermes mitigations:**
+1. Memory provenance tracking: store with each fact — which experiment originated it, whether new evidence is independent or a retelling, which conclusions depend on subsequently-revised theories
+2. Epistemic inertia signal: if `hindsight_recall` returns 5+ entries all corroborating the same claim from different agents, treat the consensus as SUSPECT rather than strong evidence — check if they trace to independent sources or to a single origin that was echoed.
+
+**Conformity Breaks Conformal Prediction (arXiv:2609.04445)**: Peer pressure shifts nonconformity scores in debate/swarm mode. Single-agent CP coverage collapses (90% → 74%) under social influence. Never reuse single-agent conformal thresholds in swarm context — recalibrate CP under debate conditions separately.
+
+**Multi-Stage CP Does Not Compose (arXiv:2608.05199)**: Per-stage split CP does not give trajectory-level coverage. A retrieve→act→write pipeline cannot achieve 90% trajectory coverage by multiplying per-stage certificates. Use Bonferroni across stage certificates or joint audit after n grows. Distribution shift kills coverage before accuracy — recalibrate after model/task shift.
+3. Contradiction decay: when a contradicting fact arrives for a widely-held belief, do not silently discard it — log the contradiction explicitly to Graphiti with a `contradicts` edge
+
+Reference: Habr/RU "Epistemic Inertia and Silo Problem", arXiv:2608.03421, Aug 2026.
+
+## EquiMem: Shared Memory Echo Chamber Prevention (arXiv:2605.09278)
+
+When multiple agents read each other's memory without calibration, they converge on the dominant agent's prior rather than ground truth — "shared memory echo chamber" failure mode.
+
+Hermes rule: when 3+ agents produce memory entries on the same topic, require explicit reconciliation (this skill) before writing to shared memory. Last-write-wins amplifies the most recent agent's frame. The coordinator in hermes-agent-sync should check for semantic conflict (LLM gate, not cosine threshold) before merging.
+
+## GraphWake — Agent Memory as Attack Vector (arXiv:2608.17665, Aug 2026)
+
+Shared memory systems in multi-agent communities are an active attack surface for belief injection and community polarization. The **Memory-Mediated Polarization Cascade**:
+
+1. **Expose**: attacker-controlled agent exposes target agents to stance-reinforcing arguments → these are retained in their memory
+2. **Trigger**: stance-neutral cue later triggers retrieval and reproduction of the injected memory
+3. **Propagate**: treated agents interact with untreated ones; cascade spreads community-wide
+
+The attack exploits the fact that agents trust their own memory as ground truth. A memory retrieved from a prior interaction feels "first-person known" — not "told by an attacker".
+
+**Hermes mitigations**:
+- Tag Hindsight/Graphiti entries with `source_agent_id` and `trust_tier` — memories from peer agents (subagents, external agents) are lower trust than user-session memories
+- Never merge subagent-generated stance/opinion claims into the primary memory surface without explicit user confirmation
+- For swarm consensus tasks: validate consensus not just on the verdict but on the *source distribution* of supporting evidence — if all supporting memories trace to one agent, treat it as a single source regardless of how many agents echoed it
+- Apply the existing EquiMem echo-chamber detection after each consensus round (see `## EquiMem` section)
+
+Reference: arXiv:2608.17665, "GraphWake: Group Polarization via Memory-Mediated Polarization Cascade", Aug 2026.
+
+---
+
+## WorkSwarm — Swarm Skill Persistence (Huawei openJiuwen, Aug 2026)
+
+WorkSwarm's **Swarm Skills Hub**: after a successful multi-agent run, extract the coordination flow (which agents played which roles, how handoffs were structured, what the successful communication protocol was) and persist it as a reusable "Swarm Skill" — a template for replaying similar team compositions on future tasks.
+
+**Hermes pattern**:
+- After a successful parallel delegate_task batch: write a Hindsight entry summarizing the agent decomposition (how many agents, what roles, how results were combined) tagged `["swarm-pattern", task_domain]`.
+- Future swarm tasks on the same domain can query Hindsight for prior successful compositions rather than redesigning from scratch.
+- Tie to the blackboard contract: a successful blackboard run + task verdict is the unit from which a swarm skill can be extracted.
+
+Reference: Huawei openJiuwen WorkSwarm, QbitAI Aug 2026.
+
+---
+
+## Swarm Deployment Breaks Individual Verification (Zenn.dev, Aug 2026) <!-- why: prevents false confidence from per-agent verification when deployment introduces emergent failure dimensions -->
+
+Japanese practitioner article ("AIエージェントは「群れ」にすると壊れる" — "When you make AI agents a swarm, it breaks"): individual agent output verification is necessary but insufficient. Deployment at scale introduces emergent failure dimensions that don't appear in single-agent evaluation:
+
+**Failure dimensions that only appear in swarm deployment:**
+1. **Interference effects** — agents with individually-verified correct outputs produce conflicting state when writing to shared resources simultaneously
+2. **Trust propagation failure** — a verified output from agent A becomes unverified input to agent B; the chain degrades verification guarantees
+3. **Aggregate behaviour** — individually safe actions compose into unsafe aggregate patterns (e.g. each agent reads a file safely; collectively they exhaust filesystem handles)
+4. **Ordering sensitivity** — correct outputs are order-dependent; verified in isolation but sequence-dependent in deployment
+
+**Hermes mitigation:** Treat the swarm as the unit of verification, not individual agents. For multi-agent sweeps:
+- Define the expected aggregate invariant (e.g. "total writes to Hindsight < N", "no two agents write to the same skill file")
+- Add an aggregate check AFTER all subagents complete, not just per-subagent output review
+- For shared-resource writes (skill_manage, Hindsight, Graphiti), serialize through a single coordinator agent — do not allow parallel writes to the same target
+
+**Reference:** zenn.dev/ryok/articles/agent-swarm-verification (Aug 2026)
+
+## OFTRL Aggregation — Regret-Optimal Ensemble Update (arXiv:2608.31166) <!-- spike 004, VALIDATED 2026-09-07 -->
+
+OFTRL (Optimistic Follow-The-Regularized-Leader) achieves O(1) per-agent regret in N-player
+coordination games vs. O(T) for naive averaging. Spike result: mean regret 1.00 (OFTRL) vs
+3.40 (averaging), wins 20/20 seeds; OFTRL correctly places full probability mass on the
+best answer by convergence.
+
+**When to use over majority vote:** When agents have conflicting priors AND more than one
+rounding is available (sequential re-querying or multi-turn consensus). OFTRL update is not
+useful for single-round fan-in — use only when you can do 2+ rounds.
+
+**OFTRL update rule (per-agent):**
+```python
+# Initialize: w[i] = uniform over K answers
+# Each round t:
+# 1. Agent i observes loss signal (group disagreement with its pick)
+# 2. Optimistic correction: predict next loss = current loss
+# 3. w_next[i] = softmax(-eta * cumulative_loss + optimistic_correction)
+for t in range(T):
+    losses = compute_group_losses(w, correct_answer)
+    w = softmax_update(w, losses, eta=0.1, optimistic=True)
+```
+
+**Hermes integration:** For swarm tasks with sequential rounds (e.g., iterative peer review,
+multi-round debate), replace the naive confidence-averaging in the reduction step with OFTRL
+updates. Each agent's weight is updated based on its regret relative to the group, with an
+optimistic lookahead that predicts the next round's loss signal.
+
+**Caution:** OFTRL assumes agents can update their distributions across rounds. For single-shot
+parallel fan-out (no re-querying), revert to the standard majority/confidence reduction.
+
+## Information-Bottleneck Fan-Out Gate (arXiv:2503.11321)
+
+Before spawning a multi-agent fan-out, apply this gate:
+
+  Relay sufficiency check: "Could a receiving agent produce a useful answer
+  from the relay message alone (without re-running all context)?"
+
+  YES -> fan-out may help; proceed if also independent and parallelizable
+  NO  -> restructure: either (a) enrich the relay, or (b) don't fan out
+
+Empirical finding for Sonnet-class models: MAS beats SAS only when the
+per-agent effective bottleneck beta >= 0.7 (relay carries >70% of signal).
+Below that threshold, relay loss cancels diversity gain.
+
+Do NOT fan out just to add "diverse perspectives" on a single question with
+low conditional entropy. Single well-reasoned answer dominates.
+
+## Debate Termination and Role Assignment (Sep 2026, Round 3)
+
+### Precedence Stack (applies to ALL debate/termination/role rules in this section)
+When rules conflict, this order wins:
+  1. Round-0 independence gate — ALWAYS collect independent answers first
+  2. Skip-if-agree — skip extra debate rounds only AFTER the diversity gate has passed (>=2 distinct evidence refs confirmed)
+  3. Plateau halt — stop when diversity_delta < 0.05 for 2 consecutive rounds
+  4. Role rotation (PEAR/meta-debate) — only after confirmed disagreement + diverse models
+  5. Budget cap — hard ceiling regardless of convergence
+
+---
+
+### MACI: Principled Debate Termination (arXiv:2510.04488)
+Fixed-round debate wastes compute. MACI uses two independent control dials:
+  Info dial: gates evidence by quality (ungrounded claims weight 0)
+  Behavior dial: schedules contentiousness from exploration to consolidation
+
+Moderator halts when gains plateau (tracks disagreement, overlap, evidence quality, argument quality).
+A cross-family LLM judge (CRIT) is used as soft weight and stop signal.
+
+IMPORTANT: 'Nonincreasing dispersion' and 'provable termination' are properties of
+the full MACI system (info/behavior dials + moderator + CRIT judge). The approximation
+below does NOT implement those components and carries NO termination guarantee.
+
+Practical approximation (labels as such — not MACI):
+  1. After each round, compute: n_unique_answers / n_total (diversity score)
+     'Unique' = distinct normalized closed-claim strings (for closed tasks) or
+     distinct embedding clusters at cosine threshold 0.85 (for open tasks)
+  2. If diversity_delta < 0.05 for 2 consecutive rounds: halt (plateau heuristic)
+  3. Reject any claim that lacks a cited observation (weight=0)
+  4. Use a cross-family judge for the final verdict when available
+  NOTE: The 2-round plateau + budget cap is a crude approximation.
+  Apply MACI's structure (diversity score + ungrounded rejection) as advisory.
+
+### Beta-Binomial Adaptive Stopping (arXiv:2510.12697)
+Model consensus dynamics via a time-varying Beta-Binomial mixture.
+Paper stops when Kolmogorov-Smirnov distributional similarity shows convergence across rounds.
+
+Practical approximation (WITHOUT KS test):
+  - Track per-round (n_agree, n_disagree) as a Beta(1+n_agree, 1+n_disagree) belief
+  - Require minimum n >= 6 observations before stopping
+  - Stop when the LOWER credible bound (5th percentile) of agreement probability exceeds 0.85
+    (NOT the 95th percentile upper tail — the upper tail fires trivially with few observations)
+  - Do not stop only on majority agreement at one round (a single round can be noise)
+  NOTE: This is a simplified approximation; the paper uses a KS test on a mixture.
+  Label this as 'non-paper heuristic' — not a provable guarantee.
+
+### DCI: Typed Epistemic Acts for High-Accountability Decisions (arXiv:2603.11781)
+Deliberative Collective Intelligence: 4 reasoning archetypes, 14 typed epistemic acts,
+shared workspace, convergent flow. Produces structured decision packet with minority report.
+
+IMPORTANT: DCI consumes ~62x single-agent tokens. Single-agent outperforms DCI on
+overall quality. Use ONLY when:
+  - The decision has external accountability requirements (audit trail)
+  - A minority report is explicitly required
+  - Cost is not the primary constraint
+  Do NOT use DCI as a general debate protocol for routine tasks.
+
+### Dynamic Role Assignment via Meta-Debate (arXiv:2601.17152)
+Static role assignment ignores capability differences. Meta-debate pre-run:
+  Stage 1: Candidate agents submit role-tailored arguments
+  Stage 2: Proposals scored with domain + role-specific criteria
+  Result: up to 74.8% improvement over uniform assignment, 29.7% over random
+
+Precedence note: Diversity gate BEATS skip-if-agree. Skip extra debate (including meta-debate) only AFTER the diversity gate has passed (>=2 distinct evidence refs confirmed).
+Meta-debate is only sensible after confirmed Round-0 disagreement AND ≥2 distinct model families.
+Do NOT run meta-debate on same-model panels (gains require model diversity).
+Do NOT run meta-debate before collecting independent answers (corrupts Round-0).
+
+Protocol (apply only after Round-0 disagreement with diverse models):
+  - Run a brief meta-debate: each candidate argues for role fit
+  - Score on: domain knowledge evidence, role-specific quality criteria, instruction-following
+  - Assign roles based on meta-debate outcome
+  NOTE: 74.8% gain is vs uniform assignment of different model families;
+  same-model panels gain little to nothing.
+
+### PEAR: Rotate Roles to Prevent Positional Bias (arXiv:2606.20621)
+Fixed topologies: persistent positional biases, amplification of unreliable agents,
+high sensitivity to role assignments. PEAR dynamically reconfigures roles each round.
+
+Precedence stack (earlier items win):
+  1. Round-0 independence gate — collect all answers independently first
+  2. Skip-if-agree — skip extra debate rounds (including PEAR) only AFTER the diversity gate has passed (>=2 distinct evidence refs confirmed)
+  3. PEAR/role rotation — apply only after confirmed Round-0 disagreement
+
+Rules (when debate proceeds past Round-0):
+  - No agent occupies the same communication role in consecutive rounds
+  - Use sparse topology (not all-to-all) to reduce routing complexity
+  - Switch based on evolving agent state (e.g. confidence, recent accuracy)
+  - Rotate at least once if debate goes beyond 2 rounds
+  NOTE: Gains require ≥2 diverse model families. Same-model swarm: PEAR provides
+  minimal diversity benefit beyond role labeling.
+
+### Domain-Dependent Role Bottleneck (arXiv:2606.20629)
+Heterogeneous teams (different models per role) improve accuracy 44% or cut cost 12x
+vs homogeneous teams — but the bottleneck role is domain-dependent.
+
+Diagnostic:
+  - Ablate each role (planner, executor, verifier) independently
+  - Measure accuracy impact per role ablation
+  - Assign the strongest model to the bottleneck role; cheaper models elsewhere
+  - Reassess per domain; do not carry one assignment across task types
+
+### Agent Contracts: Declare Budgets Before Activation (arXiv:2601.08815)
+Contract algorithms specify computation budgets before activation.
+
+EMPIRICAL CLAIMS CAVEAT: The 90% token reduction, 525x lower variance, and
+zero conservation violations are from the paper's formal contract runtime —
+a purpose-built enforcement layer. Hermes delegate_task does NOT enforce
+max_turns/max_tool_calls/max_tokens as hard constraints. These claims do NOT
+transfer to Hermes prompt-level goal specifications.
+
+Advisory protocol for delegate_task (NOT enforced by runtime):
+  - Declare before spawning: {max_turns, max_tool_calls, max_tokens, timeout, success_criteria}
+    in the child goal so the agent self-governs
+  - State budget conservation in the goal: 'do not spawn subagents that together
+    would exceed N total tool calls'
+  - Request partial results in the output schema: children must return valid output
+    even if interrupted
+  NOTE: 'On budget breach: halt the child cleanly' requires runtime enforcement
+  that does not exist. The child can only self-enforce via its own goal prompt.
+
+
+Open-ended tasks (code, analysis, reasoning): use list-wise DCR aggregation
+  (adaptive-agent-reasoning skill, dcr-reconcile.py). Never majority-vote open-ended.
+Closed claims (fact-check, classification, yes/no): independent samples + majority vote
+  (arXiv:2508.17536 — debate without correction-biased updates is a martingale).
+Never mix aggregators: pick by task type at the start, not per round.
+
+### Never Run Unguided Homogeneous PEER DEBATE (arXiv:2605.00914)
+Clarification: this ban is on UNGUIDED SAME-MODEL PEER DEBATE, NOT on independent
+  same-model samples (verbalized sampling is OK; peers exchanging chat is not OK).
+N=10 unguided 7-8B debate: sycophantic conformity up to 85.5%, correct answers flipped
+  70%, consensus collapse 32.3pp, 2.1-3.4x tokens vs isolated self-correction.
+Note: these figures are for 7-8B models in unguided debate; not Sonnet/Grok operating numbers.
+Independent samples from same model: allowed; just don't let them see each other's reasoning.
+
+### Progressive Consensus (HCP-MAD arXiv:2604.09679 + ARMOR-MAD arXiv:2606.13197)
+Round 0 MUST be independent (no peer context). Only after collecting independent answers:
+  Step 1: Spawn 2 role-diverse agents with DIFFERENT assigned solution paths (arXiv:2601.05746
+    DynaDebate: Path Generation Agent assigns distinct sketches; not random init).
+  Step 2: If they agree AND diversity gate passed (>=2 distinct evidence refs) -> stop extra debate. Unanimous paraphrases of one chain -> steelman, then reduce.
+  Step 3: If they disagree -> one structured exchange. Attack intermediate steps not final answer.
+  Step 4: If still disagree -> optional 3rd round + aggregation by task type.
+Do NOT present all-to-all unlimited rounds by default.
+
+### Outlier Down-weighting vs Minority Sentinel — Explicit Precedence
+SOD (semantic outlier down-weighting, arXiv:2606.13197) runs as a PRE-FILTER only.
+Minority Sentinel (arXiv:2606.29270) runs AFTER SOD and c
+[...TRUNCATED FOR DISPLAY...]
+
+================================================================================
+SKILL: agent-runtime-loop-patterns
+================================================================================
+---
+name: agent-runtime-loop-patterns
+description: "Use when tuning per-turn/per-tool guardrails, retry logic, or self-correction in an existing agent loop. Covers tool schema, MCP context, failure recovery. Not for greenfield harness architecture (use harness-first-agent-design). For loop architecture/design use autonomous-agent-loop-design."
+version: 1.7.1
+triggers:
+  - tuning existing agent loop guardrails or failure recovery logic
+  - tuning tool selection, schema efficiency, or MCP tool context management
+  - multi-turn conversation state management or context ceiling problems
+  - parallel tool call batching or grouping strategies
+  - agent self-correction, reflection, or repair patterns
+  - "how many tools should I expose to the agent"
+  - "my agent is hitting a context ceiling"
+  - "agent keeps retrying the same failed approach"
+  - "how do I make agent self-correction work"
+  - tool schema eviction or MCP context management
+related_skills:
+  - autonomous-agent-loop-design
+  - harness-first-agent-design
+  - hermes-context-hygiene
+  - hermes-cron-and-agents
+  - claude-routing-hierarchy
+  - trajectory-risk-guardrail
+  - stalled-session-recovery
+  - hermes-context-budgeting
+  - browser-agent-ops
+  - self-improve-agent
+---
+
+# Agent Runtime Loop Patterns
+
+Research-grounded patterns for agent loop design, tool use efficiency, state management, and self-correction. Findings from 2025–2026 arXiv papers, with concrete Hermes config/code implications.
+
+See `references/agent-runtime-research-2025-2026.md` for the full evidence base (10+ papers with quantified results, non-English sources, and community practitioner reports).
+
+---
+
+## 1. Loop Guardrails & Failure Recovery
+
+### Phantom Guardrail Problem (arXiv:2607.13083, Jul 2026)
+
+Self-improving harnesses that read failing episodes and propose scaffold edits **hallucinate failures in 25% of runs** and install permanent guardrails against them.
+
+**Three conditions that cause phantom guardrails (all three must co-occur):**
+1. A rule-shaped pattern in the input
+2. An open-ended rule set (not closed/enumerated)
+3. An instruction that *presupposes* failures exist
+
+Remove any one → fabrication disappears. Inside an add-only accept loop, phantom guardrails re-enter even without condition 3 — the loop's "keep adding" role supplies the presupposition.
+
+**Standard "suppression-only" acceptance cannot detect phantom guardrails** because a phantom guardrail changes no true outcome and cannot improve an already-perfect suppression score.
+
+**Hermes pattern:** Fixed guardrail thresholds (warn at 2 exact failures / 3 same-tool failures) are safer than dynamic adaptive thresholds. If ever implementing harness self-optimization:
+- Require ≥1 verified true-positive suppression before accepting a new guardrail
+- Use delete-allowed loops, not add-only loops
+- Test proposed guardrails against clean "featureless" input before accepting
+
+### Typed Failure Memory: MERIT Pattern (arXiv:2608.05906, Aug 2026)
+
+Maintaining a **dual-polarity failure store** (successful repairs + failed repair directions), typed by failure category, improves iterative repair accuracy by 3–3.5pp without retraining.
+
+**Key mechanics:**
+- 5–7 failure type categories (auth/schema/timeout/rate-limit/parse/permission/unknown)
+- Coarse failure-type classifier conditions retrieval before each repair attempt
+- **Negative memory** (what NOT to retry) is as important as positive corrections
+- Schema-local experience gives the most consistent gain
+
+**Hermes pattern:** When a tool fails and `api_max_retries=1` triggers, the retry record should include: failure_type, attempts_tried, resolution. Reuse within a session to avoid cycling through already-failed repairs.
+
+**Retry layers — do not mix the numbers:**
+1. **Transport** — `api_max_retries`: automatic re-issue of the *same* call. Keep at 1.
+2. **Class-based** — `retry-budget-guard.py` (TRANSIENT / RESOURCE / SEMANTIC / AUTH / FATAL). Only after classifying the error. Details: `references/python-runtime-pitfalls-aug2026.md`.
+3. **Loop** — same tool + same args ≥3 → RETRY_LOOP / LivePlan / circuit-breaker Rung 1. That 3 is a *switch/steer trigger*, not "retry three more times".
+Phantom guardrail warns at 2 exact failures / 3 same-tool failures — same loop layer, not a fourth budget.
+
+---
+
+### Inertia Pattern: Complete In-Flight Transitions Before Recovery (Cordis, Aug 2026)
+
+Source: Cordis §4.3.3 + §4.4, Shi/Zhang/Cui (Peking University + DeepSeek-AI, Aug 2026).
+
+**Principle:** A transition in progress runs to completion before the system responds to a
+dependency state change. Recovery retries that fire before an in-flight transition settles
+create partial-write corruption in shared state (memory, files, config).
+
+**Pattern:**
+1. Dependency failure detected mid-run → flag it, do NOT re-dispatch immediately.
+2. All in-flight sibling tasks run to their current iteration boundary (checkpoint).
+3. Only after all in-flight work reaches a stable state does the orchestrator evaluate
+   the new dependency state and decide on retry vs escalate.
+
+**When to skip inertia:** pure read-only tasks (search, extract) with no shared write
+state may be cancelled and retried immediately — no partial-write risk.
+
+**Contrast with MERIT pattern (above):** MERIT classifies failure types for better retry
+direction. Inertia determines WHEN to retry. They compose: apply inertia to determine the
+retry window, then use MERIT to pick the correct retry strategy within that window.
+
+---
+
+## 2. Tool Selection & Schema Efficiency
+
+### Tool Schema Eviction: MemTool Pattern (arXiv:2507.21428, Jul 2025)
+
+Tool schema eviction is **more impactful than message compression** for multi-turn agents. Fixed context windows are the primary multi-turn bottleneck.
+
+**Results on 13+ LLMs, ScaleMCP benchmark (100 consecutive interactions):**
+- Reasoning LLMs (autonomous eviction): 90–94% tool removal efficiency (3-window average)
+- Medium-sized models (autonomous eviction): 0–60% — need deterministic eviction policy
+- Hybrid mode: best task completion + effective removal combined
+
+**Hermes pattern:** Message compression (`micro_compact`) is a separate layer from tool-schema eviction. Prefer **event-aligned** compaction at tool-call commit boundaries (see CommitKV in `references/extended-runtime-patterns.md`) over a fixed every-N-turns rule. For many-MCP-tool sessions: track relevance decay per tool per turn and evict stale tool schemas independently of message compression. Smaller models need deterministic eviction; larger models can use autonomous eviction.
+
+### HyperTool: Code-Block Batching (arXiv:2606.13663, Jun 2026)
+
+Step-wise atomic tool calls create an **execution-granularity mismatch**: deterministic sub-workflows unfolded into repeated model-visible decisions, consuming context and forcing low-level dataflow management in the reasoning trace.
+
+**Results on MCP-Universe benchmark:**
+- Qwen3-32B: 15.69% → 35.29% accuracy (+125% relative)
+- Qwen3-8B: 9.93% → 33.33% accuracy (+235% relative)
+- Surpasses GPT-OSS and Kimi-k2.5
+
+**Hermes pattern:** For deterministic sequential tool sub-workflows (read-file → parse → write-file), wrap as a single compound tool call. Reduces context inflation AND removes unnecessary decision overhead at each intermediate step. Goes beyond parallel batching: covers sequential dependencies too.
+
+### Type-Affinity Fusion: LLM-Tool Compiler (arXiv:2405.17438, May 2024)
+
+Runtime fusion of **similar-type** tool operations into a single unified function before presenting to the LLM.
+
+**Results on large-scale Copilot platform:** 4× more parallel calls; −40% token cost; −12% latency.
+
+**Hermes pattern:** When scheduling parallel calls, group same-type tools together and present them as a fused call rather than individual operations.
+
+### Per-Step Context Narrowing: AOrchestra (arXiv:2602.03786, Feb 2026, Chinese institutions)
+
+Agent abstracted as `(Instruction, Context, Tools, Model)` tuple, concretized per step. Curates task-relevant context and selects tools at each step rather than forwarding wholesale.
+
+**Results:** +16.28% relative improvement over strongest baseline on GAIA/SWE-Bench/Terminal-Bench.
+
+**Hermes pattern:** Context forwarded to delegated subagents should be narrowed per sub-task. Passing full conversation history directly degrades performance. Scope context slices to what the subagent's specific task needs.
+
+### Fewer Tools Often Beat More: Sketch.dev Production Finding (HN, May 2025)
+
+A 9-line agent loop with a **single `bash` tool** is surprisingly effective for a wide class of tasks — no tool selection overhead, no schema management complexity.
+
+**Hermes pattern:** Reduce active tool surface for simpler tasks. Tool descriptions should explain *when not to use* a tool to reduce false-positive selection.
+
+### SkillTrace: Dependency-Aware Skill Graph Traversal (arXiv:2608.02356, Aug 2026) ⭐ CODE
+
+Flat embedding search for skill selection misses **skill dependencies** — skill A retrieved for step 3 may require skill B that wasn't retrieved for step 1. SkillTrace builds a three-level graph: (1) decompose task into sub-queries, (2) embed sub-queries against skill library, (3) propagate skill dependency edges to auto-include required prerequisites.
+
+SOTA: 53.17% SkillsBench, 91.43% ALFWorld.
+
+**Hermes implementation:** skill prerequisite edges belong in `hermes-agent-skill-authoring` / `hermes-semantic-skill-routing`. Do not invent a `requires:` frontmatter field from this skill. At load time, resolve declared dependencies so skill A is not applied without B's pitfalls.
+
+### Practitioner-Confirmed Tool Reliability Fixes (r/LocalLLaMA Aug 2026, production)
+
+Independent from papers — these are field-discovered by practitioners shipping agent products:
+
+**Idempotency markers (confirmed ~80% reduction in duplicate writes):** Add "[IDEMPOTENT: safe to retry]" or "[DESTRUCTIVE: verify before calling]" inline in tool descriptions. Low implementation cost; agents read and respect this. The most common cause of silent data corruption in production loops.
+
+**Structured error returns over exception traces:** When a tool fails, return `{"error": "reason", "suggested_fix": "..."}` in the tool result instead of raising an exception. Models recover from structured error returns far more reliably. Exception stack traces are optimized for human reading, not LLM recovery.
+
+**Dry-run mode for destructive tools:** Add `dry_run: bool` parameter to any tool with side effects. Agents learn to dry-run first, then execute. Catches ~90% of destructive mistakes before they happen.
+
+**Retry cap at 3 with exponential backoff + escalation:** After 3 *loop-layer* failures (same tool / same args), switch or escalate — see Retry layers above. Two is too few for transients; four or more wastes budget. This is not `api_max_retries` and not the 5-class transport budget.
+
+**Dynamic tool injection (most-impactful harness fix, independently confirmed):** Practitioners report >12 tools in the schema causes noticeable degradation in tool-selection accuracy. Present only the tools relevant to the current task phase. This was the most-upvoted practical tip across multiple production communities in Aug 2026 — confirmed by multiple independent deployments, not just the Aethelgard paper. It is first-class production advice, not an optimization.
+
+### Canary Tools: 6-Type Tool Selection Failure Taxonomy (arXiv:2608.04719, Aug 2026) ⭐ CODE
+
+CSR (Canary Susceptibility Rate) varies **36	imes across models**. Six failure types:
+| Type | Description | Most affected |
+|---|---|---|
+| Semantic decoys | Similar-sounding tool with different purpose | Small models |
+| Parameter traps | Same tool name but wrong param signature | Small models |
+| Capability mirages | Tool described as able to do X but cannot | Frontier models |
+| Prerequisite blindness | Tool requires prior tool not selected | All |
+| Temporal decoys | Tool only valid in certain system states | Medium |
+| Granularity traps | Too-coarse or too-fine tool for task | All |
+
+Re-measure CSR on the *live* model; do not hard-code a winner. Capability mirages uniquely trap frontier models.
+
+**Hermes pattern:** Use the 6-type taxonomy as a test checklist for every new tool/MCP schema. During development: plant one capability mirage and one prerequisite blindness canary and verify the model catches them. Required: explicit `when_not_to_use:` in tool descriptions (addresses granularity traps). Cross-ref: `hermes-skillspector-guard-maintenance` for the safety test harness.
+
+### Tool-Use Policy Distribution Shift (arXiv:2609.00467)
+
+Tool availability, schemas, and SLAs are not stationary. Treat a change in the tool surface as a **policy distribution shift**, not as a one-off error.
+
+Four shift types:
+1. **Tool unavailable** — previously callable tool missing from schema / MCP / auth gate
+2. **Schema change** — same tool name, different parameters or return shape
+3. **New-tool available** — a better or replacement tool appeared mid-session
+4. **SLA latency degradation** — tool still works but latency/success diverges from the session baseline
+
+**Rules:**
+- Track in-session tool latency estimate: note roughly when each tool call starts and ends (agent-estimated via turn count, not a precise logger). If the same tool takes noticeably longer or fails more in turns N through N+5 than it did in turns 1 through 5, treat as candidate degradation. This is an agent-estimated heuristic, not an instrumented baseline — relabel to cobra/outcome-logger latency field when available.
+- On first tool error: **pause** and compare the live schema vs prior calls in this session before retrying. Do not treat a schema-mismatch as a transient.
+- Alert (log warning **and** note in the tool result) if **2+ tools degrade together in the same turn** — correlated SLA drop, not independent flakes.
+- Retry **once** with a fallback tool if one is available (PlanBench-XL fallback path). Do **not** blindly retry the same failing tool.
+
+Pairs with BENCH2ROBUST retry/switch/abstain and PlanBench-XL pre-declared fallbacks. Environment-shift rule for skills: `hermes-operating-pattern` Harness Effect.
+
+---
+
+## 3. Multi-Turn State Management
+
+### OODA-Tool separation (arXiv:2608.24368) ★ HIGH
+Direct function-calling and ReAct couple state tracking and action generation in one
+autoregressive stream → state-action competition (next call overwrites earlier state).
+
+**Hermes pattern (manual OODA):**
+1. **Observe** — reconstruct task state from WM (`working-memory.py show|skill-hint`), not only chat tail.
+2. **Orient** — update progress/next/must-constraints in WM before choosing tools.
+3. **Decide** — name the next action and why it matches current WM (one line).
+4. **Act** — issue tool call(s). Do not invent state inside the tool-call arguments.
+
+Long-horizon: skill selection is driven by WM needs (Recuris 2608.24876), while durable
+lessons stay in experiential memory (Hindsight/Graphiti/skills).
+
+### Session-as-Event-Log: Selective Slice Loading (Anthropic Engineering, Apr 2026)
+
+Store the full session as an **ordered, append-only event log outside the context window**.
+Inject only positional slices: `getEvents(from_turn, to_turn)` rather than compacting irreversibly.
+
+Key properties:
+- Every event is immutable once written — no destructive compression of past events
+- Slices are loaded on demand: "last 10 events", "events before action X", "events where tool=Y"
+- The harness transforms the slice before injecting (strip raw tool payloads, keep summaries)
+- Context stays bounded regardless of session length; recall is selective not exhaustive
+
+**Hermes mapping:**
+- Hermes's SQLite session DB already stores events as rows — `session_search` is the slice mechanism
+- The compaction pipeline should treat the session DB as the primary source of truth and
+  the in-context window as a working-memory projection, not the authoritative record
+- `session_search(session_id=..., around_message_id=..., window=N)` is the `getEvents(from, to)` call
+- Implication: do NOT rely on compaction to preserve full fidelity — query the DB instead
+
+**Brain/Hands decoupling (same paper):**
+- Orchestrator (brain) decides what to do — uses a powerful/expensive model, runs rarely
+- Executor (hands) actually calls tools — can use fast/cheap model, runs many times
+- Enables parallel execution: multiple hands can run simultaneously under one brain
+- Already present in Hermes via `delegate_task` — the formal pattern validates this design
+
+### Context Ceiling & Verification Gap (arXiv:2602.18998, Feb 2026, CMU)
+
+Two fundamental limits prevent test-time scaling from working in practice:
+
+**Context ceiling (sequential scaling):** Performance degrades as agents accumulate tool results. More turns ≠ better results.
+
+**Verification gap (parallel scaling):** Sampling multiple trajectories fails — agents cannot reliably self-verify which result is best without ground truth.
+
+All 10 tested LLM agents showed "substantial performance degradation" in general-agent settings.
+
+**Hermes pattern:**
+- `agent.max_turns=500` is a ceiling, not a target
+- Adaptive compression should trigger based on **tool-result density** (proportion of context that is raw tool output), not just total character count
+- `verify_on_stop=auto` addresses the verification gap correctly — always verify externally
+- `compression.threshold=0.5` (live config as of Sep 2026 — verify with `grep threshold ~/.hermes/config.yaml`) may need to trigger earlier based on tool density — set it at session start if tool-heavy work is anticipated, not mid-session
+
+**Community confirmation (Reddit r/LocalLLaMA, Dec 2025):** Over-isolation → incompatible changes; over-sharing → eliminates parallel benefit. The right level is interface/schema context only, not full conversation history.
+
+---
+
+## 4. Self-Correction Patterns
+
+### Reflexion: Verbal Episodic Buffer on Task Failure (arXiv:2303.11366)
+
+ReAct already gives Hermes action–observation via the tool-call loop. Reflexion adds a **post-failure verbal trace** used on the *next attempt*, not a skill patch.
+
+When a **task/attempt** fails (verifier/tests/user correction/stop-fail) — not a single recovered tool error:
+
+1. Write one structured reflection with `hindsight_retain` (`context="reflexion-failure"`, tags `reflexion`, `failure`, `task_type:<slug>`): what failed, why, what to try next.
+2. On the next attempt of that task type, recall those tags **before** choosing tools; do not repeat `what_failed`.
+3. Do not `skill_manage` from this step. Recurring same-`why` failures (≥3) escalate to the human-gated path in `self-improve-agent`.
+
+Full template and EvoAgent distinction: `self-improve-agent` § Reflexion verbal episodic buffer. In-loop retries stay MERIT / LivePlan / circuit-breaker; this buffer is for the attempt boundary.
+
+### Prospective Reflection: PreFlect (arXiv:2602.07187, Feb 2026)
+
+Existing reflection is **retrospective**: act → fail → correct. PreFlect introduces **prospective** reflection: critique and refine plans *before* execution, distilled from historical trajectory error patterns.
+
+"Significantly improves overall agent utility on complex real-world tasks, outperforming strong reflection-based baselines and several more complex agent architectures."
+
+**Hermes pattern:** Before beginning a multi-step tool call sequence:
+1. Outline the planned tool call sequence
+2. Ask the model to identify likely failure modes from prior similar tasks
+3. Revise the plan to avoid them before execution begins
+
+### Per-Stage ODR Loop: REGREACT (arXiv:2604.12054, Apr 2026)
+
+Each pipeline stage implements **Observe-Diagnose-Repair (ODR)**: validate → diagnose → repair. Outperforms GPT-4o single-pass on all structural and semantic metrics.
+
+**Hermes pattern:** `verify_on_stop` operates at the task level. ODR operates at the tool-call level. For tools producing structured output (JSON, code), a lightweight schema validator at each tool boundary prevents downstream error cascade. The two are complementary.
+
+### Tool Synthesis Self-Correction (arXiv:2502.11705, ACL 2025)
+
+Agents dynamically synthesize new Python tool functions from task descriptions and self-critique the tool before using it.
+
+**Hermes pattern (soft version):** When a tool call fails with a schema error, allow the model to suggest an improved tool schema/description and cache the session-local improvement for subsequent calls.
+
+### Self-Improvement Hype vs. Reality (r/LocalLLaMA + HN Aug 2026, practitioner-confirmed)
+
+These patterns were validated or disproven in production deployments independent of academic research:
+
+**Works:** Test-driven self-improvement (external, static test suite as the evaluation signal). Error carry-forward (`ERRORS.md` with root cause; inject last 5 at session start; 30–40% reduction in repeated mistakes). Skill versioning with performance snapshots (roll back on regression). Peer review between model variants (15–25% quality gain on complex tasks; critic must have different framing from generator).
+
+**Does NOT work in production:**
+- Recursive self-improvement loops ("agent improves itself, improved agent improves itself"): converges to local optima and collapses; agent optimizes for its evaluation metric, not actual performance. Universal practitioner report: dead end without a fixed external evaluator.
+- Fully autonomous skill generation without human review: self-generated skills drift from actual runtime capabilities within 2–3 iterations, hallucinating tool capabilities that don't exist.
+- Continuous memory consolidation without human checkpoints: automated compression without periodic validation accumulates confident-but-wrong beliefs.
+- Automatic tool discovery at runtime: agents select plausible-sounding tools that don't exist or have unmodeled side effects.
+
+**The core principle:** self-improvement works when it's *improvement against a fixed external benchmark*. The fixedness of the evaluation signal is what separates "helpful self-tuning" from "reward hacking." The eval is the most important part of the harness for self-improvement, not the loop itself.
+
+---
+
+## 5. Monitoring, Safety Evolution & Efficiency (Aug 2026)
+
+### PlanBench-XL: Pre-declare Fallback Tool Paths (arXiv:2606.22388)
+
+327 retail tasks over 1,665 tools. GPT-5.4 dropped from 51.90% → 11.36% success under
+realistic tool ecosystem failures. Two failure modes dominated: (1) missing explicit error
+signals — agent can't detect it failed; (2) recovery required discovering a longer
+alternative path the agent had no prior knowledge of.
+
+**Hermes pattern:** For any task with more than 3 sequential tool calls, before execution:
+1. Identify the 1-2 highest-risk tool calls (external API, auth-gated, flaky service)
+2. Pre-declare one fallback path for each: "if X fails → try Y instead"
+3. Ensure every tool call produces an explicit success/failure signal — never infer success
+   from absence of error. Check return values, status codes, or read back the written state.
+
+This pairs with the failure-type classifier below (retry logic) — PlanBench is about
+knowing *where to go next*, the classifier is about *how many times to retry in place*.
+
+### RADEG: Retroactive Policy Generation for Skill Load Gating (arXiv:2608.09168)
+
+Log query-skill-outcome triples → lightweight classifier → gate low-utility skill loads.
+When a skill produces no actionable output for 3+ consecutive sessions on the same trigger,
+flag it for removal from auto-routing. Routing layer: `hermes-semantic-skill-routing`.
+ATP approval logs as training signal: `mnemosyne-atp-safety`.
+
+Paper-level patterns extracted to `references/extended-runtime-patterns.md` (load on demand):
+Salience induction defense, zero-replay event KG, SHE 4-artifact evolution, CommitKV
+event-aligned compaction, ATP-Bench planning failures, PSE cross-session contamination,
+EASy milestone routing, DreamGuard prefix-risk (`trajectory-risk-guardrail`).
+
+
+Decouples trajectory monitoring from correction: a **deterministic rule-based monitor** scans general trajectory signals (repeated actions, no-progress streaks, empty patches) without invoking an LLM; an **advisor LLM is called only when the monitor fires**. Achieves +9.9% average issue-resolution on SWE-bench at $0.08/instance additional cost.
+
+**Hermes pattern:** Implement as a SQLite-backed loop watchdog:
+1. After each tool call, write `(turn, tool_name, success, result_hash)` to a session table.
+2. If `COUNT(*) WHERE tool_name=X AND success=0 >= 3` OR `result_hash matches previous turn` → trigger a corrective prompt: "You've tried X three times and failed. What alternative approach should you take?"
+3. No LLM call for the monitoring step — pure SQL.
+
+SHE / CommitKV / ATP-Bench / PSE / EASy / DreamGuard: `references/extended-runtime-patterns.md`.
+Event-aligned compaction (CommitKV principle) is the rule for micro-compact; do not use a fixed every-N-turns cadence.
+Long `computer_use` prefix-risk: `trajectory-risk-guardrail`. Milestone executor 
+[...TRUNCATED FOR DISPLAY...]

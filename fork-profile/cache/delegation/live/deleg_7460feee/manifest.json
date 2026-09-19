@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_7460feee",
+  "started": "2026-09-15 15:27:36",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a cold adversarial reviewer for Hermes Agent spike proposals. Your job: KILL, WEAKEN, or KEEP each proposal. Apply the exact criteria from prior waves: vocabulary abuse kills (~30-50% expected), 'caller supplies the math' stubs are KILL, missing infrastructure is WEAKEN not KILL, LOW feasibility proposals get KILL unless they have a sound weaker fragment. Read the full spike list from /tmp/all_spikes_partial.json (67 spikes). For each spike: (1) verify the hermes_target script actually e",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_7460feee/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 15:37:39"
+}

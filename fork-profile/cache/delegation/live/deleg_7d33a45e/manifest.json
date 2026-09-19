@@ -1,0 +1,45 @@
+{
+  "delegation_id": "deleg_7d33a45e",
+  "started": "2026-09-19 18:45:03",
+  "task_count": 5,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Fix concept-lattice-index.py: replace the sha256 % n_clusters random-partition cluster assignment with TF-IDF cosine-similarity k-means (stdlib-only, no numpy/sklearn).\n\nSpec:\n1. Read ~/.hermes/scripts/concept-lattice-index.py fully (paginate 200-line chunks). Understand rq_kmeans_assign() and how its output feeds into build_formal_context().\n2. Replace rq_kmeans_assign() with real TF-IDF + cosine k-means using only stdlib (math, collections, re, hashlib):\n   - Tokenise: lowercase, split on non-",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_7d33a45e/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Wire adaptive-ttl-state.json into memory-ttl-purge.py: currently the adjuster writes adjusted TTLs that memory-ttl-purge.py never reads.\n\nSpec:\n1. Read ~/.hermes/scripts/recall-miss-ttl-adjuster.py fully (139 lines).\n2. Read ~/.hermes/scripts/memory-ttl-purge.py lines 1-130. Understand _load_ttl_config() and TTL_POLICY dict structure.\n3. Patch _load_ttl_config() to additionally check adaptive-ttl-state.json after existing config.yaml logic:\n   - Path: _hermes_root / 'cache' / 'adaptive-ttl-state",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_7d33a45e/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Wire CapabilityGrant and check_grant() into tool-auth-gate.py's evaluate_tool_request().\n\nSpec:\n1. Read ~/.hermes/scripts/tool-auth-gate.py lines 130-300.\n2. Read lines 1-50 and 300-464 for full context.\n3. In evaluate_tool_request(), add a CapabilityGrant check at the top of the function:\n   - Path for grant file: use profile-aware path:\n     import os as _os_tag; _b=Path(_os_tag.environ.get('HERMES_HOME',str(Path.home()/'.hermes'))); _p=_os_tag.environ.get('HERMES_PROFILE',''); _root_tag=(_b/'",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_7d33a45e/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Build cross-calibration-monitor.py to detect drift across the three independent calibration silos.\n\nSpec:\n1. grep -rn 'reasoning.calibration' ~/.hermes/scripts/ to find the source and schema of reasoning-calibration.jsonl.\n2. Read ~/.hermes/scripts/calibration-threshold-updater.py (74 lines) for calibration-log.jsonl schema.\n3. Read ~/.hermes/scripts/memory-query-router.py lines 50-90 for routing-calibration.jsonl schema.\n4. Write ~/.hermes/scripts/cross-calibration-monitor.py stdlib-only:\n   - ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_7d33a45e/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 4,
+      "goal": "Fix plan-enforcement-gate.py TOCTOU race with a signed Plan Execution Token (PET).\n\nSpec:\n1. Read ~/.hermes/scripts/plan-enforcement-gate.py fully (paginate 200-line chunks).\n2. Understand: what does cmd_check() return (stdout JSON format)? Who calls it?\n3. Add Plan Execution Token (PET) system:\n   a. Add _pet_session_key() helper: reads/creates cache/pet-session-key (32 random bytes, written atomically as hex). Uses profile-aware path:\n      import os as _os_peg; _b_peg=Path(_os_peg.environ.get",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_7d33a45e/task-4.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 18:47:47"
+}

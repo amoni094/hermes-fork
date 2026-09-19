@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_a31123c1",
+  "started": "2026-09-19 20:17:57",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Cold adversarial review of wave-10 fixes to hermes-fork scripts. Verify each claim against actual file contents. Report PASS/FAIL/PARTIAL per claim with evidence. Flag any new issues introduced. Write report to /tmp/adversarial_wave10.md.",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_a31123c1/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 20:22:02"
+}

@@ -1,0 +1,1346 @@
+
+==================================== ERRORS ====================================
+______________ ERROR collecting tests/eval/test_judge_harness.py _______________
+ImportError while importing test module '/tmp/hello_agent/tests/eval/test_judge_harness.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/eval/test_judge_harness.py:10: in <module>
+    from src.eval.judge_harness import score_atomic_unit
+src/eval/judge_harness.py:27: in <module>
+    from src.pipeline.agents.prompting import safe_template_format
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+____________ ERROR collecting tests/evidence/test_atomic_support.py ____________
+ImportError while importing test module '/tmp/hello_agent/tests/evidence/test_atomic_support.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/evidence/test_atomic_support.py:5: in <module>
+    from src.pipeline.evidence.atomic_support import (
+src/pipeline/evidence/atomic_support.py:28: in <module>
+    from src.tools.verify_quote import _fuzzy_find
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+__________ ERROR collecting tests/evidence/test_gate_claim_support.py __________
+ImportError while importing test module '/tmp/hello_agent/tests/evidence/test_gate_claim_support.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/evidence/test_gate_claim_support.py:17: in <module>
+    from src.pipeline.evidence.gates import claim_support as claim_support_module
+src/pipeline/evidence/gates/claim_support.py:25: in <module>
+    from strands import Agent
+E   ModuleNotFoundError: No module named 'strands'
+_________ ERROR collecting tests/evidence/test_gate_quote_grounding.py _________
+ImportError while importing test module '/tmp/hello_agent/tests/evidence/test_gate_quote_grounding.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/evidence/test_gate_quote_grounding.py:14: in <module>
+    from src.pipeline.evidence.gates.quote_grounding import (
+src/pipeline/evidence/gates/quote_grounding.py:28: in <module>
+    from src.tools.verify_quote import _fuzzy_find
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+____________ ERROR collecting tests/evidence/test_gate_registry.py _____________
+ImportError while importing test module '/tmp/hello_agent/tests/evidence/test_gate_registry.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/evidence/test_gate_registry.py:8: in <module>
+    from src.pipeline.evidence import gate_registry
+src/pipeline/evidence/gate_registry.py:16: in <module>
+    from src.pipeline.evidence.gates.claim_support import ClaimSupportGate
+src/pipeline/evidence/gates/claim_support.py:25: in <module>
+    from strands import Agent
+E   ModuleNotFoundError: No module named 'strands'
+_____________ ERROR collecting tests/evidence/test_integration.py ______________
+ImportError while importing test module '/tmp/hello_agent/tests/evidence/test_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/evidence/test_integration.py:35: in <module>
+    from src.pipeline.evidence.gates.claim_support import ClaimSupportGate, ClaimSupportJudgement
+src/pipeline/evidence/gates/claim_support.py:25: in <module>
+    from strands import Agent
+E   ModuleNotFoundError: No module named 'strands'
+________________ ERROR collecting tests/evidence/test_worker.py ________________
+ImportError while importing test module '/tmp/hello_agent/tests/evidence/test_worker.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/evidence/test_worker.py:28: in <module>
+    from src.pipeline.evidence.worker import process_evidence_event, run_evidence_for_finding
+src/pipeline/evidence/worker.py:30: in <module>
+    from src.pipeline.evidence.gate_registry import build_default_gates
+src/pipeline/evidence/gate_registry.py:16: in <module>
+    from src.pipeline.evidence.gates.claim_support import ClaimSupportGate
+src/pipeline/evidence/gates/claim_support.py:25: in <module>
+    from strands import Agent
+E   ModuleNotFoundError: No module named 'strands'
+___________ ERROR collecting tests/intake/test_live_position_api.py ____________
+ImportError while importing test module '/tmp/hello_agent/tests/intake/test_live_position_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/intake/test_live_position_api.py:8: in <module>
+    from src.intake import api_routes
+src/intake/__init__.py:30: in <module>
+    from .inconsistency_detector import InconsistencyDetector
+src/intake/inconsistency_detector.py:14: in <module>
+    from src.agent import invoke_with_fallback
+src/agent.py:24: in <module>
+    from strands import Agent, ModelRetryStrategy
+E   ModuleNotFoundError: No module named 'strands'
+______ ERROR collecting tests/pipeline/agents/test_compiler_qc_review.py _______
+ImportError while importing test module '/tmp/hello_agent/tests/pipeline/agents/test_compiler_qc_review.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/pipeline/agents/test_compiler_qc_review.py:24: in <module>
+    from src.pipeline.agents.compiler import (
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+___ ERROR collecting tests/pipeline/agents/test_compiler_relevance_screen.py ___
+ImportError while importing test module '/tmp/hello_agent/tests/pipeline/agents/test_compiler_relevance_screen.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/pipeline/agents/test_compiler_relevance_screen.py:6: in <module>
+    from src.pipeline.agents.compiler import (
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+______ ERROR collecting tests/pipeline/hooks/test_cost_and_retry_hook.py _______
+ImportError while importing test module '/tmp/hello_agent/tests/pipeline/hooks/test_cost_and_retry_hook.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/pipeline/hooks/test_cost_and_retry_hook.py:11: in <module>
+    from strands.hooks.events import (
+E   ModuleNotFoundError: No module named 'strands'
+__________ ERROR collecting tests/pipeline/test_compiler_soft_fail.py __________
+ImportError while importing test module '/tmp/hello_agent/tests/pipeline/test_compiler_soft_fail.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/pipeline/test_compiler_soft_fail.py:11: in <module>
+    from strands.multiagent.base import Status
+E   ModuleNotFoundError: No module named 'strands'
+__________ ERROR collecting tests/pipeline/test_consistency_scorer.py __________
+ImportError while importing test module '/tmp/hello_agent/tests/pipeline/test_consistency_scorer.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/pipeline/test_consistency_scorer.py:17: in <module>
+    from src.pipeline.agents.compiler import _apply_consistency_score, _verify_single_item
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+____________ ERROR collecting tests/pipeline/test_delta_analysis.py ____________
+ImportError while importing test module '/tmp/hello_agent/tests/pipeline/test_delta_analysis.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/pipeline/test_delta_analysis.py:15: in <module>
+    from src.pipeline.graph import (
+src/pipeline/graph.py:22: in <module>
+    from strands.hooks import HookRegistry
+E   ModuleNotFoundError: No module named 'strands'
+_______ ERROR collecting tests/pipeline/test_delta_semantic_location.py ________
+ImportError while importing test module '/tmp/hello_agent/tests/pipeline/test_delta_semantic_location.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/pipeline/test_delta_semantic_location.py:9: in <module>
+    from src.pipeline.agents.compiler import CompilationIssue
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+__________ ERROR collecting tests/pipeline/test_middle_loss_shadow.py __________
+ImportError while importing test module '/tmp/hello_agent/tests/pipeline/test_middle_loss_shadow.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/pipeline/test_middle_loss_shadow.py:25: in <module>
+    from src.pipeline.graph import _prior_issue_merger_node
+src/pipeline/graph.py:22: in <module>
+    from strands.hooks import HookRegistry
+E   ModuleNotFoundError: No module named 'strands'
+_ ERROR collecting tests/playbook_authority/eval/test_eval01_fixture_schema.py _
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/eval/test_eval01_fixture_schema.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/eval/test_eval01_fixture_schema.py:30: in <module>
+    from src.playbook_authority import (
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+____ ERROR collecting tests/playbook_authority/scoring/eval/test_harness.py ____
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/scoring/eval/test_harness.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/scoring/eval/test_harness.py:25: in <module>
+    from src.playbook_authority import OfflinePlaybookReadPort
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+_ ERROR collecting tests/playbook_authority/scoring/eval/test_score05_gate.py __
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/scoring/eval/test_score05_gate.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/scoring/eval/test_score05_gate.py:39: in <module>
+    from src.playbook_authority import OfflinePlaybookReadPort
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+__ ERROR collecting tests/playbook_authority/scoring/test_agentcore_action.py __
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/scoring/test_agentcore_action.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/scoring/test_agentcore_action.py:29: in <module>
+    from src.playbook_authority import (
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+___ ERROR collecting tests/playbook_authority/scoring/test_clause_scorer.py ____
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/scoring/test_clause_scorer.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/scoring/test_clause_scorer.py:25: in <module>
+    from src.playbook_authority import (
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+_______ ERROR collecting tests/playbook_authority/scoring/test_floor.py ________
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/scoring/test_floor.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/scoring/test_floor.py:24: in <module>
+    from src.playbook_authority import (
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+_____ ERROR collecting tests/playbook_authority/scoring/test_governance.py _____
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/scoring/test_governance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/scoring/test_governance.py:20: in <module>
+    from src.playbook_authority import PolicyReference, PositionKind
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+_____ ERROR collecting tests/playbook_authority/scoring/test_judge_port.py _____
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/scoring/test_judge_port.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/scoring/test_judge_port.py:24: in <module>
+    from src.playbook_authority import PositionKind
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+_______ ERROR collecting tests/playbook_authority/scoring/test_prompt.py _______
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/scoring/test_prompt.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/scoring/test_prompt.py:26: in <module>
+    from src.playbook_authority import PositionKind
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+_______ ERROR collecting tests/playbook_authority/scoring/test_rollup.py _______
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/scoring/test_rollup.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/scoring/test_rollup.py:27: in <module>
+    from src.playbook_authority import PolicyReference, PositionKind
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+_ ERROR collecting tests/playbook_authority/test_auth04_reference_roundtrip.py _
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/test_auth04_reference_roundtrip.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/test_auth04_reference_roundtrip.py:15: in <module>
+    from src.playbook_authority import (
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+____ ERROR collecting tests/playbook_authority/test_auth07_load_evidence.py ____
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/test_auth07_load_evidence.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/test_auth07_load_evidence.py:21: in <module>
+    from src.playbook_authority import (
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+______ ERROR collecting tests/playbook_authority/test_parsing_grammar.py _______
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/test_parsing_grammar.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/test_parsing_grammar.py:7: in <module>
+    from src.playbook_authority import PositionKind
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+___ ERROR collecting tests/playbook_authority/test_ports_and_version_pin.py ____
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/test_ports_and_version_pin.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/test_ports_and_version_pin.py:12: in <module>
+    from src.playbook_authority import (
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+____ ERROR collecting tests/playbook_authority/test_trace_issue_citation.py ____
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_authority/test_trace_issue_citation.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_authority/test_trace_issue_citation.py:24: in <module>
+    from src.playbook_authority import (
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+______ ERROR collecting tests/playbook_loop/test_loop01_debrief_model.py _______
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_loop/test_loop01_debrief_model.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_loop/test_loop01_debrief_model.py:17: in <module>
+    from src.playbook_authority import PolicyReference, PositionKind
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+______ ERROR collecting tests/playbook_loop/test_loop02_diff_proposal.py _______
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_loop/test_loop02_diff_proposal.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_loop/test_loop02_diff_proposal.py:14: in <module>
+    from src.playbook_authority import OfflinePlaybookReadPort, PolicyReference, PositionKind, lookup_position
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+______ ERROR collecting tests/playbook_loop/test_loop03_republish_pin.py _______
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_loop/test_loop03_republish_pin.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_loop/test_loop03_republish_pin.py:29: in <module>
+    from src.playbook_authority import PositionKind, lookup_position, resolve_pinned_version
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+___________ ERROR collecting tests/playbook_loop/test_loop04_gate.py ___________
+ImportError while importing test module '/tmp/hello_agent/tests/playbook_loop/test_loop04_gate.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/playbook_loop/test_loop04_gate.py:19: in <module>
+    from src.playbook_authority import (
+src/playbook_authority/__init__.py:13: in <module>
+    from .authority import PositionNotFound, get_default_port, lookup_position
+src/playbook_authority/authority.py:12: in <module>
+    from .parsing import is_appendix, iter_sections, position_kind_of, section_id_of
+src/playbook_authority/parsing.py:17: in <module>
+    from src.agentcore_app import parse_playbook_sections  # canonical structural SoT (D2)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+_______ ERROR collecting tests/regulatory_core/test_llm_collaborators.py _______
+ImportError while importing test module '/tmp/hello_agent/tests/regulatory_core/test_llm_collaborators.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/regulatory_core/test_llm_collaborators.py:3: in <module>
+    from src.regulatory_core.llm_collaborators import (
+src/regulatory_core/llm_collaborators.py:17: in <module>
+    from src.agent import invoke_with_fallback
+src/agent.py:24: in <module>
+    from strands import Agent, ModelRetryStrategy
+E   ModuleNotFoundError: No module named 'strands'
+_____________________ ERROR collecting tests/test_ag_ui.py _____________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_ag_ui.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_ag_ui.py:3: in <module>
+    from bedrock_agentcore.runtime.models import SESSION_HEADER
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+___________ ERROR collecting tests/test_agentcore_legacy_helpers.py ____________
+ImportError while importing test module '/tmp/hello_agent/tests/test_agentcore_legacy_helpers.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_agentcore_legacy_helpers.py:3: in <module>
+    from src.agentcore_app import _build_legacy_extract_prompt, _collect_legacy_quote_items
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+________________ ERROR collecting tests/test_agreement_tools.py ________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_agreement_tools.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_agreement_tools.py:10: in <module>
+    from src.tools.agreement_tools import (
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+______________ ERROR collecting tests/test_analysis_telemetry.py _______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_analysis_telemetry.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_analysis_telemetry.py:4: in <module>
+    from src.pipeline.analysis_telemetry import build_runtime_analysis_telemetry
+src/pipeline/analysis_telemetry.py:8: in <module>
+    from src.pipeline.agents.structural import STRUCTURAL_MODE_OFF, resolve_structural_mode
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+________________ ERROR collecting tests/test_call_limit_hook.py ________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_call_limit_hook.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_call_limit_hook.py:8: in <module>
+    from strands.hooks.events import BeforeInvocationEvent, BeforeModelCallEvent, BeforeToolCallEvent
+E   ModuleNotFoundError: No module named 'strands'
+_____________ ERROR collecting tests/test_compiler_mitigations.py ______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_compiler_mitigations.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_compiler_mitigations.py:21: in <module>
+    from src.pipeline.agents.compiler import (
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+________ ERROR collecting tests/test_compiler_policy_reference_stamp.py ________
+ImportError while importing test module '/tmp/hello_agent/tests/test_compiler_policy_reference_stamp.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_compiler_policy_reference_stamp.py:23: in <module>
+    from src.pipeline.agents.compiler import _generate_llm_mitigations
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+___________ ERROR collecting tests/test_compiler_quote_writeback.py ____________
+ImportError while importing test module '/tmp/hello_agent/tests/test_compiler_quote_writeback.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_compiler_quote_writeback.py:10: in <module>
+    from src.pipeline.agents.compiler import _normalize_quote, _verify_single_item
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+_______________ ERROR collecting tests/test_compiler_recovery.py _______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_compiler_recovery.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_compiler_recovery.py:5: in <module>
+    from src.pipeline.agents.compiler import (
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+__________ ERROR collecting tests/test_compiler_scr_claim_support.py ___________
+ImportError while importing test module '/tmp/hello_agent/tests/test_compiler_scr_claim_support.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_compiler_scr_claim_support.py:8: in <module>
+    from src.pipeline.agents.compiler import (
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+_________ ERROR collecting tests/test_contract_family_live_position.py _________
+ImportError while importing test module '/tmp/hello_agent/tests/test_contract_family_live_position.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_contract_family_live_position.py:5: in <module>
+    from src.intake.contract_graph import (
+src/intake/__init__.py:30: in <module>
+    from .inconsistency_detector import InconsistencyDetector
+src/intake/inconsistency_detector.py:14: in <module>
+    from src.agent import invoke_with_fallback
+src/agent.py:24: in <module>
+    from strands import Agent, ModelRetryStrategy
+E   ModuleNotFoundError: No module named 'strands'
+_________________ ERROR collecting tests/test_deal_context.py __________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_deal_context.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_deal_context.py:21: in <module>
+    import src.tools.deal_context_tools as _deal_ctx_tools_mod
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+___________ ERROR collecting tests/test_deep_analyzer_regressions.py ___________
+ImportError while importing test module '/tmp/hello_agent/tests/test_deep_analyzer_regressions.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_deep_analyzer_regressions.py:1: in <module>
+    from src.intake.deep_analyzer import DeepAnalyzer
+src/intake/__init__.py:30: in <module>
+    from .inconsistency_detector import InconsistencyDetector
+src/intake/inconsistency_detector.py:14: in <module>
+    from src.agent import invoke_with_fallback
+src/agent.py:24: in <module>
+    from strands import Agent, ModelRetryStrategy
+E   ModuleNotFoundError: No module named 'strands'
+___________________ ERROR collecting tests/test_demo_mode.py ___________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_demo_mode.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_demo_mode.py:15: in <module>
+    from src.pipeline.analysis_telemetry import build_runtime_analysis_telemetry
+src/pipeline/analysis_telemetry.py:8: in <module>
+    from src.pipeline.agents.structural import STRUCTURAL_MODE_OFF, resolve_structural_mode
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+________________ ERROR collecting tests/test_discovery_pass.py _________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_discovery_pass.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_discovery_pass.py:15: in <module>
+    from src.pipeline.discovery import (
+src/pipeline/discovery.py:23: in <module>
+    from thefuzz import fuzz
+E   ModuleNotFoundError: No module named 'thefuzz'
+_____________ ERROR collecting tests/test_docx_comment_balloons.py _____________
+ImportError while importing test module '/tmp/hello_agent/tests/test_docx_comment_balloons.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_docx_comment_balloons.py:38: in <module>
+    from docx_markup import apply_track_changes
+backend-python/docx_markup.py:30: in <module>
+    from text_matcher import find_text_in_document, normalize_text, strip_section_hint
+backend-python/text_matcher.py:10: in <module>
+    from thefuzz import fuzz
+E   ModuleNotFoundError: No module named 'thefuzz'
+__________________ ERROR collecting tests/test_docx_markup.py __________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_docx_markup.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_docx_markup.py:22: in <module>
+    from docx_markup import (
+backend-python/docx_markup.py:30: in <module>
+    from text_matcher import find_text_in_document, normalize_text, strip_section_hint
+backend-python/text_matcher.py:10: in <module>
+    from thefuzz import fuzz
+E   ModuleNotFoundError: No module named 'thefuzz'
+_____________ ERROR collecting tests/test_dynamo_table_helpers.py ______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_dynamo_table_helpers.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_dynamo_table_helpers.py:19: in <module>
+    from src.intake.session_manager import IntakeSessionManager
+src/intake/__init__.py:30: in <module>
+    from .inconsistency_detector import InconsistencyDetector
+src/intake/inconsistency_detector.py:14: in <module>
+    from src.agent import invoke_with_fallback
+src/agent.py:24: in <module>
+    from strands import Agent, ModelRetryStrategy
+E   ModuleNotFoundError: No module named 'strands'
+_________________ ERROR collecting tests/test_entity_lookup.py _________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_entity_lookup.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_entity_lookup.py:42: in <module>
+    _entity_matcher = _direct_import("src.tools.entity_name_matcher", _SRC / "tools" / "entity_name_matcher.py")
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_entity_lookup.py:32: in _direct_import
+    spec.loader.exec_module(mod)
+src/tools/entity_name_matcher.py:17: in <module>
+    from thefuzz import fuzz
+E   ModuleNotFoundError: No module named 'thefuzz'
+___________________ ERROR collecting tests/test_exec_demo.py ___________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_exec_demo.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_exec_demo.py:16: in <module>
+    from src.pipeline.agents.profiler import profile_and_setup
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+_______________ ERROR collecting tests/test_integration_paths.py _______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_integration_paths.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_integration_paths.py:38: in <module>
+    from src.tools.agreement_tools import (
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+____________ ERROR collecting tests/test_issue_management_tools.py _____________
+ImportError while importing test module '/tmp/hello_agent/tests/test_issue_management_tools.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_issue_management_tools.py:29: in <module>
+    from src.tools.issue_management_tools import (
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+_________________ ERROR collecting tests/test_lambda_routes.py _________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_lambda_routes.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_lambda_routes.py:27: in <module>
+    from src.tools.issue_management_tools import (
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+________________ ERROR collecting tests/test_markup_failures.py ________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_markup_failures.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_markup_failures.py:39: in <module>
+    from src.tools.markup_generation_tools import (
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+____________ ERROR collecting tests/test_markup_generation_tools.py ____________
+ImportError while importing test module '/tmp/hello_agent/tests/test_markup_generation_tools.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_markup_generation_tools.py:30: in <module>
+    from src.tools.markup_generation_tools import (
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+________________ ERROR collecting tests/test_pipeline_agents.py ________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_pipeline_agents.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_pipeline_agents.py:17: in <module>
+    from src.pipeline.agents.compiler import (
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+________________ ERROR collecting tests/test_pipeline_graph.py _________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_pipeline_graph.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_pipeline_graph.py:14: in <module>
+    from src.pipeline.graph import (
+src/pipeline/graph.py:22: in <module>
+    from strands.hooks import HookRegistry
+E   ModuleNotFoundError: No module named 'strands'
+_______________ ERROR collecting tests/test_profile_agreement.py _______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_profile_agreement.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_profile_agreement.py:3: in <module>
+    from src.tools.profile_agreement import (
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+________________ ERROR collecting tests/test_qc_agent_models.py ________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_qc_agent_models.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_qc_agent_models.py:19: in <module>
+    from src.agents.qc_agent.models import (
+src/agents/__init__.py:7: in <module>
+    from .qc_agent import QCAgent, get_qc_agent
+src/agents/qc_agent/__init__.py:16: in <module>
+    from .agent import QCAgent, get_qc_agent
+src/agents/qc_agent/agent.py:14: in <module>
+    from strands import Agent
+E   ModuleNotFoundError: No module named 'strands'
+______________ ERROR collecting tests/test_qc_check_reasoning.py _______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_qc_check_reasoning.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_qc_check_reasoning.py:14: in <module>
+    from src.agents.qc_agent.tools.check_reasoning import (
+src/agents/__init__.py:7: in <module>
+    from .qc_agent import QCAgent, get_qc_agent
+src/agents/qc_agent/__init__.py:16: in <module>
+    from .agent import QCAgent, get_qc_agent
+src/agents/qc_agent/agent.py:14: in <module>
+    from strands import Agent
+E   ModuleNotFoundError: No module named 'strands'
+_______________ ERROR collecting tests/test_qc_strategy_tools.py _______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_qc_strategy_tools.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_qc_strategy_tools.py:16: in <module>
+    from src.agents.qc_agent.tools.strategy_tools import (
+src/agents/__init__.py:7: in <module>
+    from .qc_agent import QCAgent, get_qc_agent
+src/agents/qc_agent/__init__.py:16: in <module>
+    from .agent import QCAgent, get_qc_agent
+src/agents/qc_agent/agent.py:14: in <module>
+    from strands import Agent
+E   ModuleNotFoundError: No module named 'strands'
+_____________ ERROR collecting tests/test_qc_validate_analysis.py ______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_qc_validate_analysis.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_qc_validate_analysis.py:15: in <module>
+    from src.agents.qc_agent.tools.validate_analysis import (
+src/agents/__init__.py:7: in <module>
+    from .qc_agent import QCAgent, get_qc_agent
+src/agents/qc_agent/__init__.py:16: in <module>
+    from .agent import QCAgent, get_qc_agent
+src/agents/qc_agent/agent.py:14: in <module>
+    from strands import Agent
+E   ModuleNotFoundError: No module named 'strands'
+_______________ ERROR collecting tests/test_qc_validate_draft.py _______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_qc_validate_draft.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_qc_validate_draft.py:15: in <module>
+    from src.agents.qc_agent.tools.validate_draft import (
+src/agents/__init__.py:7: in <module>
+    from .qc_agent import QCAgent, get_qc_agent
+src/agents/qc_agent/__init__.py:16: in <module>
+    from .agent import QCAgent, get_qc_agent
+src/agents/qc_agent/agent.py:14: in <module>
+    from strands import Agent
+E   ModuleNotFoundError: No module named 'strands'
+_________________ ERROR collecting tests/test_report_tools.py __________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_report_tools.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_report_tools.py:9: in <module>
+    from src.tools.report_tools import (
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+____________ ERROR collecting tests/test_runtime_security_fixes.py _____________
+ImportError while importing test module '/tmp/hello_agent/tests/test_runtime_security_fixes.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_runtime_security_fixes.py:8: in <module>
+    from src import agentcore_app as runtime_main
+src/agentcore_app.py:26: in <module>
+    from bedrock_agentcore.runtime import BedrockAgentCoreApp
+E   ModuleNotFoundError: No module named 'bedrock_agentcore'
+_______________ ERROR collecting tests/test_servicenow_parity.py _______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_servicenow_parity.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_servicenow_parity.py:4: in <module>
+    from src.intake.servicenow_parity import (
+src/intake/__init__.py:30: in <module>
+    from .inconsistency_detector import InconsistencyDetector
+src/intake/inconsistency_detector.py:14: in <module>
+    from src.agent import invoke_with_fallback
+src/agent.py:24: in <module>
+    from strands import Agent, ModelRetryStrategy
+E   ModuleNotFoundError: No module named 'strands'
+______________ ERROR collecting tests/test_session_concurrency.py ______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_session_concurrency.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_session_concurrency.py:29: in <module>
+    from src.tools.issue_management_tools import (
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+______________ ERROR collecting tests/test_structural_analysis.py ______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_structural_analysis.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_structural_analysis.py:17: in <module>
+    from src.pipeline.agents.structural import (
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+___________ ERROR collecting tests/test_tabular_extraction_tools.py ____________
+ImportError while importing test module '/tmp/hello_agent/tests/test_tabular_extraction_tools.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_tabular_extraction_tools.py:11: in <module>
+    from src.tools.tabular_extraction_tools import (
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+_________________ ERROR collecting tests/test_text_matcher.py __________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_text_matcher.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_text_matcher.py:17: in <module>
+    from text_matcher import (
+backend-python/text_matcher.py:10: in <module>
+    from thefuzz import fuzz
+E   ModuleNotFoundError: No module named 'thefuzz'
+______________ ERROR collecting tests/test_track_change_utils.py _______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_track_change_utils.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_track_change_utils.py:26: in <module>
+    from docx_markup import _apply_change_to_paragraph, apply_track_changes
+backend-python/docx_markup.py:30: in <module>
+    from text_matcher import find_text_in_document, normalize_text, strip_section_hint
+backend-python/text_matcher.py:10: in <module>
+    from thefuzz import fuzz
+E   ModuleNotFoundError: No module named 'thefuzz'
+______________ ERROR collecting tests/test_track_changes_tools.py ______________
+ImportError while importing test module '/tmp/hello_agent/tests/test_track_changes_tools.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_track_changes_tools.py:31: in <module>
+    from src.tools import track_changes_tools as tct
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+_____________ ERROR collecting tests/test_verbalized_confidence.py _____________
+ImportError while importing test module '/tmp/hello_agent/tests/test_verbalized_confidence.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_verbalized_confidence.py:13: in <module>
+    from src.pipeline.agents.compiler import (
+src/pipeline/agents/__init__.py:8: in <module>
+    from .compiler import create_compiler_agent
+src/pipeline/agents/compiler.py:25: in <module>
+    from strands import Agent, tool
+E   ModuleNotFoundError: No module named 'strands'
+_________________ ERROR collecting tests/test_verify_quote.py __________________
+ImportError while importing test module '/tmp/hello_agent/tests/test_verify_quote.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_verify_quote.py:18: in <module>
+    from src.tools.verify_quote import (
+src/tools/__init__.py:15: in <module>
+    from .agreement_tools import (
+src/tools/agreement_tools.py:13: in <module>
+    from strands import tool
+E   ModuleNotFoundError: No module named 'strands'
+__________ ERROR collecting tests/workflows/test_context_relevance.py __________
+ImportError while importing test module '/tmp/hello_agent/tests/workflows/test_context_relevance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/workflows/test_context_relevance.py:11: in <module>
+    import src.workflows.llm_collaborators as collab
+src/workflows/llm_collaborators.py:56: in <module>
+    from src.agent import invoke_with_fallback
+src/agent.py:24: in <module>
+    from strands import Agent, ModelRetryStrategy
+E   ModuleNotFoundError: No module named 'strands'
+__________ ERROR collecting tests/workflows/test_llm_collaborators.py __________
+ImportError while importing test module '/tmp/hello_agent/tests/workflows/test_llm_collaborators.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/workflows/test_llm_collaborators.py:6: in <module>
+    import src.workflows.llm_collaborators as collab
+src/workflows/llm_collaborators.py:56: in <module>
+    from src.agent import invoke_with_fallback
+src/agent.py:24: in <module>
+    from strands import Agent, ModelRetryStrategy
+E   ModuleNotFoundError: No module named 'strands'
+_ ERROR collecting tests/workflows/test_llm_collaborators_deterministic_value.py _
+ImportError while importing test module '/tmp/hello_agent/tests/workflows/test_llm_collaborators_deterministic_value.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/workflows/test_llm_collaborators_deterministic_value.py:12: in <module>
+    import src.workflows.llm_collaborators as collab
+src/workflows/llm_collaborators.py:56: in <module>
+    from src.agent import invoke_with_fallback
+src/agent.py:24: in <module>
+    from strands import Agent, ModelRetryStrategy
+E   ModuleNotFoundError: No module named 'strands'
+=========================== short test summary info ============================
+ERROR tests/eval/test_judge_harness.py
+ERROR tests/evidence/test_atomic_support.py
+ERROR tests/evidence/test_gate_claim_support.py
+ERROR tests/evidence/test_gate_quote_grounding.py
+ERROR tests/evidence/test_gate_registry.py
+ERROR tests/evidence/test_integration.py
+ERROR tests/evidence/test_worker.py
+ERROR tests/intake/test_live_position_api.py
+ERROR tests/pipeline/agents/test_compiler_qc_review.py
+ERROR tests/pipeline/agents/test_compiler_relevance_screen.py
+ERROR tests/pipeline/hooks/test_cost_and_retry_hook.py
+ERROR tests/pipeline/test_compiler_soft_fail.py
+ERROR tests/pipeline/test_consistency_scorer.py
+ERROR tests/pipeline/test_delta_analysis.py
+ERROR tests/pipeline/test_delta_semantic_location.py
+ERROR tests/pipeline/test_middle_loss_shadow.py
+ERROR tests/playbook_authority/eval/test_eval01_fixture_schema.py
+ERROR tests/playbook_authority/scoring/eval/test_harness.py
+ERROR tests/playbook_authority/scoring/eval/test_score05_gate.py
+ERROR tests/playbook_authority/scoring/test_agentcore_action.py
+ERROR tests/playbook_authority/scoring/test_clause_scorer.py
+ERROR tests/playbook_authority/scoring/test_floor.py
+ERROR tests/playbook_authority/scoring/test_governance.py
+ERROR tests/playbook_authority/scoring/test_judge_port.py
+ERROR tests/playbook_authority/scoring/test_prompt.py
+ERROR tests/playbook_authority/scoring/test_rollup.py
+ERROR tests/playbook_authority/test_auth04_reference_roundtrip.py
+ERROR tests/playbook_authority/test_auth07_load_evidence.py
+ERROR tests/playbook_authority/test_parsing_grammar.py
+ERROR tests/playbook_authority/test_ports_and_version_pin.py
+ERROR tests/playbook_authority/test_trace_issue_citation.py
+ERROR tests/playbook_loop/test_loop01_debrief_model.py
+ERROR tests/playbook_loop/test_loop02_diff_proposal.py
+ERROR tests/playbook_loop/test_loop03_republish_pin.py
+ERROR tests/playbook_loop/test_loop04_gate.py
+ERROR tests/regulatory_core/test_llm_collaborators.py
+ERROR tests/test_ag_ui.py
+ERROR tests/test_agentcore_legacy_helpers.py
+ERROR tests/test_agreement_tools.py
+ERROR tests/test_analysis_telemetry.py
+ERROR tests/test_call_limit_hook.py
+ERROR tests/test_compiler_mitigations.py
+ERROR tests/test_compiler_policy_reference_stamp.py
+ERROR tests/test_compiler_quote_writeback.py
+ERROR tests/test_compiler_recovery.py
+ERROR tests/test_compiler_scr_claim_support.py
+ERROR tests/test_contract_family_live_position.py
+ERROR tests/test_deal_context.py
+ERROR tests/test_deep_analyzer_regressions.py
+ERROR tests/test_demo_mode.py
+ERROR tests/test_discovery_pass.py
+ERROR tests/test_docx_comment_balloons.py
+ERROR tests/test_docx_markup.py
+ERROR tests/test_dynamo_table_helpers.py
+ERROR tests/test_entity_lookup.py
+ERROR tests/test_exec_demo.py
+ERROR tests/test_integration_paths.py
+ERROR tests/test_issue_management_tools.py
+ERROR tests/test_lambda_routes.py
+ERROR tests/test_markup_failures.py
+ERROR tests/test_markup_generation_tools.py
+ERROR tests/test_pipeline_agents.py
+ERROR tests/test_pipeline_graph.py
+ERROR tests/test_profile_agreement.py
+ERROR tests/test_qc_agent_models.py
+ERROR tests/test_qc_check_reasoning.py
+ERROR tests/test_qc_strategy_tools.py
+ERROR tests/test_qc_validate_analysis.py
+ERROR tests/test_qc_validate_draft.py
+ERROR tests/test_report_tools.py
+ERROR tests/test_runtime_security_fixes.py
+ERROR tests/test_servicenow_parity.py
+ERROR tests/test_session_concurrency.py
+ERROR tests/test_structural_analysis.py
+ERROR tests/test_tabular_extraction_tools.py
+ERROR tests/test_text_matcher.py
+ERROR tests/test_track_change_utils.py
+ERROR tests/test_track_changes_tools.py
+ERROR tests/test_verbalized_confidence.py
+ERROR tests/test_verify_quote.py
+ERROR tests/workflows/test_context_relevance.py
+ERROR tests/workflows/test_llm_collaborators.py
+ERROR tests/workflows/test_llm_collaborators_deterministic_value.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 83 errors during collection !!!!!!!!!!!!!!!!!!!
+9102 deselected, 83 errors in 14.87s
+
+__HERMES_CWD_18ed6254bd5e__/tmp/hello_agent__HERMES_CWD_18ed6254bd5e__

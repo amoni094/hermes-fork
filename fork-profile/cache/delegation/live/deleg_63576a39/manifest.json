@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_63576a39",
+  "started": "2026-09-19 16:46:22",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are an adversarial cold reviewer. Your job is to challenge, invalidate, or confirm a set of bottleneck findings about a Hermes Agent fork profile. For each finding, produce a verdict: CONFIRMED, FALSE_POSITIVE, or DOWNGRADE (with revised severity). Challenge aggressively — most findings should be CONFIRMED if evidence is solid, but call out anything that is speculative, misattributed, or harmless-in-practice.\n\nThe environment: Linux, Python 3.14.7, Hermes Agent fork profile at ~/.hermes/prof",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_63576a39/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 17:02:37"
+}

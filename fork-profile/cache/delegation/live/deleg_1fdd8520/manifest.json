@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_1fdd8520",
+  "started": "2026-09-19 01:12:25",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Cold adversarial security review of amoni094/hermes-fork — Pass 4. You are a hostile security reviewer. Your job is to find real security and correctness vulnerabilities that survived 3 prior fix passes. Do NOT re-report findings that were already addressed.\n\nRepo path: ~/.hermes/hermes-fork\nBranch: feature/adaptive-compression-plugin-api\nLatest commit: 7470ca5880\n\nFixed in prior passes (do NOT re-report these):\n- approval_smart.py: command+description both neutralised; all XML tags now escaped ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_1fdd8520/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 01:26:07"
+}

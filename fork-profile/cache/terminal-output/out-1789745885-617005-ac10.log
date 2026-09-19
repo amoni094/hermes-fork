@@ -1,0 +1,719 @@
+d10c77ae01 adversarial-pass9: P5-M1 /dev/shm /run/secrets /sys blocked, P5-L1 NBSP added to invisible-unicode strip
+ec87e06d7a adversarial-pass8: P4-H1 /proc/net/* blocked, P4-M1 Unicode whitespace slash cmd, P4-M2 ZWSP pre-strip, P4-M3 queue_prefetch empty-sid guard, P4-M4 strip nudge on early return, P4-M5 bot-loop 20-char dead-zone removed, P4-L1 BOL Human:/Assistant:
+7470ca5880 adversarial-pass7: P3-H1 reply cache in mark_streamed_delivery, P3-H2 any-pid /proc/fd, P3-M1 JSON role regex, P3-M2 orphaned fragment cleanup, P3-M3 stale prefetch_sid reset, P3-L2 neutralise all approval tags
+4be5eb562b adversarial-pass6: fix reply-cache key mismatch (session_key->conv_key), slash cmd catch-all pattern, sanitizer verified
+bb38153938 adversarial-pass5: P2-H3 sanitizer (ChatML/XML/single-NL), M3 F10 empty-sid, M4 F01 retry flag, M6 html.escape→delimiter-neutralise, L1/L2/M5/L4 comment+catalogue fixes
+add1024ab5 adversarial-pass4: fix self-echo reply cache + /proc/self/fd/ + /proc/self/exe/cwd blocklist gaps
+7f4466612d adversarial-pass3: arch fixes F01/F02/F04/F08/F09/F11/CLI-1/S-1/S-5/M-1/M-5/bot-loop + CR-M1-M4/L1-L2 + input_sanitizer
+6ee84c0bd2 adversarial-pass2-coldreview: fix 4 MEDIUM + 2 LOW from cold reviewer
+9e1d15305e adversarial-pass2: fix H3/F03/F10/skin-traversal/XML-injection/worktree-gc/test-isolation
+d1e1e5be6b feat(jev-compaction): adversarial passes P9-P14, saturation reached
+b9e18f2b2e feat(fork-profile): upload skills, config, scripts, plugins, and runtime config
+6e6ec966a0 fix(hermes-scripts): adversarial pass #2 remaining 3 bugs + api_content wiring
+404ed24f0f fix(hermes-scripts): adversarial pass #2 — 7 bugs fixed across wave11/12 scripts
+68d018c5b5 feat(hermes-scripts): math wave12 — 7 new scripts, suite grows to 60 monitors
+5200b08afc feat(hermes-scripts): math wave11 implementations + wiring fixes
+d763633387 fix(hermes-scripts): wiring audit — session path coverage, alarm logic, math fixes
+1153571f9f feat(hermes-scripts): add local monitor suite and research scripts (222 files)
+8e57a18377 feat(memforest): MemForest EventTree partition-prune ordering (R1)
+d13ce8d52c fix(lambda-tuner): adversarial pass — bind-state leak, DPI fallback, docstring accuracy
+abf943e274 fix(conventions): coding conventions pass — security, error handling, tooling
+e39dbc931f fix(lambda-tuner): post-insert cap on _complexity_buffers in _apply_adaptive_effort
+1cccc8d362 fix(adversarial): rearm/head_tail bugs found in recursive adversarial pass
+5783668e07 refactor(lambda-tuner): RF-1–RF-4 on_pre_llm_call, atomic write, eviction, docstring
+da0c0ea6c7 fix(style+correctness): naming, long lines, head_tail budget, rearm on tighter floor
+89cb80bc1f fix(complexity): clamp description_compression_ratio to [0,1]; 0.0 for empty input
+48dc9d7564 Merge remote-tracking branch 'origin/fork-dev/feature/adaptive-compression-plugin-api' into feature/adaptive-compression-plugin-api
+d2208fbd7a fix(compressor): pass provider to resolve_model_threshold in bind_session_state
+1b373b2c60 fix(classifier): route all session types to fork_mixed (v4 eval finding)
+6cb0b825a1 eval: v4 domain-matched lineage scorecards + fixtures cap-window fix
+25c68b0bd4 fix(telegraphic): plugin init + compressor refinements + expanded tests
+ccd136ccf9 fix(eval): classifier decision observability + coherence audit fixes
+1926ece586 eval: telegraphic pre-pass arms result (2026-09-11)
+13aafeed60 feat(eval): add lean_telegraphic + fork_research_telegraphic eval arms
+ab251409ca test(compressor): 59 unit tests for TelegraphicCompressor + ToolResultCompactor
+04da5d5fee feat(compressor): telegraphic tool_result compressor replaces naive head+tail
+d1731e0e26 feat(eval): add classified policy arm with session-type classifier routing
+ce4930491e fix(compressor): ledger before summary prefix so head_hit_rate is non-zero
+371261a3f8 feat(routing): harmonize LLM routing hints with session-type classifier
+0bab01400e feat(classifier): session-type heuristic classifier + compressor routing
+51990a4545 fix(eval): fact ledger noise reduction + head-hit window + cap-aware question rule
+8dd4e23479 feat(compaction): eval v2 — valid questions, harness metrics, compressor improvements
+3b34ca7a6f eval(compaction): add fork policy arms; calibrate protect_last_n 22/28 from eval
+b72087aeb7 spike(manifold): manifold-based span scoring analysis (math-007-manifold)
+d09b8072f8 feat(complexity): description MDL signal, zlib compression ratio (th-decomp2)
+52da0fa940 test(arb): add ARB retry stamp tests (cs-arb-tests, arXiv:2608.25403)
+17588eee82 spike(it-compress): R(D) per-session compression floor analysis
+efced5feae fix(adversarial): remove wrong entropy bands, novelty uninformative prior, _read_hint expiry check, single-writer hint
+88198bf0ac feat(research-apply): entropy decay reclassify, IT-weighted complexity scorer, session warm-start cache, pre_compress guard verify
+7cde0a5ad5 fix(cleanup): remove invalid capability tokens, fix IB prune /new leak verified
+c0df6908b8 fix(final): IB prune leak on /new, ctx._session_id finalize clear
+e349a88bd2 fix(cycle3): IB prune session-type inversion, _session_id, doc clarity
+042f644f6f feat(MNOP): reasoning mode, entropy-delta gate, RR/Kolmogorov score, skill sync
+b6dc100cb0 fix(cycle2): AEP lockout, ChronoMem cross-session leak, threshold config restore
+b3d1472374 feat(IJKL): importance-biased prune, BoN diversity, SkillOpt hooks, MDL tool compactor
+3bc948e2b2 fix(cycle1): AEP floor math, profile leak on /new, intent cap, pre_compress doc
+58b487c369 feat(EFGH): EXG memory API, ChronoMem clock, complexity scorer, importance scorer
+8f4366474e fix: recursive adversarial pass 2 — 6 confirmed bugs resolved
+bee1ae97ed feat(D): predicates module + intent propagation + wrapper hardening
+54fd089397 feat(A): entropy-rate estimator + intent-conditioned compression + pre-compress checkpoint
+58bbe1f9cc docs(C): MDL dedup + rationale comments + fork skill
+3e5366e6e1 feat(B): pre_compress hook + on_session_end cleanup + diversity-tax note + set_intent
+7225d1a07a fix: adversarial-pass residuals — 5 confirmed bugs resolved
+6a012471f0 opt: domain sweep fixes — thread safety, bounds, dirty-check, profile validation
+b6d71d8e50 feat: adaptive compression plugin API + lambda-tuner session classifier
+b6b53c69a6 docs: document OpenRouter @preset references in /model (follow-up to #99633)
+d3202bbc8d feat(tui_gateway): fire agent_loop_stopped on session.interrupt too
+f361971eed feat(gateway): fire agent_loop_stopped plugin hook on interrupt
+82199439c7 feat(image_gen): add Meta Muse Image ($0.01/img) to the FAL catalog
+337ef8f8ce docs(matrix): remove phantom matrix_* agent tools and MATRIX_TOOLS_ALLOW_* gates from docs (#100535)
+a5522f69c0 feat(slack): route status/title through the Agent Sessions API (slack-sdk 3.44.0)
+ae38c903b1 test(cron): unreachable-retry ladder test uses an interval schedule, not a wall-clock cron
+ec58e08a35 feat(cron): automatic bounded re-runs when a fire never reached the model
+23af232837 fix(tools): reject malformed tool parameter schemas at registration
+7f61ae589f Port from openai/codex#41436: answer blocking terminal queries in background PTY sessions
+0c2e66ea8b test(auth): OpenRouter PKCE invariants, fake-authority A/B harness, docs, contributor map
+0007a4c2f9 feat(auth): OpenRouter OAuth PKCE login via `hermes auth add openrouter --type oauth`
+3310298a37 refactor(auth): share the loopback PKCE listener between OAuth flows
+41380ccef9 fix(process): list refreshes no longer leave exited children running
+8dc4b6f565 test(approval): reconcile fixture uses the per-home baseline map
+d4f2ffa3a6 chore: map contributor email for dajiaohuang
+2aba244ff5 test: trim reconcile suite to the invariant cases
+9db604ce38 fix(tools): reload permanent allowlist by replacement
+98d54ee7b3 docs(approval): say that save_permanent_allowlist can only add, and that a revocation waits for the next write
+9b06d3d081 fix(approval): saving the allowlist deletes entries the operator added by hand and resurrects ones they revoked
+08a2e7dbcc refactor(cli): vim mode is a config key only — drop the /vim slash command
+4f03480787 test(cli): add vim to the tracked inline-handled command list
+cccaca6b42 fix(cli): tolerate partial prompt_toolkit stubs; map saforem2 attribution
+968fdc4746 fix(cli): apply /vim salvage to decomposed layout, trim tests, docs
+1571752a70 test(cli): cover /vim toggle, persistence, and status label
+750b2fc5e2 feat(cli): wire vi editing mode into the prompt_toolkit Application
+2a5373da2c feat(cli): add display.vim_mode config and register /vim command
+63584da036 feat(video): add MiniMax H3 Max Turbo family (fal post-train, 480P-1080P)
+e21a6fb159 fix(tools): make the empty/whitespace old_string rejection actionable
+92df11f81d fix(classifier): terminal_quota_exhausted 429s classify as billing, not rate_limit
+833594cda6 test: opt the ClawHub owner-HTTP fixture into private URLs for the SSRF-guarded stream
+fef98ff00f fix(skills): bound streamed ClawHub ZIP downloads (#57571)
+7b037f0efa feat(cli): opt-in git_branch status-bar field (⎇ current branch)
+bef5b7c2c3 chore: map asaxinw@gmail.com -> PINKIIILQWQ (salvage #42858)
+053f8b1b17 fix(kanban): make archive-time worker termination race-safe and audited
+907f409dc4 fix(kanban): archive_task now kills the worker process
+47c029927f feat(skills): add dream-loop — concept-art visual fidelity build loop (port of achimala/dream-loop, MIT)
+77f0c83ec3 fix(sessions): honor CLAUDE_CONFIG_DIR and CODEX_HOME in foreign session discovery
+8c4b0b751e docs: explain session hygiene — why /new still matters for memory and cost
+d5774ad880 fix(tests): pay heavy view imports at collection, not the first test's budget
+0e13fa98ec fix(web): cap web_extract provider dispatch with a wall-clock timeout (salvage #57180)
+f41b2c615d feat(skills): system-atlas — explorable isometric architecture atlases (port of inkboard/system-atlas, MIT)
+ad0398eed8 fix(kanban): preserve sticky block on tasks created with initial_status=blocked (#107398)
+cbd4492f1f fix(tools): steer/redirect releases a blocking process_manage wait (port of MoonshotAI/kimi-code#3697)
+50f17b1300 fix(google-workspace): support multi-tab Google Docs (port cloudflare/cloudflare-os#450)
+11d761eed9 fix(stream): flush residual SSE buffer at EOF and widen resilience to the Gemini native adapter
+c2b9a517e0 fix(gateway): harden proxy mode SSE streaming — 3 resilience bugs
+d46f79233e fix: sort imports in markdown-text.tsx per perfectionist rule
+e1c05ffa32 feat(desktop): persist video playback speed across transcript videos
+f79cb77224 fix(tools): reject V4A Add File onto an existing path
+24692ee790 feat(approval): flag cloud metadata-endpoint (IMDS) credential fetches for approval
+6dd091a89c test: fold Gemini thinking-budget tests into invariant form
+29056b2335 fix(title): disable Gemini thinking tokens to prevent max_tokens starvation
+5ea655771b fix(agent): disable reasoning on the title-generation pass
+1fec70ea48 fix(guardrails): catch repeating multi-call cycles in the stall guard
+a565e2d493 fix(mcp): widen the SSE fallback trigger and harden its guards (salvage #53764)
+b2465f1608 fix(mcp): auto-fallback to SSE transport when Streamable HTTP returns 400
+e151d0b345 fix(discord): reject a numeric application ID pasted as the bot token during setup
+0f3199bd65 fix(dashboard): OAuth start routes resolve pollers late so test mocks intercept the spawned thread
+b35c0284a1 feat(skills): add mono-color — one/two-ink editorial print images (port of yanliudesign/mono-color-skill, MIT)
+1f855ec2a0 chore: map contributor email for #80648 salvage
+101b986fdf docs(cron): document resnap alongside the drift guard
+0037a4b17a feat(cron): add resnap action to adopt the current global inference default
+a49a9d79b3 Port from lobehub/lobehub#19329: surface environment recreation in terminal tool results
+6f62aff7f2 fix(tools): read_file line accounting — count unterminated final lines, drop the phantom trailing line
+10c34dd7e2 fix(tools): stop read_file rendering a phantom empty line for newline-terminated files
+71063b1dbe fix(tools): count final unterminated line in read_file total_lines
+eae250534f docs(memory): explain that memory needs session boundaries on gateways
+2bc9ed9f23 fix(mcp): fully redact credential headers in MCP probe errors and test display (salvage #97466)
+d7a56474fc feat(skills): pr-lens — animated architecture/data-flow diagrams for PRs (port of coldteadotai/pr-lens, 1.1k-star MIT)
+d21913b09c fix(state): let sqlite raise the canonical error for a directory db_path
+3966e5de94 security(state): harden async_delegation's direct state.db writer
+1916cb249d security: make state databases and snapshots owner-only
+c445987559 fix(memory): secure built-in memory lock files
+baf1200e0a refactor(commandcode): drop the deepseek ImportError guard, trim tests to two invariants
+fbb3a244b7 fix(commandcode): degrade to no-op when the deepseek plugin shim is missing
+6f88fb030a fix(commandcode): forward DeepSeek reasoning controls through the wire
+205645ee42 fix(gateway): register gateway.multiplex_profiles; explicit migrate --multiplex flips it with no standalone secondary
+acbecf588a fix(profiles): --clone leaves messaging channels behind; --clone-channels opts in
+de2d6a1b93 fix(config): a fresh process recovers the last good config.yaml instead of running on defaults
+d595e636c8 fix(model): a selected model id is never rewritten to a catalog neighbour
+c6f87deb2c feat(video): OpenRouter backend covers every model on the live video catalog
+387ac50d85 feat(video): add OpenRouter Hailuo 3 Max provider
+e440bf3547 fix(dashboard): shared-gateway restart toast keyed on the restart action's exit, matching Desktop
+6a66a5d481 fix(desktop,dashboard): served profile's api_server/webhook read connected with their /p/<profile>/ URL; shared-gateway restart asks first
+819988acb7 docs(kanban): per-platform opt-in is the documented path (hermes tools enable kanban --platform X)
+9b9026e62f fix(kanban): drop the TUI empty-selection change and refit tests to the opt-in contract
+3d7f773bb4 fix(kanban): honor explicit platform tool opt-ins across configuration surfaces
+1c671beab2 refactor(process-registry): word the degrade warning as a host-level notice
+f003e449be refactor(cron): trim the scope-degrade dispatch to its invariants
+560b6d2e81 fix(cron): degrade gracefully when systemd user scopes are unavailable
+9a60a7f316 test(cron): one fail-fast guard for the heartbeat vs its own run's fence
+87b013b21e fix(cron): do not hold fire fence during heartbeat save_jobs
+476a45f4f3 test(agent): one real-transport test for the codex summary tool controls
+e76ce0b67f test(agent): cover the codex iteration-summary retry path
+16695bfa07 fix(codex): strip tool controls from summary calls
+3b8071dad4 chore: map Julientalbot and trnorga contributor emails
+d62716c704 fix(mcp): breaker opened by tool errors says "rejected", not "unreachable"
+476d7223b5 test: utf-8 encodings in messaging profile tests
+a52e553af4 test: utf-8 encodings in hot-serve test
+2d121aa322 fix(gateway): hot-serve reaches pooled Desktop backends; deleted profiles leave no stale runtime entries
+d1dbb0ac9e feat(gateway): multiplexer hot-serves profiles created while it runs, unroutes deleted ones
+0d6b59fb74 docs(profiles): zh-Hans --clone wording matches the English correction
+49aed6e81c docs(profiles): --clone copies the curated memory files, not just config
+6c1db05d4a docs(feishu): soften 200340 causality, mirror callback-tab guidance in zh-Hans
+8ea7c0bfed docs(feishu): 200340 on card buttons is a callback-subscription gap, not a payload bug
+da451afb46 fix(update): probe configured-feature deps in the target venv, not the updater
+2ef9c55a92 fix(update): name configured platforms whose extras failed to install
+199544e054 fix(openrouter): canonical config URL keeps the pool; mirror key follows the selected endpoint
+63f1016bea fix(cli): honor config base_url mirror for explicit openrouter provider
+b146cf1d0e fix(email): thread attachment sends on the caller's reply_to
+b78abb4710 fix(config): stop forcing 0700 on HERMES_HOME inside containers
+cc6d86a83d chore(tests): encoding=utf-8 on write_text in test_browser_cleanup (windows-footgun ratchet)
+c59c1a98e3 fix(browser): suppress KeyboardInterrupt in atexit cleanup thread stop
+7aa8249876 fix(cli): clear the preparing-line dedupe set on every stream reset
+cc269866aa fix(cli): announce "preparing <tool>…" once per tool per batch
+67bd2f6571 fix(gateway/config): root-level platform blocks keep their adapter keys
+2f3ccfa3bd fix(gateway/config): promote every top-level platform key into extra
+ce0b10cb21 fix(approval): anchor uninstall rules at command position, allow option operands
+06e3124fe1 test(approval): package uninstall gated, install/update unprompted (#10199)
+85ce25687e fix(approval): require confirmation for package uninstalls
+92a8398087 fix(config): treat explicit false values in HERMES_MANAGED as unmanaged
+848075c501 fix(redact): AgentMail prefix rule matches any opaque key body, not only hex
+acf7143d9f test(redact): am_ identifiers survive, hex AgentMail keys still mask
+cc885b8b19 fix: tighten AgentMail API key regex to avoid false positives
+ec8b4b2d6f fix(gateway): recheck the heartbeat guard after an awaited edit
+0fc3cbac59 fix: suppress stale "Still working..." heartbeats during gateway restart
+1de9963ce7 fix(cli): backslash continuation runs before the paste-timing guard
+40f123ceab fix(cli): Enter arriving mid-paste is a newline, not a per-line steer
+847369e6c6 fix(claw): detect the gateway's process title `openclaw-gateway`
+18aae66a13 chore(tests): explicit utf-8 encoding in test_mcp_config (windows-footgun ratchet)
+b70e0f4603 fix(mcp): CLI readers no longer reopen `include: []` as "all tools enabled"
+88d84beede fix(desktop): treat an explicit empty MCP include list as block-all
+088d292d36 fix(agent): navigation targets only from a cd that starts a shell segment
+7d61b4872a fix(agent): resolve bare `cd backend` targets in SubdirectoryHintTracker
+ac54e5e715 fix(api): forked sessions carry _branched_from so they stay listable
+d0093a11f0 fix(sessions): /branch and API fork end the parent only after the child exists
+f7990661a0 fix(install): reuse probe skips the active venv; venv creation failure is fatal
+5bdb4742b0 fix(install): reuse an installed supported Python instead of downloading 3.11
+4e1b3daa86 fix(memory): warn when MEMORY.md / USER.md exceed their char limit on load
+df8b548797 test(gateway): run the TCP-witness Windows arm natively via windows_only
+853bfec43a docs(browser): separate Chrome 136 flag refusal from the 144+ approval dialog
+b25c2ef0ba test(dev-mock): raise the dev:mock provider context window to the 64K floor
+53ab77d07d chore: map contributor emails for docs/tests salvage batch
+26f610e77a test(constants): gate the two symlink tests with require_symlinks, not pytest.skip
+683e8d382b docs(agents): reconcile Footprint Ladder rung 3 with the session-surface rule
+f2ee74d739 test(windows): create=True for the start_unix_server tripwire patch
+a318772f51 fix(test): raise mock model context window
+80ea4cbde0 fix(tests): skip POSIX-only and symlink tests on Windows CI
+d47df6ea00 docs(browser): the Chrome 136+ remote-debugging block is a consent dialog, not a silent failure
+60797460b6 fix(acp): messages=[] from run_conversation clears the ACP transcript
+8b79d8731b fix(acp): preserve falsey tool results in step callback
+d1a13ae244 fix(auxiliary): normalize model on auto cache miss
+abedd8c018 fix(website): active filter pill stays readable on hover
+1df51cb4ee fix(dashboard,website): widen sidebar fallback to chat side panel; trim CSS comments
+5053e92243 chore: map contributor emails for salvaged UI CSS fixes
+ee18a0b060 fix(website): readable filter pill labels in light mode
+ff97415c91 fix: opaque fallback for mobile header/sidebar background
+21ec19dc02 fix(cli): let cron job badges wrap so the job title survives narrow widths
+f5a2c70b12 test(api-server): RequestKey isolation test tolerates aiohttp < 3.14
+9d0d886c43 fix(identity): spawn-ledger write survives surrogate-escaped argv
+3aea61dbff fix(gateway): run cron/housekeeping/MCP cleanup before the failure-exit return
+79007efc48 fix(agent): a no-fallback verdict wins over the local-ValueError fallback allowance
+293cb54f28 fix(agent): keep MoA verdicts fallback-free; nest the gated fallback under one `if`
+dfd4aa4a94 fix(agent): malformed tool-call-argument 400s no longer walk the fallback chain
+12fe7684e1 fix(plugins): async-await helper thread runs under the caller's ContextVars
+24444e52eb fix(plugins): await async hook callbacks instead of collecting bare coroutines
+1664e12fc7 chore(tests): explicit utf-8 encoding in test_plugins (windows-footgun ratchet)
+2175df4034 fix(feishu): keep source.message_id in step with the batched event id
+f9dac388ba test(slack): expect the triggering ts in per-turn thread metadata
+719cb67bdb fix(platforms): carry the inbound message id into the session source everywhere
+156d3c454c test(feishu): pin source.message_id to the inbound message id
+353cf2d055 chore: map contributor email harrison@succession.bio -> successionbio
+6f7847bbd3 fix(feishu): carry inbound message_id into the session source
+8b8076dea9 fix(slack): bind triggering message to session source
+b2b713984e test(acp): first persisted row carries the provider snapshot
+6351c44dac fix(acp): persist provider snapshot on initial session save
+71c72e078a fix(cli): one unverified-accept message for custom endpoints without /models; tests trimmed
+a3671787b0 fix(cli): clarify unverified custom model warning
+eda1e6cb15 fix(cli): accept unverified custom models
+a7cf8ef8b2 fix(install): pick the .tar.gz Node.js archive when the host has no xz
+66dbb656be fix(skills): literal HOME replacement; `~/$VAR` still expands the variable
+86211492d1 fix(skills): expand HOME defaults against tool home
+a5228204b4 fix(branding): Caduceus in the WhatsApp bridge, installers and favicon too
+477e8a631a chore: contributor mapping for bixycler
+70d0f556d7 fix(branding): use the Caduceus ☤ (U+2624), not the Rod of Asclepius ⚕ (U+2625)
+535fd88c70 fix(backup): keep durable cache/ artifacts (images, citation ledger) in full backups
+b97ae5c9b8 fix(backup): make the socket test runner-safe and document the new exclusions
+428cdbff52 chore: map contributor email mrwanstudio@gmail.com -> mrwanstudio
+947e027f61 fix(backup): skip non-regular filesystem entries
+3b3f354933 fix(backup): exclude profile caches from full backups
+10864f394d fix(agent): stream_options compatibility retry does not consume the transient budget
+6527af2286 fix(agent): retry once without stream_options when an endpoint rejects it (HTTP 400/422)
+7817af2a16 fix(claw): detect the gateway's process title `openclaw-gateway`
+a340710389 chore(tests): explicit utf-8 encoding in test_skill_commands (windows-footgun ratchet)
+392c6221a3 chore(contributors): map zjc-enigma (salvage #12522)
+036b3ff5ba fix(skills): allow non-ASCII characters in skill command names (#12351)
+215a820ace chore(tests): encoding="utf-8" on read_text/write_text in test_subdirectory_hints.py
+5148b76677 fix(agent): skip_context_files also disables subdirectory hint injection
+330004e597 fix(agent): keep trajectory serialization inside the best-effort handler
+9c614484b3 chore(contributors): map shafdev (salvage #12685)
+bd70d7387a fix(agent): lock save_trajectory() appends so concurrent processes cannot corrupt the JSONL
+d131391ff9 fix(feishu): stop markdown-escaping inbound post text
+5fd8f02e3c fix(wecom): URL-decode aeskey and store inbound images with an image MIME
+f39680de45 fix(wecom): inbound images cached with their real extension, not .bin
+2b685f08fa fix(claw): detect the gateway's process title `openclaw-gateway`
+07ead2249b chore(tests): explicit utf-8 encoding in test_claw (windows-footgun ratchet)
+45dd97a6f7 fix(claw): cleanup no longer mistakes any "openclaw" in argv for a running daemon
+d267bc7f78 fix(model-switch): `provider:model` resolves like `provider/model` off aggregators too
+c5cdd92254 fix(copilot): validate supported token prefixes
+fd15cd003e chore(tests): encoding="utf-8" on read_text/write_text in test_personality_single_owner.py
+44ce128a27 fix(personality): honour the top-level `personalities:` config block on every surface
+5685b76fde fix(doctor): image_gen hint covers a selected provider with a missing key or SDK
+6ea3b00e7f chore(tests): encoding="utf-8" on read_text/write_text in test_doctor.py
+7d25ae58a7 fix(doctor): image_gen reports "no provider configured", not "system dependency not met"
+1dce69be4e chore: contributor mapping for ggascoigne
+81cec06c77 test(cli): banner hero line is not center-padded
+e38d63b7f0 fix(cli): left-align banner hero art
+6d20c321d6 fix(gateway): enable linger on systemd user-service repair path (#12863)
+5be0c4921c fix(gateway): surface launchctl bootstrap failures in refresh_launchd_plist_if_needed
+9d09598111 fix(display): tool previews never exceed a tiny max_len (1-3)
+dfa84e4a84 chore: map contributor email d.hermsmeier@mittwald.de -> Hermsi1337
+02b398bda5 fix(mcp): recovered application errors keep the breaker strike
+5dca47a651 fix(mcp): preserve application results after transport recovery
+b5b697e91d chore: contributor mapping for MonkeyLeeT
+289e0d506f fix(insights): count tool usage per session before merging the two sources
+befa5735e9 chore(tests): encoding="utf-8" on read_text/write_text in test_memory_provider.py
+f8f16b5e7f chore: contributor mapping for zhouhe-xydt
+5084237f8e fix(memory): load provider schemas before mutating MemoryManager state
+eca2cea5c6 chore(tests): encoding="utf-8" on read_text/write_text in test_mirror.py
+6716f22396 fix(gateway): mirror_to_session reports False when the transcript write fails
+66884c4397 fix(cron): honour job workdir on the inline _build_job_prompt script path too
+64edb8a9ce chore: map contributor email ycy1990@gmail.com -> metricano
+62b0235d45 fix(cron): pass workdir to agent pre-run scripts
+5b0103ffdc refactor(desktop): extract terminalLcCtype so the Linux locale rule is testable
+6f8d975fe7 fix(desktop): use valid LC_CTYPE on Linux terminals
+c7efbbdab2 chore(deps): mirror slack-sdk 3.44.1 pin in tools/lazy_deps.py
+dc67f00e0b chore: map contributor email bill3wits@gmail.com -> bill3wits
+a5437e592d fix(deps): bump slack-sdk to 3.44.1 — fixes aiohttp Socket Mode connect() retrying forever
+fc83fb42d3 deps: bump tornado 6.5.7 -> 6.5.8 (GHSA-5w76-955r-9v8r multipart max_parts DoS)
+c7c86a7dc6 chore: map contributor email ada.a0uew@56.pt -> Arguably1341
+456dd2b888 fix: preserve max reasoning for Daybreak alias
+7c734c7838 fix(opencode-go): send reasoning for the canonical deepseek-flash id
+21bc1d3775 fix(api-server): trim RequestKey fallback comment, add import-isolation test
+335c3f8843 chore: map contributor email hongzhennan@outlook.com -> Decent9967
+943e04ba2b fix(gateway): keep aiohttp web import alive when RequestKey is unavailable
+f34933605a test(identity): make the 0600 ledger test prove the mode under a permissive umask
+5a8e651183 fix(identity): enforce 0600 on spawn ledger writes
+7b6fc1d234 test: trim fast-status regression test to the invariant cases
+d7ff5675e0 fix: normalize empty fast status to normal without changing tier
+28bf67b176 chore: map contributor emails for jinliyl and teddychenfeiyang-png
+a8ac7899b5 test(plugins): typo'd requires_hermes clause fails `plugins validate` admission
+c4c508579d fix(plugins): validate requires_hermes from manifest module
+761fa5d497 refactor(hooks): fold the interrupt-path comments into one WHY line
+f8fbf7c385 test(hooks): quote the marker path in the interrupt test's hook script
+bca94759d5 fix(hooks): reap the hook process tree when _spawn is interrupted
+850c48cd84 feat(skills-hub): tap K-Dense and OpenScience scientific skills under one "science" bucket
+e7794124da fix(skills-index): bound ClawHub owner enrichment so the scheduled index build finishes
+b309a713a8 fix(model-metadata): trim dated docstring, pin output-cap vs context-limit invariant
+9ee9e920c6 patch(model-metadata): stop parsing output-limit errors as context limits
+8a5617f02c chore: map contributor email francesco@carucci.org -> fcarucci
+53c57871d6 feat(plugin-catalog): add snyk — Snyk MCP server + snyk-security-scan skill
+3e09e5a15f fmt(js): `npm run fix` on merge (#109094)
+b0c383cdf7 fix(desktop): served profiles show running and route lifecycle to the multiplexer from a pooled local backend
+be2f7e9c36 feat: curator prunes unused skills at 30 days (was 90), stale at 14
+f364c19775 feat(plugins): touchdesigner ships as a catalog plugin (MCP server + skill), optional skill retired
+876e444e4e fix(cli): open the session store through the state.db registry, not a bare SessionDB()
+e8016a18c1 fix(cli): report the auto-detected context length when a custom provider is saved without one
+08bb58bd4a fix(skills): never call a rate-limited fetch a stale index entry; drop per-search caveat
+257a704d18 fix(skills): name stale index entries instead of generic fetch failure
+75ade17617 fix(telegram): normalize unicode dashes in bot menu descriptions
+1b1f5c4abe test(desktop-update): drive linux_gate through --self-test-gate; cover both symlink spellings
+31bf8e504c fix(update): address review — neutral gate comment, pin empty-target skew case
+d3b090a397 fix(update): canonicalise relaunch-target paths before the linux skew gate
+0aa08a835e fix(toolsets): use typing.Any instead of builtin any in get_distribution return type
+39ab25a6ac test(mem0): drop the inside-the-cap no-op case (salvage bar: 2 invariant tests)
+aca4dc86a3 fix(memory/mem0): trim a synced message at the last sentence boundary, not the first separator kind
+e705dde6e4 chore(tests): pass encoding=utf-8 in test_skills_guard file writes (windows-footgun ratchet)
+596bd8fec6 fix(skills_guard): dns_exfil no longer fires on the English noun "host" in prose
+bed4abd106 fix(lsp): look up nested single-root clients and version docs before didChange send
+a9cfcf70c1 fix(desktop): forward optional composer handlers through the latest-actions adapter
+ab7f03049e refactor(desktop): large-paste writer in its own electron module, 3k threshold
+22e3888543 Inspired by ChatGPT Work: convert large pastes into .txt attachments in the Desktop composer
+b7b35a84b7 docs: remove the Nous guest free-tier guide (#108991)
+eec131b716 refactor(cli): hold shallow.lock across write-verify-restore; share the atomic write
+966fb375fc fix(cli): make shallow-boundary repair survive the prune and the graph-safety review findings
+2fb87f047f fix(cli): repair shallow boundaries already dropped by stale-graft prune
+d76856cc69 fix(migrate): shared-ingress adapters declare serves_profile_prefix so migration reports them as notices
+5c4e08e8df docs(multiplex): inbound-port platforms under the multiplexer
+9ca7db8232 test(multiplex): shared-listener ingress invariants
+65fd3a2b9c feat(status): show each served profile's shared-listener callback URLs
+6fc76ce751 feat(platforms): bind through shared_ingress.bind_listener in every inbound-port adapter
+c0d8d6b5d5 feat(multiplex): serve secondary profiles' inbound-port platforms on the default's shared listener
+36b1a6e62c test(cron): crash-safety tests claim the fire before asserting not-due
+6cd4fbd640 docs(cron): state the missed-occurrence contract for restart gaps
+eaa5ac94ea fix(cron): fire one catch-up for a slot missed during a restart gap (#107485)
+2bc471cb35 fix(cron): skip catch-up only with a future anchor
+df51797e2e feat(cron): let planned downtime skip missed recurring runs
+be82d52cb7 docs: migrating from per-profile gateways to the multiplexer
+df95f378a6 feat(dashboard): "Migrate to a single multiplexed gateway" on the System page
+07a4ae016a feat(update): auto-migrate to one multiplexed gateway when unblocked
+e2fc493427 feat(gateway): hermes gateway migrate --multiplex / --standalone
+bcdb49ac7b feat(gateway): adapters declare serves_profile_prefix for /p/<profile>/ ingress
+5aa17c0590 docs(multiplex): list the newly per-profile caches in the isolation table
+208bd0b65a fix(multiplex): per-profile plugin caches and the Yuanbao active adapter
+5ff34f565e fix(multiplex): per-profile catalog, skin and guest-mint state in hermes_cli
+4b8c01f691 fix(multiplex): key tool-side and agent-side memos by profile home
+2cc6d88c1d fix(multiplex): build Bedrock and Entra credential clients from the routed profile
+044a77b3b6 fix(gateway): failed-turn boundary keyed on the durable conversation tail; exception path classifies overflow before writing
+b9f543951e refactor(gateway): compute the failed-turn notice once; the reply and the boundary row share it
+79680b04bd fix(gateway): a deduped platform retry of a failed turn adds no second boundary row
+07b0c7e1bc refactor(gateway): failed-turn boundary row built once; notice derived where it is persisted
+c4c7fe13c3 fix(gateway): restore main's generic error-reply wording
+241752ac97 fix(gateway): keep the context-overflow error reply free of the partial-effect notice
+371f0a057b fix(gateway): make failed-turn retry guidance side-effect safe
+25c69ee63c fix(gateway): close failed turns before future replay
+28326a6ccd fmt(js): `npm run fix` on merge (#108902)
+bf867d3c74 chore(skills): ship dynamic-workflow as an optional skill
+fb4ed7b284 docs(skills): dynamic-workflow v2 — background-first delegation, campaign lessons from #102117
+8fb0350b61 docs(skills): tighten dynamic-workflow per donovan-yohan review
+351041463d feat(skills): add dynamic-workflow orchestration skill
+436ec48985 fix(gateway): generation-guarded slot release on /stop; displaced lease tokens swept
+443c2785fa docs(gateway): state the sudo mid-command rationale once, at the decision point
+1ecdfd18db fix(gateway): consult the installed unit only when root
+b18c5752e3 test(gateway): keep one invariant test per bare-name owner
+a32b8cd4a3 refactor(gateway): share the sudo-invoker home lookup, drop unreachable guards
+1ff56d9ed9 fix(gateway): keep the unit anchor Linux-only and pin the order it depends on
+a4a10eb520 fix(gateway): anchor system service identity on the installed unit
+fdb9b50a15 fix(gateway): preserve sudo system service name
+24699e07a6 chore: map huklaa's contributor email
+99d7f17a1c docs(desktop): explain automatic tutorial cutoff in settings
+995e79afe4 feat(desktop): retire tutorials after the first month
+526ce1b64c test(gateway): eviction-stub release-thread fakes accept session_key kwarg
+789eec791b refactor(gateway): drop the write-only one-shot generation stamp; /stop and eviction share _drop_turn_slot
+90970d85f2 fix(gateway): a repeated /model --once keeps the earliest restore target
+c71a411fe5 test(gateway): release-slot fakes accept the finalizer's run_generation kwarg
+c133095cc5 refactor(gateway): eviction and /stop share one interrupt-and-invalidate core
+549a6fb359 fix(gateway): stop, reset and eviction settle a one-shot override before displacing the turn
+18da3f673a refactor(gateway): release turn leases by token identity only
+317f4079a9 refactor(gateway): keep one per-generation turn-lease token map
+5aa7636a0d fix(gateway): address lifecycle review blockers for displaced leases and one-shot restoration
+5e3e1a10dd fix(gateway): fence one-shot restoration and displaced leases
+93ececb383 fix(gateway): guard stale turn finalizer
+cb83df800f fix(gateway): interrupt evicted in-flight runs
+683afe45ba fix(auth): a global-root write-through invalidates the root store memo
+ea42884e99 refactor(auth): codex cooldown clear reuses the pool ownership rule
+fe6351000f refactor(auth): codex pool reads call read_credential_pool directly; cooldown clear decides ownership under the lock
+65c9d33b14 fix(auth): a borrowed Codex pool clears its quota cooldown in the root store
+3767c2eacd fix(auth): inherit global Codex pool in profiles
+a84a2223f8 fmt(js): `npm run fix` on merge (#108829)
+f7cd8bf084 fmt(js): `npm run fix` on merge (#108814)
+cbe9e5b294 chore(desktop): literal comments across the onboarding flow (#108438)
+474a7f8b2a Guided first launch: the first build connects the picked apps before it starts (NS-859) (#108317)
+4f1966edac feat(desktop): connector cards that wait for the sign-in, and a guided first launch that holds together (#108292)
+284d220ba4 fix(multiplex): cron, kanban, /loop and completion paths for a served profile match its standalone gateway
+fc71fb63e5 test(multiplex): invariants for the residue fixes; retire allowlist tests
+9848e22ed6 feat(multiplex)!: drop gateway.multiplex_profile_allowlist — serve every profile
+edff87fa1e fix(mcp): key the desktop/TUI discovery slot by profile home (#67605)
+76d21f93d2 fix(profiles): a served turn never recreates an archived profile home (#94590)
+31b1cbbe8d fix(multiplex): served profiles read their own sessions.* settings
+4d47891b4a fix(dashboard): isolate the environment of named-profile actions
+9c9e7ab6e5 fix(multiplex): a served profile's turn sees its own cwd, approvals, redaction and tool policy
+446f6f79a8 fix(multiplex): dashboard and `gateway stop` see a served profile's gateway as the multiplexer
+76a0c9d4c4 docs(multiplex): list adapter settings in the per-profile isolation table
+055e307b48 refactor(api_server): trim the idempotency-scope salvage to shape gates
+3d59486a86 fix(gateway): fold route + authenticated principal into idempotency key
+2b7eb97fbf fix(gateway): scope the OpenAI-compat Idempotency-Key cache by profile
+199c66f70f fix(gateway): adapter settings resolve per profile under multiplex, not from the default's env
+5725efaf09 fix(gateway): scope resolve_proxy_url()'s platform_env_var read by multiplex profile
+0f1668ef76 fmt(js): `npm run fix` on merge (#108753)
+9c021a6bde fix(desktop): Bot Mode pet picker selects locally hatched pets via pet.thumb
+2f21d29f44 fmt(js): `npm run fix` on merge (#108749)
+794981e3d4 fmt(js): `npm run fix` on merge (#108745)
+20816c13cd feat(voice): pick the voice chat engine from the composer
+f923faa0b8 feat(voice): GPT-Live voice chat mode — a full-duplex voice frontend that delegates to Hermes (Desktop)
+fafb27ee5c feat(plugins): on_room_member_activity hook projects Group Chat member runtime events to plugins
+8134d941be chore: map contributor email for ishangodawatta
+12d03eafed test(whatsapp): trim salvaged bridge tests to the quoted-media invariants (drop cache unit test)
+27481a6338 docs(whatsapp): quoted replies attach the quoted media (both adapters)
+c8b56d43da fix(whatsapp): quoting the bot's own image/voice/document attaches the file
+e948ea8347 fix(whatsapp): don't drop bare quote-replies with resolved media
+cd89e4b4a6 fix(whatsapp): resolve original media for quoted-media replies
+fa425c942e test: stub the safe.directory pre-read by default; map privacydied's email
+66adfaee6b refactor(git): trim safe.directory tests to two invariants, memoise the config read
+02200f0b65 fix(git): preserve safe.directory ordering and reset markers when carrying it
+01a3206e90 fix(git): carry user safe.directory past non-interactive config isolation
+1021a03256 chore: map contributor email for jakobdylanc
+3a2cfb7871 test(models): trim routing-variant tests to invariants
+30e4673776 refactor(models): import openrouter_variant_base from its defining module
+f28c52845a fix(models): resolve routed OpenRouter ids in models.dev catalog lookups
+284ee03df1 fix(models): resolve context length for OpenRouter :nitro/:floor routing variants
+bf51fee548 docs(multiplex): make the multiplexed-gateway page match what the code does
+bdb5bf96f3 test(hooks): synthetic payload carries the new profile field like production
+adf23550f5 fix(tools): profile-scoped checkpoint/snapshot paths, tool caches, TZ and schema paths under multiplex
+e70db09f51 fix(security): re-resolve checkpoint/sticker-cache paths per call
+819517fbac fix(gateway): routed profiles get their own max_turns, fallback chain, hooks, aux auth and media policy
+0c74353c86 security(gateway): re-resolve hooks directory per call to fix profile isolation
+53e32d0581 fix(env_passthrough): tolerate an unresolvable home when keying the allowlist cache
+d198082172 chore(contributors): map see-k's commit email for release credit
+72cc96578a test: trim salvaged multiplex tests to the invariant pair per fix
+651878e1e4 docs(multiplex): per-profile config.yaml behaviour, env_passthrough and write guards
+388b881b33 fix(gateway,tools): per-profile Yuanbao home, env_passthrough allowlist and Slack ignored-channel guard under multiplex
+545e74d0ea fix(gateway): a secondary profile's config.yaml no longer poisons the process env under multiplex
+7af5006b24 fix(file-safety): bind the write-guard resolver fallback to the active profile
+1271622e4b fix(file-safety): resolve HERMES_HOME/config per call so multiplex profiles don't poison the write guards (#107327)
+606903badc fix(tui): bind launch-profile terminal scope once multiplexing is active
+a5c801c8dc fix(tools): never ambient-bridge TERMINAL_* under a profile home override
+954113839b fix(discord): apply YAML allow_bots to ingress policy
+d807a34c87 docs(multiplex): cron ticker allowlist, named multiplexer, guild-scoped route delivery
+1c08edccf0 fix(gateway): a named-profile multiplexer ticks its own cron store and owns the shared adapters
+a6c5b7ada8 fix(serve): SSH-isolated idle-exit keeps the backend alive while a cron job runs
+0e57543908 fix(desktop): cron ticker follows the multiplexer allowlist and stands down for served satellites
+444fa8166a fix(cron): routed-profile cron delivers through the shared bot for guild-scoped routes and profiles without a platforms block
+32c538851a fix(desktop): yield single-profile cron to its running gateway
+c17629a0a2 fix(cron): scope restart-safe worker environment
+3efbd79a30 chore: map salvaged contributor emails (remi-td, nmediaie)
+cdedfe9770 test(gateway): invariants for multiplex routing/authz (#104933, #103717)
+c632437c3b fix(gateway): deliver secondary-profile async completions under their own profile scope
+77180acc2c fix(gateway): mid-turn authorization reads the admitting bot's allowlist; shared-bot satellites keep a transport
+7ecee9e78f refactor(gateway): share the primary admit/scope step between message and busy handlers
+27768a9fa5 fix(gateway): profile_routes no longer hijack DMs to a dedicated secondary bot (#104933)
+350b9c90fa fix(gateway): resolve authorization routing in multiplexed busy sessions
+fc4f564568 fix(gateway): scope multiplex busy-session handler to its owning profile
+65579d8a46 fix(gateway): bind HERMES_SESSION_PROFILE per /p/<profile>/ api request
+37dcc0a6e8 fix(gateway): a secondary API_SERVER_KEY no longer skips the profile; start/install/status honour the live multiplexer
+ceaf622c6d fix(mcp): same-named MCP servers with different credentials connect per profile; owner /reload-mcp keeps adopters' tools
+5e04961072 test(hindsight): trim salvaged #103957 tests to the three invariants
+a9838c2100 fix(multiplex): tool and memory-provider env reads stay inside the routed profile
+a1b689f12a fix(mem0): skip platform key lookup in OSS mode
+778ad61017 fix(hindsight): accept HINDSIGHT_API_LLM_API_KEY vault name in key resolution
+d0d5c7745a test(hindsight): run pure gate tests on Windows too
+2c24ed4b6e fix(hindsight): keep scopeless daemon worker from clobbering profile env key
+915c0f806d test(goals): patch the registry construction seam, not hermes_state.SessionDB
+956793aeac docs(multi-profile): profile sessions keep their own keys and store on every gateway path
+6806a38084 fix(goals): GoalManager borrows the registry's shared state.db handle
+e7136f1694 fix(tui_gateway): profile sessions never read or write through the launch store
+75ae2859b9 fix(gateway): default-profile rows and /undo eviction stay on the profile that owns them
+5fc784a8cf fix(gateway): shutdown notices parse named-profile keys directly
+adc4fad919 fix(qqbot): authorize approval buttons for named-profile session keys
+bdb38e3fc6 fix(gateway): parse named-profile namespaces in session keys
+31d0a2428e fix: add MagicMock to gitignore
+35a9d6b39d fix: delete magicmock crud
+939e45c91d chore: release v0.21.2 (2026.9.11)
+759024bdff fix(deepseek): honor Flash 1M window leftovers and native vision
+7469c0f2a5 fmt(js): `npm run fix` on merge (#108522)
+0dcadf6f41 revert: remove Collective Wisdom V1 (#94266)
+4e865d42d1 fix(desktop): restore flat glass surfaces without text bleed
+8226c2f6a2 Merge pull request #107708 from dagardner-nv/feat/propagate-request-metadata-to-relay
+698ab88ab8 Merge pull request #108429 from NousResearch/fix/local-recommendation-policy
+5764ae3168 fix(local-models): keep automatic recommendations GPU-resident
+90307af312 Add attribution
+ad03f20dd6 test(desktop): pin local media seeking through the production fetchLocal
+73a2597c81 fix(desktop): serve local hermes-media ranges so chat video can seek
+3b45681c25 fix(desktop): qualify group (you) by connection, not bare profile name
+0b8daf30aa fix(bootstrap-installer): stamp setup app version from release semver
+04dd80a977 test(web): count only the dashboard's own warning in the corrupt-store poll test
+fdd32f81d4 fix(web): report a corrupt state.db as a throttled 503 status instead of a traceback per poll
+5a2f512390 fix(cli): exit non-zero from `sessions repair --check-only` on an unhealthy store
+d8cf5da7ac fix(state): make the FTS write-health probe flush segments and catch IntegrityError
+754ecff466 fix(state): pin corrupt-session recovery guidance to the failing profile
+3d167a8271 fix(doctor): name structural state.db corruption honestly and route it to sessions recover
+38adfe90a4 fix(state): classify FTS-scoped corruption as fts_index, never whole-file damage
+17b2768b86 fix(state): quarantine a corrupt/replaced handle out of rebuild_fts() too
+10777823fe fix(sessions): salvage a page-1-header-damaged state.db in the lost_and_found lane
+c816bfab20 fix(state): escape underscores in the cjk family exclusion LIKE pattern
+b811dfd0ee fix(state): exclude the cjk index family from the legacy FTS demote rename
+8a9f9eca2e fix(recovery): seed a damaged rowid edge from min()/max() before the INT64 domain
+1dcc0b06e2 fix(recovery): skip rows the destination schema rejects during partial salvage
+bd2c7e2457 fix(state): drop orphan FTS5 shadow tables per family on SessionDB open
+a2413495ad fix(state): fts_trigram_session_sql qualifies model_config under the json_valid guard
+46afbfec10 fix(state): route the remaining model_config marker reads through _sql_json_extract
+c4a8572d68 test(state): pin corrupt-row robustness — one bad timestamp/oversized IN-list never kills the command
+25670cd9e3 fix(state): batch large session cleanup queries below SQLite's variable limit
+acfda37598 fix(sessions): chunk IN-list ids in bulk delete to avoid 'too many SQL variables'
+496eb13bd7 fix(state): one corrupt timestamp row no longer kills sessions list, export or insights
+df1388e77b test(tools): extend the delegation fd-leak injection to the schema replay
+a6d65cdd09 fix(state): single durable-shape authority for async_delegations
+0bb27d37cf fix(state): declare origin_session_id in the canonical async_delegations schema
+a239c4f811 fix(state): tolerate malformed session marker JSON
+78f85112d9 perf(state): batch message hydration in export_all
+16e4496d90 fix(agent): corrupt-session recovery guidance names the session's own state.db
+df0eed4f6b fix(session_search): a bare session id never reads another profile's state.db
+5a720bbb1b test(tui): launch-handle pin test opens a real registry SessionDB
+342705135a test(tui): cover launch SessionDB binding under profile override windows
+3c3ca061a6 fix(desktop): pin launch SessionDB handle to the launch home
+3a350508f7 fix(cli): wait for SessionDB teardown when deleting a profile
+f1ee8e0f39 fix(cli): release SessionDB handles when deleting a profile
+d956e05e5e chore: contributor mappings for the statedb-wal salvage (gaoanze888 work email, nikkoxgonzales noreply)
+e00a21cd39 fix(state): retry a transient SQLITE_IOERR on the pooled read path before surfacing it
+295edf2557 fix(state): gate the lock-free read pool on a confirmed WAL header, not the assumed mode
+9f9ec647f5 fix(gateway): re-check the live store before broadcasting the state.db warning
+045704ce00 test(state): port the #107411 dentry tests to the shared WAL-generation harness
+4d9ec9be50 fix(db): survive DELETE fallback failure in WAL setup
+031d3760d0 fix(state): distinguish retired WAL recovery guidance
+3a3ec6eeaf fix(state): serialize replaced/generation probe with close() in _execute_write
+d6b036b726 fix(state): compare fd identity against the watched path, not st_nlink
+84a3c4de74 fix(state): require nlink==0 before treating a /proc fd as an unlinked WAL sidecar
+7dec81568e test(desktop): trim salvaged pool tests to invariants
+19cff347ad fix(desktop): wait for an evicted backend to release its slot
+919dea9020 fix(desktop): await LRU teardown before queued wake
+a863bbcc28 fix(desktop): make pool slot timeouts actionable
+d27180ba7f fix(desktop): pin primary backend routing to its booted profile
+d1bd7b00df fix(desktop): dispatch probe falls back to /api/status on pre-/api/health remotes
+ee8257d601 fix(desktop): probe /api/health on pooled SSH dispatch, not /api/status
+8ab08968f4 fix(desktop): give pooled remote dispatch probes the cold-start liveness budget
+902eccae3f test(state): trim holder-scope suite to the two behaviour contracts
+085623a11a fix(state): scope uninspectable-holder fallback to the instance's own HERMES_HOME
+d41e906598 test(hosted-rooms): pin the coordination store off the master state.db; label sidecars
+cfeccbdf34 fix(hosted-rooms): local_profiles skips the profile-delete tombstone dir
+c9b71ebaf7 fix(dashboard): startup schema reconcile opens state.db read-only first
+b02f3aa00b fix(doctor): refuse the WAL checkpoint while a live writer holds state.db (#103339)
+d294a655f3 fix(cron): serialize lifecycle script reads with sqlite locks
+4e743b06a2 chore: contributor mapping for RikETS
+0e422e0ece fix(gateway): isolate hosted-room state in shared-state.db — profile gateways must not write master state.db
+52fb4e0877 fix(desktop): read Bot Mode avatars over the active socket, not one dial per bot
+e4080b381b fix(desktop): roster avatar sync no longer dials a backend per registered profile at launch
+ff59fcd710 fix(state): skip the display-trigger drop+recreate when the triggers already match
+c4c7e102aa refactor(state): tighten generation-stamp comment to the why
+b8d7977f0d test(state): trim #101881 tests to two invariants (zero writes on settled open; open not blocked by sibling write lock)
+ef8d682200 perf(state): stop taking the state.db write lock to open a database that needs no writes
+dbc5d7c60b fix(desktop): warmAgent goes through the guarded prewarm resolver too
+b23559877a fix(desktop): route host.warmProfile through the guarded prewarm resolver
+8706517544 style(desktop): lint and format the salvaged titlebar files
+837e4b0942 feat(desktop): let Appearance choose left or right for titlebar app actions
+a09368fcd6 fix(desktop): pin settings layout and HUD back to the right titlebar
+75a6fac052 fix(desktop): focus_pane un-minimizes the tree zone for every revealer
+aabad7b042 fmt(js): `npm run fix` on merge (#108217)
+efca39279a fmt(js): `npm run fix` on merge (#108214)
+0591da2ba6 Guided first launch: review fixes from #107985 and the free-tier chip badge (NS-848, NS-855) (#108211)
+dee30d123d fix(desktop): scope approval hints and omit zero message counts
+b08a26791f fix(desktop): focus opened sessions and restore closed tab positions
+22b4b49aa7 fix(desktop): preserve composer selection across model picking
+e6aa2e9fe4 fix(desktop): satisfy Electron permission type check
+244a42f636 fix(desktop): media-range review follow-ups — ignore multi-range as a whole, fstat the handle being streamed, 404 for missing files
+360c1ee836 fix(desktop): allow HTML5 video fullscreen through permission handlers
+f36b6b0ce6 fix(desktop): cancel bootstrap manifest work during quit
+7b9808e43b fix(desktop): complete quit through one bounded teardown barrier
+8607d6a52a fix(desktop): retain and cancel owned backend lifecycle work
+556d19c2d5 fix(desktop): preserve refresh errors in media and verify auth recovery over HTTP
+22751c8fd9 fix(desktop): preserve remote auth through refresh failures and login races
+5e9157658a fix(desktop): stage group-chat PDFs through file.attach
+8184051be7 test(bot-mode): pin group PDF staging to the 1:1 file.attach contract
+a3190625c0 fix(desktop): refresh missing roster sources after recovery
+10555c287b fix(desktop): scope primary auth recovery to its foreground
+8d092c2f71 fix(desktop): validate remote OAuth through ticket minting
+8429a54bac fix(desktop): track the exact group member through presence and stop
+6fa8518b44 fix(desktop): reject unsupported group slash commands before delivery
+20f7ef4df5 fix(desktop): yield the plugin titlebar band only to mounted chrome
+433d40686d fix(desktop): republish composer clearance after an effect replay
+aa05e5c0f4 fix(desktop): resolve side ownership before workspace registration
+6cc51b407c fix(desktop): keep sidebar tabs and restore controls clear of titlebar chrome
+477194879c fix(desktop): recover minimized sidebars from their existing controls
+8c74118c4a fmt(js): `npm run fix` on merge (#108127)
+b8e8639445 Guided first launch: smaller code and review fixes over PR B1 (NS-848, PR B2) (#107985)
+0e927c914d Guided first launch behind HERMES_GUEST_ONBOARDING: intro, guided chat, first task in default (NS-848, PR B1) (#107958)
+5d2d5e906d fix(tests): banner ssh-fastpath tests patch the seam production reads (_github_branch_tip)
+1827a8584e refactor(desktop): name the in-memory tail wipe by what it clears
+cbd03e6e4c fix(gateway): secondary-profile adapters no longer inherit the default's allow-all / allowlists
+94fb74fa97 docs(bot-mode): explain Warm Bot Backends, idle reaping, and slot waits
+ad6fdd4f1c fix(desktop): route session reads through primary backend
+fc3d60af09 feat(compression): provider-scoped model_thresholds keys ("<provider>:<substr>")
+9ce7547faf fix(update): bound network git in hermes update and prune shallow grafts on apply
+5bfa389e8a fix(cli): prune stale shallow grafts left by depth-1 update checks (#105951)
+66a13703b3 fix(desktop): update-check failures name the real cause instead of 'couldn't reach the update server'
+a6ee31f55a feat(wisdom): add Hermes Collective Wisdom Agent V1 (#94266)
+f8456248d9 fix: Bedrock Guardrails enforced on the Claude route and blocks surface as refusals
+d15ed44452 fix(desktop): forget in-memory paging state on a connection/mode re-home
+c2d01f1012 fix(desktop): key the page under the stamp its rows already carry
+fd9c52ae1e refactor(desktop): name the tail entry's route and owner
+a0977b0a3c fix(desktop): coalesce tail spellings against backends without the profile field
+1affcb9386 refactor(desktop): resolve the ambient tail owner through the api/client seam
+e52c97b8e7 fix(tests): align desktop fixtures with the jsdom window contract
+d45842d206 fix(desktop): preserve older history pagination across scopes
+036a20b3ca test(anthropic): one wire_headers probe; the bearer mirror lives only in the portal wire test
+ed2dd27e85 test(anthropic): portal bearer test asserts the wire headers, not the api_key attribute
+17b3cc2023 fix(anthropic): bearer-only clients omit x-api-key the same copy-safe way
+9ee217c063 refactor(anthropic): Omit() guard reads the sentinel straight off the pinned SDK
+7eb6978c26 test(anthropic): move credential-isolation regressions to a dedicated shard
+56dfa091f9 fix(anthropic): fail closed when the SDK Omit sentinel is unavailable
+d3cde3b3b5 test(anthropic): keep formatter-stable line length in wire-level assert
+52037b9705 test(anthropic): assert the Bearer guard at the wire header level
+4a7200ced5 test(anthropic): cover the with_options() copy path for the Bearer guard
+42cd1ab2d8 fix(anthropic): make the api-key Bearer guard copy-safe via Omit() default header
+174eff3f4c fix(anthropic): clear SDK env-derived auth_token on api-key-style clients
+3a76fe8e67 chore: map contributor emails for kokhlo and 0genlab
+2423385c05 refactor(serve): one place maps "process gone" to orphaned in the watchdog
+e7eed649a6 fix(serve): only "no such process" from ps means the Desktop parent is gone
+60562ed81a test(serve): watchdog probe tests stop faking the host platform
+3e72aef744 fix(serve): reserve ProcessLookupError for known missing process signals
+2489f15040 fix(serve): ensure parent-death watchdog detects exited Desktop parent (#80204)
+754dd430ce fmt(js): `npm run fix` on merge (#108028)
+4f137c73fc refactor(desktop): one readStatusCode beside httpStatusError; log the reauth latch once
+9cb9eda782 test(desktop): trim the reauth-latch suite to the two composition invariants
+e91ad53fda fix(desktop): a failed native refresh only confirms reauth on a dead refresh token
+0dd6bee93a refactor(desktop): route every REST status error through httpStatusError
+8d22781b1c fix(desktop): latch an expired remote OAuth session on the first confirmed 401 instead of flickering the Sign in overlay (#95701)
+b7d353fef1 Merge pull request #107994 from NousResearch/fix/local-model-session-routing
+dc90a75ab4 fix(desktop): park a secondary socket after repeated stalled dials
+b07163bdad fix(desktop): keepalive-touch only secondaries with an open socket
+128e411023 fix(desktop): resolve passive reads inside the backend resolvers
+66a56cc337 fix(desktop): prevent background tile reconcile from starving pool slots (#103375)
+28388947f8 fix(desktop): preserve local provider identity across new chats
+2b7bd7c96d feat(reasoning): verbosity mixin - compact/suppress thinking history for low-effort turns
+4ddcd495c0 feat(lambda-tuner): complexity-driven adaptive reasoning effort with EMA smoothing
+f5805c07ca feat(reasoning): adaptive effort override - per-turn complexity-driven effort injection
+8d79c2ff57 Merge pull request #107959 from NousResearch/fix/local-fit-mtp-accounting
+91efd7cf98 feat(reasoning): conflict resolver - priority+confidence arbitration for multi-plugin effort recommendations
+bffa5f75e4 test(terminal): trim NOPASSWD probe tests to behaviour contracts
+4fc64b6730 refactor(terminal): probe NOPASSWD only when a prompt would fire; drop the host-only probe
+39abca492d fix(terminal): gate sudo probes by backend cancellation safety
+d38064e3c1 fix(terminal): probe remote passwordless sudo
+6ac77111af refactor(sessions): simplify the retired-generation capture after review
+64fe13a647 fix(sessions): retire-capture integrity - backups skip capture dirs whole; short reads fail the capture
+5cb9f5c347 fix(sessions): keep the writer-conn lock audit green for the lost-generation close paths
+d74a88c51e fix(sessions): a runtime setconfig failure on a lost-generation handle logs at ERROR
+6db572a828 test(hermes_state): one harness for the lost-WAL-generation tests
+8e0c999f4b refactor(sessions): one streaming copy loop for the retired-generation capture
+d87bf0d07e fix(sessions): a failed retired-generation capture still pins the 3.11 handle and logs at ERROR
+d93f72c460 fix(sessions): retire lost-generation writers unclosed where the close-time checkpoint cannot be switched off
+d616424571 fix(sessions): capture a lost WAL generation durably before shutdown settles
+8ec8c4c090 fix(cleanup): remove invalid capability tokens, fix IB prune /new leak verified
+d59a914076 fix(final): IB prune leak on /new, ctx._session_id finalize clear
+07628c4389 fix(cycle3): IB prune session-type inversion, _session_id, doc clarity
+52003ab49e feat(MNOP): reasoning mode, entropy-delta gate, RR/Kolmogorov score, skill sync
+2383b5f07a fix(cycle2): AEP lockout, ChronoMem cross-session leak, threshold config restore
+275a83e487 feat(IJKL): importance-biased prune, BoN diversity, SkillOpt hooks, MDL tool compactor
+e146f0b59a fix(cycle1): AEP floor math, profile leak on /new, intent cap, pre_compress doc
+9cdfd6ee03 feat(EFGH): EXG memory API, ChronoMem clock, complexity scorer, importance scorer
+b72eda5197 fix: recursive adversarial pass 2 — 6 confirmed bugs resolved
+4a6f890579 feat(D): predicates module + intent propagation + wrapper hardening
+3ba19df7b3 feat(A): entropy-rate estimator + intent-conditioned compression + pre-compress checkpoint
+0665245801 docs(C): MDL dedup + rationale comments + fork skill
+1644aacaf8 feat(B): pre_compress hook + on_session_end cleanup + diversity-tax note + set_intent
+f1419f1adf fix: adversarial-pass residuals — 5 confirmed bugs resolved
+e0c191d1c8 opt: domain sweep fixes — thread safety, bounds, dirty-check, profile validation
+c976c174d0 feat: adaptive compression plugin API + lambda-tuner session classifier
+0316d3d404 fix(local-runtime): unify memory accounting and effective-window MTP
+0c0983ab21 test(auth): anon-auth fixture resets the per-profile token memo as a dict
+05d705dd69 Merge pull request #105839 from victor-kyriazakos/fix/relay-explicit-disable
+6f5dda1aee fix(relay): read the opt-out through the loader's own YAML reader
+7ea67e97f4 docs(relay): describe the opt-out at its real boundary
+5edf794e6b test: restore the untouched streaming nested-config test
+16b56e8e22 test(relay): replace the startup harness with four invariant tests
+1d5debfa65 fix(config): apply managed overlay when the user config.yaml is absent
+337d69856f fix(relay): legacy gateway.json opt-out is advisory, like every platform
+5746b5bae6 fix(relay): veto the disable at the activation boundary only
+6ee218602d feat(relay): pass API request metadata to Relay tracking
+c15e1e94c1 fix(relay): log terminal config opt-out on websocket dial
+4f3c4be7ca fix(config): reuse unchanged legacy gateway reads
+114cfc0bc0 test(gateway): exercise streaming configuration with real YAML
+6ce2b72281 fix: apply managed gateway config without user YAML
+f2de102872 fix(relay): preserve legacy opt-out without standalone bootstrap
+9c576fc69d fix(relay): honor explicit profile disable before automatic relay activity
+
+__HERMES_CWD_429f6a978eaa__/var/home/rainbow/.hermes/hermes-fork__HERMES_CWD_429f6a978eaa__

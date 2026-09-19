@@ -1,0 +1,24 @@
+{
+  "delegation_id": "deleg_83daf711",
+  "started": "2026-09-19 22:54:34",
+  "task_count": 2,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Adversarial review of reviewer thread findings on PR 2072 (jesterG1979/hello_agent, branch cursor/jev-extraction-cascade-d02d). Your job is to verify each finding against the actual code before it gets posted as a comment. Output a JSON array of objects with fields: thread_id, verdict (VALID | PARTIALLY_VALID | INVALID), rationale (one sentence), post_comment (true/false), reply_body (the comment text to post if post_comment=true — write it as amoni094 would, technical, concise, referencing spec",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_83daf711/task-0.log",
+      "status": "interrupted",
+      "exit_reason": "interrupted"
+    },
+    {
+      "index": 1,
+      "goal": "Adversarial review of reviewer thread findings on PR 2075 (jesterG1979/hello_agent, branch cursor/interpretation-kernel-3524). Your job is to verify each finding against actual code before comments are posted. Output a JSON array with fields: thread_id, verdict (VALID | PARTIALLY_VALID | INVALID), rationale, post_comment (true/false), reply_body. Write to /tmp/adversarial_2075.json.\n\nThread findings and code evidence:\n\n1. PRRT_kwDORF5oBs6j_RoS (P1): _SENTENCE regex in extract.py: r'(?:[^.;]|\\.(?",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_83daf711/task-1.log",
+      "status": "interrupted",
+      "exit_reason": "interrupted"
+    }
+  ],
+  "completed": "2026-09-19 22:59:59"
+}

@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_6852e03e",
+  "started": "2026-09-18 19:39:36",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Perform a cold adversarial review of a Hermes plugin. You are a SKEPTIC/ADVERSARY. Your job is to find real bugs, design flaws, and failure modes — not to validate. Be specific: cite line numbers, exact failure conditions, and severity (HIGH/MED/LOW).\n\nPlugin file: /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py\n\nDependencies also in scope:\n- /var/home/rainbow/.hermes/scripts/jev_verify_fn.py (provides logprob_classify)\n- /var/home/rainbow/.hermes/scripts/proper_scorin",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_6852e03e/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Perform a cold WIRING AUDIT of a Hermes plugin. You are a VALIDATOR — your job is to verify that every integration point is correct, that the plugin actually fires in the real runtime, and that it cannot silently no-op or corrupt state. Be precise: cite source file line numbers where relevant.\n\nPlugin file: /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py\nConfig file: /var/home/rainbow/.hermes/profiles/fork/config.yaml\n\nHermes runtime facts to verify against:\n- Plugin d",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_6852e03e/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "You are an infrastructure engineer. Continue the Hermes Jev research implementation work. Specifically: build and run additional corpus-calibrated predicates and infrastructure beyond what has already been done.\n\nAlready completed (do NOT redo):\n- /var/home/rainbow/.hermes/scripts/jev_verify_fn.py (698 lines): logprob_classify, atomic_subquestions, calibrated_gate, consistency sampling, call budget\n- /var/home/rainbow/.hermes/scripts/proper_scoring.py (412 lines): Brier/log-loss isotonic calibra",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_6852e03e/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-18 19:47:23"
+}

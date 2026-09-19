@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_150398ba",
+  "started": "2026-09-19 00:56:50",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a cold adversarial reviewer with NO prior context. Find bugs, logic errors, incomplete fixes, or new security issues in the patched files listed below. Be adversarial — assume patches are wrong until proven correct.\n\nFor each finding rate: HIGH / MEDIUM / LOW with exact file + line.\n\nPatched files to review:\n\n1. ~/.hermes/hermes-fork/gateway/input_sanitizer.py (entire file ~70 lines) — extended sanitizer covering ChatML, XML, single-newline, JSON role injection\n2. ~/.hermes/hermes-fork/t",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_150398ba/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 01:06:44"
+}

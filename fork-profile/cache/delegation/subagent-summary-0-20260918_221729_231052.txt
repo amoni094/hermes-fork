@@ -1,0 +1,177 @@
+All five files read in full. Now I'll analyse each focus area and all other real bugs before writing findings.
+
+**Lock sequence analysis for `_update_threshold`:**
+- Line 777: acquires `_THRESHOLDS_LOCK`, reads `thresholds`, checks `role`, reads `current`, releases.
+- Lines 783–802: acquires `_THRESHOLDS_LOCK` again (second acquisition from same thread), reads/writes `_SCORE_HISTORY`, releases.
+- Lines 817–835: acquires `_THRESHOLDS_LOCK` a third time, does FTRL write, releases.
+
+Three separate lock acquisitions; none nested — no re-entrant deadlock from within `_update_threshold` itself.
+
+**`_apply_js_shrinkage` call order in `_relevance_gated_prune`:**
+- Line 1181: `_apply_js_shrinkage` called AFTER both `_record_decision` loops (lines 1127–1159 call `_record_decision` → `_update_threshold` which releases `_THRESHOLDS_LOCK`). No nested lock hold when JS shrinkage is called. Safe.
+
+**`_get_thresholds` session-end race:**
+- Line 632: `dict(_SESSION_THRESHOLDS.get(session_id, snapshot))` — if session was cleaned up, `.get` returns `snapshot` (the dict taken earlier). Safe fallback confirmed.
+
+**`_patch_compressor` TOCTOU:**
+- Lines 1283–1285: read under lock, release.
+- Line 1286: `if already_patched:` branch — updates and writes under a new lock at 1293/1308. But this path returns immediately; no write of a NEW entry happens in this branch.
+- Lines 1316–1361: new-entry path — builds closure, then writes `_PATCHED[cid]` under lock at 1362. Between "not patched" check (line 1284 release) and write (line 1362), another thread could patch the same `cid`. Result: two closures installed, but only one written to `_PATCHED`. The second closure silently orphaned but `compressor._prune_old_tool_results` gets overwritten twice — second write wins, `_PATCHED` correctly stores second; first `_weakref.finalize` fires on GC and evicts the cid, preventing future idempotency. Not catastrophic but the double-patch of the instance attribute is real.
+
+**`gate_audit.py` vs plugin `_beta_posterior_threshold`:**
+- `gate_audit.py` has NO `_beta_posterior_threshold` function. The plugin's `_beta_posterior_threshold` (lines 643–690) reads the calibration log and computes the Beta-Binomial posterior. `gate_audit.py` has `beta_binomial_posterior` (line 68) — a completely different function for a different purpose (auditing gate error rates, not computing threshold posteriors). The question premise is partially wrong (gate_audit doesn't use the plugin's function), but there IS a naming collision risk and an implementation divergence between the two Beta-Binomial implementations.
+
+**`set(numpy_array)` in `proper_scoring.py` line 269:**
+- `set(numpy_array)` works: iterating a 1-D numpy array yields scalar numpy elements; `set()` accepts any iterable, `len(set(...))` is valid. However, elements are `numpy.bool_` / `numpy.int64` scalars. `len(set(numpy_array)) < 2` evaluates correctly because numpy scalars support `__hash__` and `__eq__`. Not a bug.
+
+**`_MIDDLE_TIER_COUNTS` / `_TOTAL_COUNTS` unguarded:**
+- Lines 897–912 and 1011–1012: these module-level dicts are read and written without any lock. Under concurrent compaction of different sessions this is just GIL-protected (CPython dict read/write is atomic for simple ops) but the compound check-then-update at 897–898 is not atomic.
+
+**`confidence_tracker.py` write path — no atomic replace:**
+- Line 386–387: `with open(out_path, "w") as f: json.dump(...)` — non-atomic; crash mid-write corrupts file. Contrast with `calibration_loop.py` line 311 which uses `tempfile + os.replace`.
+
+**`_pav` in `calibration_loop.py` line 214 — variable shadowing `ys`:**
+- Line 214: `breakpoints = sorted((x, float(sum(ys) / len(ys))) for x, ys in bp_map.items())`. The name `ys` inside the genexp shadows the outer `ys` list from line 171. This is fine inside the comprehension (each `ys` in the genexp is a `list[float]` from `bp_map`), but if the comprehension ever raises and `ys` is checked after, it would be the last inner `ys` value. Not a real runtime bug under current flow, but a shadowing hazard.
+
+**`_write_calibration_event` — file opened without lock:**
+- Multiple threads can call `_write_calibration_event` concurrently (one per middle-tier message during compaction). `open(..., "a")` + `fh.write(...)` is not atomic at the OS level on all filesystems; two threads writing simultaneously can interleave their JSON lines, producing malformed JSONL.
+
+**`_get_count` (line 635–637) — unguarded read of `_THRESHOLD_COUNTS`:**
+- Called from `_relevance_gated_prune` without holding `_THRESHOLDS_LOCK`. A concurrent `on_session_end` can pop `session_id` from `_THRESHOLD_COUNTS` between the outer `.get` and the inner `.get(role, 0)`, causing a `KeyError` on the nested dict if the session's dict was popped but a stale reference was kept. Actually `.get(session_id, {})` returns `{}` if popped, so `.get(role, 0)` is safe. But the count can be stale/zero when it shouldn't be — more a correctness issue than a crash.
+
+```json
+[
+  {
+    "id": "P7A-01",
+    "severity": "MED",
+    "file": "__init__.py",
+    "line_range": [1283, 1363],
+    "failure_condition": "Two threads call on_pre_compress concurrently for the same compressor instance (same cid) that has never been patched. Thread A reads _PATCHED under lock at line 1283 (already_patched=False), releases. Thread B does the same (also False). Both proceed to build closures. Thread A writes _PATCHED[cid] at line 1362. Thread B overwrites _PATCHED[cid] at line 1362. Thread A's weakref finalizer is also installed. When the compressor is GC'd the finalizer fires and correctly evicts cid. But compressor._prune_old_tool_results has been overwritten twice: Thread B's closure is now installed on the instance, referencing Thread B's _session_ref. Thread A's closure is lost, but Thread A also called _weakref.finalize — two finalizers are now registered for the same cid. When GC fires, _evict_patched_id(cid) is called twice; the second pop is a no-op (correct). The compressor runs Thread B's EMA state regardless of which session triggered the compaction. No crash, but wrong session_id used for all threshold lookups if Thread A and B are for different sessions.",
+    "impact": "Compressor runs under wrong session's EMA thresholds. Two weakref finalizers registered (double-eviction is harmless but wasteful). If Thread A and B carry different session_ids, Thread B's thresholds silently govern compaction for both sessions until next GC cycle.",
+    "fix_recommendation": "Hold _PATCHED_LOCK across the entire check-and-install sequence (read + closure creation + write), not just around the read and separately around the write. Since the closure creation is cheap (no I/O, no blocking), the lock can safely cover lines 1283–1363. Alternatively, after re-acquiring the lock at line 1362, re-check `if cid in _PATCHED: return` and skip the second install."
+  },
+  {
+    "id": "P7A-02",
+    "severity": "MED",
+    "file": "__init__.py",
+    "line_range": [777, 835],
+    "failure_condition": "Two threads call _update_threshold for the same (session_id, role). The function acquires _THRESHOLDS_LOCK THREE times sequentially (lines 777, 793, 817), releasing between each. Between release 1 (line 782) and acquire 2 (line 793), on_session_end can pop session_id from _SESSION_THRESHOLDS and _SCORE_HISTORY. Thread then acquires lock at 793, calls _SCORE_HISTORY.setdefault(...) — this re-creates the history deque for a session that just ended. On_session_end's cleanup at lines 1428-1430 has already run and won't clean this up again (session already popped). Result: zombie _SCORE_HISTORY entry for the dead session leaks indefinitely.",
+    "impact": "Memory leak: one deque per (dead_session, role) combination survives session end. In long-running processes with high session churn and concurrent compression, this accumulates unboundedly. Not a crash; the leaked deque never affects correctness of live sessions.",
+    "fix_recommendation": "Merge the first and second lock acquisitions: move the early-exit check (lines 777–781) inside the second lock block (lines 793–802), or use a single lock acquisition covering lines 777–802. This eliminates the window for on_session_end to run between them."
+  },
+  {
+    "id": "P7A-03",
+    "severity": "LOW",
+    "file": "__init__.py",
+    "line_range": [635, 637],
+    "failure_condition": "_get_count is called from _relevance_gated_prune (line 1056) without holding _THRESHOLDS_LOCK. Concurrently, on_session_end runs and pops session_id from _THRESHOLD_COUNTS at line 1425. _get_count reads _THRESHOLD_COUNTS.get(session_id, {}) — this is GIL-safe and returns {} if popped. The inner .get(role, 0) then returns 0. So _cold_start_boost sees count=0 (maximum bonus), lowering the threshold unnecessarily for a session that is ending.",
+    "impact": "Threshold is temporarily over-lowered (maximum cold-start bonus) for the last compaction pass of a session. Messages are more likely to be retained than the calibrated threshold warrants. Incorrect but not unsafe — no crash, no data corruption. The session is ending so the effect is transient.",
+    "fix_recommendation": "Either (a) add a with _THRESHOLDS_LOCK guard around _get_count, or (b) accept the race as tolerable given the session-ending context and document it. Option (a) requires checking for lock ordering since _get_count is called from within the scoring loop, not under any lock."
+  },
+  {
+    "id": "P7A-04",
+    "severity": "HIGH",
+    "file": "__init__.py",
+    "line_range": [521, 564],
+    "failure_condition": "_write_calibration_event is called from multiple locations in _relevance_gated_prune (lines 1075, 1086, 1108, 1119, 1137, 1156). Under concurrent compaction passes (two sessions compressing simultaneously), multiple threads call open(_CALIBRATION_LOG, 'a') + fh.write() concurrently. On Linux, O_APPEND writes are atomic at the kernel level for writes <= PIPE_BUF (4096 bytes) on local filesystems, but a JSON record can exceed 4096 bytes (long session_id + tool content). On NFS or network filesystems O_APPEND atomicity is not guaranteed regardless of size. Two threads writing a record that spans multiple write() syscalls can interleave their output, producing a truncated or merged line that json.loads() in calibration_loop.py either skips (JSONDecodeError) or misparses.",
+    "impact": "Calibration log corruption: one or more JSONL records become unparseable. calibration_loop.py skips malformed lines, so the immediate effect is silently dropped calibration data. Over time this degrades ECE computation accuracy. In the worst case (NFS mount) entire records are lost or merged.",
+    "fix_recommendation": "Add a module-level threading.Lock() (e.g., _CALIBRATION_LOG_LOCK) and acquire it for the duration of the open+write sequence in _write_calibration_event. This makes all writes from the same process serialised. For multi-process safety, use fcntl.flock() around the write."
+  },
+  {
+    "id": "P7A-05",
+    "severity": "MED",
+    "file": "__init__.py",
+    "line_range": [896, 912],
+    "failure_condition": "_TOTAL_COUNTS and _MIDDLE_TIER_COUNTS are read and written at lines 897–912 and 1011–1012 without _THRESHOLDS_LOCK or any other lock. Under concurrent compaction (two threads, different sessions), the compound read-modify-write at line 1011 (_TOTAL_COUNTS[session_id] = _TOTAL_COUNTS.get(..., 0) + max(..., 1)) is not atomic at the Python level. CPython's GIL makes individual dict[key] reads/writes atomic, but .get() + arithmetic + assignment is three bytecodes; a thread switch between the .get() and the assignment loses the other thread's increment.",
+    "impact": "Under concurrency, p_middle (line 901) may be computed from stale or partially-updated counters. EVSI is estimated incorrectly, causing the Jev skip criterion to either: (a) skip Jev when it should run (evsi underestimated — false early exit), or (b) run Jev when it should be skipped (evsi overestimated — wasted LLM calls). Quantitatively mild for low-concurrency deployments; larger impact for high-throughput setups.",
+    "fix_recommendation": "Guard the read-modify-write of _TOTAL_COUNTS and _MIDDLE_TIER_COUNTS under _THRESHOLDS_LOCK, or use a separate dedicated lock. Alternatively, use collections.Counter with atomic operations or accept the approximation and document it."
+  },
+  {
+    "id": "P7A-06",
+    "severity": "MED",
+    "file": "gate_audit.py",
+    "line_range": [68, 111],
+    "failure_condition": "gate_audit.py defines its own beta_binomial_posterior function (line 68). The plugin's __init__.py defines _beta_posterior_threshold (line 643) which also computes a Beta-Binomial posterior but with different priors, different inputs, and a different purpose. gate_audit.py uses Beta(1,1) prior (PRIOR_ALPHA=1.0, PRIOR_BETA=1.0, line 58–59); the plugin uses Beta(2,2) prior (beta_prior=2.0, line 657–658). Both are invoked in production via different codepaths. If an operator compares gate_audit error rates with the plugin's threshold posteriors (e.g., to decide if the calibrated threshold is appropriate given the gate error rate), the two posteriors are computed on different priors and produce systematically different values. The plugin's threshold posterior will be more conservative (shrunk toward 0.5) than the gate audit's error rate posterior. This inconsistency is invisible at the API level.",
+    "impact": "Posterior estimates for 'what is the retain rate' (plugin) and 'what is the error rate' (gate_audit) use different priors with no documented justification for the difference. An operator comparing plugin threshold (Beta(2,2)) with gate false_act rate (Beta(1,1)) to assess calibration consistency will get a misleading picture. Not a crash; a calibration logic error.",
+    "fix_recommendation": "Unify the Beta priors: either (a) expose a shared prior constant (e.g., BETA_PRIOR_ALPHA/BETA in a shared constants module), or (b) document explicitly in both files why different priors are used and what the practical difference is. If the two posteriors are truly for different phenomena, add a note warning operators not to compare them directly."
+  },
+  {
+    "id": "P7A-07",
+    "severity": "LOW",
+    "file": "calibration_loop.py",
+    "line_range": [214, 214],
+    "failure_condition": "Line 214: `breakpoints = sorted((x, float(sum(ys) / len(ys))) for x, ys in bp_map.items())`. The genexp variable `ys` shadows the outer `ys` list defined at line 171. Inside the genexp each `ys` is correctly a list of floats from bp_map. However, if bp_map is empty (zero breakpoints after dedup — impossible in practice given the prior `_pav_stack` produced non-empty blocks, but theoretically reachable if predictions is empty — which is guarded at line 166) the genexp produces an empty sequence and `sorted()` returns []. The outer `ys` is then the last value bound by the genexp's loop variable, which in CPython leaks into the enclosing scope after the comprehension finishes (generator expressions do NOT leak, but this is a genexp passed to sorted(), which IS evaluated lazily — the variable does NOT leak from a genexp). Confirmed: generator expression variable does not leak in Python 3. The shadowing is therefore only a readability hazard, not a runtime bug.",
+    "impact": "No runtime impact. The variable shadowing can confuse maintainers who read the code and assume `ys` after line 214 still refers to the PAV output list from line 171. A future maintainer who adds a reference to `ys` after line 214 expecting the PAV output would silently get the last inner list from bp_map instead (if they convert the genexp to a list comprehension, which DOES leak in Python 3).",
+    "fix_recommendation": "Rename the inner variable: `breakpoints = sorted((x, float(sum(y_vals) / len(y_vals))) for x, y_vals in bp_map.items())`. One-character rename eliminates ambiguity."
+  },
+  {
+    "id": "P7A-08",
+    "severity": "MED",
+    "file": "confidence_tracker.py",
+    "line_range": [384, 387],
+    "failure_condition": "confidence_tracker.py writes its output JSON non-atomically at lines 386–387: `with open(out_path, 'w') as f: json.dump(result, f, indent=2)`. The `open(..., 'w')` call truncates the file immediately. If the process is killed or crashes after truncation but before json.dump completes (possible for large result dicts — e.g., 1000 tools × 20 fields each), the output file is left empty or partially written. Contrast with calibration_loop.py lines 311–320 which correctly uses tempfile.mkstemp + os.replace for atomic write.",
+    "impact": "confidence-trajectory.json is left empty or truncated. Any downstream consumer (dashboard, cron job) reading the file sees invalid JSON and either crashes or silently skips the report. A subsequent successful run of confidence_tracker.py overwrites with a valid file, so the window is bounded by the process lifetime.",
+    "fix_recommendation": "Apply the same pattern as calibration_loop.py: write to a tempfile in the same directory, then os.replace() to the target path. Six lines of change, matching the existing pattern in the codebase."
+  },
+  {
+    "id": "P7A-09",
+    "severity": "LOW",
+    "file": "proper_scoring.py",
+    "line_range": [269, 270],
+    "failure_condition": "Line 269: `if len(set(outcomes)) < 2`. If outcomes is a numpy array (dtype int32/int64/bool), `set(numpy_array)` iterates the array and produces a set of numpy scalar objects (numpy.int64, numpy.bool_, etc.). These scalars support __hash__ and __eq__ correctly, so `len(set(outcomes))` returns the correct count of distinct values. The condition works as intended. However, proper_scoring.py's docstring (line 29) explicitly states 'All functions are stdlib-only. No numpy/scipy'. If a caller passes a numpy array, the guard works correctly but the function then proceeds to `sorted(zip(predictions, outcomes), ...)` at line 273. zip() with a numpy array iterates it correctly. The downstream _pav_stack receives a list of float(y) values (line 275: `ys = [float(y) for _, y in pairs]`). float(numpy.int64(1)) = 1.0 — correct. So numpy arrays pass through correctly despite the stdlib-only contract.",
+    "impact": "No runtime impact for 1-D numpy arrays of integer/bool dtype. The stdlib-only contract is quietly violated but no error is raised. If a caller passes a 2-D numpy array, iteration yields rows (1-D arrays), set() produces a set of arrays, and __hash__ on a numpy array raises TypeError ('unhashable type: numpy.ndarray'). This is an unguarded TypeError that propagates to the caller.",
+    "fix_recommendation": "Add an explicit guard at the top of isotonic_calibrate: `outcomes = list(outcomes)` (and similarly `predictions = list(predictions)`). This materialises any numpy array into a plain list before the set() check and all subsequent operations, satisfying the stdlib-only contract and preventing the 2-D array TypeError."
+  },
+  {
+    "id": "P7A-10",
+    "severity": "LOW",
+    "file": "__init__.py",
+    "line_range": [595, 632],
+    "failure_condition": "_get_thresholds acquires _THRESHOLDS_LOCK at line 596, reads thresholds and takes snapshot, releases. Then at lines 615–619 calls _beta_posterior_threshold(session_id, role, cfg) for each role WITHOUT holding _THRESHOLDS_LOCK. _beta_posterior_threshold reads _CALIBRATION_LOG (I/O). This is by design — I/O under a lock would be bad. However, _CALIBRATION_LOG is also being written concurrently by _write_calibration_event (no file lock as noted in P7A-04). A read that overlaps a partial write may produce a truncated last line, which json.loads() raises JSONDecodeError on — caught and skipped at line 673. So the last in-flight record is silently dropped from the posterior computation. Across a long session this biases the posterior toward records written before the current compaction pass, lagging by up to one compaction cycle.",
+    "impact": "Posterior threshold estimate excludes the most recent calibration events (those being written concurrently). With beta_min_obs=10, the lag is one calibration event out of at least 10, causing a ≤10% stale bias in the posterior. Not a crash; a systematic but bounded calibration lag.",
+    "fix_recommendation": "This is a consequence of P7A-04 (no file lock on writes). Fixing P7A-04 (adding _CALIBRATION_LOG_LOCK) eliminates this lag entirely, since the read in _beta_posterior_threshold happens outside the lock and sees fully-written lines. No additional change needed beyond P7A-04."
+  },
+  {
+    "id": "P7A-11",
+    "severity": "LOW",
+    "file": "__init__.py",
+    "line_range": [1178, 1181],
+    "failure_condition": "_apply_js_shrinkage is called at line 1181 AFTER the _record_decision loops at lines 1127–1159. Each _record_decision call invokes _update_threshold, which acquires and releases _THRESHOLDS_LOCK (three times). After all _record_decision calls complete and all locks are released, _apply_js_shrinkage acquires _THRESHOLDS_LOCK fresh at line 714. This is a non-reentrant acquisition from a thread that does not currently hold _THRESHOLDS_LOCK. Confirmed: no double-acquisition of _THRESHOLDS_LOCK from the same thread. No deadlock possible between _THRESHOLDS_LOCK and _PATCHED_LOCK via this path: _apply_js_shrinkage only acquires _THRESHOLDS_LOCK and never acquires _PATCHED_LOCK; _update_threshold acquires only _THRESHOLDS_LOCK and never _PATCHED_LOCK. The only code that holds both locks simultaneously would require one function to call the other while holding — no such path exists in the codebase.",
+    "impact": "PASS — no deadlock, no double-acquisition. This focus area is confirmed safe.",
+    "fix_recommendation": "No action required. Document in the function that _apply_js_shrinkage must be called only after all _record_decision calls for the pass have completed, to preserve the invariant that the JS shrinkage sees the fully-updated thresholds for this pass."
+  },
+  {
+    "id": "P7A-12",
+    "severity": "LOW",
+    "file": "__init__.py",
+    "line_range": [621, 632],
+    "failure_condition": "_get_thresholds at line 626 writes `thresholds[role] = val` directly into the live `thresholds` dict (which is _SESSION_THRESHOLDS[session_id]). This write happens under _THRESHOLDS_LOCK. However, `thresholds` was captured at line 599 as a reference to the live dict (not a copy). At line 604, `snapshot = dict(thresholds)` correctly copies at that point. But the CAS write at 626 modifies the live dict through the `thresholds` reference while `snapshot` is a stale copy. A concurrent `_update_threshold` that also CAS-checks version will still correctly gate its write (version bumped). The issue: if on_session_end fires between line 596 (initial lock release) and line 621 (second lock acquire), _SESSION_THRESHOLDS.pop(session_id) removes the dict. `thresholds` is still a reference to the now-orphaned dict (not in _SESSION_THRESHOLDS). The write at line 626 goes into the orphaned dict — the updated value is never visible to any future _get_thresholds call. The line 632 final read correctly falls back to `snapshot` via `.get(session_id, snapshot)` since session_id is no longer in _SESSION_THRESHOLDS.",
+    "impact": "The posterior CAS update is silently lost when on_session_end fires in the window between the two _THRESHOLDS_LOCK acquisitions. The final read at line 632 returns the pre-CAS snapshot. This is correct behavior (session is ending) — the lost update has no operational consequence since the session is dead. PASS for correctness; the fallback works as intended.",
+    "fix_recommendation": "No action required. Confirmed: the `.get(session_id, snapshot)` fallback at line 632 correctly handles the session-end race. Add a comment to line 626 noting that writes to the orphaned `thresholds` dict are intentionally discarded if the session ends before line 632."
+  }
+]
+
+---
+
+**Summary**
+
+Read all 5 files in full. 12 findings produced (8 substantive bugs + 4 PASS/low-risk confirmations).
+
+**Real bugs found:**
+
+| ID | Sev | File | Issue |
+|----|-----|------|-------|
+| P7A-01 | MED | `__init__.py` | `_patch_compressor` TOCTOU: two threads both see `already_patched=False`, double-install closure, wrong session EMA governs compaction |
+| P7A-02 | MED | `__init__.py` | `_update_threshold` three-lock-acquisition sequence: on_session_end can run between lock 1 and lock 2, creating zombie `_SCORE_HISTORY` entry that leaks indefinitely |
+| P7A-03 | LOW | `__init__.py` | `_get_count` reads `_THRESHOLD_COUNTS` without lock; concurrent session end causes stale count=0 and max cold-start bonus on session's last compaction pass |
+| P7A-04 | HIGH | `__init__.py` | `_write_calibration_event` concurrent multi-thread writes with no file lock; on non-local or slow FS, records interleave, corrupting JSONL |
+| P7A-05 | MED | `__init__.py` | `_TOTAL_COUNTS`/`_MIDDLE_TIER_COUNTS` compound read-modify-write unguarded; concurrent sessions lose increments, biasing EVSI skip criterion |
+| P7A-06 | MED | `gate_audit.py` | Two independent Beta-Binomial implementations use inconsistent priors (Beta(1,1) vs Beta(2,2)); operator comparison of gate error rates vs plugin thresholds is misleading |
+| P7A-07 | LOW | `calibration_loop.py` | Genexp variable `ys` shadows outer PAV list; readability hazard that becomes a runtime bug if genexp is converted to list comprehension |
+| P7A-08 | MED | `confidence_tracker.py` | Non-atomic JSON output write (truncate-then-write); contrast with `calibration_loop.py` which correctly uses `tempfile + os.replace` |
+| P7A-09 | LOW | `proper_scoring.py` | `set(outcomes)` guard works for 1-D numpy arrays but raises `TypeError: unhashable type` for 2-D numpy arrays; stdlib-only contract silently violated |
+| P7A-10 | LOW | `__init__.py` | Concurrent write to calibration log during `_beta_posterior_threshold` read silently drops the most recent record; posterior lags by one cycle (consequence of P7A-04) |
+
+**PASS confirmations (focus areas explicitly checked):**
+- **P7A-11**: `_apply_js_shrinkage` call ordering and lock re-entrancy — confirmed safe, no deadlock possible
+- **P7A-12**: `_get_thresholds` session-end race with `.get(session_id, snapshot)` fallback — confirmed correct; orphaned-dict write is harmless

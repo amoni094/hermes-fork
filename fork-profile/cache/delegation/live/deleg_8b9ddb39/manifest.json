@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_8b9ddb39",
+  "started": "2026-09-16 11:01:29",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Adversarial review of Hermes wave 14 math sweep findings. You are a cold adversarial reviewer with no prior context. Review the following artifacts for coherence, grounding, internal consistency, and factual errors. Return a structured findings table with severity (HIGH/MEDIUM/LOW), category, exact location, and three-way verdict (confirmed/false_positive/need_more_context).\n\nTask type: Research/analysis + skill-document\nActive dimensions: Evidence Quality, Grounding, Coherence, Coverage, No Dea",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_8b9ddb39/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-16 11:02:36"
+}

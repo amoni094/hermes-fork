@@ -1,0 +1,24 @@
+{
+  "delegation_id": "deleg_49af2319",
+  "started": "2026-09-15 14:58:33",
+  "task_count": 2,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Apply two research findings to ~/.hermes/scripts/unified-recall.py and update two skills. All edits must use the patch tool (read the file first, make targeted old_string/new_string patches). py_compile must pass after each edit.\n\n## Finding 1: Robust Trust (arXiv:2602.09490)\nThe paper formalises trust-region clipping when an adviser's alignment probability p is known. With probability p the adviser is truthful; with 1-p they can manipulate. The optimal decision rule clips the adviser's recommen",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_49af2319/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Apply two research findings to Hermes skills. Use the patch tool for all edits. Read each file before patching.\n\n## Finding 1: Safe Harness Self-Evolution theory (arXiv:2609.08175)\nThe paper proves feasibility and limits for harness self-evolution: an agent that modifies its own prompts/tools/orchestration while keeping the underlying model frozen. Key theoretical results:\n1. FEASIBILITY CONDITION: Self-evolution is safe iff the expected reward improvement E[R(h')] - E[R(h)] > delta_min, where d",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_49af2319/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 15:00:25"
+}

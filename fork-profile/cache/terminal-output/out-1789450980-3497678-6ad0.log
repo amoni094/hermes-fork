@@ -1,0 +1,1584 @@
+### topology ###
+=== HAT-1: Skill Graph Topology ===
+  Vertices (skills)    V = 273
+  Edges (relations)    E = 811
+  H0 (components)      = 42
+  H1 (cycles)          = 580
+  chi = V - E          = -538
+
+  ⚠ H0=42 > 1: 42 disconnected skill islands detected.
+    Largest component: 231 skills
+    Small isolated clusters (41 total):
+      ['router-admin-automation', 'tplink-ax55-router-automation']
+      ['humanizer']
+      ['xurl']
+      ['gif-search']
+      ['songsee']
+      ['youtube-content']
+      ['apple-notes']
+      ['apple-reminders']
+      ['findmy']
+      ['imessage']
+  ⚠ H1=580 > 0: circular dependency patterns present in graph.
+
+### cycle-basis ###
+=== HAT-3: Cycle Basis (H1 generators) ===
+  Independent cycles found: 580
+
+  Cycle   1 (length=1) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    wald-sequential-analysis → wald-sequential-analysis
+  Cycle   2 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-lambda-tuner → hermes-context-budgeting → hermes-fork → hermes-lambda-tuner
+  Cycle   3 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    adaptive-agent-reasoning → l01-token-efficiency → hermes-context-budgeting → adaptive-agent-reasoning
+  Cycle   4 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    metacognition → l01-token-efficiency → hermes-context-budgeting → metacognition
+  Cycle   5 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    metacognition → adaptive-agent-reasoning → hermes-context-budgeting → metacognition
+  Cycle   6 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    dispatching-parallel-agents → hermes-agent-sync → hermes-swarm-consensus → dispatching-parallel-agents
+  Cycle   7 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-context-packet → hermes-agent-sync → hermes-swarm-consensus → hermes-context-packet
+  Cycle   8 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    subagent-driven-development → subagent-output-contract → hermes-agent-sync → subagent-driven-development
+  Cycle   9 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → agent-task-signoff → subagent-output-contract → verification-before-completion
+  Cycle  10 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    subagent-driven-development → agent-task-signoff → subagent-output-contract → subagent-driven-development
+  Cycle  11 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    subagent-driven-development → harness-first-agent-design → agent-task-signoff → subagent-driven-development
+  Cycle  12 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → harness-first-agent-design → agent-task-signoff → verification-before-completion
+  Cycle  13 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    ralph-loops → mnemosyne-atp-safety → harness-first-agent-design → ralph-loops
+  Cycle  14 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    autonomous-agent-loop-design → mnemosyne-atp-safety → harness-first-agent-design → autonomous-agent-loop-design
+  Cycle  15 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → mnemosyne-atp-safety → harness-first-agent-design → verification-before-completion
+  Cycle  16 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    trajectory-risk-guardrail → mnemosyne-atp-safety → harness-first-agent-design → trajectory-risk-guardrail
+  Cycle  17 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    async-agent-nightshift-patterns → mnemosyne-atp-safety → harness-first-agent-design → async-agent-nightshift-patterns
+  Cycle  18 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    autonomous-agent-loop-design → agent-mailbox-ipc → mnemosyne-atp-safety → autonomous-agent-loop-design
+  Cycle  19 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    async-agent-nightshift-patterns → agent-mailbox-ipc → mnemosyne-atp-safety → async-agent-nightshift-patterns
+  Cycle  20 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    async-agent-nightshift-patterns → hermes-cron-and-agents → agent-mailbox-ipc → async-agent-nightshift-patterns
+  Cycle  21 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    autonomous-agent-loop-design → hermes-cron-and-agents → agent-mailbox-ipc → autonomous-agent-loop-design
+  Cycle  22 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-math-research → hermes-research-ops → hermes-research → hermes-math-research
+  Cycle  23 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-cs-research → hermes-research-ops → hermes-research → hermes-cs-research
+  Cycle  24 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    trajectory-research-synthesis-to-skills → hermes-research-ops → hermes-research → trajectory-research-synthesis-to-skills
+  Cycle  25 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    arxiv-sweep-findings → hermes-research-ops → hermes-research → arxiv-sweep-findings
+  Cycle  26 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-math-sweep-findings → hermes-cs-sweep-findings → hermes-research-ops → hermes-math-sweep-findings
+  Cycle  27 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-cs-research → hermes-cs-sweep-findings → hermes-research-ops → hermes-cs-research
+  Cycle  28 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    arxiv-sweep-findings → hermes-cs-sweep-findings → hermes-research-ops → arxiv-sweep-findings
+  Cycle  29 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    trajectory-research-synthesis-to-skills → hermes-cs-sweep-findings → hermes-research-ops → trajectory-research-synthesis-to-skills
+  Cycle  30 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-math-sweep-findings → spike → hermes-cs-sweep-findings → hermes-math-sweep-findings
+  Cycle  31 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-cs-research → spike → hermes-cs-sweep-findings → hermes-cs-research
+  Cycle  32 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    math-cs-applicability-reasoning → spike → hermes-cs-sweep-findings → math-cs-applicability-reasoning
+  Cycle  33 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    workflow-map → problem-solving-router → spike → workflow-map
+  Cycle  34 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → problem-solving-router → spike → plan
+  Cycle  35 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → problem-solving-router → spike → verification-before-completion
+  Cycle  36 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    workflow-map → risk-based-review → problem-solving-router → workflow-map
+  Cycle  37 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → risk-based-review → problem-solving-router → verification-before-completion
+  Cycle  38 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → risk-based-review → problem-solving-router → plan
+  Cycle  39 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → code-impact-preflight → risk-based-review → verification-before-completion
+  Cycle  40 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → github-operations → code-impact-preflight → verification-before-completion
+  Cycle  41 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    github → github-issue-to-pr → github-operations → github
+  Cycle  42 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    scoped-pr-fix-and-verification → github-issue-to-pr → github-operations → scoped-pr-fix-and-verification
+  Cycle  43 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    github-issues → github-issue-to-pr → github-operations → github-issues
+  Cycle  44 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    split-ci-workflow-change-and-draft-pr → github-issue-to-pr → github-operations → split-ci-workflow-change-and-draft-pr
+  Cycle  45 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → github-issue-to-pr → github-operations → verification-before-completion
+  Cycle  46 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → github-issue-to-pr → github-operations → plan
+  Cycle  47 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    requesting-code-review → test-driven-development → github-issue-to-pr → requesting-code-review
+  Cycle  48 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → test-driven-development → github-issue-to-pr → verification-before-completion
+  Cycle  49 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → test-driven-development → github-issue-to-pr → plan
+  Cycle  50 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    systematic-debugging → test-driven-development → github-issue-to-pr → systematic-debugging
+  Cycle  51 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    systematic-debugging → huth-ryan-logic → test-driven-development → systematic-debugging
+  Cycle  52 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → huth-ryan-logic → test-driven-development → verification-before-completion
+  Cycle  53 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    systematic-debugging → boyd-convex-optimization → test-driven-development → systematic-debugging
+  Cycle  54 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    systematic-debugging → hastie-esl → test-driven-development → systematic-debugging
+  Cycle  55 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    shannon-1948 → li-vitanyi-kolmogorov → mackay-itila → shannon-1948
+  Cycle  56 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    shannon-1948 → gallager-itrc → mackay-itila → shannon-1948
+  Cycle  57 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    cover-thomas-eit → gallager-itrc → mackay-itila → cover-thomas-eit
+  Cycle  58 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    shannon-1948 → cover-thomas-eit → mackay-itila → shannon-1948
+  Cycle  59 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    jaynes-probability → shannon-1948 → mackay-itila → jaynes-probability
+  Cycle  60 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    knowledge-corpus-architecture → gepa-omni-optimization → evaluation-driven-development → knowledge-corpus-architecture
+  Cycle  61 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    skillopt-continuous-improvement → hermes-self-evolution → gepa-omni-optimization → skillopt-continuous-improvement
+  Cycle  62 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    self-improve-agent → hermes-self-evolution → gepa-omni-optimization → self-improve-agent
+  Cycle  63 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    skillopt-continuous-improvement → hermes-agent-skill-authoring → gepa-omni-optimization → skillopt-continuous-improvement
+  Cycle  64 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    skillopt-continuous-improvement → agent-memory-consolidation → hermes-agent-skill-authoring → skillopt-continuous-improvement
+  Cycle  65 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    memory-topology-categorical → hindsight-stack-operations → agent-memory-consolidation → memory-topology-categorical
+  Cycle  66 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    llm-agent-memory-pipeline-research → hindsight-stack-operations → agent-memory-consolidation → llm-agent-memory-pipeline-research
+  Cycle  67 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-memory-surface-selection → hindsight-stack-operations → agent-memory-consolidation → hermes-memory-surface-selection
+  Cycle  68 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    graphiti-mcp-setup → hindsight-stack-operations → agent-memory-consolidation → graphiti-mcp-setup
+  Cycle  69 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    memory-topology-categorical → memory-layer-gate → hindsight-stack-operations → memory-topology-categorical
+  Cycle  70 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-memory-surface-selection → memory-layer-gate → hindsight-stack-operations → hermes-memory-surface-selection
+  Cycle  71 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-memory-surface-selection → obsidian-research-ingestion → hindsight-stack-operations → hermes-memory-surface-selection
+  Cycle  72 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    academic-literature-review → grounded-citations → obsidian-research-ingestion → academic-literature-review
+  Cycle  73 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    domain-research-synthesis → grounded-citations → obsidian-research-ingestion → domain-research-synthesis
+  Cycle  74 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    firecrawl-research → grounded-citations → obsidian-research-ingestion → firecrawl-research
+  Cycle  75 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    weekly-review-planning → grounded-citations → obsidian-research-ingestion → weekly-review-planning
+  Cycle  76 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    legal-regulatory-research-writing → law-firm-briefing-memo → grounded-citations → legal-regulatory-research-writing
+  Cycle  77 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    exec-memo-writing → law-firm-briefing-memo → grounded-citations → exec-memo-writing
+  Cycle  78 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    docx → law-firm-briefing-memo → grounded-citations → docx
+  Cycle  79 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    pdf → law-firm-briefing-memo → grounded-citations → pdf
+  Cycle  80 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    docx → exec-memo-writing → grounded-citations → docx
+  Cycle  81 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    pdf → exec-memo-writing → grounded-citations → pdf
+  Cycle  82 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    pdf → document-layout-design → exec-memo-writing → pdf
+  Cycle  83 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    docx → document-layout-design → exec-memo-writing → docx
+  Cycle  84 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    pdf → rich-pdf-generation → document-layout-design → pdf
+  Cycle  85 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    pdf → context-safe-pdf-edits → document-layout-design → pdf
+  Cycle  86 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    competitor-news-monitor → product-price-monitor → grounded-citations → competitor-news-monitor
+  Cycle  87 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    pdf → product-price-monitor → grounded-citations → pdf
+  Cycle  88 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    firecrawl-research → product-price-monitor → grounded-citations → firecrawl-research
+  Cycle  89 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    firecrawl-research → product-availability-search → product-price-monitor → firecrawl-research
+  Cycle  90 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    document-to-action-items → meeting-action-items → grounded-citations → document-to-action-items
+  Cycle  91 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    pdf → meeting-action-items → grounded-citations → pdf
+  Cycle  92 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    email-compose-and-send → messaging-consent-boundaries → email-inbox-triage → email-compose-and-send
+  Cycle  93 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    email-compose-and-send → computer-use → messaging-consent-boundaries → email-compose-and-send
+  Cycle  94 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    linux-wifi-stability → tailscale-linux-setup → linux-privacy-hardening → linux-wifi-stability
+  Cycle  95 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    linux-wifi-stability → wake-on-lan-desktop → tailscale-linux-setup → linux-wifi-stability
+  Cycle  96 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    linux-wifi-stability → protonvpn-nm-automation → tailscale-linux-setup → linux-wifi-stability
+  Cycle  97 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    linux-wifi-stability → wayland-session-management → protonvpn-nm-automation → linux-wifi-stability
+  Cycle  98 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    linux-wifi-stability → lxqt-remote-desktop-management → wayland-session-management → linux-wifi-stability
+  Cycle  99 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    linux-wifi-stability → atomic-desktop-app-installation → wayland-session-management → linux-wifi-stability
+  Cycle 100 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    linux-thermal-workload-throttling → atomic-desktop-app-installation → wayland-session-management → linux-thermal-workload-throttling
+  Cycle 101 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    fedora-atomic-dotfiles-adaptation → bootable-usb-linux → atomic-desktop-app-installation → fedora-atomic-dotfiles-adaptation
+  Cycle 102 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    silverblue-system-update-trigger → bootable-usb-linux → atomic-desktop-app-installation → silverblue-system-update-trigger
+  Cycle 103 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    silverblue-system-update-trigger → silverblue-toolbox-wrapper-bootstrap → atomic-desktop-app-installation → silverblue-system-update-trigger
+  Cycle 104 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    fedora-atomic-dotfiles-adaptation → silverblue-system-update-trigger → atomic-desktop-app-installation → fedora-atomic-dotfiles-adaptation
+  Cycle 105 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-agent-independent-update-protocol → managed-repo-update-workflow → silverblue-system-update-trigger → hermes-agent-independent-update-protocol
+  Cycle 106 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    linux-wifi-stability → miracast-linux-silverblue → wayland-session-management → linux-wifi-stability
+  Cycle 107 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    browser-agent-ops → agent-browser-troubleshooting → computer-use → browser-agent-ops
+  Cycle 108 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    blocked-page-recovery → firecrawl-stealth-fallback → browser-agent-ops → blocked-page-recovery
+  Cycle 109 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    thunderbird-cli-anything → email-compose-and-send → email-inbox-triage → thunderbird-cli-anything
+  Cycle 110 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    powerpoint → xlsx → grounded-citations → powerpoint
+  Cycle 111 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    docx → xlsx → grounded-citations → docx
+  Cycle 112 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    pdf → xlsx → grounded-citations → pdf
+  Cycle 113 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    pdf → box → xlsx → pdf
+  Cycle 114 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    docx → box → xlsx → docx
+  Cycle 115 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    pdf → pii-redaction → box → pdf
+  Cycle 116 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    docx → pii-redaction → box → docx
+  Cycle 117 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    docx → officecli → xlsx → docx
+  Cycle 118 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    pdf → officecli → xlsx → pdf
+  Cycle 119 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    arxiv → pdf → grounded-citations → arxiv
+  Cycle 120 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    visual-document-review → pdf → grounded-citations → visual-document-review
+  Cycle 121 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    research-document-output → pdf → grounded-citations → research-document-output
+  Cycle 122 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    document-to-action-items → pdf → grounded-citations → document-to-action-items
+  Cycle 123 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    powerpoint → pdf → grounded-citations → powerpoint
+  Cycle 124 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    docx → pdf → grounded-citations → docx
+  Cycle 125 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    weekly-review-planning → pdf → grounded-citations → weekly-review-planning
+  Cycle 126 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    docx → nab-formatting → pdf → docx
+  Cycle 127 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    research-document-output → docx → grounded-citations → research-document-output
+  Cycle 128 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    document-to-action-items → docx → grounded-citations → document-to-action-items
+  Cycle 129 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    powerpoint → docx → grounded-citations → powerpoint
+  Cycle 130 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    academic-literature-review → research-document-output → grounded-citations → academic-literature-review
+  Cycle 131 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    academic-literature-review → legal-regulatory-research-writing → grounded-citations → academic-literature-review
+  Cycle 132 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    academic-literature-review → personal-domain-deep-research → grounded-citations → academic-literature-review
+  Cycle 133 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    domain-research-synthesis → personal-domain-deep-research → grounded-citations → domain-research-synthesis
+  Cycle 134 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    blocked-page-recovery → defuddle → grounded-citations → blocked-page-recovery
+  Cycle 135 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    firecrawl-research → defuddle → grounded-citations → firecrawl-research
+  Cycle 136 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    visual-document-review → defuddle → grounded-citations → visual-document-review
+  Cycle 137 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    academic-literature-review → defuddle → grounded-citations → academic-literature-review
+  Cycle 138 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    firecrawl-research → competitor-news-monitor → grounded-citations → firecrawl-research
+  Cycle 139 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    domain-research-synthesis → competitor-news-monitor → grounded-citations → domain-research-synthesis
+  Cycle 140 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    weekly-review-planning → competitor-news-monitor → grounded-citations → weekly-review-planning
+  Cycle 141 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    external-signal-pipeline-recovery → agent-reach-discovery → competitor-news-monitor → external-signal-pipeline-recovery
+  Cycle 142 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    domain-research-synthesis → agent-reach-discovery → competitor-news-monitor → domain-research-synthesis
+  Cycle 143 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    stay-in → suggest-music → agent-reach-discovery → stay-in
+  Cycle 144 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    gold-class → suggest-music → agent-reach-discovery → gold-class
+  Cycle 145 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    domain-research-synthesis → external-signal-pipeline-recovery → competitor-news-monitor → domain-research-synthesis
+  Cycle 146 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    firecrawl-research → external-signal-pipeline-recovery → competitor-news-monitor → firecrawl-research
+  Cycle 147 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    academic-literature-review → lecture-transcript-summarization → grounded-citations → academic-literature-review
+  Cycle 148 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    domain-research-synthesis → lecture-transcript-summarization → grounded-citations → domain-research-synthesis
+  Cycle 149 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    blocked-page-recovery → lecture-transcript-summarization → grounded-citations → blocked-page-recovery
+  Cycle 150 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    firecrawl-research → lecture-transcript-summarization → grounded-citations → firecrawl-research
+  Cycle 151 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    knowledge-graph-corpus-pipeline → computational-text-corpus-analysis → grounded-citations → knowledge-graph-corpus-pipeline
+  Cycle 152 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    firecrawl-research → computational-text-corpus-analysis → grounded-citations → firecrawl-research
+  Cycle 153 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    knowledge-graph-corpus-pipeline → comparative-religion-corpus → computational-text-corpus-analysis → knowledge-graph-corpus-pipeline
+  Cycle 154 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    firecrawl-research → visual-document-review → grounded-citations → firecrawl-research
+  Cycle 155 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    stay-in → gold-class → grounded-citations → stay-in
+  Cycle 156 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    firecrawl-research → gold-class → grounded-citations → firecrawl-research
+  Cycle 157 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    firecrawl-research → stay-in → grounded-citations → firecrawl-research
+  Cycle 158 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    domain-research-synthesis → knowledge-graph-corpus-pipeline → grounded-citations → domain-research-synthesis
+  Cycle 159 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    domain-research-synthesis → local-personal-dashboard → grounded-citations → domain-research-synthesis
+  Cycle 160 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    firecrawl-research → blocked-page-recovery → grounded-citations → firecrawl-research
+  Cycle 161 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    academic-literature-review → blocked-page-recovery → grounded-citations → academic-literature-review
+  Cycle 162 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    obsidian → hermes-obsidian-sync → obsidian-research-ingestion → obsidian
+  Cycle 163 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-memory-surface-selection → hermes-obsidian-sync → obsidian-research-ingestion → hermes-memory-surface-selection
+  Cycle 164 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    weekly-review-planning → obsidian → obsidian-research-ingestion → weekly-review-planning
+  Cycle 165 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    domain-research-synthesis → weekly-review-planning → obsidian-research-ingestion → domain-research-synthesis
+  Cycle 166 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    firecrawl-research → academic-literature-review → obsidian-research-ingestion → firecrawl-research
+  Cycle 167 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    domain-research-synthesis → academic-literature-review → obsidian-research-ingestion → domain-research-synthesis
+  Cycle 168 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    domain-research-synthesis → firecrawl-research → obsidian-research-ingestion → domain-research-synthesis
+  Cycle 169 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    memory-topology-categorical → hermes-memory-surface-selection → agent-memory-consolidation → memory-topology-categorical
+  Cycle 170 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    llm-agent-memory-pipeline-research → hermes-memory-surface-selection → agent-memory-consolidation → llm-agent-memory-pipeline-research
+  Cycle 171 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    graphiti-mcp-setup → hermes-memory-surface-selection → agent-memory-consolidation → graphiti-mcp-setup
+  Cycle 172 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-memory-capture-and-bridge → hermes-memory-surface-selection → agent-memory-consolidation → hermes-memory-capture-and-bridge
+  Cycle 173 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    session-warm-start-protocol → hermes-memory-surface-selection → agent-memory-consolidation → session-warm-start-protocol
+  Cycle 174 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-agent → hermes-skill-library-consolidation-audit → hermes-config-repo-audit → hermes-agent
+  Cycle 175 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-agent → skill-family-router-maintenance → hermes-skill-library-consolidation-audit → hermes-agent
+  Cycle 176 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-agent → hermes-system-audit → hermes-skill-library-consolidation-audit → hermes-agent
+  Cycle 177 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    portable-context-layer → hermes-cowork-port-sync → hermes-config-repo-audit → portable-context-layer
+  Cycle 178 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    graphiti-mcp-setup → memory-topology-categorical → agent-memory-consolidation → graphiti-mcp-setup
+  Cycle 179 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    skillopt-continuous-improvement → runtime-skill-synthesis → hermes-agent-skill-authoring → skillopt-continuous-improvement
+  Cycle 180 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    trajectory-research-synthesis-to-skills → runtime-skill-synthesis → hermes-agent-skill-authoring → trajectory-research-synthesis-to-skills
+  Cycle 181 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → hermes-internals-source-recon → hermes-agent-skill-authoring → verification-before-completion
+  Cycle 182 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → hermes-internals-source-recon → hermes-agent-skill-authoring → plan
+  Cycle 183 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    self-improve-agent → skillopt-continuous-improvement → gepa-omni-optimization → self-improve-agent
+  Cycle 184 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    systematic-debugging → pearl-causality → test-driven-development → systematic-debugging
+  Cycle 185 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    systematic-debugging → jaynes-probability → test-driven-development → systematic-debugging
+  Cycle 186 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    systematic-debugging → thompson-type-theory → test-driven-development → systematic-debugging
+  Cycle 187 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → isolated-workspace-preflight → test-driven-development → verification-before-completion
+  Cycle 188 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → isolated-workspace-preflight → test-driven-development → plan
+  Cycle 189 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    workflow-map → isolated-workspace-preflight → test-driven-development → workflow-map
+  Cycle 190 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    complexity-gated-planning → isolated-workspace-preflight → test-driven-development → complexity-gated-planning
+  Cycle 191 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    subagent-driven-development → isolated-workspace-preflight → test-driven-development → subagent-driven-development
+  Cycle 192 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    requesting-code-review → isolated-workspace-preflight → test-driven-development → requesting-code-review
+  Cycle 193 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    finishing-a-development-branch → executing-plans → using-git-worktrees → finishing-a-development-branch
+  Cycle 194 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → hermes-operating-pattern → test-driven-development → verification-before-completion
+  Cycle 195 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → hermes-operating-pattern → test-driven-development → plan
+  Cycle 196 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    workflow-map → hermes-operating-pattern → test-driven-development → workflow-map
+  Cycle 197 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-coding-review-loop → hermes-operating-pattern → test-driven-development → hermes-coding-review-loop
+  Cycle 198 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    systematic-debugging → hermes-operating-pattern → test-driven-development → systematic-debugging
+  Cycle 199 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    requesting-code-review → hermes-operating-pattern → test-driven-development → requesting-code-review
+  Cycle 200 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    using-superpowers → writing-skills → test-driven-development → using-superpowers
+  Cycle 201 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → using-superpowers → test-driven-development → plan
+  Cycle 202 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    subagent-driven-development → using-superpowers → test-driven-development → subagent-driven-development
+  Cycle 203 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    requesting-code-review → using-superpowers → test-driven-development → requesting-code-review
+  Cycle 204 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → using-superpowers → test-driven-development → verification-before-completion
+  Cycle 205 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    requesting-code-review → receiving-code-review → using-superpowers → requesting-code-review
+  Cycle 206 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → receiving-code-review → using-superpowers → verification-before-completion
+  Cycle 207 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → brainstorming → using-superpowers → plan
+  Cycle 208 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    github-issues → github-issue-agent → github-operations → github-issues
+  Cycle 209 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    scoped-pr-fix-and-verification → split-ci-workflow-change-and-draft-pr → github-operations → scoped-pr-fix-and-verification
+  Cycle 210 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    github → github-issues → github-operations → github
+  Cycle 211 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → github-issues → github-operations → verification-before-completion
+  Cycle 212 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → github-issues → github-operations → plan
+  Cycle 213 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → scoped-pr-fix-and-verification → github-operations → verification-before-completion
+  Cycle 214 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → finishing-a-development-branch → github-operations → verification-before-completion
+  Cycle 215 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → hermes-coding-review-loop → code-impact-preflight → verification-before-completion
+  Cycle 216 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    requesting-code-review → security-hardening-balance-review → risk-based-review → requesting-code-review
+  Cycle 217 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    requesting-code-review → review-driven-followup-fixes → risk-based-review → requesting-code-review
+  Cycle 218 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → review-driven-followup-fixes → risk-based-review → verification-before-completion
+  Cycle 219 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    workflow-map → requesting-code-review → risk-based-review → workflow-map
+  Cycle 220 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    subagent-driven-development → requesting-code-review → risk-based-review → subagent-driven-development
+  Cycle 221 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → requesting-code-review → risk-based-review → verification-before-completion
+  Cycle 222 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → requesting-code-review → risk-based-review → plan
+  Cycle 223 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    subagent-driven-development → tech-debt-survey-and-refactor → requesting-code-review → subagent-driven-development
+  Cycle 224 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    adversarial-review → tech-debt-survey-and-refactor → requesting-code-review → adversarial-review
+  Cycle 225 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → tech-debt-survey-and-refactor → requesting-code-review → verification-before-completion
+  Cycle 226 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → repo1-gateway-workflow → requesting-code-review → verification-before-completion
+  Cycle 227 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → repo1-gateway-workflow → requesting-code-review → plan
+  Cycle 228 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    subagent-driven-development → repo1-gateway-workflow → requesting-code-review → subagent-driven-development
+  Cycle 229 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → policy-dashboard-workflow → requesting-code-review → verification-before-completion
+  Cycle 230 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → policy-dashboard-workflow → requesting-code-review → plan
+  Cycle 231 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    subagent-driven-development → policy-dashboard-workflow → requesting-code-review → subagent-driven-development
+  Cycle 232 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    isa → adversarial-review → problem-solving-router → isa
+  Cycle 233 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → adversarial-review → problem-solving-router → verification-before-completion
+  Cycle 234 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    transfer-applicability-chain → adversarial-review → problem-solving-router → transfer-applicability-chain
+  Cycle 235 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → isa → problem-solving-router → verification-before-completion
+  Cycle 236 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → isa → problem-solving-router → plan
+  Cycle 237 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    grill-me → isa → problem-solving-router → grill-me
+  Cycle 238 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → ponytail-yagni → problem-solving-router → verification-before-completion
+  Cycle 239 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → ponytail-yagni → problem-solving-router → plan
+  Cycle 240 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    complexity-gated-planning → grill-me → problem-solving-router → complexity-gated-planning
+  Cycle 241 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → workflow-map → spike → verification-before-completion
+  Cycle 242 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    plan → workflow-map → spike → plan
+  Cycle 243 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    subagent-driven-development → workflow-map → spike → subagent-driven-development
+  Cycle 244 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-math-research → hermes-math-sweep-findings → hermes-research-ops → hermes-math-research
+  Cycle 245 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    arxiv-sweep-findings → hermes-math-sweep-findings → hermes-research-ops → arxiv-sweep-findings
+  Cycle 246 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    trajectory-research-synthesis-to-skills → hermes-math-sweep-findings → hermes-research-ops → trajectory-research-synthesis-to-skills
+  Cycle 247 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-cs-research → hermes-config-research-sync → hermes-research → hermes-cs-research
+  Cycle 248 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-math-research → hermes-config-research-sync → hermes-research → hermes-math-research
+  Cycle 249 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    math-cs-applicability-reasoning → transfer-applicability-chain → hermes-research → math-cs-applicability-reasoning
+  Cycle 250 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    domain-research-synthesis → transfer-applicability-chain → hermes-research → domain-research-synthesis
+  Cycle 251 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-cs-research → math-cs-applicability-reasoning → hermes-research → hermes-cs-research
+  Cycle 252 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-math-research → math-cs-applicability-reasoning → hermes-research → hermes-math-research
+  Cycle 253 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    trajectory-research-synthesis-to-skills → math-cs-applicability-reasoning → hermes-research → trajectory-research-synthesis-to-skills
+  Cycle 254 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    arxiv → llm-agent-memory-pipeline-research → hermes-research → arxiv
+  Cycle 255 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    arxiv-sweep-findings → llm-agent-memory-pipeline-research → hermes-research → arxiv-sweep-findings
+  Cycle 256 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    arxiv-sweep-findings → trajectory-research-synthesis-to-skills → hermes-research → arxiv-sweep-findings
+  Cycle 257 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    self-improve-agent → trajectory-research-synthesis-to-skills → hermes-research → self-improve-agent
+  Cycle 258 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-research-pipeline-pitfalls → trajectory-research-synthesis-to-skills → hermes-research → hermes-research-pipeline-pitfalls
+  Cycle 259 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-cs-research → trajectory-research-synthesis-to-skills → hermes-research → hermes-cs-research
+  Cycle 260 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-math-research → trajectory-research-synthesis-to-skills → hermes-research → hermes-math-research
+  Cycle 261 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    arxiv → arxiv-sweep-findings → hermes-research → arxiv
+  Cycle 262 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    domain-research-synthesis → arxiv-sweep-findings → hermes-research → domain-research-synthesis
+  Cycle 263 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-cs-research → arxiv-sweep-findings → hermes-research → hermes-cs-research
+  Cycle 264 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-math-research → arxiv-sweep-findings → hermes-research → hermes-math-research
+  Cycle 265 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    self-improve-agent → arxiv-sweep-findings → hermes-research → self-improve-agent
+  Cycle 266 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    domain-research-synthesis → arxiv → hermes-research → domain-research-synthesis
+  Cycle 267 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-research-pipeline-pitfalls → hermes-math-research → hermes-research → hermes-research-pipeline-pitfalls
+  Cycle 268 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-cs-research → hermes-math-research → hermes-research → hermes-cs-research
+  Cycle 269 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-research-pipeline-pitfalls → hermes-cs-research → hermes-research → hermes-research-pipeline-pitfalls
+  Cycle 270 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    claude-routing-hierarchy → stalled-session-recovery → hermes-cron-and-agents → claude-routing-hierarchy
+  Cycle 271 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    agent-runtime-loop-patterns → stalled-session-recovery → hermes-cron-and-agents → agent-runtime-loop-patterns
+  Cycle 272 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → handoff → stalled-session-recovery → verification-before-completion
+  Cycle 273 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-context-hygiene → handoff → stalled-session-recovery → hermes-context-hygiene
+  Cycle 274 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    dispatching-parallel-agents → hermes-acp-routing → hermes-cron-and-agents → dispatching-parallel-agents
+  Cycle 275 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-observability-and-task-ledger → hermes-acp-routing → hermes-cron-and-agents → hermes-observability-and-task-ledger
+  Cycle 276 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    autonomous-agent-loop-design → hermes-acp-routing → hermes-cron-and-agents → autonomous-agent-loop-design
+  Cycle 277 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-memory-capture-and-bridge → hermes-observability-and-task-ledger → hermes-cron-and-agents → hermes-memory-capture-and-bridge
+  Cycle 278 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    dispatching-parallel-agents → hermes-observability-and-task-ledger → hermes-cron-and-agents → dispatching-parallel-agents
+  Cycle 279 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    ralph-loops → preact-trajectory-compilation → mnemosyne-atp-safety → ralph-loops
+  Cycle 280 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    autonomous-agent-loop-design → preact-trajectory-compilation → mnemosyne-atp-safety → autonomous-agent-loop-design
+  Cycle 281 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    trajectory-risk-guardrail → information-flow-control → mnemosyne-atp-safety → trajectory-risk-guardrail
+  Cycle 282 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    claude-routing-hierarchy → trajectory-risk-guardrail → harness-first-agent-design → claude-routing-hierarchy
+  Cycle 283 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    ralph-loops → trajectory-risk-guardrail → harness-first-agent-design → ralph-loops
+  Cycle 284 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → trajectory-risk-guardrail → harness-first-agent-design → verification-before-completion
+  Cycle 285 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    async-agent-nightshift-patterns → trajectory-risk-guardrail → harness-first-agent-design → async-agent-nightshift-patterns
+  Cycle 286 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    agent-runtime-loop-patterns → trajectory-risk-guardrail → harness-first-agent-design → agent-runtime-loop-patterns
+  Cycle 287 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    autonomous-agent-loop-design → trajectory-risk-guardrail → harness-first-agent-design → autonomous-agent-loop-design
+  Cycle 288 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    autonomous-agent-loop-design → ralph-loops → harness-first-agent-design → autonomous-agent-loop-design
+  Cycle 289 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    subagent-driven-development → ralph-loops → harness-first-agent-design → subagent-driven-development
+  Cycle 290 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    autonomous-agent-loop-design → puterman-mdp → ralph-loops → autonomous-agent-loop-design
+  Cycle 291 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    async-agent-nightshift-patterns → claude-routing-hierarchy → harness-first-agent-design → async-agent-nightshift-patterns
+  Cycle 292 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    autonomous-agent-loop-design → claude-routing-hierarchy → harness-first-agent-design → autonomous-agent-loop-design
+  Cycle 293 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    anthropic-agent-api-patterns → claude-routing-hierarchy → harness-first-agent-design → anthropic-agent-api-patterns
+  Cycle 294 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    agent-runtime-loop-patterns → claude-routing-hierarchy → harness-first-agent-design → agent-runtime-loop-patterns
+  Cycle 295 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    autonomous-agent-loop-design → async-agent-nightshift-patterns → harness-first-agent-design → autonomous-agent-loop-design
+  Cycle 296 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    autonomous-agent-loop-design → anthropic-agent-api-patterns → harness-first-agent-design → autonomous-agent-loop-design
+  Cycle 297 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    autonomous-agent-loop-design → portable-context-layer → harness-first-agent-design → autonomous-agent-loop-design
+  Cycle 298 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    subagent-driven-development → self-improve-agent → agent-task-signoff → subagent-driven-development
+  Cycle 299 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → self-improve-agent → agent-task-signoff → verification-before-completion
+  Cycle 300 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    subagent-driven-development → plan → subagent-output-contract → subagent-driven-development
+  Cycle 301 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → plan → subagent-output-contract → verification-before-completion
+  Cycle 302 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    verification-before-completion → media-catalog-seed-data → plan → verification-before-completion
+  Cycle 303 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    complexity-gated-planning → media-catalog-seed-data → plan → complexity-gated-planning
+  Cycle 304 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    subagent-driven-development → verification-before-completion → subagent-output-contract → subagent-driven-development
+  Cycle 305 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-agent → claude-code → verification-before-completion → hermes-agent
+  Cycle 306 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    node-inspect-debugger → python-debugpy → verification-before-completion → node-inspect-debugger
+  Cycle 307 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    systematic-debugging → python-debugpy → verification-before-completion → systematic-debugging
+  Cycle 308 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    systematic-debugging → node-inspect-debugger → verification-before-completion → systematic-debugging
+  Cycle 309 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    dispatching-parallel-agents → kanban-swarm-nightly-ops → hermes-agent-sync → dispatching-parallel-agents
+  Cycle 310 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    dispatching-parallel-agents → subagent-driven-development → hermes-agent-sync → dispatching-parallel-agents
+  Cycle 311 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-context-packet → hermes-role-pipelines → hermes-swarm-consensus → hermes-context-packet
+  Cycle 312 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    autonomous-ai-agents → hermes-role-pipelines → hermes-swarm-consensus → autonomous-ai-agents
+  Cycle 313 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    dispatching-parallel-agents → hermes-role-pipelines → hermes-swarm-consensus → dispatching-parallel-agents
+  Cycle 314 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    dispatching-parallel-agents → fable-orchestrate → hermes-swarm-consensus → dispatching-parallel-agents
+  Cycle 315 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    autonomous-agent-loop-design → vera-schema-therapy → autonomous-ai-agents → autonomous-agent-loop-design
+  Cycle 316 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    dispatching-parallel-agents → merge-reconciler → hermes-swarm-consensus → dispatching-parallel-agents
+  Cycle 317 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    systematic-debugging → complexity-gated-planning → adaptive-agent-reasoning → systematic-debugging
+  Cycle 318 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    sipser-theory-computation → complexity-gated-planning → adaptive-agent-reasoning → sipser-theory-computation
+  Cycle 319 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    wald-sequential-analysis → sipser-theory-computation → adaptive-agent-reasoning → wald-sequential-analysis
+  Cycle 320 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    systematic-debugging → sipser-theory-computation → adaptive-agent-reasoning → systematic-debugging
+  Cycle 321 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    systematic-debugging → wald-sequential-analysis → adaptive-agent-reasoning → systematic-debugging
+  Cycle 322 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-context-hygiene → agent-runtime-loop-patterns → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 323 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-semantic-skill-routing → metacognition → hermes-context-budgeting → hermes-semantic-skill-routing
+  Cycle 324 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-context-hygiene → metacognition → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 325 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    symbolic-context-offload → tencentdb-agent-memory → hermes-context-budgeting → symbolic-context-offload
+  Cycle 326 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-context-hygiene → tencentdb-agent-memory → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 327 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    rr-compaction-scorer → it-derived-algorithms → hermes-context-budgeting → rr-compaction-scorer
+  Cycle 328 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    information-theory-for-agents → rr-compaction-scorer → hermes-context-budgeting → information-theory-for-agents
+  Cycle 329 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-context-hygiene → rr-compaction-scorer → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 330 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-lambda-tuner → rr-compaction-scorer → hermes-context-budgeting → hermes-lambda-tuner
+  Cycle 331 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-context-hygiene → information-theory-for-agents → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 332 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-context-hygiene → hermes-session-hygiene → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 333 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    symbolic-context-offload → hermes-context-hygiene → hermes-context-budgeting → symbolic-context-offload
+  Cycle 334 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-lambda-tuner → session-warm-start-protocol → hermes-fork → hermes-lambda-tuner
+  Cycle 335 (length=3) ⚠ TIGHT CIRCULAR DEPENDENCY:
+    hermes-lambda-tuner → hermes-reasoning-layer-engineering → hermes-fork → hermes-lambda-tuner
+  Cycle 336 (length=4):
+    hermes-reasoning-layer-engineering → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-reasoning-layer-engineering
+  Cycle 337 (length=4):
+    autonomous-ai-agents → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → autonomous-ai-agents
+  Cycle 338 (length=4):
+    preact-trajectory-compilation → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → preact-trajectory-compilation
+  Cycle 339 (length=4):
+    math-cs-applicability-reasoning → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → math-cs-applicability-reasoning
+  Cycle 340 (length=4):
+    hermes-math-research → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-math-research
+  Cycle 341 (length=4):
+    subagent-driven-development → risk-based-review → problem-solving-router → spike → subagent-driven-development
+  Cycle 342 (length=4):
+    adversarial-review → code-impact-preflight → risk-based-review → problem-solving-router → adversarial-review
+  Cycle 343 (length=4):
+    plan → github-operations → code-impact-preflight → risk-based-review → plan
+  Cycle 344 (length=4):
+    thompson-type-theory → coding-conventions → huth-ryan-logic → test-driven-development → thompson-type-theory
+  Cycle 345 (length=4):
+    milewski-category-theory → coding-conventions → huth-ryan-logic → test-driven-development → milewski-category-theory
+  Cycle 346 (length=4):
+    jaynes-probability → coding-conventions → huth-ryan-logic → test-driven-development → jaynes-probability
+  Cycle 347 (length=4):
+    pearl-causality → coding-conventions → huth-ryan-logic → test-driven-development → pearl-causality
+  Cycle 348 (length=4):
+    hastie-esl → coding-conventions → huth-ryan-logic → test-driven-development → hastie-esl
+  Cycle 349 (length=4):
+    boyd-convex-optimization → coding-conventions → huth-ryan-logic → test-driven-development → boyd-convex-optimization
+  Cycle 350 (length=4):
+    wald-sequential-analysis → coding-conventions → huth-ryan-logic → test-driven-development → wald-sequential-analysis
+  Cycle 351 (length=4):
+    jaynes-probability → mackay-itila → hastie-esl → test-driven-development → jaynes-probability
+  Cycle 352 (length=4):
+    jaynes-probability → royden-fitzpatrick-real-analysis → cover-thomas-eit → mackay-itila → jaynes-probability
+  Cycle 353 (length=4):
+    verification-before-completion → evaluation-driven-development → hastie-esl → test-driven-development → verification-before-completion
+  Cycle 354 (length=4):
+    policy-routing-update → evaluation-driven-development → hastie-esl → test-driven-development → policy-routing-update
+  Cycle 355 (length=4):
+    autonomous-agent-loop-design → hermes-self-evolution → gepa-omni-optimization → evaluation-driven-development → autonomous-agent-loop-design
+  Cycle 356 (length=4):
+    verification-before-completion → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → verification-before-completion
+  Cycle 357 (length=4):
+    self-improve-agent → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → self-improve-agent
+  Cycle 358 (length=4):
+    blocked-page-recovery → product-availability-search → product-price-monitor → grounded-citations → blocked-page-recovery
+  Cycle 359 (length=4):
+    weekly-review-planning → email-inbox-triage → meeting-action-items → grounded-citations → weekly-review-planning
+  Cycle 360 (length=4):
+    miracast-linux-silverblue → fedora-atomic-dotfiles-adaptation → atomic-desktop-app-installation → wayland-session-management → miracast-linux-silverblue
+  Cycle 361 (length=4):
+    stay-in → agent-reach-discovery → competitor-news-monitor → grounded-citations → stay-in
+  Cycle 362 (length=4):
+    gold-class → agent-reach-discovery → competitor-news-monitor → grounded-citations → gold-class
+  Cycle 363 (length=4):
+    hermes-context-hygiene → hermes-skill-library-consolidation-audit → hermes-config-repo-audit → hermes-memory-surface-selection → hermes-context-hygiene
+  Cycle 364 (length=4):
+    hermes-semantic-skill-routing → hermes-skill-library-consolidation-audit → hermes-config-repo-audit → hermes-memory-surface-selection → hermes-semantic-skill-routing
+  Cycle 365 (length=4):
+    self-improve-agent → runtime-skill-synthesis → hermes-agent-skill-authoring → gepa-omni-optimization → self-improve-agent
+  Cycle 366 (length=4):
+    using-superpowers → using-git-worktrees → isolated-workspace-preflight → test-driven-development → using-superpowers
+  Cycle 367 (length=4):
+    plan → executing-plans → using-git-worktrees → isolated-workspace-preflight → plan
+  Cycle 368 (length=4):
+    subagent-driven-development → executing-plans → using-git-worktrees → isolated-workspace-preflight → subagent-driven-development
+  Cycle 369 (length=4):
+    systematic-debugging → receiving-code-review → using-superpowers → test-driven-development → systematic-debugging
+  Cycle 370 (length=4):
+    complexity-gated-planning → brainstorming → using-superpowers → test-driven-development → complexity-gated-planning
+  Cycle 371 (length=4):
+    requesting-code-review → hermes-coding-review-loop → code-impact-preflight → risk-based-review → requesting-code-review
+  Cycle 372 (length=4):
+    adversarial-review → review-driven-followup-fixes → risk-based-review → problem-solving-router → adversarial-review
+  Cycle 373 (length=4):
+    systematic-debugging → requesting-code-review → risk-based-review → problem-solving-router → systematic-debugging
+  Cycle 374 (length=4):
+    adversarial-review → requesting-code-review → risk-based-review → problem-solving-router → adversarial-review
+  Cycle 375 (length=4):
+    math-cs-applicability-reasoning → adversarial-review → problem-solving-router → spike → math-cs-applicability-reasoning
+  Cycle 376 (length=4):
+    subagent-driven-development → grill-me → problem-solving-router → spike → subagent-driven-development
+  Cycle 377 (length=4):
+    math-cs-applicability-reasoning → hermes-math-sweep-findings → hermes-research-ops → hermes-research → math-cs-applicability-reasoning
+  Cycle 378 (length=4):
+    claude-routing-hierarchy → anthropic-api-cost-optimization → hermes-observability-and-task-ledger → hermes-cron-and-agents → claude-routing-hierarchy
+  Cycle 379 (length=4):
+    self-improve-agent → trajectory-risk-guardrail → harness-first-agent-design → agent-task-signoff → self-improve-agent
+  Cycle 380 (length=4):
+    autonomous-ai-agents → trajectory-risk-guardrail → harness-first-agent-design → agent-task-signoff → autonomous-ai-agents
+  Cycle 381 (length=4):
+    self-improve-agent → ralph-loops → harness-first-agent-design → agent-task-signoff → self-improve-agent
+  Cycle 382 (length=4):
+    agent-runtime-loop-patterns → puterman-mdp → ralph-loops → harness-first-agent-design → agent-runtime-loop-patterns
+  Cycle 383 (length=4):
+    autonomous-ai-agents → async-agent-nightshift-patterns → harness-first-agent-design → agent-task-signoff → autonomous-ai-agents
+  Cycle 384 (length=4):
+    dispatching-parallel-agents → verification-before-completion → subagent-output-contract → hermes-agent-sync → dispatching-parallel-agents
+  Cycle 385 (length=4):
+    hermes-agent → ouroboros-setup-and-health-check → ouroboros-plugin-development → verification-before-completion → hermes-agent
+  Cycle 386 (length=4):
+    autonomous-ai-agents → ouroboros-setup-and-health-check → ouroboros-plugin-development → verification-before-completion → autonomous-ai-agents
+  Cycle 387 (length=4):
+    hermes-role-pipelines → subagent-driven-development → hermes-agent-sync → hermes-swarm-consensus → hermes-role-pipelines
+  Cycle 388 (length=4):
+    autonomous-agent-loop-design → hermes-role-pipelines → hermes-swarm-consensus → adaptive-agent-reasoning → autonomous-agent-loop-design
+  Cycle 389 (length=4):
+    complexity-gated-planning → hermes-role-pipelines → hermes-swarm-consensus → adaptive-agent-reasoning → complexity-gated-planning
+  Cycle 390 (length=4):
+    autonomous-agent-loop-design → autonomous-ai-agents → hermes-swarm-consensus → adaptive-agent-reasoning → autonomous-agent-loop-design
+  Cycle 391 (length=4):
+    autonomous-agent-loop-design → merge-reconciler → hermes-swarm-consensus → adaptive-agent-reasoning → autonomous-agent-loop-design
+  Cycle 392 (length=4):
+    tencentdb-agent-memory → autonomous-agent-loop-design → adaptive-agent-reasoning → hermes-context-budgeting → tencentdb-agent-memory
+  Cycle 393 (length=4):
+    hermes-context-hygiene → autonomous-agent-loop-design → adaptive-agent-reasoning → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 394 (length=4):
+    agent-runtime-loop-patterns → autonomous-agent-loop-design → adaptive-agent-reasoning → hermes-context-budgeting → agent-runtime-loop-patterns
+  Cycle 395 (length=4):
+    hermes-agent → hermes-context-hygiene → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 396 (length=4):
+    session-warm-start-protocol → hermes-context-hygiene → hermes-context-budgeting → hermes-fork → session-warm-start-protocol
+  Cycle 397 (length=5):
+    autonomous-ai-agents → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → autonomous-ai-agents
+  Cycle 398 (length=5):
+    claude-routing-hierarchy → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → claude-routing-hierarchy
+  Cycle 399 (length=5):
+    agent-runtime-loop-patterns → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-runtime-loop-patterns
+  Cycle 400 (length=5):
+    requesting-code-review → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → requesting-code-review
+  Cycle 401 (length=5):
+    hermes-coding-review-loop → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → hermes-coding-review-loop
+  Cycle 402 (length=5):
+    wald-sequential-analysis → cover-thomas-eit → mackay-itila → hastie-esl → test-driven-development → wald-sequential-analysis
+  Cycle 403 (length=5):
+    autonomous-agent-loop-design → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → autonomous-agent-loop-design
+  Cycle 404 (length=5):
+    knowledge-corpus-architecture → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → knowledge-corpus-architecture
+  Cycle 405 (length=5):
+    verification-before-completion → linux-wifi-stability → linux-privacy-hardening → computer-use → messaging-consent-boundaries → verification-before-completion
+  Cycle 406 (length=5):
+    legal-regulatory-research-writing → pii-redaction → box → xlsx → grounded-citations → legal-regulatory-research-writing
+  Cycle 407 (length=5):
+    graphiti-mcp-setup → knowledge-graph-corpus-pipeline → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → graphiti-mcp-setup
+  Cycle 408 (length=5):
+    knowledge-corpus-architecture → knowledge-graph-corpus-pipeline → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → knowledge-corpus-architecture
+  Cycle 409 (length=5):
+    hermes-memory-capture-and-bridge → hermes-obsidian-sync → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-memory-capture-and-bridge
+  Cycle 410 (length=5):
+    knowledge-corpus-architecture → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → knowledge-corpus-architecture
+  Cycle 411 (length=5):
+    skillopt-continuous-improvement → hermes-skill-library-consolidation-audit → hermes-config-repo-audit → hermes-memory-surface-selection → agent-memory-consolidation → skillopt-continuous-improvement
+  Cycle 412 (length=5):
+    finishing-a-development-branch → using-superpowers → test-driven-development → github-issue-to-pr → github-operations → finishing-a-development-branch
+  Cycle 413 (length=5):
+    requesting-code-review → finishing-a-development-branch → github-operations → code-impact-preflight → risk-based-review → requesting-code-review
+  Cycle 414 (length=5):
+    systematic-debugging → hermes-coding-review-loop → code-impact-preflight → risk-based-review → problem-solving-router → systematic-debugging
+  Cycle 415 (length=5):
+    verification-before-completion → stalled-session-recovery → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → verification-before-completion
+  Cycle 416 (length=5):
+    autonomous-ai-agents → hermes-acp-routing → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → autonomous-ai-agents
+  Cycle 417 (length=5):
+    verification-before-completion → hermes-memory-capture-and-bridge → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → verification-before-completion
+  Cycle 418 (length=5):
+    graphiti-mcp-setup → hermes-memory-capture-and-bridge → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → graphiti-mcp-setup
+  Cycle 419 (length=5):
+    merge-reconciler → verification-before-completion → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → merge-reconciler
+  Cycle 420 (length=5):
+    autonomous-ai-agents → verification-before-completion → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → autonomous-ai-agents
+  Cycle 421 (length=5):
+    autonomous-agent-loop-design → kanban-swarm-nightly-ops → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → autonomous-agent-loop-design
+  Cycle 422 (length=5):
+    autonomous-agent-loop-design → subagent-driven-development → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → autonomous-agent-loop-design
+  Cycle 423 (length=5):
+    complexity-gated-planning → subagent-driven-development → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → complexity-gated-planning
+  Cycle 424 (length=5):
+    systematic-debugging → subagent-driven-development → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → systematic-debugging
+  Cycle 425 (length=5):
+    hermes-semantic-skill-routing → hermes-role-pipelines → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-semantic-skill-routing
+  Cycle 426 (length=5):
+    hermes-semantic-skill-routing → hermes-context-packet → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-semantic-skill-routing
+  Cycle 427 (length=5):
+    rr-compaction-scorer → hermes-context-packet → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → rr-compaction-scorer
+  Cycle 428 (length=5):
+    hermes-agent → autonomous-agent-loop-design → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 429 (length=6):
+    transfer-applicability-chain → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → transfer-applicability-chain
+  Cycle 430 (length=6):
+    systematic-debugging → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → systematic-debugging
+  Cycle 431 (length=6):
+    workflow-map → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → workflow-map
+  Cycle 432 (length=6):
+    subagent-driven-development → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → subagent-driven-development
+  Cycle 433 (length=6):
+    plan → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → plan
+  Cycle 434 (length=6):
+    requesting-code-review → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → requesting-code-review
+  Cycle 435 (length=6):
+    agent-browser-troubleshooting → wayland-session-management → protonvpn-nm-automation → tailscale-linux-setup → linux-privacy-hardening → computer-use → agent-browser-troubleshooting
+  Cycle 436 (length=6):
+    autonomous-agent-loop-design → hermes-web-provider-configuration → firecrawl-stealth-fallback → browser-agent-ops → computer-use → messaging-consent-boundaries → autonomous-agent-loop-design
+  Cycle 437 (length=6):
+    verification-before-completion → hermes-web-provider-configuration → firecrawl-stealth-fallback → browser-agent-ops → computer-use → messaging-consent-boundaries → verification-before-completion
+  Cycle 438 (length=6):
+    knowledge-corpus-architecture → comparative-religion-corpus → computational-text-corpus-analysis → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → knowledge-corpus-architecture
+  Cycle 439 (length=6):
+    graphiti-mcp-setup → comparative-religion-corpus → computational-text-corpus-analysis → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → graphiti-mcp-setup
+  Cycle 440 (length=6):
+    runtime-skill-synthesis → hermes-skill-library-consolidation-audit → hermes-config-repo-audit → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → runtime-skill-synthesis
+  Cycle 441 (length=6):
+    autonomous-agent-loop-design → skill-family-router-maintenance → hermes-skill-library-consolidation-audit → hermes-config-repo-audit → hermes-memory-surface-selection → agent-memory-consolidation → autonomous-agent-loop-design
+  Cycle 442 (length=6):
+    autonomous-agent-loop-design → hermes-skillspector-guard-maintenance → hermes-skill-library-consolidation-audit → hermes-config-repo-audit → hermes-memory-surface-selection → agent-memory-consolidation → autonomous-agent-loop-design
+  Cycle 443 (length=6):
+    writing-skills → skillopt-continuous-improvement → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → writing-skills
+  Cycle 444 (length=6):
+    finishing-a-development-branch → using-git-worktrees → isolated-workspace-preflight → test-driven-development → github-issue-to-pr → github-operations → finishing-a-development-branch
+  Cycle 445 (length=6):
+    subagent-driven-development → hermes-acp-routing → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → subagent-driven-development
+  Cycle 446 (length=6):
+    complexity-gated-planning → plan → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → complexity-gated-planning
+  Cycle 447 (length=6):
+    systematic-debugging → plan → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → systematic-debugging
+  Cycle 448 (length=6):
+    systematic-debugging → verification-before-completion → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → systematic-debugging
+  Cycle 449 (length=6):
+    hermes-agent → autonomous-ai-agents → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 450 (length=6):
+    hermes-agent → merge-reconciler → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 451 (length=7):
+    autonomous-agent-loop-design → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → autonomous-agent-loop-design
+  Cycle 452 (length=7):
+    complexity-gated-planning → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → complexity-gated-planning
+  Cycle 453 (length=7):
+    adversarial-review → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → adversarial-review
+  Cycle 454 (length=7):
+    ralph-loops → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → ralph-loops
+  Cycle 455 (length=7):
+    blocked-page-recovery → browser-agent-ops → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → blocked-page-recovery
+  Cycle 456 (length=7):
+    book-to-skill → pdf → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → book-to-skill
+  Cycle 457 (length=7):
+    book-to-skill → docx → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → book-to-skill
+  Cycle 458 (length=7):
+    verification-before-completion → skill-family-router-maintenance → hermes-skill-library-consolidation-audit → hermes-config-repo-audit → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → verification-before-completion
+  Cycle 459 (length=7):
+    verification-before-completion → hermes-skillspector-guard-maintenance → hermes-skill-library-consolidation-audit → hermes-config-repo-audit → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → verification-before-completion
+  Cycle 460 (length=7):
+    writing-skills → book-to-skill → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → writing-skills
+  Cycle 461 (length=7):
+    trajectory-risk-guardrail → arxiv-sweep-findings → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → trajectory-risk-guardrail
+  Cycle 462 (length=7):
+    subagent-driven-development → handoff → stalled-session-recovery → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → subagent-driven-development
+  Cycle 463 (length=7):
+    hermes-role-pipelines → trajectory-risk-guardrail → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → hermes-role-pipelines
+  Cycle 464 (length=7):
+    fable-orchestrate → claude-routing-hierarchy → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → fable-orchestrate
+  Cycle 465 (length=7):
+    fable-orchestrate → anthropic-agent-api-patterns → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → fable-orchestrate
+  Cycle 466 (length=7):
+    autonomous-agent-loop-design → self-improve-agent → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → autonomous-agent-loop-design
+  Cycle 467 (length=7):
+    symbolic-context-offload → plan → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → symbolic-context-offload
+  Cycle 468 (length=7):
+    symbolic-context-offload → verification-before-completion → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → symbolic-context-offload
+  Cycle 469 (length=7):
+    tencentdb-agent-memory → verification-before-completion → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → tencentdb-agent-memory
+  Cycle 470 (length=7):
+    hermes-context-hygiene → verification-before-completion → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 471 (length=7):
+    autonomous-agent-loop-design → ouroboros-plugin-development → verification-before-completion → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → autonomous-agent-loop-design
+  Cycle 472 (length=7):
+    autonomous-agent-loop-design → claude-code → verification-before-completion → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → autonomous-agent-loop-design
+  Cycle 473 (length=8):
+    agent-runtime-loop-patterns → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → agent-runtime-loop-patterns
+  Cycle 474 (length=8):
+    complexity-gated-planning → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → complexity-gated-planning
+  Cycle 475 (length=8):
+    dispatching-parallel-agents → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → dispatching-parallel-agents
+  Cycle 476 (length=8):
+    self-improve-agent → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → self-improve-agent
+  Cycle 477 (length=8):
+    milewski-category-theory → hatcher-algebraic-topology → kreyszig-functional-analysis → royden-fitzpatrick-real-analysis → cover-thomas-eit → mackay-itila → hastie-esl → test-driven-development → milewski-category-theory
+  Cycle 478 (length=8):
+    autonomous-agent-loop-design → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → autonomous-agent-loop-design
+  Cycle 479 (length=8):
+    verification-before-completion → linux-thermal-workload-throttling → wayland-session-management → protonvpn-nm-automation → tailscale-linux-setup → linux-privacy-hardening → computer-use → messaging-consent-boundaries → verification-before-completion
+  Cycle 480 (length=8):
+    firecrawl-research → firecrawl-stealth-fallback → browser-agent-ops → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → firecrawl-research
+  Cycle 481 (length=8):
+    academic-literature-review → firecrawl-stealth-fallback → browser-agent-ops → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → academic-literature-review
+  Cycle 482 (length=8):
+    domain-research-synthesis → firecrawl-stealth-fallback → browser-agent-ops → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → domain-research-synthesis
+  Cycle 483 (length=8):
+    autonomous-agent-loop-design → email-compose-and-send → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → autonomous-agent-loop-design
+  Cycle 484 (length=8):
+    hermes-operating-pattern → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → hermes-operating-pattern
+  Cycle 485 (length=8):
+    hermes-acp-routing → workflow-map → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → hermes-acp-routing
+  Cycle 486 (length=8):
+    plan → hermes-memory-capture-and-bridge → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → plan
+  Cycle 487 (length=8):
+    complexity-gated-planning → trajectory-risk-guardrail → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → complexity-gated-planning
+  Cycle 488 (length=8):
+    metacognition → trajectory-risk-guardrail → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → metacognition
+  Cycle 489 (length=8):
+    complexity-gated-planning → claude-routing-hierarchy → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → complexity-gated-planning
+  Cycle 490 (length=8):
+    agent-runtime-loop-patterns → self-improve-agent → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → agent-runtime-loop-patterns
+  Cycle 491 (length=8):
+    hermes-agent → verification-before-completion → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 492 (length=9):
+    verification-before-completion → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → verification-before-completion
+  Cycle 493 (length=9):
+    verification-before-completion → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → verification-before-completion
+  Cycle 494 (length=9):
+    autonomous-agent-loop-design → agent-runtime-stack-debugging → hermes-dashboard-troubleshooting → wayland-session-management → protonvpn-nm-automation → tailscale-linux-setup → linux-privacy-hardening → computer-use → messaging-consent-boundaries → autonomous-agent-loop-design
+  Cycle 495 (length=9):
+    verification-before-completion → email-compose-and-send → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → verification-before-completion
+  Cycle 496 (length=9):
+    claude-routing-hierarchy → adversarial-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → claude-routing-hierarchy
+  Cycle 497 (length=9):
+    autonomous-agent-loop-design → grill-me → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → autonomous-agent-loop-design
+  Cycle 498 (length=9):
+    async-agent-nightshift-patterns → grill-me → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → async-agent-nightshift-patterns
+  Cycle 499 (length=9):
+    hermes-context-packet → stalled-session-recovery → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-context-packet
+  Cycle 500 (length=9):
+    plan → handoff → stalled-session-recovery → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → plan
+  Cycle 501 (length=9):
+    hermes-context-hygiene → claude-routing-hierarchy → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 502 (length=10):
+    subagent-driven-development → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → subagent-driven-development
+  Cycle 503 (length=10):
+    complexity-gated-planning → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → complexity-gated-planning
+  Cycle 504 (length=10):
+    trajectory-risk-guardrail → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → trajectory-risk-guardrail
+  Cycle 505 (length=10):
+    complexity-gated-planning → workflow-map → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → complexity-gated-planning
+  Cycle 506 (length=10):
+    trajectory-risk-guardrail → workflow-map → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → trajectory-risk-guardrail
+  Cycle 507 (length=10):
+    hermes-role-pipelines → hermes-acp-routing → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → hermes-role-pipelines
+  Cycle 508 (length=10):
+    tencentdb-agent-memory → graphiti-mcp-setup → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → tencentdb-agent-memory
+  Cycle 509 (length=10):
+    hermes-context-hygiene → preact-trajectory-compilation → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 510 (length=10):
+    hermes-context-hygiene → information-flow-control → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 511 (length=10):
+    hermes-agent → claude-routing-hierarchy → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 512 (length=11):
+    writing-skills → skill-family-router-maintenance → hermes-skill-library-consolidation-audit → hermes-config-repo-audit → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → writing-skills
+  Cycle 513 (length=11):
+    hermes-memory-capture-and-bridge → hermes-coding-review-loop → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → hermes-memory-capture-and-bridge
+  Cycle 514 (length=11):
+    information-flow-control → adversarial-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → information-flow-control
+  Cycle 515 (length=12):
+    plan → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → plan
+  Cycle 516 (length=12):
+    dispatching-parallel-agents → github-issue-agent → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → dispatching-parallel-agents
+  Cycle 517 (length=12):
+    hermes-context-hygiene → stalled-session-recovery → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 518 (length=13):
+    trajectory-research-synthesis-to-skills → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → trajectory-research-synthesis-to-skills
+  Cycle 519 (length=13):
+    trajectory-research-synthesis-to-skills → skillopt-continuous-improvement → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → trajectory-research-synthesis-to-skills
+  Cycle 520 (length=13):
+    arxiv-sweep-findings → skillopt-continuous-improvement → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → arxiv-sweep-findings
+  Cycle 521 (length=13):
+    hermes-agent → hermes-acp-routing → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 522 (length=13):
+    hermes-context-hygiene → anthropic-api-cost-optimization → hermes-observability-and-task-ledger → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 523 (length=14):
+    self-improve-agent → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → self-improve-agent
+  Cycle 524 (length=14):
+    it-derived-algorithms → math-cs-applicability-reasoning → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → it-derived-algorithms
+  Cycle 525 (length=15):
+    ralph-loops → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → ralph-loops
+  Cycle 526 (length=15):
+    autonomous-agent-loop-design → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → autonomous-agent-loop-design
+  Cycle 527 (length=15):
+    transfer-applicability-chain → academic-literature-review → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → transfer-applicability-chain
+  Cycle 528 (length=15):
+    hermes-role-pipelines → workflow-map → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → hermes-role-pipelines
+  Cycle 529 (length=16):
+    systematic-debugging → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → systematic-debugging
+  Cycle 530 (length=16):
+    llm-agent-memory-pipeline-research → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → llm-agent-memory-pipeline-research
+  Cycle 531 (length=16):
+    merge-reconciler → adversarial-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → merge-reconciler
+  Cycle 532 (length=16):
+    metacognition → workflow-map → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → metacognition
+  Cycle 533 (length=17):
+    arxiv-sweep-findings → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → arxiv-sweep-findings
+  Cycle 534 (length=17):
+    arxiv-sweep-findings → academic-literature-review → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → arxiv-sweep-findings
+  Cycle 535 (length=17):
+    arxiv-sweep-findings → firecrawl-research → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → arxiv-sweep-findings
+  Cycle 536 (length=17):
+    dispatching-parallel-agents → book-corpus-ingestion → knowledge-corpus-architecture → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → dispatching-parallel-agents
+  Cycle 537 (length=17):
+    metacognition → adversarial-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → metacognition
+  Cycle 538 (length=18):
+    hermes-memory-capture-and-bridge → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → hermes-memory-capture-and-bridge
+  Cycle 539 (length=18):
+    domain-research-synthesis → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → domain-research-synthesis
+  Cycle 540 (length=18):
+    graphiti-mcp-setup → knowledge-corpus-architecture → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → graphiti-mcp-setup
+  Cycle 541 (length=19):
+    stalled-session-recovery → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → stalled-session-recovery
+  Cycle 542 (length=19):
+    arxiv → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → arxiv
+  Cycle 543 (length=19):
+    systematic-debugging → agent-runtime-stack-debugging → hermes-dashboard-troubleshooting → wayland-session-management → protonvpn-nm-automation → tailscale-linux-setup → linux-privacy-hardening → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → systematic-debugging
+  Cycle 544 (length=19):
+    arxiv → academic-literature-review → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → arxiv
+  Cycle 545 (length=20):
+    graphiti-mcp-setup → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → graphiti-mcp-setup
+  Cycle 546 (length=20):
+    claude-routing-hierarchy → hermes-config-repo-audit → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → claude-routing-hierarchy
+  Cycle 547 (length=21):
+    wald-sequential-analysis → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → wald-sequential-analysis
+  Cycle 548 (length=21):
+    hermes-agent → hermes-coding-review-loop → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 549 (length=22):
+    dispatching-parallel-agents → personal-domain-deep-research → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → dispatching-parallel-agents
+  Cycle 550 (length=22):
+    anthropic-agent-api-patterns → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → anthropic-agent-api-patterns
+  Cycle 551 (length=23):
+    portable-context-layer → hermes-config-repo-audit → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → portable-context-layer
+  Cycle 552 (length=23):
+    hermes-context-hygiene → hermes-operating-pattern → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 553 (length=23):
+    hermes-context-hygiene → writing-skills → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 554 (length=24):
+    portable-context-layer → hermes-obsidian-sync → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → portable-context-layer
+  Cycle 555 (length=24):
+    hermes-agent → isolated-workspace-preflight → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 556 (length=24):
+    hermes-agent → hermes-operating-pattern → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 557 (length=25):
+    information-theory-for-agents → li-vitanyi-kolmogorov → mackay-itila → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → information-theory-for-agents
+  Cycle 558 (length=25):
+    information-theory-for-agents → gallager-itrc → mackay-itila → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → information-theory-for-agents
+  Cycle 559 (length=26):
+    agent-runtime-loop-patterns → browser-agent-ops → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-runtime-loop-patterns
+  Cycle 560 (length=27):
+    it-derived-algorithms → hermes-internals-source-recon → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → it-derived-algorithms
+  Cycle 561 (length=28):
+    sipser-theory-computation → clrs-algorithms → hatcher-algebraic-topology → kreyszig-functional-analysis → royden-fitzpatrick-real-analysis → cover-thomas-eit → mackay-itila → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → sipser-theory-computation
+  Cycle 562 (length=28):
+    session-warm-start-protocol → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → session-warm-start-protocol
+  Cycle 563 (length=28):
+    autonomous-ai-agents → agent-browser-troubleshooting → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → autonomous-ai-agents
+  Cycle 564 (length=28):
+    hermes-semantic-skill-routing → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-semantic-skill-routing
+  Cycle 565 (length=28):
+    symbolic-context-offload → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → symbolic-context-offload
+  Cycle 566 (length=28):
+    information-theory-for-agents → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → information-theory-for-agents
+  Cycle 567 (length=28):
+    hermes-context-hygiene → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 568 (length=28):
+    tencentdb-agent-memory → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → tencentdb-agent-memory
+  Cycle 569 (length=28):
+    hermes-agent → hermes-internals-source-recon → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 570 (length=30):
+    hermes-session-hygiene → hermes-obsidian-sync → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-session-hygiene
+  Cycle 571 (length=30):
+    hermes-agent → hermes-config-repo-audit → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 572 (length=30):
+    metacognition → hermes-skillspector-guard-maintenance → hermes-skill-library-consolidation-audit → hermes-config-repo-audit → hermes-memory-surface-selection → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → metacognition
+  Cycle 573 (length=33):
+    autonomous-ai-agents → agent-runtime-stack-debugging → hermes-dashboard-troubleshooting → wayland-session-management → protonvpn-nm-automation → tailscale-linux-setup → linux-privacy-hardening → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → autonomous-ai-agents
+  Cycle 574 (length=35):
+    hermes-context-hygiene → browser-agent-ops → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-context-hygiene
+  Cycle 575 (length=37):
+    hermes-agent → linux-wifi-stability → linux-privacy-hardening → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 576 (length=39):
+    hermes-session-hygiene → hermes-dashboard-troubleshooting → wayland-session-management → protonvpn-nm-automation → tailscale-linux-setup → linux-privacy-hardening → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-session-hygiene
+  Cycle 577 (length=40):
+    hermes-agent → hermes-dashboard-troubleshooting → wayland-session-management → protonvpn-nm-automation → tailscale-linux-setup → linux-privacy-hardening → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 578 (length=40):
+    hermes-agent → linux-thermal-workload-throttling → wayland-session-management → protonvpn-nm-automation → tailscale-linux-setup → linux-privacy-hardening → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 579 (length=41):
+    hermes-agent → rootless-podman-compose-adaptation → atomic-desktop-app-installation → wayland-session-management → protonvpn-nm-automation → tailscale-linux-setup → linux-privacy-hardening → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+  Cycle 580 (length=42):
+    hermes-agent → hermes-gateway-lifecycle-guard → silverblue-system-update-trigger → atomic-desktop-app-installation → wayland-session-management → protonvpn-nm-automation → tailscale-linux-setup → linux-privacy-hardening → computer-use → messaging-consent-boundaries → email-inbox-triage → meeting-action-items → grounded-citations → obsidian-research-ingestion → hindsight-stack-operations → agent-memory-consolidation → hermes-agent-skill-authoring → gepa-omni-optimization → evaluation-driven-development → hastie-esl → test-driven-development → github-issue-to-pr → github-operations → code-impact-preflight → risk-based-review → problem-solving-router → spike → hermes-cs-sweep-findings → hermes-research-ops → hermes-research → hermes-background-scripting → hermes-cron-and-agents → agent-mailbox-ipc → mnemosyne-atp-safety → harness-first-agent-design → agent-task-signoff → subagent-output-contract → hermes-agent-sync → hermes-swarm-consensus → adaptive-agent-reasoning → hermes-context-budgeting → hermes-fork → hermes-agent
+
+  ⚠ 335 tight circular dependencies (length ≤ 3) detected:
+    ['wald-sequential-analysis']
+    ['hermes-lambda-tuner', 'hermes-context-budgeting', 'hermes-fork']
+    ['adaptive-agent-reasoning', 'l01-token-efficiency', 'hermes-context-budgeting']
+    ['metacognition', 'l01-token-efficiency', 'hermes-context-budgeting']
+    ['metacognition', 'adaptive-agent-reasoning', 'hermes-context-budgeting']
+    ['dispatching-parallel-agents', 'hermes-agent-sync', 'hermes-swarm-consensus']
+    ['hermes-context-packet', 'hermes-agent-sync', 'hermes-swarm-consensus']
+    ['subagent-driven-development', 'subagent-output-contract', 'hermes-agent-sync']
+    ['verification-before-completion', 'agent-task-signoff', 'subagent-output-contract']
+    ['subagent-driven-development', 'agent-task-signoff', 'subagent-output-contract']
+    ['subagent-driven-development', 'harness-first-agent-design', 'agent-task-signoff']
+    ['verification-before-completion', 'harness-first-agent-design', 'agent-task-signoff']
+    ['ralph-loops', 'mnemosyne-atp-safety', 'harness-first-agent-design']
+    ['autonomous-agent-loop-design', 'mnemosyne-atp-safety', 'harness-first-agent-design']
+    ['verification-before-completion', 'mnemosyne-atp-safety', 'harness-first-agent-design']
+    ['trajectory-risk-guardrail', 'mnemosyne-atp-safety', 'harness-first-agent-design']
+    ['async-agent-nightshift-patterns', 'mnemosyne-atp-safety', 'harness-first-agent-design']
+    ['autonomous-agent-loop-design', 'agent-mailbox-ipc', 'mnemosyne-atp-safety']
+    ['async-agent-nightshift-patterns', 'agent-mailbox-ipc', 'mnemosyne-atp-safety']
+    ['async-agent-nightshift-patterns', 'hermes-cron-and-agents', 'agent-mailbox-ipc']
+    ['autonomous-agent-loop-design', 'hermes-cron-and-agents', 'agent-mailbox-ipc']
+    ['hermes-math-research', 'hermes-research-ops', 'hermes-research']
+    ['hermes-cs-research', 'hermes-research-ops', 'hermes-research']
+    ['trajectory-research-synthesis-to-skills', 'hermes-research-ops', 'hermes-research']
+    ['arxiv-sweep-findings', 'hermes-research-ops', 'hermes-research']
+    ['hermes-math-sweep-findings', 'hermes-cs-sweep-findings', 'hermes-research-ops']
+    ['hermes-cs-research', 'hermes-cs-sweep-findings', 'hermes-research-ops']
+    ['arxiv-sweep-findings', 'hermes-cs-sweep-findings', 'hermes-research-ops']
+    ['trajectory-research-synthesis-to-skills', 'hermes-cs-sweep-findings', 'hermes-research-ops']
+    ['hermes-math-sweep-findings', 'spike', 'hermes-cs-sweep-findings']
+    ['hermes-cs-research', 'spike', 'hermes-cs-sweep-findings']
+    ['math-cs-applicability-reasoning', 'spike', 'hermes-cs-sweep-findings']
+    ['workflow-map', 'problem-solving-router', 'spike']
+    ['plan', 'problem-solving-router', 'spike']
+    ['verification-before-completion', 'problem-solving-router', 'spike']
+    ['workflow-map', 'risk-based-review', 'problem-solving-router']
+    ['verification-before-completion', 'risk-based-review', 'problem-solving-router']
+    ['plan', 'risk-based-review', 'problem-solving-router']
+    ['verification-before-completion', 'code-impact-preflight', 'risk-based-review']
+    ['verification-before-completion', 'github-operations', 'code-impact-preflight']
+    ['github', 'github-issue-to-pr', 'github-operations']
+    ['scoped-pr-fix-and-verification', 'github-issue-to-pr', 'github-operations']
+    ['github-issues', 'github-issue-to-pr', 'github-operations']
+    ['split-ci-workflow-change-and-draft-pr', 'github-issue-to-pr', 'github-operations']
+    ['verification-before-completion', 'github-issue-to-pr', 'github-operations']
+    ['plan', 'github-issue-to-pr', 'github-operations']
+    ['requesting-code-review', 'test-driven-development', 'github-issue-to-pr']
+    ['verification-before-completion', 'test-driven-development', 'github-issue-to-pr']
+    ['plan', 'test-driven-development', 'github-issue-to-pr']
+    ['systematic-debugging', 'test-driven-development', 'github-issue-to-pr']
+    ['systematic-debugging', 'huth-ryan-logic', 'test-driven-development']
+    ['verification-before-completion', 'huth-ryan-logic', 'test-driven-development']
+    ['systematic-debugging', 'boyd-convex-optimization', 'test-driven-development']
+    ['systematic-debugging', 'hastie-esl', 'test-driven-development']
+    ['shannon-1948', 'li-vitanyi-kolmogorov', 'mackay-itila']
+    ['shannon-1948', 'gallager-itrc', 'mackay-itila']
+    ['cover-thomas-eit', 'gallager-itrc', 'mackay-itila']
+    ['shannon-1948', 'cover-thomas-eit', 'mackay-itila']
+    ['jaynes-probability', 'shannon-1948', 'mackay-itila']
+    ['knowledge-corpus-architecture', 'gepa-omni-optimization', 'evaluation-driven-development']
+    ['skillopt-continuous-improvement', 'hermes-self-evolution', 'gepa-omni-optimization']
+    ['self-improve-agent', 'hermes-self-evolution', 'gepa-omni-optimization']
+    ['skillopt-continuous-improvement', 'hermes-agent-skill-authoring', 'gepa-omni-optimization']
+    ['skillopt-continuous-improvement', 'agent-memory-consolidation', 'hermes-agent-skill-authoring']
+    ['memory-topology-categorical', 'hindsight-stack-operations', 'agent-memory-consolidation']
+    ['llm-agent-memory-pipeline-research', 'hindsight-stack-operations', 'agent-memory-consolidation']
+    ['hermes-memory-surface-selection', 'hindsight-stack-operations', 'agent-memory-consolidation']
+    ['graphiti-mcp-setup', 'hindsight-stack-operations', 'agent-memory-consolidation']
+    ['memory-topology-categorical', 'memory-layer-gate', 'hindsight-stack-operations']
+    ['hermes-memory-surface-selection', 'memory-layer-gate', 'hindsight-stack-operations']
+    ['hermes-memory-surface-selection', 'obsidian-research-ingestion', 'hindsight-stack-operations']
+    ['academic-literature-review', 'grounded-citations', 'obsidian-research-ingestion']
+    ['domain-research-synthesis', 'grounded-citations', 'obsidian-research-ingestion']
+    ['firecrawl-research', 'grounded-citations', 'obsidian-research-ingestion']
+    ['weekly-review-planning', 'grounded-citations', 'obsidian-research-ingestion']
+    ['legal-regulatory-research-writing', 'law-firm-briefing-memo', 'grounded-citations']
+    ['exec-memo-writing', 'law-firm-briefing-memo', 'grounded-citations']
+    ['docx', 'law-firm-briefing-memo', 'grounded-citations']
+    ['pdf', 'law-firm-briefing-memo', 'grounded-citations']
+    ['docx', 'exec-memo-writing', 'grounded-citations']
+    ['pdf', 'exec-memo-writing', 'grounded-citations']
+    ['pdf', 'document-layout-design', 'exec-memo-writing']
+    ['docx', 'document-layout-design', 'exec-memo-writing']
+    ['pdf', 'rich-pdf-generation', 'document-layout-design']
+    ['pdf', 'context-safe-pdf-edits', 'document-layout-design']
+    ['competitor-news-monitor', 'product-price-monitor', 'grounded-citations']
+    ['pdf', 'product-price-monitor', 'grounded-citations']
+    ['firecrawl-research', 'product-price-monitor', 'grounded-citations']
+    ['firecrawl-research', 'product-availability-search', 'product-price-monitor']
+    ['document-to-action-items', 'meeting-action-items', 'grounded-citations']
+    ['pdf', 'meeting-action-items', 'grounded-citations']
+    ['email-compose-and-send', 'messaging-consent-boundaries', 'email-inbox-triage']
+    ['email-compose-and-send', 'computer-use', 'messaging-consent-boundaries']
+    ['linux-wifi-stability', 'tailscale-linux-setup', 'linux-privacy-hardening']
+    ['linux-wifi-stability', 'wake-on-lan-desktop', 'tailscale-linux-setup']
+    ['linux-wifi-stability', 'protonvpn-nm-automation', 'tailscale-linux-setup']
+    ['linux-wifi-stability', 'wayland-session-management', 'protonvpn-nm-automation']
+    ['linux-wifi-stability', 'lxqt-remote-desktop-management', 'wayland-session-management']
+    ['linux-wifi-stability', 'atomic-desktop-app-installation', 'wayland-session-management']
+    ['linux-thermal-workload-throttling', 'atomic-desktop-app-installation', 'wayland-session-management']
+    ['fedora-atomic-dotfiles-adaptation', 'bootable-usb-linux', 'atomic-desktop-app-installation']
+    ['silverblue-system-update-trigger', 'bootable-usb-linux', 'atomic-desktop-app-installation']
+    ['silverblue-system-update-trigger', 'silverblue-toolbox-wrapper-bootstrap', 'atomic-desktop-app-installation']
+    ['fedora-atomic-dotfiles-adaptation', 'silverblue-system-update-trigger', 'atomic-desktop-app-installation']
+    ['hermes-agent-independent-update-protocol', 'managed-repo-update-workflow', 'silverblue-system-update-trigger']
+    ['linux-wifi-stability', 'miracast-linux-silverblue', 'wayland-session-management']
+    ['browser-agent-ops', 'agent-browser-troubleshooting', 'computer-use']
+    ['blocked-page-recovery', 'firecrawl-stealth-fallback', 'browser-agent-ops']
+    ['thunderbird-cli-anything', 'email-compose-and-send', 'email-inbox-triage']
+    ['powerpoint', 'xlsx', 'grounded-citations']
+    ['docx', 'xlsx', 'grounded-citations']
+    ['pdf', 'xlsx', 'grounded-citations']
+    ['pdf', 'box', 'xlsx']
+    ['docx', 'box', 'xlsx']
+    ['pdf', 'pii-redaction', 'box']
+    ['docx', 'pii-redaction', 'box']
+    ['docx', 'officecli', 'xlsx']
+    ['pdf', 'officecli', 'xlsx']
+    ['arxiv', 'pdf', 'grounded-citations']
+    ['visual-document-review', 'pdf', 'grounded-citations']
+    ['research-document-output', 'pdf', 'grounded-citations']
+    ['document-to-action-items', 'pdf', 'grounded-citations']
+    ['powerpoint', 'pdf', 'grounded-citations']
+    ['docx', 'pdf', 'grounded-citations']
+    ['weekly-review-planning', 'pdf', 'grounded-citations']
+    ['docx', 'nab-formatting', 'pdf']
+    ['research-document-output', 'docx', 'grounded-citations']
+    ['document-to-action-items', 'docx', 'grounded-citations']
+    ['powerpoint', 'docx', 'grounded-citations']
+    ['academic-literature-review', 'research-document-output', 'grounded-citations']
+    ['academic-literature-review', 'legal-regulatory-research-writing', 'grounded-citations']
+    ['academic-literature-review', 'personal-domain-deep-research', 'grounded-citations']
+    ['domain-research-synthesis', 'personal-domain-deep-research', 'grounded-citations']
+    ['blocked-page-recovery', 'defuddle', 'grounded-citations']
+    ['firecrawl-research', 'defuddle', 'grounded-citations']
+    ['visual-document-review', 'defuddle', 'grounded-citations']
+    ['academic-literature-review', 'defuddle', 'grounded-citations']
+    ['firecrawl-research', 'competitor-news-monitor', 'grounded-citations']
+    ['domain-research-synthesis', 'competitor-news-monitor', 'grounded-citations']
+    ['weekly-review-planning', 'competitor-news-monitor', 'grounded-citations']
+    ['external-signal-pipeline-recovery', 'agent-reach-discovery', 'competitor-news-monitor']
+    ['domain-research-synthesis', 'agent-reach-discovery', 'competitor-news-monitor']
+    ['stay-in', 'suggest-music', 'agent-reach-discovery']
+    ['gold-class', 'suggest-music', 'agent-reach-discovery']
+    ['domain-research-synthesis', 'external-signal-pipeline-recovery', 'competitor-news-monitor']
+    ['firecrawl-research', 'external-signal-pipeline-recovery', 'competitor-news-monitor']
+    ['academic-literature-review', 'lecture-transcript-summarization', 'grounded-citations']
+    ['domain-research-synthesis', 'lecture-transcript-summarization', 'grounded-citations']
+    ['blocked-page-recovery', 'lecture-transcript-summarization', 'grounded-citations']
+    ['firecrawl-research', 'lecture-transcript-summarization', 'grounded-citations']
+    ['knowledge-graph-corpus-pipeline', 'computational-text-corpus-analysis', 'grounded-citations']
+    ['firecrawl-research', 'computational-text-corpus-analysis', 'grounded-citations']
+    ['knowledge-graph-corpus-pipeline', 'comparative-religion-corpus', 'computational-text-corpus-analysis']
+    ['firecrawl-research', 'visual-document-review', 'grounded-citations']
+    ['stay-in', 'gold-class', 'grounded-citations']
+    ['firecrawl-research', 'gold-class', 'grounded-citations']
+    ['firecrawl-research', 'stay-in', 'grounded-citations']
+    ['domain-research-synthesis', 'knowledge-graph-corpus-pipeline', 'grounded-citations']
+    ['domain-research-synthesis', 'local-personal-dashboard', 'grounded-citations']
+    ['firecrawl-research', 'blocked-page-recovery', 'grounded-citations']
+    ['academic-literature-review', 'blocked-page-recovery', 'grounded-citations']
+    ['obsidian', 'hermes-obsidian-sync', 'obsidian-research-ingestion']
+    ['hermes-memory-surface-selection', 'hermes-obsidian-sync', 'obsidian-research-ingestion']
+    ['weekly-review-planning', 'obsidian', 'obsidian-research-ingestion']
+    ['domain-research-synthesis', 'weekly-review-planning', 'obsidian-research-ingestion']
+    ['firecrawl-research', 'academic-literature-review', 'obsidian-research-ingestion']
+    ['domain-research-synthesis', 'academic-literature-review', 'obsidian-research-ingestion']
+    ['domain-research-synthesis', 'firecrawl-research', 'obsidian-research-ingestion']
+    ['memory-topology-categorical', 'hermes-memory-surface-selection', 'agent-memory-consolidation']
+    ['llm-agent-memory-pipeline-research', 'hermes-memory-surface-selection', 'agent-memory-consolidation']
+    ['graphiti-mcp-setup', 'hermes-memory-surface-selection', 'agent-memory-consolidation']
+    ['hermes-memory-capture-and-bridge', 'hermes-memory-surface-selection', 'agent-memory-consolidation']
+    ['session-warm-start-protocol', 'hermes-memory-surface-selection', 'agent-memory-consolidation']
+    ['hermes-agent', 'hermes-skill-library-consolidation-audit', 'hermes-config-repo-audit']
+    ['hermes-agent', 'skill-family-router-maintenance', 'hermes-skill-library-consolidation-audit']
+    ['hermes-agent', 'hermes-system-audit', 'hermes-skill-library-consolidation-audit']
+    ['portable-context-layer', 'hermes-cowork-port-sync', 'hermes-config-repo-audit']
+    ['graphiti-mcp-setup', 'memory-topology-categorical', 'agent-memory-consolidation']
+    ['skillopt-continuous-improvement', 'runtime-skill-synthesis', 'hermes-agent-skill-authoring']
+    ['trajectory-research-synthesis-to-skills', 'runtime-skill-synthesis', 'hermes-agent-skill-authoring']
+    ['verification-before-completion', 'hermes-internals-source-recon', 'hermes-agent-skill-authoring']
+    ['plan', 'hermes-internals-source-recon', 'hermes-agent-skill-authoring']
+    ['self-improve-agent', 'skillopt-continuous-improvement', 'gepa-omni-optimization']
+    ['systematic-debugging', 'pearl-causality', 'test-driven-development']
+    ['systematic-debugging', 'jaynes-probability', 'test-driven-development']
+    ['systematic-debugging', 'thompson-type-theory', 'test-driven-development']
+    ['verification-before-completion', 'isolated-workspace-preflight', 'test-driven-development']
+    ['plan', 'isolated-workspace-preflight', 'test-driven-development']
+    ['workflow-map', 'isolated-workspace-preflight', 'test-driven-development']
+    ['complexity-gated-planning', 'isolated-workspace-preflight', 'test-driven-development']
+    ['subagent-driven-development', 'isolated-workspace-preflight', 'test-driven-development']
+    ['requesting-code-review', 'isolated-workspace-preflight', 'test-driven-development']
+    ['finishing-a-development-branch', 'executing-plans', 'using-git-worktrees']
+    ['verification-before-completion', 'hermes-operating-pattern', 'test-driven-development']
+    ['plan', 'hermes-operating-pattern', 'test-driven-development']
+    ['workflow-map', 'hermes-operating-pattern', 'test-driven-development']
+    ['hermes-coding-review-loop', 'hermes-operating-pattern', 'test-driven-development']
+    ['systematic-debugging', 'hermes-operating-pattern', 'test-driven-development']
+    ['requesting-code-review', 'hermes-operating-pattern', 'test-driven-development']
+    ['using-superpowers', 'writing-skills', 'test-driven-development']
+    ['plan', 'using-superpowers', 'test-driven-development']
+    ['subagent-driven-development', 'using-superpowers', 'test-driven-development']
+    ['requesting-code-review', 'using-superpowers', 'test-driven-development']
+    ['verification-before-completion', 'using-superpowers', 'test-driven-development']
+    ['requesting-code-review', 'receiving-code-review', 'using-superpowers']
+    ['verification-before-completion', 'receiving-code-review', 'using-superpowers']
+    ['plan', 'brainstorming', 'using-superpowers']
+    ['github-issues', 'github-issue-agent', 'github-operations']
+    ['scoped-pr-fix-and-verification', 'split-ci-workflow-change-and-draft-pr', 'github-operations']
+    ['github', 'github-issues', 'github-operations']
+    ['verification-before-completion', 'github-issues', 'github-operations']
+    ['plan', 'github-issues', 'github-operations']
+    ['verification-before-completion', 'scoped-pr-fix-and-verification', 'github-operations']
+    ['verification-before-completion', 'finishing-a-development-branch', 'github-operations']
+    ['verification-before-completion', 'hermes-coding-review-loop', 'code-impact-preflight']
+    ['requesting-code-review', 'security-hardening-balance-review', 'risk-based-review']
+    ['requesting-code-review', 'review-driven-followup-fixes', 'risk-based-review']
+    ['verification-before-completion', 'review-driven-followup-fixes', 'risk-based-review']
+    ['workflow-map', 'requesting-code-review', 'risk-based-review']
+    ['subagent-driven-development', 'requesting-code-review', 'risk-based-review']
+    ['verification-before-completion', 'requesting-code-review', 'risk-based-review']
+    ['plan', 'requesting-code-review', 'risk-based-review']
+    ['subagent-driven-development', 'tech-debt-survey-and-refactor', 'requesting-code-review']
+    ['adversarial-review', 'tech-debt-survey-and-refactor', 'requesting-code-review']
+    ['verification-before-completion', 'tech-debt-survey-and-refactor', 'requesting-code-review']
+    ['verification-before-completion', 'repo1-gateway-workflow', 'requesting-code-review']
+    ['plan', 'repo1-gateway-workflow', 'requesting-code-review']
+    ['subagent-driven-development', 'repo1-gateway-workflow', 'requesting-code-review']
+    ['verification-before-completion', 'policy-dashboard-workflow', 'requesting-code-review']
+    ['plan', 'policy-dashboard-workflow', 'requesting-code-review']
+    ['subagent-driven-development', 'policy-dashboard-workflow', 'requesting-code-review']
+    ['isa', 'adversarial-review', 'problem-solving-router']
+    ['verification-before-completion', 'adversarial-review', 'problem-solving-router']
+    ['transfer-applicability-chain', 'adversarial-review', 'problem-solving-router']
+    ['verification-before-completion', 'isa', 'problem-solving-router']
+    ['plan', 'isa', 'problem-solving-router']
+    ['grill-me', 'isa', 'problem-solving-router']
+    ['verification-before-completion', 'ponytail-yagni', 'problem-solving-router']
+    ['plan', 'ponytail-yagni', 'problem-solving-router']
+    ['complexity-gated-planning', 'grill-me', 'problem-solving-router']
+    ['verification-before-completion', 'workflow-map', 'spike']
+    ['plan', 'workflow-map', 'spike']
+    ['subagent-driven-development', 'workflow-map', 'spike']
+    ['hermes-math-research', 'hermes-math-sweep-findings', 'hermes-research-ops']
+    ['arxiv-sweep-findings', 'hermes-math-sweep-findings', 'hermes-research-ops']
+    ['trajectory-research-synthesis-to-skills', 'hermes-math-sweep-findings', 'hermes-research-ops']
+    ['hermes-cs-research', 'hermes-config-research-sync', 'hermes-research']
+    ['hermes-math-research', 'hermes-config-research-sync', 'hermes-research']
+    ['math-cs-applicability-reasoning', 'transfer-applicability-chain', 'hermes-research']
+    ['domain-research-synthesis', 'transfer-applicability-chain', 'hermes-research']
+    ['hermes-cs-research', 'math-cs-applicability-reasoning', 'hermes-research']
+    ['hermes-math-research', 'math-cs-applicability-reasoning', 'hermes-research']
+    ['trajectory-research-synthesis-to-skills', 'math-cs-applicability-reasoning', 'hermes-research']
+    ['arxiv', 'llm-agent-memory-pipeline-research', 'hermes-research']
+    ['arxiv-sweep-findings', 'llm-agent-memory-pipeline-research', 'hermes-research']
+    ['arxiv-sweep-findings', 'trajectory-research-synthesis-to-skills', 'hermes-research']
+    ['self-improve-agent', 'trajectory-research-synthesis-to-skills', 'hermes-research']
+    ['hermes-research-pipeline-pitfalls', 'trajectory-research-synthesis-to-skills', 'hermes-research']
+    ['hermes-cs-research', 'trajectory-research-synthesis-to-skills', 'hermes-research']
+    ['hermes-math-research', 'trajectory-research-synthesis-to-skills', 'hermes-research']
+    ['arxiv', 'arxiv-sweep-findings', 'hermes-research']
+    ['domain-research-synthesis', 'arxiv-sweep-findings', 'hermes-research']
+    ['hermes-cs-research', 'arxiv-sweep-findings', 'hermes-research']
+    ['hermes-math-research', 'arxiv-sweep-findings', 'hermes-research']
+    ['self-improve-agent', 'arxiv-sweep-findings', 'hermes-research']
+    ['domain-research-synthesis', 'arxiv', 'hermes-research']
+    ['hermes-research-pipeline-pitfalls', 'hermes-math-research', 'hermes-research']
+    ['hermes-cs-research', 'hermes-math-research', 'hermes-research']
+    ['hermes-research-pipeline-pitfalls', 'hermes-cs-research', 'hermes-research']
+    ['claude-routing-hierarchy', 'stalled-session-recovery', 'hermes-cron-and-agents']
+    ['agent-runtime-loop-patterns', 'stalled-session-recovery', 'hermes-cron-and-agents']
+    ['verification-before-completion', 'handoff', 'stalled-session-recovery']
+    ['hermes-context-hygiene', 'handoff', 'stalled-session-recovery']
+    ['dispatching-parallel-agents', 'hermes-acp-routing', 'hermes-cron-and-agents']
+    ['hermes-observability-and-task-ledger', 'hermes-acp-routing', 'hermes-cron-and-agents']
+    ['autonomous-agent-loop-design', 'hermes-acp-routing', 'hermes-cron-and-agents']
+    ['hermes-memory-capture-and-bridge', 'hermes-observability-and-task-ledger', 'hermes-cron-and-agents']
+    ['dispatching-parallel-agents', 'hermes-observability-and-task-ledger', 'hermes-cron-and-agents']
+    ['ralph-loops', 'preact-trajectory-compilation', 'mnemosyne-atp-safety']
+    ['autonomous-agent-loop-design', 'preact-trajectory-compilation', 'mnemosyne-atp-safety']
+    ['trajectory-risk-guardrail', 'information-flow-control', 'mnemosyne-atp-safety']
+    ['claude-routing-hierarchy', 'trajectory-risk-guardrail', 'harness-first-agent-design']
+    ['ralph-loops', 'trajectory-risk-guardrail', 'harness-first-agent-design']
+    ['verification-before-completion', 'trajectory-risk-guardrail', 'harness-first-agent-design']
+    ['async-agent-nightshift-patterns', 'trajectory-risk-guardrail', 'harness-first-agent-design']
+    ['agent-runtime-loop-patterns', 'trajectory-risk-guardrail', 'harness-first-agent-design']
+    ['autonomous-agent-loop-design', 'trajectory-risk-guardrail', 'harness-first-agent-design']
+    ['autonomous-agent-loop-design', 'ralph-loops', 'harness-first-agent-design']
+    ['subagent-driven-development', 'ralph-loops', 'harness-first-agent-design']
+    ['autonomous-agent-loop-design', 'puterman-mdp', 'ralph-loops']
+    ['async-agent-nightshift-patterns', 'claude-routing-hierarchy', 'harness-first-agent-design']
+    ['autonomous-agent-loop-design', 'claude-routing-hierarchy', 'harness-first-agent-design']
+    ['anthropic-agent-api-patterns', 'claude-routing-hierarchy', 'harness-first-agent-design']
+    ['agent-runtime-loop-patterns', 'claude-routing-hierarchy', 'harness-first-agent-design']
+    ['autonomous-agent-loop-design', 'async-agent-nightshift-patterns', 'harness-first-agent-design']
+    ['autonomous-agent-loop-design', 'anthropic-agent-api-patterns', 'harness-first-agent-design']
+    ['autonomous-agent-loop-design', 'portable-context-layer', 'harness-first-agent-design']
+    ['subagent-driven-development', 'self-improve-agent', 'agent-task-signoff']
+    ['verification-before-completion', 'self-improve-agent', 'agent-task-signoff']
+    ['subagent-driven-development', 'plan', 'subagent-output-contract']
+    ['verification-before-completion', 'plan', 'subagent-output-contract']
+    ['verification-before-completion', 'media-catalog-seed-data', 'plan']
+    ['complexity-gated-planning', 'media-catalog-seed-data', 'plan']
+    ['subagent-driven-development', 'verification-before-completion', 'subagent-output-contract']
+    ['hermes-agent', 'claude-code', 'verification-before-completion']
+    ['node-inspect-debugger', 'python-debugpy', 'verification-before-completion']
+    ['systematic-debugging', 'python-debugpy', 'verification-before-completion']
+    ['systematic-debugging', 'node-inspect-debugger', 'verification-before-completion']
+    ['dispatching-parallel-agents', 'kanban-swarm-nightly-ops', 'hermes-agent-sync']
+    ['dispatching-parallel-agents', 'subagent-driven-development', 'hermes-agent-sync']
+    ['hermes-context-packet', 'hermes-role-pipelines', 'hermes-swarm-consensus']
+    ['autonomous-ai-agents', 'hermes-role-pipelines', 'hermes-swarm-consensus']
+    ['dispatching-parallel-agents', 'hermes-role-pipelines', 'hermes-swarm-consensus']
+    ['dispatching-parallel-agents', 'fable-orchestrate', 'hermes-swarm-consensus']
+    ['autonomous-agent-loop-design', 'vera-schema-therapy', 'autonomous-ai-agents']
+    ['dispatching-parallel-agents', 'merge-reconciler', 'hermes-swarm-consensus']
+    ['systematic-debugging', 'complexity-gated-planning', 'adaptive-agent-reasoning']
+    ['sipser-theory-computation', 'complexity-gated-planning', 'adaptive-agent-reasoning']
+    ['wald-sequential-analysis', 'sipser-theory-computation', 'adaptive-agent-reasoning']
+    ['systematic-debugging', 'sipser-theory-computation', 'adaptive-agent-reasoning']
+    ['systematic-debugging', 'wald-sequential-analysis', 'adaptive-agent-reasoning']
+    ['hermes-context-hygiene', 'agent-runtime-loop-patterns', 'hermes-context-budgeting']
+    ['hermes-semantic-skill-routing', 'metacognition', 'hermes-context-budgeting']
+    ['hermes-context-hygiene', 'metacognition', 'hermes-context-budgeting']
+    ['symbolic-context-offload', 'tencentdb-agent-memory', 'hermes-context-budgeting']
+    ['hermes-context-hygiene', 'tencentdb-agent-memory', 'hermes-context-budgeting']
+    ['rr-compaction-scorer', 'it-derived-algorithms', 'hermes-context-budgeting']
+    ['information-theory-for-agents', 'rr-compaction-scorer', 'hermes-context-budgeting']
+    ['hermes-context-hygiene', 'rr-compaction-scorer', 'hermes-context-budgeting']
+    ['hermes-lambda-tuner', 'rr-compaction-scorer', 'hermes-context-budgeting']
+    ['hermes-context-hygiene', 'information-theory-for-agents', 'hermes-context-budgeting']
+    ['hermes-context-hygiene', 'hermes-session-hygiene', 'hermes-context-budgeting']
+    ['symbolic-context-offload', 'hermes-context-hygiene', 'hermes-context-budgeting']
+    ['hermes-lambda-tuner', 'session-warm-start-protocol', 'hermes-fork']
+    ['hermes-lambda-tuner', 'hermes-reasoning-layer-engineering', 'hermes-fork']
+
+### cw-complex ###
+=== HAT-2: CW-Complex Analysis ===
+  Vertices (V)         = 273
+  Edges    (E)         = 811
+  Triangles/2-faces (F)= 748
+  chi = V - E + F      = 210
+
+  748 triangle(s) found (mutually related skill triplets):
+      1. (book-to-skill, docx, pdf)
+      2. (blocked-page-recovery, firecrawl-research, grounded-citations)
+      3. (blocked-page-recovery, firecrawl-research, lecture-transcript-summarization)
+      4. (blocked-page-recovery, firecrawl-research, defuddle)
+      5. (blocked-page-recovery, firecrawl-research, product-availability-search)
+      6. (blocked-page-recovery, firecrawl-research, academic-literature-review)
+      7. (blocked-page-recovery, firecrawl-research, firecrawl-stealth-fallback)
+      8. (blocked-page-recovery, grounded-citations, lecture-transcript-summarization)
+      9. (blocked-page-recovery, grounded-citations, defuddle)
+     10. (blocked-page-recovery, grounded-citations, academic-literature-review)
+     11. (blocked-page-recovery, lecture-transcript-summarization, academic-literature-review)
+     12. (blocked-page-recovery, defuddle, academic-literature-review)
+     13. (blocked-page-recovery, academic-literature-review, firecrawl-stealth-fallback)
+     14. (blocked-page-recovery, firecrawl-stealth-fallback, browser-agent-ops)
+     15. (using-superpowers, brainstorming, plan)
+     16. (using-superpowers, using-git-worktrees, finishing-a-development-branch)
+     17. (using-superpowers, finishing-a-development-branch, requesting-code-review)
+     18. (using-superpowers, finishing-a-development-branch, verification-before-completion)
+     19. (using-superpowers, receiving-code-review, requesting-code-review)
+     20. (using-superpowers, receiving-code-review, verification-before-completion)
+    ... and 728 more triangles.
+
+### domain-gaps ###
+=== HAT-6: Domain Co-occurrence & Coverage Gaps ===
+  Total domains:              15
+  Cross-domain link pairs:    25
+  H0 (domain components):     4
+
+  ⚠ Isolated coverage islands (3 domains with zero cross-domain links):
+    - apple (4 skills)
+    - creative (10 skills)
+    - media (3 skills)
+
+  Domain connectivity (cross-domain edge counts):
+    autonomous-ai-agents                      degree=8  skills=67
+    software-development                      degree=8  skills=59
+    productivity                              degree=5  skills=22
+    research                                  degree=5  skills=60
+    email                                     degree=4  skills=4
+    superpowers                               degree=4  skills=7
+    computer-use                              degree=3  skills=1
+    devops                                    degree=3  skills=25
+    github                                    degree=3  skills=6
+    note-taking                               degree=3  skills=2
+    uncategorized                             degree=3  skills=1
+    social-media                              degree=1  skills=2
+    apple                                     degree=0  skills=4
+    creative                                  degree=0  skills=10
+    media                                     degree=0  skills=3
+
+__HERMES_CWD_c59677669e67__/var/home/rainbow__HERMES_CWD_c59677669e67__

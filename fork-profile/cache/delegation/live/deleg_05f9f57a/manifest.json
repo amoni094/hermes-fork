@@ -1,0 +1,38 @@
+{
+  "delegation_id": "deleg_05f9f57a",
+  "started": "2026-09-16 22:35:04",
+  "task_count": 4,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Wire concept-lattice-index.py as a semantic fallback in skill-router-index.py.\n\n1. Read both scripts:\n   - /var/home/rainbow/.hermes/scripts/skill-router-index.py\n   - /var/home/rainbow/.hermes/scripts/concept-lattice-index.py\n\n2. In concept-lattice-index.py: add --query and --top-k CLI args in main() that call query_activate() and print JSON list to stdout. Currently main() only builds the index with no query path.\n\n3. In skill-router-index.py, modify cmd_query() to:\n   a. After BM25 top-k resu",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_05f9f57a/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Wire consistency_scorer.py into metacognitive-harness.py, and add CLI entrypoints to improvement_governance.py and run_ledger.py.\n\nSUB-TASK A - consistency_scorer wiring:\n1. Read /var/home/rainbow/.hermes/scripts/consistency_scorer.py fully\n2. Read /var/home/rainbow/.hermes/scripts/metacognitive-harness.py - find where JOL confidence is computed (search for jol_stop_threshold, fok_jol_gap, confidence)\n3. In metacognitive-harness.py in the confidence-scoring section: when scope is L2 or L3 factua",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_05f9f57a/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Wire shadow_telemetry as a nightly cron report, and wire rd-compaction-advisor into pre-compact-annotate.\n\nSUB-TASK A - shadow-gate-nightly.py cron script:\n1. Read /var/home/rainbow/.hermes/scripts/shadow_telemetry.py - understand evaluate_flag() and record() interfaces\n2. Write /var/home/rainbow/.hermes/scripts/shadow-gate-nightly.py that:\n   - Reads all ~/.hermes/cache/shadow-telemetry/*.jsonl files (create dir if absent)\n   - Calls evaluate_flag() for each flag found in telemetry data\n   - Pr",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_05f9f57a/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Perform a cold adversarial coherence audit of the Hermes fork. Read fresh and check:\n\nA) INTERNAL CONTRADICTIONS:\n   - Read /var/home/rainbow/.hermes/profiles/fork/ARCHITECTURE.md\n   - Read /var/home/rainbow/.hermes/scripts/consistency_scorer.py\n   - Read /var/home/rainbow/.hermes/scripts/improvement_governance.py\n   - Read /var/home/rainbow/.hermes/scripts/loop-pid.py (first 150 lines)\n   - Read /var/home/rainbow/.hermes/scripts/lyapunov-analysis.py (first 80 lines)\n   Check: does loop-pid.py a",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_05f9f57a/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-16 22:38:37"
+}

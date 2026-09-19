@@ -1,0 +1,24 @@
+{
+  "delegation_id": "deleg_424c5aaa",
+  "started": "2026-09-15 16:12:48",
+  "task_count": 2,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Run a final cold adversarial review on all NEW and MODIFIED scripts in ~/.hermes/scripts/ that were produced during this session. Your job is to independently verify each script is correct, non-trivially useful, and does not have critical bugs.\n\nScripts to review (all in ~/.hermes/scripts/):\n- skill-persistent-homology.py (NEW)\n- skill-embedding-geometry.py (NEW)\n- routing-convergence-guard.py (NEW)\n- skill-gw-compare.py (NEW)\n- agent-mailbox-ipc.py (NEW)\n- lyapunov-analysis.py (NEW)\n- action-lo",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_424c5aaa/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Run a comprehensive cohesion audit of ALL Hermes skills in ~/.hermes/skills/ and ~/.hermes/profiles/fork/skills/.\n\nThe audit has 5 checks:\n\n1. DESCRIPTION ACCURACY: Load each skill's frontmatter `description` field. Check if the description matches the skill name and body. Flag any skill where the description clearly describes a DIFFERENT skill (like clrs-algorithms was mis-tagged with Boyd text). Use simple heuristics: if skill name contains 'cryptography' but description mentions 'gradient des",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_424c5aaa/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 16:26:36"
+}

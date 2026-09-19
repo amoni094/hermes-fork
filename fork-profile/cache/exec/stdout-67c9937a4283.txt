@@ -1,0 +1,1470 @@
+
+============================================================
+SKILL: anthropic-api-cost-optimization (19578 chars)
+============================================================
+---
+name: anthropic-api-cost-optimization
+description: "Use when cutting Anthropic API costs via caching or schemas."
+version: 1.0.0
+triggers:
+  - "reduce API costs"
+  - "prompt caching"
+  - "cache_control"
+  - "cache hit rate"
+  - "token savings"
+  - "API cost monitoring"
+  - "structured output anthropic"
+  - "output_config.format"
+  - "strict tool use"
+  - "circuit breaker API spend"
+  - "LLM cost"
+  - "cache miss"
+  - "budget guard"
+related_skills:
+  - hermes-observability-and-task-ledger
+  - hermes-context-hygiene
+  - claude-routing-hierarchy
+---
+
+# Anthropic API Cost Optimization
+
+> Verified Aug 2026 against live Anthropic docs. All patterns apply to Hermes running
+> claude-sonnet-4-6 + claude-haiku-4-5 via direct API.
+
+## Quick Wins (LOW complexity — implement immediately)
+
+### 1. Automatic top-level `cache_control`
+
+Add ONE field to every `messages.create()` call:
+
+```python
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    cache_control={"type": "ephemeral"},   # ← add this
+    system="...",
+    messages=[...]
+)
+```
+
+- Cache reads cost **0.10× base input price** → 90% savings on cached tokens
+- System auto-applies breakpoint to last cacheable block, advances each turn
+- Sonnet 4.6: $0.30/MTok cached vs $3/MTok base
+- Works on all active models (Sonnet 4.6, Haiku 4.5, Opus 4.x)
+
+Track hits via `response.usage.cache_read_input_tokens` vs `cache_creation_input_tokens`.
+
+### 2. 1-hour TTL for static system prompts
+
+```python
+system=[{
+    "type": "text",
+    "text": "You are...",
+    "cache_control": {"type": "ephemeral", "ttl": "1h"}  # ← 1h for system prompt
+}]
+```
+
+- Standard 5-min TTL misses cache when cron agents restart every 30+ min
+- Cost: 2× base on writes; pays back on 2nd read within 1 hour
+
+### 3. `max_tokens: 0` pre-warming
+
+```python
+# Call before agent loop (cron start, batch start)
+client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=0,           # ← zero: no output, no output tokens billed
+    system=[{"type": "text", "text": SYSTEM_PROMPT,
+             "cache_control": {"type": "ephemeral", "ttl": "1h"}}],
+    messages=[{"role": "user", "content": "ping"}]
+)
+# First real call immediately hits warm cache
+```
+
+Better than old `max_tokens: 1` — no token to discard, intent clear.
+
+### 4. `strict: True` on all tool definitions
+
+```python
+tools = [{"name": "my_tool", "strict": True, ...}]
+```
+
+- Grammar-constrained sampling → schema-compliant every call
+- Eliminates hallucinated fields, retry loops
+- Compatible with `output_config.format` simultaneously
+
+### 5. `output_config.format` + Pydantic (replaces manual JSON prompting)
+
+```python
+from pydantic import BaseModel
+from anthropic import Anthropic
+
+class MyOutput(BaseModel):
+    reasoning: str
+    answer: str
+    confidence: float
+
+response = Anthropic().messages.parse(
+    model="claude-sonnet-4-6",
+    max_tokens=512,
+    messages=[{"role": "user", "content": "..."}],
+    output_format=MyOutput,     # SDK derives schema + validates
+)
+result = response.parsed_output  # typed MyOutput instance
+```
+
+- Constrained decoding → always valid, no parse errors, no retries
+- Eliminates retry cost (each retry = 100% token overhead)
+- `output_config.format` is the stable param (replaces beta `output_format`)
+- Incompatible with: citations, message prefilling
+
+### 6. Named sub-fields as schema-level CoT (⚡ HIGH ROI, LOW effort)
+
+Instead of `{"suggestion": "..."}`, use:
+```json
+{"reasoning": "...", "concise_suggestion": "...", "confidence": "high|medium|low"}
+```
+
+- Named fields act as CoT scaffolding without explicit CoT prompting
+- Use `description` field on each property — free steering
+- Reported: 20–40% fewer hallucinated values
+
+### 7. Poka-yoke tool inputs
+
+From Anthropic SWE-bench team: Claude made systematic errors with relative file paths.
+Fix: require absolute paths in description + validate server-side. General principle:
+constrain tool inputs so common mistakes are structurally impossible.
+
+---
+
+## Pricing Reference (Aug 2026)
+
+| Model | Base Input | 5m Cache Write | 1h Cache Write | Cache Read |
+|-------|-----------|----------------|----------------|------------|
+| Sonnet 4.6 | $3/MTok | $3.75 | $6 | $0.30 |
+| Haiku 4.5 | $1/MTok | $1.25 | $2 | $0.10 |
+| Opus 4.6 | $5/MTok | $6.25 | $10 | $0.50 |
+
+Batch API: 50% discount, compatible with structured outputs and prompt caching.
+
+---
+
+## Cost Monitoring
+
+### CacheLens local cost proxy
+```bash
+pip install cache-lens
+# Set ANTHROPIC_BASE_URL=http://localhost:8080 in Hermes .env
+```
+
+- Zero-latency stream tee; cacheability scorer (~85% multi-call accuracy)
+- Budget caps that **block** requests before overspend
+- Prometheus `/metrics` endpoint; identifies repeated prompt patterns
+- Source: https://github.com/stephenlthorn/cache-lens
+
+### Inward circuit breaker on API spend
+
+```python
+def check_budget_breaker():
+    ratio = get_anthropic_usage_this_month() / MONTHLY_BUDGET
+    if ratio >= 0.90: set_breaker_state("OPEN")
+    elif ratio <= 0.85: set_breaker_state("CLOSED")  # hysteresis
+    return get_breaker_state()
+```
+
+- Trip at 90%, recover at 85% (hysteresis prevents oscillation)
+- Fail-safe: if usage API is down, maintain last-known state
+- Alert dedup: one alert per resource per billing period
+- Source: https://yingjiezhao.com/en/articles/Usage-Circuit-Breaker-for-Cloudflare-Workers
+
+---
+
+## Caching Architecture
+
+### Explicit + auto combined (recommended for Hermes)
+
+```python
+messages.create(
+    cache_control={"type": "ephemeral"},   # auto: conversation history (5m TTL)
+    system=[{
+        "type": "text",
+        "text": LARGE_SYSTEM_PROMPT,
+        "cache_control": {"type": "ephemeral", "ttl": "1h"}  # explicit: system (1h TTL)
+    }],
+    messages=conversation_history
+)
+```
+
+### Caching tool definitions
+
+```python
+# Place cache_control on the LAST tool
+tools = [
+    {"name": "tool_a", ...},
+    {"name": "tool_b", ..., "cache_control": {"type": "ephemeral"}}  # caches all above
+]
+```
+
+---
+
+## MCP Output Schemas (MEDIUM complexity, very HIGH impact)
+
+MCP spec 2025-06-18+ added `outputSchema` for tools. Enables CodeAct pattern:
+agents know return structure before calling → single-step programs vs. exploratory loops.
+
+Anthropic Programmatic tool calling: tool results NOT added to context window.
+**Reported: up to 98.7% token savings in tool-heavy workflows.**
+
+For Hermes: add typed return schemas to graphiti MCP tools.
+Source: https://huggingface.co/blog/llchahn/ai-agents-output-schema
+
+---
+
+## RACS: Stability-Rank Ordering and Prefix-Drift Detection (github:davccavalcante/racs, Sweep 16)
+
+RACS formalizes what should already be intuitive but often isn't enforced: context blocks should
+be ordered most-stable-first to maximize provider-side prefix cache hits.
+
+**Stability-rank ordering (order context blocks by mutation frequency):**
+
+| Rank | Block | Mutation frequency | Position in prompt |
+|---|---|---|---|
+| 1 (most stable) | System prompt | Never changes mid-session | TOP — always first |
+| 2 | Persona / role | Changes only on explicit task switch | After system prompt |
+| 3 | Loaded skills | Changes only when a new skill is loaded | After persona |
+| 4 | Injected memories | Changes per-turn if new facts arrive | After skills |
+| 5 (least stable) | Conversation history | Changes every turn | BOTTOM — always last |
+
+**Note for racs-prefix-tracker.py:** The script tracks system_prompt, skills, and memories as the drift-monitored set. However, memories changes per-turn when new Hindsight facts arrive, generating expected drift events. Treat memories drift as informational only. Only system_prompt and skills drift indicate unexpected cache breaks worth investigating.
+
+This is the ordering Hermes already uses structurally (system > memory > tools > conversation).
+RACS makes it explicit and adds two new mechanisms:
+
+**Prefix-drift detection:**
+When assembling the prompt, compare the current prefix hash against the previous turn's prefix hash.
+If the hash changed for blocks ranked 1–3 (system, persona, skills), log a `prefix_drift` event —
+these changes break the provider-side cache and incur re-computation cost. Flag the cause:
+- System prompt edit → intentional, expected
+- Skill loaded mid-session → expected, note it
+- Memory injection changed stable section content → investigate; may indicate memory write-path bug
+
+In Hermes: compare prompt hashes across turns manually using racs-prefix-tracker.py.
+Note: `hermes config set context.log_prefix_drift` is not a supported config key.
+The script at ~/.hermes/scripts/racs-prefix-tracker.py is the current implementation;
+it must be called manually from execute_code or a cron script.
+
+**RACS prefix-drift logging (`racs-prefix-tracker.py`):**
+The Anthropic API returns `cache_read_input_tokens` when prompt caching is active. Unexpected
+drops to zero indicate a prefix-drift event where a stable block changed and broke the cache.
+Hash stable context blocks per turn and log those events with
+`~/.hermes/scripts/racs-prefix-tracker.py` (`track_turn(session_id, turn_num, blocks)`).
+Blocks = `{system_prompt, skills, memories, history}`; only the first three are drift-tracked.
+Logs: `~/.hermes/logs/prefix-drift.jsonl`. Report: `python3 ~/.hermes/scripts/racs-prefix-tracker.py --report`.
+
+**TTL keep-warm scheduling:**
+Anthropic's prompt cache TTL is 5 minutes (ephemeral) or 1 hour (extended). For long-running
+sessions or cron jobs with infrequent turns, schedule a lightweight "keep-warm" ping before TTL
+expiry to preserve the cached prefix. For cron jobs that run every 30+ minutes: add a no-op
+heartbeat turn at the 4-minute or 55-minute mark to refresh the TTL.
+
+**Practical ordering rule for delegate_task context packets:**
+When building a context packet for a subagent, put the most stable content first:
+```
+context = f"""
+{SYSTEM_INSTRUCTIONS}       # never changes — rank 1
+{loaded_skill_content}      # changes per task type — rank 3
+{prior_findings_summary}    # changes per batch — rank 4
+{conversation_excerpt}      # changes per turn — rank 5 (keep minimal)
+"""
+```
+
+## Anthropic Batch API — 50% Cost Reduction for Non-Latency Tasks (agent-improvements-2026-08.md)
+
+For any task where the user doesn't need an immediate response, use the Batch API:
+- 50% cheaper than synchronous Messages API
+- Accepts up to 10,000 requests per batch
+- Results available within 24 hours (usually <1 hour)
+- Same models, same tool use, same output quality
+
+**Hermes use cases:**
+- l1-promote.py Hindsight writes (currently synchronous, could batch overnight)
+- Bulk skill analysis/scoring (SkillOpt, RUMBA eval runs)
+- Overnight research synthesis across many documents
+- Any cron job where output is consumed next session, not immediately
+
+```python
+batch = client.messages.batches.create(
+    requests=[
+        {"custom_id": f"item-{i}", "params": {
+            "model": "claude-haiku-4-5",
+            "max_tokens": 1024,
+            "messages": [{"role": "user", "content": prompt}]
+        }}
+        for i, prompt in enumerate(prompts)
+    ]
+)
+# Poll: client.messages.batches.retrieve(batch.id)
+# Results: client.messages.batches.results(batch.id)
+```
+
+**Routing rule:** use Batch API when: cron job, no user waiting, result consumed >1 min from now.
+Do NOT use for: interactive tasks, streaming, tool-use loops requiring real-time routing.
+
+## RACS — Stability-Rank Prefix Ordering + TTL Keep-Warm (github:davccavalcante/racs) ★ MED — Sweep 16
+
+Source: "RACS: Request-Aware Cache Scheduling for LLM Inference". Key findings applicable
+to Hermes prompt caching:
+
+## ReCache — Resource-Wise KV Block Caching Per Tool/Skill (Sweep 20) <!-- why: mid-session skill injection in the middle of a stable prefix invalidates downstream cache; append-only stable order preserves it -->
+
+Tool schemas and skill bodies should be cached as independent KV blocks at session start, assembled from cache for subsequent turns. Mid-session skill injection in the middle of a stable prefix invalidates everything downstream.
+
+Herm
+[...+7578 more chars]
+
+============================================================
+SKILL: clrs-algorithms (8825 chars)
+============================================================
+---
+name: clrs-algorithms
+description: "Knowledge base from CLRS 'Introduction to Algorithms'. Use when reasoning about algorithmic complexity, data structures, sorting, graph algorithms, dynamic programming, or performance analysis in code."
+---
+
+# Introduction to Algorithms (CLRS, 4th ed, 2022)
+**Authors**: Cormen, Leiserson, Rivest, Stein | **Pages**: ~1312 | **Chapters**: 35 + appendices A–D
+
+Knowledge base from CLRS *Introduction to Algorithms*. Use when reasoning about algorithmic complexity, data structures, sorting, graph algorithms, dynamic programming, or performance analysis in code.
+
+Synthesized toolkit, not the book text. Cite chapter/section when applying a rule. Load [references/cheatsheet.md](references/cheatsheet.md), [references/patterns.md](references/patterns.md), or [references/glossary.md](references/glossary.md) for lookup; load a chapter file for worked detail.
+
+## How to use
+
+- Complexity / Big-O disputes → Ch 3 + cheatsheet
+- Recursion performance → Ch 4 Master theorem (do this *before* profiling)
+- Loop correctness → Ch 2.1 loop invariants
+- Arrays that grow / heaps / union-find cost → Ch 16 amortized analysis, Ch 19
+- Hashing → Ch 11
+- DP vs greedy → Ch 14 vs Ch 15
+- Graphs: BFS/DFS → Ch 20; Dijkstra/Bellman-Ford → Ch 22
+
+---
+
+## Core frameworks
+
+### Loop invariants (Ch 2.1)
+
+A loop is correct iff you can state a property that holds at the start of every iteration and, with the exit condition, implies the postcondition. Prove three things:
+
+1. **Initialization** — true before the first iteration (base case).
+2. **Maintenance** — if true before an iteration, true before the next (inductive step).
+3. **Termination** — the loop ends; substituting the exit into the invariant yields a useful correctness claim.
+
+Unlike infinite induction, the “induction” stops when the loop exits. Use this for any non-trivial loop, not as a style comment: the invariant is the correctness argument. Insertion-sort example: at the start of the `for i` loop, `A[1..i-1]` is the original prefix in sorted order; at `i = n+1` the whole array is sorted.
+
+### Asymptotic notation (Ch 3.1–3.2)
+
+- **O(g)** — asymptotic *upper* bound (set of functions).
+- **Ω(g)** — asymptotic *lower* bound.
+- **Θ(g)** — tight bound: both O and Ω (Theorem 3.1).
+
+Drop lower-order terms and constant coefficients of the leading term. Prefer the tightest true statement: insertion sort is Θ(n²) *worst case* and Θ(n) *best case*; saying “running time is Θ(n²)” (all cases) is an overstatement. O(n²) is always true for it. Do not conflate O with Θ: “an O(n log n) algorithm is faster than an O(n²) algorithm” is false if the O(n²) one is actually Θ(n).
+
+### Master theorem (Ch 4.5, Theorem 4.1)
+
+For T(n) = a T(n/b) + f(n) with a > 0, b > 1 (floors/ceilings ignorable for asymptotics):
+
+Let watershed W = n^{log_b a}.
+
+1. f(n) = O(W / n^ε) for some ε > 0 → T(n) = Θ(W). Leaves dominate.
+2. f(n) = Θ(W lg^k n), k ≥ 0 → T(n) = Θ(W lg^{k+1} n). Levels cost about the same. Common: k=0 → Θ(W lg n). Merge sort: a=2, b=2, f=Θ(n) → Θ(n lg n).
+3. f(n) = Ω(W · n^ε) *and* regularity a f(n/b) ≤ c f(n) for c < 1 → T(n) = Θ(f(n)). Root dominates.
+
+Cases 1 and 3 need *polynomial* separation from W, not just “a little faster.” If none of the three apply, use substitution (Ch 4.3) or a recursion tree (Ch 4.4), not a hand-waved Big-O.
+
+### Amortized analysis (Ch 16)
+
+A single operation can be Θ(n) while a *sequence* of n operations is O(n). Do not review dynamic arrays, Multipop-style stacks, binary counters, heaps with decrease-key, or union-find by per-operation worst case.
+
+Three equivalent methods (pick the one that matches the structure):
+
+| Method | Idea | Typical use |
+|--------|------|-------------|
+| **Aggregate** (16.1) | Bound total T(n) for n ops; amortized = T(n)/n (same for every op) | Multipop: each item pushed once, popped once → O(1) amortized |
+| **Accounting** (16.2) | Charge extra now, store credit on objects; credit never negative | Push costs 2, pop/multipop cost 0 |
+| **Potential** (16.3) | čy_i = c_i + Φ(D_i) − Φ(D_{i-1}); keep Φ ≥ Φ(D_0) | Stack: Φ = size; counter: Φ = number of 1-bits |
+
+**Dynamic tables (16.4):** doubling on insert (load factor ≥ 1/2) gives O(1) amortized insert even though a resize costs Θ(n). Geometric series of copy costs is < 2n. Same idea as Python/Go/Rust/Java array growth.
+
+**Disjoint sets (Ch 19):** union-by-rank + path compression is O(m α(n)) for m operations — α(n) ≤ 4 in practice. Quote amortized, not “each Find is O(n).”
+
+### Dynamic programming (Ch 14.3)
+
+Applies when an optimization problem has **optimal substructure** (an optimal solution contains optimal solutions to subproblems — prove by cut-and-paste) *and* **overlapping subproblems** (a naive recursion recomputes the same subproblems). Two implementations: bottom-up table, or top-down recursion + memoization. Pattern: (1) characterize an optimal choice, (2) assume you are given that choice, (3) name the subproblems, (4) cut-and-paste to prove subsolutions must be optimal. Keep the subproblem space as simple as it can be, then expand.
+
+### Greedy (Ch 15.2)
+
+Greedy is DP with one remaining subproblem after a locally optimal choice. Two ingredients: **greedy-choice property** (a locally best choice is always safe — some optimal solution includes it) and **optimal substructure**. DP usually needs subproblem solutions *before* choosing; greedy chooses first, then solves what remains. If you cannot prove greedy-choice, do not ship a greedy algorithm — fall back to DP or search.
+
+### Hash tables (Ch 11.2–11.4)
+
+When |K| ≪ |U|, hash to m slots: expected O(1) search, not worst-case (direct addressing is worst-case O(1) but uses Θ(|U|) space). Collisions are inevitable (|U| > m). Resolve with chaining or open addressing. Load factor α = n/m governs expected cost. Simple `k mod m` is often a poor h; h must be deterministic. Average-case claims need an input distribution *or* a randomly chosen hash family — say which.
+
+### Graphs (Ch 20, 22)
+
+- Represent as adjacency lists (sparse) or matrix (dense) — Ch 20.1.
+- **BFS (20.2):** FIFO queue; white/gray/black; computes unweighted distances and a BFS tree. Archetype for Prim and Dijkstra.
+- **DFS (20.3):** parentheses theorem, classification of edges; topological sort (20.4) on DAGs; strongly connected components (20.5).
+- **Bellman-Ford (22.1):** |V|−1 rounds of relax-all-edges; then one more pass detects a negative cycle reachable from s. Handles negative weights. O(VE).
+- **Dijkstra (22.3):** nonnegative weights only. Generalizes BFS: min-priority queue instead of FIFO. Extract-min + decrease-key. Faster than Bellman-Ford with a heap; wrong if any w < 0.
+
+**Anti-pattern:** Dijkstra on graphs with negative edges; BFS for weighted shortest paths; Floyd-Warshall (Ch 23.2) on huge sparse graphs (use Johnson, 23.3).
+
+---
+
+## Chapter index
+
+| # | Title | Load when |
+|---|-------|-----------|
+| [ch02](references/ch02-loop-invariants.md) | Getting Started | loop invariants, insertion/merge sort |
+| [ch03](references/ch03-asymptotics.md) | Characterizing Running Times | O/Ω/Θ, notation abuse |
+| [ch04](references/ch04-divide-conquer.md) | Divide-and-Conquer | recurrences, Master theorem |
+| 6–8 | Heapsort, Quicksort, linear-time sort | comparison lower bound Ω(n lg n); counting/radix/bucket |
+| 11 | Hash Tables | expected O(1), collisions, open addressing |
+| 14 | Dynamic Programming | rod cutting, LCS, optimal BST |
+| 15 | Greedy Algorithms | activity selection, Huffman |
+| [ch16](references/ch16-amortized.md) | Amortized Analysis | aggregate/accounting/potential, dynamic tables |
+| 19 | Disjoint Sets | union-find, α(n) |
+| 20 | Elementary Graph Algorithms | BFS, DFS, topo, SCC |
+| 22 | Single-Source Shortest Paths | Bellman-Ford, Dijkstra |
+| 23 | All-Pairs Shortest Paths | Floyd-Warshall, Johnson |
+| 34–35 | NP-Completeness, Approximation | when exact poly-time is unlikely |
+
+## Topic index
+
+- Amortized / dynamic arrays / potential → Ch 16
+- Asymptotics O/Ω/Θ → Ch 3
+- BFS / DFS / topo / SCC → Ch 20
+- Dijkstra / Bellman-Ford / negative cycles → Ch 22
+- Divide-and-conquer / Master theorem / recurrences → Ch 4
+- Dynamic programming / memoization → Ch 14
+- Greedy-choice / Huffman → Ch 15
+- Hash tables / open addressing → Ch 11
+- Heaps / priority queues → Ch 6
+- Loop invariants → Ch 2.1
+- Sorting lower bound / radix / counting → Ch 8
+- Union-find → Ch 19
+
+## Supporting files
+
+- [references/glossary.md](references/glossary.md)
+- [references/patterns.md](references/patterns.md)
+- [references/cheatsheet.md](references/cheatsheet.md)
+
+## Scope
+
+CLRS 4th edition only. Pseudocode is 1-indexed; translate carefully. Does not replace language-specific coding conventions or a profiler for constants — it tells you the *order of growth* and the *correctness argument* before you measure.
+
+
+
+============================================================
+SKILL: boyd-convex-optimization (9788 chars)
+============================================================
+---
+name: boyd-convex-optimization
+description: "Use when implementing gradient descent or convex solvers."
+related_skills:
+  - coding-conventions
+  - systematic-debugging
+  - test-driven-development
+---
+
+# Boyd & Vandenberghe — Convex Optimization (CUP 2004; 7th printing 2009)
+
+Knowledge base from Boyd & Vandenberghe *Convex Optimization*. Use when implementing gradient descent, numerical solvers, loss functions, or reasoning about convergence guarantees and numerical stability in optimization code.
+
+Source: `/var/home/rainbow/books/optimization/boyd-vandenberghe-convex-optimization.pdf`.
+Notation: ≽ / ≼ are PSD / NSD; ≻ / ≺ are PD / ND. Domain of f is `dom f`. Optimal value `p⋆`; dual optimal value `d⋆`.
+
+The full benefits of convex optimization only come when the problem is **known ahead of time to be convex**. Running a convex solver on an unrecognized nonconvex objective is a silent correctness bug, not a performance issue.
+
+## Convexity — definition and checking
+
+A set C is convex if `x, y ∈ C` and `θ ∈ [0,1]` imply `θx + (1-θ)y ∈ C`.
+
+A function f is convex if `dom f` is convex and for all `x, y ∈ dom f` and `θ ∈ [0,1]`:
+
+```
+f(θx + (1-θ)y) ≤ θ f(x) + (1-θ) f(y)
+```
+
+A convex optimization problem has a convex objective and convex inequality constraints (equality constraints must be affine).
+
+**Restriction to a line.** f is convex iff for every `x` and direction `v`, `g(t) = f(x + t v)` is convex on its domain. Check convexity in 1-D first.
+
+**First-order (differentiable).** f convex iff `dom f` convex and
+
+```
+f(y) ≥ f(x) + ∇f(x)^T (y - x)     for all x, y ∈ dom f
+```
+
+The first-order Taylor expansion is a **global underestimator**. Consequence: `∇f(x) = 0` ⇒ `x` is a **global** minimizer.
+
+**Second-order (twice differentiable).** f convex iff `dom f` convex and Hessian PSD everywhere on the domain:
+
+```
+∇2 f(x) ≽ 0     for all x ∈ dom f
+```
+
+On R this is `f''(x) ≥ 0`. `∇2 f(x) ≻ 0` everywhere ⇒ strictly convex, but the converse fails (`x^4` is strictly convex with `f''(0)=0`). Quadratic `(1/2) x^T P x + q^T x + r` is convex iff `P ≽ 0`, strictly convex iff `P ≻ 0`.
+
+**Do not drop convexity of the domain.** `f(x)=1/x^2` on `{x ≠ 0}` has `f''>0` everywhere on its domain but is **not** convex.
+
+**Standard convex examples (verify via Hessian or the defining inequality):** `e^{ax}`; `x^a` on R++ for `a≥1` or `a≤0`; `|x|^p` for `p≥1`; `-log x`; `x log x`; every norm; `max{x_i}`; `x^2/y` on `y>0`; `log ∑ e^{x_i}`.
+
+**Operations that preserve convexity:** nonnegative weighted sum, composition with an affine map, pointwise maximum/supremum, composition `h(g(x))` when h is convex and nondecreasing (or nonincreasing if g is concave).
+
+**Code check before a custom optimizer.** For a scalar objective, confirm `f'' ≥ 0` on the domain (or Hessian eigenvalues ≥ 0). For a vector objective, confirm Hessian PSD (Cholesky without pivoting succeeds iff PD; PSD needs a rank-revealing test). If the check fails, do not feed the problem to a convex solver.
+
+## Strong convexity
+
+On a sublevel set S, f is strongly convex with modulus `m > 0` if
+
+```
+∇2 f(x) ≽ m I     for all x ∈ S
+```
+
+Then for `x, y ∈ S`:
+
+```
+f(y) ≥ f(x) + ∇f(x)^T (y-x) + (m/2) ||y-x||_2^2
+```
+
+Consequences:
+
+- Unique minimizer `x⋆`.
+- Suboptimality from gradient size: `p⋆ ≥ f(x) - (1/(2m)) ||∇f(x)||_2^2`, so `||∇f(x)||_2 ≤ √(2m ε)` ⇒ `f(x)-p⋆ ≤ ε`.
+- Distance to optimum: `||x - x⋆||_2 ≤ (2/m) ||∇f(x)||_2`.
+
+If also `∇2 f(x) ≼ M I` on S, then `m I ≼ ∇2 f ≼ M I` and `κ = M/m` bounds the Hessian condition number. Gradient method iteration count grows like `κ`. Oscillation / crawling along a valley is usually this, not a coding typo.
+
+## Lipschitz gradients and step size
+
+`∇2 f ≼ M I` on S ⇔ `∇f` is Lipschitz with constant `L = M`:
+
+```
+||∇f(x) - ∇f(y)|| ≤ L ||x - y||
+```
+
+Quadratic upper bound:
+
+```
+f(y) ≤ f(x) + ∇f(x)^T (y-x) + (L/2) ||y-x||_2^2
+```
+
+**Fixed-step gradient descent** `x := x - t ∇f(x)` is safe only for `0 < t ≤ 1/L`. Boyd's analysis: exact line search on this bound is minimized at `t = 1/M = 1/L`. Backtracking (Armijo) with `α ∈ (0, 1/2)` is guaranteed to accept some `t ≥ min{1, β/M}`.
+
+**Do not pick a learning rate without a bound on L.** If L is unknown, use backtracking line search (typical `α ∈ [0.01, 0.3]`, `β ∈ [0.1, 0.8]`) rather than a magic constant. If the objective leaves `dom f` (logs, barriers, `x^2/y`), shrink `t` until the trial point is in the domain **before** checking Armijo.
+
+Stopping criterion (Boyd): `||∇f(x)||_2 ≤ η`, justified by the strong-convexity bound (9.9)–(9.10). "Objective decreased" is not a certificate of optimality.
+
+## Gradient descent convergence
+
+Algorithm: `Δx := -∇f(x)`, choose `t` by exact or backtracking line search, `x := x + t Δx`.
+
+Under `m I ≼ ∇2 f ≼ M I` on the relevant sublevel set:
+
+- Exact line search: `f(x^{(k)}) - p⋆ ≤ (1 - m/M)^k (f(x^{(0)}) - p⋆)` — linear (geometric) convergence. Iterations to ε-accuracy scale as `(M/m) log((f0-p⋆)/ε)`.
+- Backtracking: same form with `c = 1 - min{2mα, 2βα m/M}`.
+- Quadratic example `f = (1/2)(x_1^2 + γ x_2^2)`: error contracts by `|(γ-1)/(γ+1)|^2` each step. `γ=1` solves in one step; `γ ≫ 1` or `γ ≪ 1` crawls. This is conditioning, not a bug in the update.
+
+Newton (`Δx_nt = -(∇2 f)^{-1} ∇f`) is affine-invariant and far less sensitive to `κ`. Prefer Newton / quasi-Newton when the Hessian (or a PSD approximation) is available and n is modest. Solve the Newton system by **Cholesky**, not a dense inverse: `H = L L^T`, forward/back substitution. Newton decrement `λ^2 = ∇f^T H^{-1} ∇f`; stop when `λ^2 / 2 ≤ ε`.
+
+## Duality
+
+Lagrangian `L(x, λ, ν) = f_0(x) + ∑ λi f_i(x) + ∑ νi h_i(x)`, `λ ≥ 0`.
+Dual function `g(λ, ν) = inf_x L`. Dual problem: maximize `g` over `λ ≥ 0`.
+
+**Weak duality** always: `d⋆ ≤ p⋆`, even if the primal is nonconvex. Optimal duality gap `p⋆ - d⋆ ≥ 0`.
+
+For a primal-dual feasible pair `(x, (λ, ν))`, the **duality gap** is `f_0(x) - g(λ, ν)`. It is a **convergence certificate**: gap 0 ⇒ both points are optimal. A nonzero gap means the reported `x` is not certified optimal (either not optimal, or strong duality failed).
+
+**Strong duality** (`d⋆ = p⋆`) holds for convex problems under a constraint qualification. **Slater:** exists `x ∈ relint D` with `f_i(x) < 0` and `Ax = b`. Affine inequalities need not be strict. Slater also implies the dual optimum is attained when `d⋆ > -∞`.
+
+**Code:** constrained solvers should report the duality gap (or a computable upper bound on it). Do not treat "feasible + objective dropped" as done.
+
+## KKT conditions
+
+For differentiable problems with strong duality, any primal-dual optimal pair satisfies (Boyd 5.49):
+
+1. Primal feasibility: `f_i(x⋆) ≤ 0`, `h_i(x⋆) = 0`
+2. Dual feasibility: `λ⋆ ≥ 0`
+3. Complementary slackness: `λ⋆_i f_i(x⋆) = 0`
+4. Stationarity: `∇f_0(x⋆) + ∑ λ⋆_i ∇f_i(x⋆) + ∑ ν⋆_i ∇h_i(x⋆) = 0`
+
+If the problem is convex (`f_i` convex, `h_i` affine), KKT is **sufficient**: any point satisfying the four conditions is primal and dual optimal with zero duality gap. With Slater, KKT is necessary and sufficient.
+
+Equality-constrained convex quadratic `(1/2)x^T P x + q^T x` s.t. `Ax=b` (`P ≽ 0`) has KKT system
+
+```
+[ P  A^T ] [ x ]   [ -q ]
+[ A   0  ] [ ν ] = [  b ]
+```
+
+Solve this KKT system; do not run unconstrained GD on a penalty and call it done.
+
+**Tests for optimization code must check KKT residuals (or unconstrained stationarity `∇f ≈ 0`) at the reported solution, not merely that the objective decreased.** A decreasing objective that violates KKT is not a valid solution.
+
+## Numerical stability
+
+- **Never form `A^{-1}`.** Solve `Ax=b`. For PSD/PD Hessians use Cholesky (`LL^T`); failure of Cholesky is a useful diagnostic that H is not PD (nonconvexity, roundoff, or an iterate that left the domain).
+- Generic dense solve is ~n³. Fine for n of a few hundred; exploit sparsity / structure beyond that (Boyd App. C).
+- Ill-conditioned Hessian (`M/m` large): GD oscillates or stalls; Newton still works if the Newton system is solved stably. Rescale variables / precondition when `κ` is huge.
+- Line search: precompute affine images (`Ax+b`, `AΔx`) once per direction; do not refactor from scratch at every trial `t`.
+- Domain: log, log-det, `x^2/y`, barriers are `+∞` outside `dom f`. A NaN/Inf in f or ∇f is usually an iterate that left the domain, not a math library bug. Pull `t` back onto the domain first.
+- Newton decrement `λ^2/2` is the right residual for Newton; `||∇f||` is the right residual for gradient methods under strong convexity. Do not mix them.
+
+## Debugging a failing optimizer (three failure modes)
+
+When the iterate does not converge or oscillates, check in this order:
+
+1. **Is the objective actually convex on the domain being used?** Hessian PSD / `f''≥0`. If not, a convex method has no global guarantee; "almost convex" still fails.
+2. **Is the step size too large?** For GD, `t > 1/L` violates the quadratic upper bound and typically diverges or oscillates. Bound L or backtrack.
+3. **Conditioning?** `M/m` large ⇒ slow linear rate even with a correct step. Look at Hessian eigenvalues, feature scales, and sublevel-set eccentricity. Fix scaling or switch to Newton / a first-order method with preconditioning.
+
+## Chapter map (when you need more than this file)
+
+| Part | Ch | Topic |
+|------|----|--------|
+| I Theory | 2 | Convex sets |
+| | 3 | Convex functions (FOC/SOC, conjugates, quasiconvex) |
+| | 4 | Convex problems (LP, QP, GP, SOCP, SDP) |
+| | 5 | Duality, Slater, KKT |
+| II Applications | 6–8 | Approximation, statistical estimation, geometric problems |
+| III Algorithms | 9 | Unconstrained: descent, GD, Newton, self-concordance |
+| | 10 | Equality-constrained Newton |
+| | 11 | Interior-point / barrier / primal-dual |
+| Appendices | A–C | Analysis, two quadratics, numerical linear algebra |
+
+
+
+============================================================
+SKILL: hastie-esl (9271 chars)
+============================================================
+---
+name: hastie-esl
+description: "Use when writing ML evaluation, regularization, or CV code."
+related_skills:
+  - coding-conventions
+  - test-driven-development
+  - systematic-debugging
+  - evaluation-driven-development
+  - mackay-itila
+---
+
+# Hastie ESL
+
+Hastie, Tibshirani, Friedman, *The Elements of Statistical Learning* (2nd ed.). Knowledge base for ML evaluation, regularization, model complexity, and bias–variance. One thesis: **prediction error is bias² + variance + noise; training error is an optimistic stand-in; complexity must be chosen by a criterion that estimates extra-sample error, not by how well the fit hugs the training points.**
+
+When evaluating or tuning a model, prefer ESL's move: decompose the error (bias vs variance) before touching hyperparameters; match the regularizer to the prior; never reuse the same observations for selection and assessment.
+
+## Core Frameworks
+
+### Bias–variance decomposition (Ch 2, 7.2–7.3)
+For Y = f(X) + ε with E(ε)=0, Var(ε)=σε², squared-error prediction at x₀ decomposes as
+
+Err(x₀) = σε² + [E f̂(x₀) − f(x₀)]² + E[f̂(x₀) − E f̂(x₀)]²
+        = irreducible noise + bias² + variance.
+
+Training error err always falls with complexity (often to 0). Test error Err has a U-shape: more complexity cuts bias, raises variance. The minimum of Err is the right complexity — not the minimum of err.
+
+**Diagnosis before tuning:**
+- High training error → bias problem (model too simple / underfit). Add capacity, features, or relax the penalty.
+- Low training error + large train/test gap → variance problem (overfit). Shrink, prune, or get more data.
+- Tuning hyperparameters without this diagnosis is guessing.
+
+Two distinct jobs (Ch 7.2): **model selection** (compare models) vs **model assessment** (estimate generalization of the chosen one). If data-rich: train / validation / test, typically ~50/25/25. The test set is a vault — reuse it for selection and it underestimates true error.
+
+### Overfitting (Ch 7.2, 11.5.2)
+A model with zero training error is overfit and typically generalizes poorly. Optimism of training error is (2/N) Σ Cov(ŷᵢ, yᵢ): the harder you fit, the more each yᵢ influences its own prediction, the more err underestimates Err. For linear fits with d parameters, optimism ≈ 2(d/N)σε². Adaptive search (best subset of size d from p) has *effective* df > d — AIC formulas that plug in d are too kind.
+
+### Regularization L2 / L1 (Ch 3.4, Ex 3.6–3.7)
+Subset selection is discrete and high-variance. Shrinkage is continuous.
+
+- **Ridge (L2):** minimize RSS + λ Σ βⱼ². Equivalent to a Gaussian prior β ~ N(0, τ I) with Gaussian sampling; λ = σ²/τ². Weight decay in neural nets is the same penalty (Ch 11). Standardize inputs; do not penalize the intercept. Effective df(λ) = tr(S_λ) ∈ (0, p], falling as λ grows. Use when many correlated predictors should share the signal (proportional shrinkage).
+- **Lasso (L1):** RSS + λ Σ |βⱼ|. Laplace (double-exponential) prior — the L1 ball has corners on the axes, so solutions are sparse (soft-thresholding / continuous subset selection). Use when the domain prior is sparsity, not when L1 is merely fashionable.
+- **Match the regularizer to the domain prior, not convention.** Dense correlated effects → L2. Few large effects, rest noise → L1. Mixed → elastic net (not ESL's main object, but the same prior-matching logic).
+
+Choose λ / t by an estimate of prediction error (usually 10-fold CV). ESL's **one-standard-error rule:** pick the most parsimonious model whose CV error is within one SE of the minimum — the CV curve is itself noisy.
+
+### Model selection: AIC / BIC / CV (Ch 7.5–7.10)
+In-sample criteria add estimated optimism to err:
+
+- **Cp / AIC:** err + 2 (d/N) σˆε²  (Gaussian; AIC = −2 loglik/N + 2d/N generally). Minimizes estimated test error. As N → ∞ AIC is *not* consistent — it overfits.
+- **BIC:** −2 loglik + (log N) d. Same shape as AIC with 2 replaced by log N (heavier for N > e²). Approximates posterior model probability (Laplace evidence). Asymptotically consistent if the true model is in the family; in finite samples often underfits.
+- **df for linear smoothers:** df = tr(S) where ŷ = Sy, not the raw parameter count. Neural-net weight decay: df(α) = Σ θ_m/(θ_m+α).
+
+**CV vs analytic criteria:** AIC/BIC need a df and a likelihood. CV and bootstrap estimate extra-sample Err directly, for any loss and any adaptive fitter. Prefer CV when the fitter is nonlinear, searches, or 0–1 loss (AIC's 2d formula does not hold for 0–1).
+
+No universal AIC-vs-BIC winner. Use BIC when you believe a true sparse model exists and N is large; AIC/CV when the goal is prediction on finite N.
+
+### Cross-validation (Ch 7.10)
+K-fold CV estimates expected extra-sample error Err = E[L(Y, f̂(X))], *not* the conditional Err_T for this particular training set.
+
+CV(f̂) = (1/N) Σ L(yᵢ, f̂^{-κ(i)}(xᵢ)). Typical K = 5 or 10. K=N is LOO: low bias, high variance, expensive. K=5/10: lower variance; if the learning curve is still steep at N, CV overestimates Err (trains on (K−1)/K of the data).
+
+**Wrong vs right CV (Ch 7.10.2):** screening features on *all* samples, then CV'ing the classifier, is leakage. ESL's genomic toy: N=50, p=5000 noise features, 1-NN on the 100 most correlated — wrong-way CV error ≈ 3% vs true 50%. **All preprocessing, selection, and tuning must sit inside each training fold.** Complexity-parameter selection is part of training; the held-out test set judges the *selected* model only.
+
+GCV ≈ LOO for linear smoothers under squared error: (1/N) Σ [(yᵢ − ŷᵢ)/(1 − S_ii)]², with 1/(1−x)² ≈ 1+2x linking GCV to AIC.
+
+### Bootstrap (Ch 7.11, 8.2)
+Draw B samples of size N with replacement from Z; refit; the empirical distribution of S(Z*b) estimates the sampling distribution of S(Z) (variance, percentiles, CIs).
+
+Naive bootstrap error (evaluate bootstrap fits on the original training set) is too optimistic: each observation is in a given bootstrap sample with probability ≈ 0.632, so train/test overlap. Use **leave-one-out bootstrap** (score i only on replicates that omit i) or the **.632 / .632+** corrections.
+
+Like CV, bootstrap estimates Err well, Err_T poorly. Report **bootstrap (or CV-fold) confidence intervals**, not a lone point estimate — the CV curve's SE bands exist because the estimate is noisy. A metric without uncertainty is an incomplete specification.
+
+Bagging (Ch 8.7) is bootstrap aggregation: average high-variance fits to cut variance. Random forests (Ch 15) add de-correlation.
+
+### Curse of dimensionality (Ch 2.5, 12.3.4, 18)
+Sampling density scales as N^{1/p}. A dense 1-D sample of N=100 needs N=100^{10} in 10-D for the same density. In a unit cube, capturing 10% of the volume in p=10 requires covering ~80% of each axis. Most points lie closer to the boundary than to each other — prediction becomes extrapolation.
+
+Local methods (kNN, kernels) fail first: neighborhoods empty or huge. Structured models (linearity, additivity, sparsity) are how ESL escapes the curse — not by claiming kernels magically beat it (SVMs do not; Ch 12.3.4). When p ≫ N (Ch 18), prefer explicit regularization (ridge/lasso/shrunken centroids) and never trust univariate screens that saw the test labels.
+
+**Production implication:** a model that looks good on low-p test fixtures can collapse on high-p, sparse production inputs. Dimensionality mismatch is a distribution shift, not a code bug.
+
+## Chapter Index
+
+| Ch | Title | Key topics |
+|----|-------|------------|
+| 1 | Introduction | supervised learning, examples |
+| 2 | Overview of Supervised Learning | LS vs kNN, decision theory, curse of dimensionality, bias–variance |
+| 3 | Linear Methods for Regression | Gauss–Markov, subset, ridge, lasso, LARS, PCR/PLS |
+| 4 | Linear Methods for Classification | LDA, logistic, L1-logistic, separating hyperplanes |
+| 5 | Basis Expansions and Regularization | splines, df, RKHS, wavelets |
+| 6 | Kernel Smoothing | local regression, density, naive Bayes |
+| 7 | Model Assessment and Selection | bias–variance, AIC/BIC/MDL/VC, CV, bootstrap |
+| 8 | Model Inference and Averaging | bootstrap vs ML, Bayes, EM, MCMC, bagging, stacking |
+| 9 | Additive Models, Trees, MARS | GAM, CART, PRIM, missing data |
+| 10 | Boosting and Additive Trees | AdaBoost, gradient boosting, shrinkage |
+| 11 | Neural Networks | PPR, backprop, overfitting, weight decay |
+| 12 | SVMs and Flexible Discriminants | kernel SVM, FDA/PDA/MDA, curse |
+| 13 | Prototype Methods and Nearest-Neighbors | k-means, LVQ, adaptive metrics |
+| 14 | Unsupervised Learning | clustering, PCA, SOM, ICA, PageRank |
+| 15 | Random Forests | OOB, variable importance, de-correlation |
+| 16 | Ensemble Learning | bet-on-sparsity, regularization paths |
+| 17 | Undirected Graphical Models | Markov graphs, RBMs |
+| 18 | High-Dimensional Problems p ≫ N | shrunken centroids, L1 classifiers, FDR |
+
+## Coding rules (mined)
+
+1. Decompose error into bias vs variance *before* tuning.
+2. Match L2 (Gaussian, dense) vs L1 (Laplace, sparse) to the domain prior.
+3. ML test suites need a CV harness; train-set scores are tautological.
+4. All selection/preprocessing inside each fold (wrong-way CV).
+5. Report bootstrap/CV intervals, not point estimates.
+6. Test-vs-prod ML failures: check dimensionality / sparsity mismatch before rewriting the model.
+
+
+
+============================================================
+SKILL: jaynes-probability (10447 chars)
+============================================================
+---
+name: jaynes-probability
+description: "Use when Bayesian updating, maxent, priors, or calibration."
+related_skills:
+  - coding-conventions
+  - systematic-debugging
+  - test-driven-development
+  - shannon-1948
+  - mackay-itila
+---
+
+# Probability Theory: The Logic of Science
+**Author**: E. T. Jaynes | **Chapters**: 30 + appendices | **Source**: unfinished 1995 MS (Cambridge 2003)
+
+Knowledge base from Jaynes *Probability Theory: The Logic of Science*. Use when reasoning about uncertainty in code, Bayesian updating, prior selection, maximum entropy, or making decisions under incomplete information.
+
+Probability is extended logic: the unique consistent assignment of real numbers to degrees of belief. Not frequencies, not propensity. Load this skill when assigning, combining, or acting on uncertain quantities.
+
+## How to Use
+
+- **Without arguments** — apply the core rules below
+- **Topic** — Cox, maxent, priors, calibration, decision vs inference, paradoxes
+- **Chapter** — see Chapter Index
+
+---
+
+## Core Frameworks
+
+### Probability as extended logic (Cox)
+
+Jaynes (after R. T. Cox 1946) derives the product and sum rules from three desiderata, not from frequency axioms:
+
+1. **Degrees of plausibility are real numbers** (must live in a machine / robot brain).
+2. **Qualitative correspondence with common sense** (weak syllogisms of Pólya: if A ⇒ B and B is true, A becomes more plausible).
+3. **Consistency**: (a) every valid chain of reasoning yields the same number; (b) use *all* relevant evidence (non-ideological); (c) equivalent states of knowledge → equivalent assignments.
+
+These force, uniquely up to a monotonic reparametrization that we fix by convention 0 ≤ p ≤ 1:
+
+```
+product:  p(AB|C) = p(A|C) p(B|AC) = p(B|C) p(A|BC)
+sum:      p(A|B) + p(¬A|B) = 1
+extended: p(A+B|C) = p(A|C) + p(B|C) − p(AB|C)
+Bayes:    p(H|DX) = p(H|X) p(D|HX) / p(D|X)
+```
+
+**Use when:** a function returns a "confidence", "score", or "probability". If it does not obey non-negativity and the sum rule over an exhaustive partition, it is **not a probability**. Do not multiply it, do not threshold it as p, do not feed it to expected-utility arithmetic.
+
+**Why uniqueness matters:** any other combination rule (heuristic weighted sums, ad-hoc AND of scores) eventually contradicts itself on some Boolean identity. Cox is the uniqueness theorem for that claim.
+
+### Probability as degree of belief
+
+`p(A|X)` is the robot's degree of belief in A given information X. There is no "true probability of A" independent of X. Two agents with different X *should* assign different p. Frequency is a special case: a limiting property of some physical experiments, recovered when the information is an exchangeable sequence (Ch 9). Do not require a frequency interpretation before using p.
+
+Notation: always condition on background information. Write `p(H|DX)`, never a naked `p(H)`.
+
+### Bayesian updating
+
+Start with a prior `p(H|X)` over hypotheses (including "the bug is here", "this model is true"). Each observation D updates:
+
+```
+posterior ∝ prior × likelihood
+```
+
+- The posterior after datum n is the prior for datum n+1. There is no other consistent way to fold evidence in.
+- Skipping to a degenerate posterior (certainty) without likelihood evidence is assigning `p=1` by fiat — forbidden by desideratum IIIb (use all evidence; invent none).
+- Multiple hypotheses: never test H vs ¬H as if ¬H were a single alternative. Enumerate the actual competitors (Ch 4). Binary tests do not extend.
+- Likelihood principle (Ch 6, 8): given the model, only the observed data's likelihood matters — not the sampling plan, optional stopping, or unobserved outcomes.
+
+**Debugging is this procedure.** Prior over locations (recent diffs, stack traces) × each new observation (test, log line) → posterior = next hypothesis to test. One hypothesis at a time is sequential Bayes, not indecision.
+
+### Maximum entropy principle (Ch 11)
+
+When information is constraints (means, bounds, known moments) rather than a sampling model, assign the distribution that **maximizes Shannon entropy** `H = −∑ p_i log p_i` subject to those constraints. That is the unique assignment that:
+
+- agrees with everything you know,
+- is maximally noncommittal about everything you don't,
+- never puts p=0 on a possibility the data have not ruled out.
+
+Standard maxent distributions (use these; do not invent narrower ones):
+
+| Known constraint | Maxent distribution |
+|---|---|
+| Nothing / finite exhaustive set | Uniform (principle of indifference) |
+| Mean (real line, or unbounded support) | Exponential |
+| Mean and variance | Gaussian |
+| Mean of log (positive scale) | Inverse-gamma / Jeffreys-related |
+| Discrete mean of a count | Geometric / exponential family |
+
+**Over-specification:** choosing a tighter family (mixture of 5 Gaussians, Beta(100,3), …) without a constraint that forces it is claiming information you do not have. Maxent forbids it.
+
+Maxent assigns the *prior / sampling distribution*. Bayes then updates it when data arrive. They are complementary, not rivals (preface / Ch 11).
+
+### Prior selection (Ch 6, 12)
+
+1. **Indifference:** if X does not prefer any atom of a finite exhaustive partition, p = 1/n.
+2. **Jeffreys prior for a scale parameter s > 0:** `p(s) ∝ 1/s` (uniform in log s). Required by consistency under reparametrization s → s^m, and uniquely uninformative about location given scale (transformation groups, Ch 12; reinforced by marginalization theory).
+3. **Transformation groups:** the prior is the (improper) Haar measure of the group of transformations that leave the problem looking the same. Equivalent states of knowledge → equivalent assignments (desideratum IIIc).
+4. **Proper limits:** unnormalizable priors are limits of proper sequences. If the posterior will not settle, the data are too weak — get more evidence; do not pick a convenient proper prior to force an answer.
+5. A prior is not a subjective whim. It is a transcription of X. If you cannot state X, you cannot justify the prior.
+
+### Calibration — the honest weatherman (Ch 13)
+
+Inference yields p. Announcing q ≠ p is a *decision*, driven by a loss function. If pay is logarithmic in the announced probability of the event that occurs, expected pay is maximized uniquely at q = p. Honesty is then optimal; acquiring more information (lowering entropy of p) is also optimal.
+
+**Operational rule:** a predicted probability p is calibrated iff events you tag with p occur with empirical frequency ≈ p. Uncalibrated outputs are not probabilities in Jaynes's sense even if they sit in [0,1].
+
+### Inference vs decision
+
+Probability theory stops at the posterior. Turning a posterior into an action requires a loss/utility function (Wald / Bernoulli). Do not smuggle the decision into the inference (e.g. "reject H0") and then pretend the number was a probability. Conversely, do not refuse to assign p because you have not yet chosen a loss.
+
+Point estimates: posterior mean iff squared-error loss; median iff absolute-error; MAP is a mode, not an expected-loss minimizer unless the loss is a vanishing neighborhood of the mode.
+
+### Model comparison (Ch 24)
+
+Bayes automatically penalizes unused flexibility (Occam factor): a model that spreads prior mass over a large parameter volume pays in the marginal likelihood. Prefer the model with higher `p(D|M X)`, not the one with a prettier in-sample fit.
+
+---
+
+## Anti-patterns
+
+- **Ad-hoc scoring:** magic weights on features, then treat the sum as a probability. Uncalibrated; Cox-inconsistent. Either derive the score from a probabilistic model or label it `uncalibrated_score`.
+- **Degenerate priors:** "I'm sure it's X" with no likelihood. Ideology (violates IIIb).
+- **Sampling-theory theater:** p-values, unbiasedness, confidence intervals that do not contain the parameter at the advertised rate for *this* data (Ch 16–17). Pre-data vs post-data are different problems.
+- **Causation ≠ implication:** A ⇒ B is logical, not causal. Clouds do not cause rain in the syllogism; rain implies clouds.
+- **Ignoring nuisance parameters** or plugging in a point estimate for them (Ch 8). Marginalize.
+- **Infinite-set paradoxes** (Borel–Kolmogorov, nonconglomerability, Ch 15): they are artifacts of taking limits before stating the finite problem. Do the finite problem; pass to the limit last (finite-sets policy).
+- **Sample re-use / peeking** that violates the likelihood principle while claiming Bayesian status.
+
+---
+
+## Chapter Index
+
+**Part A — Principles**
+| # | Title | Use for |
+|---|-------|--------|
+| 1 | Plausible reasoning | Weak syllogisms, desiderata, the robot |
+| 2 | Quantitative rules (Cox) | Product/sum rules, uniqueness |
+| 3 | Elementary sampling | Urns, exchangeability, models vs reality |
+| 4 | Hypothesis testing | Priors, multiple H, pdfs |
+| 5 | Queer uses | Convergence of opinion, ESP, Neptune |
+| 6 | Parameter estimation | Uniform / Jeffreys priors, likelihood principle |
+| 7 | Central Gaussian | Why Gaussians: maxent + convolution |
+| 8 | Sufficiency, ancillarity | Nuisance parameters, meta-analysis |
+| 9 | Probability and frequency | When frequencies exist |
+| 10 | Physics of "random" experiments | Bias, coins, quantum aside |
+| 11 | Entropy principle | Maxent assignment of discrete priors |
+| 12 | Ignorance priors | Transformation groups |
+| 13 | Decision theory history | Inference vs action, honest weatherman |
+| 14 | Decision theory applications | Loss, widgets |
+| 15 | Paradoxes | Finite-sets policy |
+| 16–17 | Orthodox statistics | Pathologies of sampling theory |
+| 18 | A_p-distribution, rule of succession | Laplace succession |
+
+**Part B — Applications** — 19 measurements, 20 regression, 21 Cauchy/t, 22 time series, 23 spectrum, 24 model comparison, 25 image reconstruction, 26 marginalization, 27 communication theory, 28 antennas/filters, 29 statistical mechanics, 30 maxent matrix / density-matrix form.
+
+---
+
+## Topic Index
+
+- **Bayes' theorem** → Ch 4, 6
+- **Calibration / honest weatherman** → Ch 13
+- **Cox theorems** → Ch 2
+- **Degree of belief vs frequency** → Ch 1, 9, 10
+- **Gaussian / CLT as maxent** → Ch 7, 11
+- **Jeffreys prior** → Ch 6, 12
+- **Likelihood principle** → Ch 6, 8
+- **Marginalization** → Ch 8, 15, 26
+- **Maximum entropy** → Ch 11, 30
+- **Model comparison / Occam** → Ch 24
+- **Paradoxes, finite sets** → Ch 15
+- **Prior selection / transformation groups** → Ch 6, 11, 12
+- **Rule of succession** → Ch 18
+- **Sufficiency** → Ch 8
+
+
+
+============================================================
+SKILL: puterman-mdp (9730 chars)
+============================================================
+---
+name: puterman-mdp
+description: "Use when designing agent MDPs, value iteration, or policies."
+related_skills:
+  - coding-conventions
+  - systematic-debugging
+  - test-driven-development
+---
+
+# Puterman — Markov Decision Processes
+
+Martin L. Puterman, *Markov Decision Processes: Discrete Stochastic Dynamic Programming* (Wiley, 1994; Wiley-Interscience reprint 2005, ISBN 0-471-72782-2). Knowledge base for agent decision loops, reward shaping, value/policy iteration, and sequential decisions under uncertainty. Source PDF is a 666-page scan (no text layer).
+
+One thesis: **a sequential decision problem is an MDP when the future is independent of the past given the present state and action.** Then an optimal policy exists in a small class (deterministic Markov; stationary when the horizon is infinite and the criterion is discounted), and it is characterized by Bellman optimality equations that can be solved by backward induction, value iteration, policy iteration, modified policy iteration, or LP.
+
+Puterman writes the discount factor as **λ ∈ [0, 1)**. RL literature uses γ for the same object. This skill uses λ for Puterman's results and γ when talking to agent/RL code.
+
+## MDP formalism (Ch 2)
+
+Five objects, plus a policy:
+
+| Object | Puterman | Meaning |
+|--------|----------|--------|
+| Decision epochs | *T* | Discrete times at which a decision is required. Finite horizon: *T* = {1,…,*N*}. Infinite: *T* = {1, 2, …}. |
+| States | *S* | All information needed so that *P*(next, reward ∣ history) = *P*(next, reward ∣ current state, action). |
+| Actions | *A_s* | Feasible choices in *s*. |
+| Rewards | *r_t(s,a)* or *r(s,a)* | Immediate expected return. May depend on the next state: *r_t(s,a,j)*. |
+| Transitions | *p_t(j ∣ s,a)* | *P*(X_{t+1}=j ∣ X_t=s, Y_t=a). Time-homogeneous when *p* does not depend on *t*. |
+
+**Decision rule** *d_t* maps (history or state) → action (or a distribution over actions).
+
+**Policy** π = (*d_1*, *d_2*, …) is a sequence of decision rules.
+
+Classes, nested:
+
+```
+history-dependent randomized  ⊃  history-dependent deterministic
+        ⊊                              ⊊
+Markov randomized             ⊃  Markov deterministic
+        ⊊                              ⊊
+stationary randomized         ⊃  stationary deterministic
+```
+
+A Markov decision rule depends on the current state only, not on the path that reached it. A stationary policy uses the same Markov rule at every epoch.
+
+**Markov property (design invariant):** if the coded "state" is incomplete, the process the agent is solving is not an MDP in those variables. Then history-dependent rules can strictly beat Markov rules. Fix: encode the missing information into the state (belief, remaining horizon, inventory, time index), do not let the decision function take unbounded raw history.
+
+## Finite vs infinite horizon
+
+**Finite horizon (Ch 4).** Value functions are time-indexed. An optimal policy is deterministic Markov and generally *non-stationary* — *d_t* depends on periods remaining. Solve by **backward induction** (Puterman 4.5):
+
+```
+u_{N+1}(s) = r_{N+1}(s)                         # terminal reward
+for t = N, N-1, …, 1:
+    u_t(s) = max_a [ r_t(s,a) + Σ_j p_t(j|s,a) u_{t+1}(j) ]
+    A*_t(s) = argmax of the same
+return any π* with d*_t(s) ∈ A*_t(s)
+```
+
+This *is* Bellman's principle of optimality: an optimal tail from *t* onward depends only on *s* at *t*, not on how *s* was reached (4.3–4.4).
+
+**Infinite horizon (Ch 5–6).** Time-homogeneous data + discounting ⇒ a **stationary** deterministic optimal policy exists (under standard bounded-reward / finite *S*×*A* assumptions). Mixing the two is a defect: a stationary policy on a genuine finite-horizon problem (remaining time is payoff-relevant and not in the state) is not justified.
+
+## Discounting (Ch 5.3, Ch 6)
+
+Expected total discounted reward of π from *s*:
+
+```
+v_λ^π(s) = E_s^π [ Σ_{t=1}^∞  λ^{t-1} r(X_t, Y_t) ]
+```
+
+- **λ < 1** (equivalently γ < 1): the criterion is well-defined for bounded rewards; the Bellman operator is a contraction of modulus λ on (B, ‖·‖_∞); unique bounded solution to the optimality equation; value iteration converges geometrically.
+- **λ = 1** (undiscounted total reward, Ch 7): not a contraction. Split into **positive bounded** (rewards ≥ 0) and **negative** (rewards ≤ 0) models. Value iteration / policy iteration need extra hypotheses; existence of optimal policies can fail.
+- **Average reward** (Ch 8–9): long-run gain *g*; optimality equation involves gain + bias, not a discounted *v*. Unichain vs multichain changes the algorithm (one gain vs a gain vector).
+
+If the coded loop has γ ≥ 1 and you expect contraction-style convergence, the theory does not give it.
+
+## Bellman equations and optimality (Ch 4.3, Ch 6.2)
+
+**Discounted infinite horizon, finite *S*, *A*.** Let
+
+```
+(T_d v)(s) = r(s, d(s)) + λ Σ_j p(j|s, d(s)) v(j)
+(T v)(s)   = max_{a ∈ A_s} [ r(s,a) + λ Σ_j p(j|s,a) v(j) ]
+```
+
+Facts (6.2):
+
+1. *T* is a contraction of modulus λ: ‖Tv − Tw‖_∞ ≤ λ ‖v − w‖_∞.
+2. Unique bounded fixed point *v** = *T v** = sup_π *v_λ^π*.
+3. *v** is the optimal value. A deterministic stationary *d** is optimal iff *T_{d*} v** = *T v** (it attains the max in every state).
+4. History does not appear on the right-hand side. Value of a state = immediate reward + discounted expected future value.
+
+**Certificate of optimality:** a claimed (*v*, *d*) is optimal iff *v* = *T v* and *d* attains the max. Scoring above a threshold is not this certificate.
+
+## Value iteration (Ch 6.3, 6.6)
+
+```
+v^{0} arbitrary bounded
+v^{n+1} = T v^n
+```
+
+- ‖v^{n} − v*‖_∞ ≤ λ^n ‖v^{0} − v*‖_∞ — geometric, rate λ.
+- Stopping via span seminorm / bounds (6.6), not an arbitrary iteration cap.
+- Relative value iteration and action elimination (6.6–6.7) speed this up; they do not change the fixed point.
+- **Oscillation / non-convergence:** typical when λ ≥ 1, or average-reward VI without aperiodicity (8.5.4 aperiodicity transform). Do not "tune step size" on a Bellman backup; there is no step size.
+
+## Policy iteration (Ch 6.4)
+
+```
+1. Evaluate: solve v^n = r_{d^n} + λ P_{d^n} v^n     # linear system
+2. Improve:  d^{n+1}(s) ∈ argmax_a [ r(s,a) + λ Σ_j p(j|s,a) v^n(j) ]
+             keep d^n(s) if it remains greedy
+3. Stop when d^{n+1} = d^n
+```
+
+For **finite** *S* and *A*, there are finitely many deterministic stationary policies; each improvement is a strict increase until optimum; **PI terminates at an optimal stationary policy in finitely many steps** (6.4.2). That is stronger than VI's asymptotic convergence.
+
+**Modified policy iteration** (6.5): *m* partial evaluation backups between improvements. Recovers VI at *m*=0 and PI as *m*→∞.
+
+**When a loop does not converge, distinguish:**
+
+| Algorithm | Finite MDP, λ < 1 | λ ≥ 1 or average reward |
+|-----------|-------------------|-------------------------|
+| Value iteration | Geometric → *v**; may look like it "moves forever" if ε is tiny | May oscillate; need positivity/negativity, unichain, aperiodicity |
+| Policy iteration | Finite termination at π* | Finite-ish under unichain + extra conditions; multichain needs the Ch 9 algorithm |
+
+## Structured / monotone policies (Ch 4.7, 6.11)
+
+If rewards and transitions are stochastically monotone and the reward is superadditive in (*s*, *a*), an optimal policy is monotone in the state. Do not search the full *A^S* when the model has this structure — restrict to monotone decision rules.
+
+## Continuous time (Ch 11)
+
+Semi-Markov and continuous-time MDPs reduce, after embedding / uniformization, to a discrete-time discounted or average-reward MDP. Same Bellman shape; rates replace probabilities.
+
+## Agent-loop translations
+
+1. **State, not history.** Decision code must be a function of an explicit state sufficient for the Markov property. Unbounded conversation/trace as the decision key violates Ch 2/4.4; encode what matters (goal, constraints, remaining budget/horizon, last observation) into a finite or structured state.
+2. **Horizon type is a type error if mixed.** Finite-horizon ⇒ time-indexed *v_t*, non-stationary *d_t*. Infinite discounted ⇒ one *v*, stationary *d*. Putting remaining-time into the state converts finite horizon into a stationary problem on an augmented state.
+3. **γ < 1 is a convergence assumption, not a style choice.** If γ ≥ 1, do not debug "why VI oscillates" as a coding bug until the criterion is well-posed (Ch 7–8).
+4. **Rewards define the objective.** Changing *r* changes *v** and usually π*. Potential-based shaping *F(s,a,s') = γ Φ(s') − Φ(s)* (Ng, Harada, Russell 1999) is the standard condition that *preserves* π*; Puterman does not discuss shaping, but his optimality equation makes the failure mode obvious: a non-potential bonus is a different MDP.
+5. **Tests should check Bellman residuals.** For a reported (*v*, π), assert *v ≈ T v* and that π is greedy w.r.t. *v*. A return threshold is not an optimality certificate (6.2.4).
+
+## Chapter index
+
+| Ch | Title | Use when |
+|----|-------|----------|
+| 1 | Introduction | Sequential decision examples |
+| 2 | Model formulation | States, actions, *p*, *r*, policies |
+| 3 | Examples | Inventory, stopping, bandits, queues |
+| 4 | Finite-horizon MDPs | Backward induction, time-indexed *v_t* |
+| 5 | Infinite-horizon foundations | Criteria, discounting, Markov policies |
+| 6 | Discounted MDPs | VI, PI, MPI, LP, span bounds |
+| 7 | Expected total reward | λ=1, positive vs negative models |
+| 8 | Average reward (unichain) | Gain, bias, relative VI |
+| 9 | Average reward (multichain) | Multiple recurrent classes |
+| 10 | Sensitive discount optimality | Blackwell / *n*-discount |
+| 11 | Continuous-time models | SMDP, CTMDP |
+| App A–D | Markov chains, LP | Classification, Laurent series |
+
+
+
+============================================================
+SKILL: wald-sequential-analysis (7777 chars)
+============================================================
+---
+name: wald-sequential-analysis
+description: "Use when deciding when to stop testing or sampling."
+related_skills:
+  - test-driven-development
+  - systematic-debugging
+  - coding-conventions
+  - cover-thomas-eit
+---
+
+# Wald — Sequential Analysis (1947; 2nd printing Nov 1948)
+
+Knowledge base from Wald *Sequential Analysis*. Use when deciding when to stop testing, iterating, or sampling — optimal stopping rules, sequential probability ratio test (SPRT), error bounds on early termination.
+
+Wiley. Preface dated Columbia University, March 1947. Source PDF is a 222-page scan (tiff2pdf); formulas below are from Ch 2–3 and the appendix TOC, not a full OCR of every page.
+
+Load [references/cheatsheet.md](references/cheatsheet.md) for decision rules; [references/glossary.md](references/glossary.md) for terms.
+
+## When to use this skill
+
+Stop-or-continue decisions: hypothesis tests, property-based sampling, retries, inspection, sequential estimation. Prefer SPRT over a fixed sample size when observations arrive one (or one group) at a time and Type I/II risks are preassigned.
+
+---
+
+## Core framework: sequential vs fixed-n testing
+
+A **current (Neyman–Pearson) test** draws a preassigned n, then accepts or rejects. To hit both α and β you must choose n from the worst-case pair of hypotheses (Ch 1.3.4).
+
+A **sequential test** after each observation m chooses one of three sets (Ch 2.1): accept H₀ (Rₘ⁰), reject H₀ (Rₘ¹), or continue (Rₘ). Sample size n is a random variable. Two operating curves fully describe a sequential test:
+
+- **OC function** L(θ) = P(accept H₀ | θ)
+- **ASN function** E_θ(n) = expected sample number at θ
+
+Requirements on the OC (Ch 2.3.2, eq. 2:2–2:3): split the parameter space into a **preference-for-acceptance** zone, a **preference-for-rejection** zone, and an **indifference** zone. Preassign α, β < 1:
+
+- L(θ) ≥ 1 − α in the acceptance zone
+- L(θ) ≤ β in the rejection zone
+- indifference: no OC constraint; this is where ASN is usually largest
+
+Select among tests that meet the OC constraints by minimizing the ASN (Ch 2.3.3).
+
+---
+
+## SPRT (Ch 3) — optimal stopping for simple H₀ vs simple H₁
+
+Observations x₁, x₂, … i.i.d. with density/mass f(x, θ). Test H₀: θ = θ₀ against H₁: θ = θ₁.
+
+**Likelihood ratio after m observations** (eq. 3:1):
+
+```
+Λ_m = p_{1m} / p_{0m} = ∏_{i=1..m} f(x_i, θ₁) / f(x_i, θ₀)
+```
+
+**Stopping rule.** Constants 0 < B < A:
+
+- Λ_m ≤ B → accept H₀
+- Λ_m ≥ A → accept H₁ (reject H₀)
+- B < Λ_m < A → take another observation
+
+Equivalently on the log scale: stop when S_m = ∑ z_i exits (log B, log A), where z_i = log f(x_i,θ₁)/f(x_i,θ₀).
+
+### Type I / Type II error bounds (Ch 3)
+
+Let α = P(reject H₀ | H₀), β = P(accept H₀ | H₁). Ignoring overshoot of the boundaries:
+
+```
+α / (1 − β)  ≤  1/A     (3:12)
+β / (1 − α)  ≤  B       (3:13)
+```
+
+Weaker but immediate: α ≤ 1/A, β ≤ B (3:14–3:15).
+
+**Practical constants** (Ch 3, determination of A and B; 3:21–3:22):
+
+```
+A ≈ (1 − β) / α
+B ≈ β / (1 − α)
+```
+
+These slightly overshoot the nominal (α, β): the realized (α′, β′) still satisfy α′ ≤ α / (1 − β) and β′ ≤ β / (1 − α). For small α, β the inflation is negligible. Exact A(α,β), B(α,β) are laborious; use the approximation unless the overshoot matters (discrete, large steps).
+
+You cannot drive both α and β to 0 without sending A → ∞ and B → 0, which sends ASN → ∞.
+
+### Expected sample number (ASN) (Ch 3, § ASN function)
+
+Wald's identity: E(S_n) = E(n) E(z) when E(|z|) < ∞ and n is the stopping time. Hence (3:55, 3:57):
+
+```
+E_θ(n) ≈ [ L(θ) log B + (1 − L(θ)) log A ] / E_θ(z)
+```
+
+with L(θ) = P(accept H₀ | θ). At the two simple points, L(θ₀) ≈ 1 − α and L(θ₁) ≈ β.
+
+When E_θ(z) ≈ 0 (indifference / no drift), this formula blows up; ASN is then of order (log A)² / Var(z) — still finite for SPRT with finite A, B, but large. A sequential procedure **without** absorbing boundaries (or truncation) can have **unbounded expected cost**.
+
+SPRT terminates with probability 1 (Appendix A.1) under mild conditions on z.
+
+### Efficiency vs fixed-n (Ch 3, “Saving in the number of observations”)
+
+A fixed-n test of strength (α, β) for a normal mean needs (3:67) n = (λ₁ − λ₀)² / (θ₀ − θ₁)². SPRT matches (α, β) with a **smaller expected n** (often ~40–60% of the fixed n at θ₀ and θ₁). Appendix A.7: SPRT is most efficient among tests with the same error probabilities — it minimizes E(n) at θ₀ and θ₁.
+
+### Truncation and grouping (Ch 5.6–5.7)
+
+Observations in groups inflate ASN slightly; Wald gives bounds. Truncation (hard max n) is required in practice; it distorts OC/ASN and must be accounted for. Untruncated SPRT is the optimality benchmark, not always the deployed procedure.
+
+---
+
+## Composite hypotheses and weight functions (Ch 4, App. A.8–A.9)
+
+For composite H, replace the simple likelihood ratio by a ratio of **weighted** likelihoods ∫ f(x, θ) w(θ) dθ. Sequential t-test (mean of a normal with unknown variance) is the worked case (Ch 4.2.3, App. A.9.2). Optimum weights exist in special classes (App. A.8, A.9).
+
+---
+
+## Multi-valued decisions and sequential estimation (Part III)
+
+Ch 10: choose among k > 2 mutually exclusive hypotheses. A sequential plan is a sequence of continuation/decision regions; selection uses a **risk function** plus ASN (Ch 10.4).
+
+Ch 11: sequential estimation by intervals/sets — stop when the interval has the required coverage and length, rather than at fixed n.
+
+---
+
+## Agent / coding applications
+
+1. **Property-based tests** — do not fix N examples. SPRT-stop when the pass/fail likelihood ratio exits (B, A). See `test-driven-development`.
+2. **Flakes vs gaps** — flakes are Type I (α); coverage holes are Type II (β). Different fixes. See `test-driven-development`.
+3. **Bisect / binary search** — ASN of true bisection is log₂ N. More steps means you are exploring, not bisecting. See `systematic-debugging` Phase 2.
+4. **Retry/backoff** — declare A, B, max-n *before* the loop. Unbounded sequential procedures have unbounded expected cost. See `coding-conventions`.
+
+---
+
+## Chapter index
+
+| # | Title | Key ideas |
+|---|--------|-----------|
+| 1 | Elements of current (fixed-n) testing | α, β, critical region, n needed for preassigned errors |
+| 2 | Sequential test: general discussion | OC, ASN, three zones, selection principles |
+| 3 | SPRT: simple H₀ vs simple H₁ | Λ_m, A/B, error inequalities, ASN, efficiency |
+| 4 | General sequential tests (composite) | Weight functions, sequential t |
+| 5 | Binomial mean / lot inspection | Tabular & graphical SPRT, grouping, truncation |
+| 6 | Two binomials (double dichotomies) | Sequential test of p₁ ≧ p₂ |
+| 7 | Normal mean, σ known, one-sided | SPRT, OC, ASN |
+| 8 | Normal σ does not exceed a given value | SPRT; unknown mean modification |
+| 9 | Normal mean equals a specified value | Two-sided sequential plan |
+| 10 | Multi-valued decisions | Risk function + ASN |
+| 11 | Sequential estimation | Interval/set estimation with optional stopping |
+| App | A.1–A.9 | Termination w.p. 1; OC/ASN bounds; SPRT efficiency; optimum weights |
+
+## Topic index
+
+- **ASN / expected sample number** → Ch 2.2.2, Ch 3, Ch 5.5, App A.3–A.4
+- **Error bounds α, β / Type I / Type II** → Ch 1.3, Ch 2.3.2, Ch 3 (3:12–3:15)
+- **Indifference zone** → Ch 2.3.1
+- **Likelihood ratio Λ_m, z_i** → Ch 3
+- **OC function L(θ)** → Ch 2.2.1, Ch 3, Ch 5.4, App A.2, A.4
+- **Optimal stopping / SPRT efficiency** → Ch 3, App A.7
+- **Sequential t-test** → Ch 4.2.3, App A.9.2
+- **Termination with probability 1** → App A.1
+- **Truncation / grouping** → Ch 5.6–5.7
+- **Weight functions (composite)** → Ch 4, App A.8–A.9
+
+## Scope
+
+Book content only. Source scan has no text layer; chapter files were not generated. Combine with `test-driven-development`, `systematic-debugging`, and `coding-conventions` for implementation rules.
+
+
+
+============================================================
+SKILL: milewski-category-theory (9830 chars)
+============================================================
+---
+name: milewski-category-theory
+description: "Use when applying Milewski: functors, monads, ADTs."
+related_skills:
+  - coding-conventions
+  - test-driven-development
+---
+
+# Category Theory for Programmers
+**Author**: Bartosz Milewski | **Edition**: v1.3.0 (Aug 2019, compiled by Igal Tabachnik) | **License**: CC BY-SA 4.0 | **Chapters**: 31 (3 parts)
+
+Knowledge base from Milewski, *Category Theory for Programmers*. Use when reasoning about type safety, composability, functors, monads, algebraic data types, or functional programming patterns.
+
+Toolkit, not a recap. Prefer these formulations over textbook paraphrases. Cite chapter when applying a rule.
+
+## How to Use
+
+- Load this skill when designing types, composing pipelines, reviewing `.map`/`.then`/`flatMap`, or choosing sum vs product types.
+- Apply the **decision rules** first; open the chapter index only for a named construction.
+
+---
+
+## Core Frameworks
+
+### Category (Ch 1)
+
+Objects + arrows (morphisms). Two laws, always:
+
+1. **Associativity.** If `f : A → B`, `g : B → C`, `h : C → D` then `h ∘ (g ∘ f) = (h ∘ g) ∘ f`.
+2. **Identity.** Every object `A` has `id_A` with `f ∘ id_A = f` and `id_B ∘ f = f`.
+
+Read `g ∘ f` as "g after f." In code: `g(f(a))` / Haskell `g . f`.
+
+**Programming claim (Ch 1.3).** Programming *is* hierarchical decomposition plus recomposition. A chunk's **surface** (type / interface) is what you need to compose it; its **volume** is the implementation you must forget. If you have to look inside an object to compose it, the paradigm has already failed.
+
+### Types as composability (Ch 2)
+
+Arrows compose only when the target of one equals the source of the next. Types are that matching constraint, mechanically checked. Stronger types → better described, better verified composition. Testing is probabilistic; type checking is closer to proof ("Testing is a poor substitute for proof," Ch 2.2). Design types first; annotations become compiler-enforced comments.
+
+Haskell types + bottoms ≈ **Hask**, not **Set**. Partial functions inhabit every type via `⊥`.
+
+### Kleisli category (Ch 4, Ch 20.1)
+
+Same objects (types). A morphism `A → B` is an *embellished* function `A → m B` (endofunctor `m`). Composition and identity are redefined so the embellishment (log, failure, state, …) is combined *outside* the individual functions.
+
+Writer recipe (Ch 4.1): run first, feed `fst` to second, `mappend` the logs. Identity is `return x = (x, mempty)`. Composition is associative because both function composition *and* the log monoid are.
+
+Fish: `(>=>) :: (a → m b) → (b → m c) → (a → m c)`.
+
+**If `m` has associative composition + identities, `m` is a monad and the result is a Kleisli category.** Each Kleisli arrow is independently a function `a → m b`; the fish is the only glue.
+
+### Products and coproducts (Ch 5)
+
+Defined by universal construction (relationships, not internals).
+
+- **Initial object:** unique morphism to every object — `Void` / empty set; `absurd :: Void → a`.
+- **Terminal object:** unique morphism from every object — unit `()`.
+- **Product:** pair `(a, b)` with projections; both parts must be inhabited.
+- **Coproduct:** `Either a b`; a value is *one* of the alternatives.
+
+### Algebraic data types (Ch 6)
+
+Product and sum types form a **semiring** (rig) of types:
+
+| Numbers | Types |
+|---|---|
+| 0 | `Void` |
+| 1 | `()` |
+| a + b | `Either a b` |
+| a × b | `(a, b)` |
+| 1 + a | `Maybe a = Nothing \| Just a` |
+| 2 = 1 + 1 | `Bool` |
+
+`data List a = Nil | Cons a (List a)` solves `x = 1 + a*x`.
+
+Sum types in C++/Java are routinely faked with sentinels: empty string, negative number, null pointer (Ch 6.3). Those are not sums — they make illegal inhabitants representable. Prefer tagged unions / enums-with-data / `Optional`/`Maybe`/`Either`. Haskell constructors are reversible via pattern matching because values are immutable; construction remembers which constructor was used.
+
+### Functors (Ch 7)
+
+A functor `F` maps objects *and* morphisms, preserving structure:
+
+```
+F id_a = id_{F a}
+F (g ∘ f) = F g ∘ F f
+```
+
+No tearing: may smash/glue, never break connections. Endofunctors on types: type constructors + `fmap`.
+
+**Functor laws for `Maybe`/`optional` (Ch 7.1.2):**
+
+```
+fmap id = id
+fmap (g . f) = fmap g . fmap f
+```
+
+Equational reasoning (substitute by definition) **fails** for C++-style functions with side effects. Counterexample: `square(counter())` vs `counter() * counter()` — inlining is invalid. Therefore any `fmap`/`map` whose callback has effects is not a functor.
+
+List, Reader, Writer, `optional` are the working examples. `fmap` on `Nothing` stays `Nothing` — structure preserved, no invented values.
+
+### Natural transformations (Ch 10)
+
+Polymorphic `F a → G a` that commutes with `fmap`:
+
+```
+fmap f . α = α . fmap f
+```
+
+"One moves the eggs, the other boils them." Example: `safeHead :: [a] → Maybe a`. Do not inspect or manufacture elements; only repackage.
+
+### Monads (Ch 20–22)
+
+A monad is **a way of composing embellished functions**, not "a thing for side effects." Three equivalent presentations:
+
+| | Composition | Flatten |
+|---|---|---|
+| Fish | `(>=>)`, `return` | Kleisli |
+| Bind | `(>>=)`, `return` | `ma >>= f` |
+| Join | `join :: m (m a) → m a`, `return` | `ma >>= f = join (fmap f ma)` |
+
+**Monad / Kleisli laws (Ch 20.1):**
+
+```
+(f >=> g) >=> h = f >=> (g >=> h)   -- associativity
+return >=> f = f                    -- left unit
+f >=> return = f                    -- right unit
+```
+
+They cannot be enforced by Haskell; they *are* the category laws. Writer satisfies them iff the log is a monoid. `do` notation is sugar for nested `>>=` ("overloading the semicolon"). C++ futures / coroutines are the same pattern (Ch 20.3).
+
+Effects (Ch 21) that become Kleisli arrows instead of impurity: partiality, nondeterminism (`[]`), Reader, Writer, State, exceptions (`Either`/`Maybe`), continuations, I/O. Embellishment alone is not a monad — **insisting on associative composition** is what makes it one.
+
+---
+
+## Decision rules
+
+1. **Compose through the surface.** If a function is only correct when the caller follows unstated protocol (hidden field, global, ordering, "don't call this yet"), it is not a morphism you can compose. Flag it. (Ch 1.2–1.3, Ch 2.2)
+2. **Types first.** Change a type, fix compile breaks; do not rely on tests to propagate a new contract. (Ch 2.2)
+3. **Sum over sentinel.** `Maybe`/`Either`/enum-with-payload instead of null, `-1`, `""`, boolean flags that encode mode. (Ch 6.3–6.4)
+4. **`map` is a functor or it is a bug.** Callback pure; `map(id)` is identity; `map(g∘f) = map(g)∘map(f)`; do not drop/add structure inside `map`. (Ch 7, 7.1.2)
+5. **Chains must be Kleisli.** `Promise.then`, `flatMap`, `Result`/`Either` pipes need associativity and units. If regrouping `(f then g) then h` vs `f then (g then h)` changes results, the "monad" is broken — ordering bugs. (Ch 20.1, Ch 1.2)
+6. **Test arrows, then the fish.** Each `a → m b` is independently specifiable (Ch 4: log aggregation is *not* the function's concern). Prove each arrow; then prove the composed pipeline. (Ch 4, Ch 20.1)
+7. **Effects at the composition, not the function.** Prefer embellished return types over globals/mutation so purity of the steps is preserved. (Ch 4, Ch 21)
+
+---
+
+## Anti-patterns
+
+- **Spaghetti / soup of objects (Ch 1.3).** Surface grows as fast as volume; you cannot forget the implementation.
+- **Unsafe coercions as habit (Ch 2.2).** `unsafeCoerce` / type-system backdoors exist; Kafka's Gregor is the cautionary tale.
+- **"If it compiles it is correct" (Ch 2.2).** Types do not prove the right output; Haskell still needs tests.
+- **Unit tests as a type system (Ch 2.2).** Refactors that change an argument type will not light up call sites in a weak language.
+- **Sentinel optionality (Ch 6.3).** Null, empty, negative as "no value."
+- **C++ `union` as a sum (Ch 6.3).** Cannot hold `std::string`; use a tagged type.
+- **Side-effecting `fmap` (Ch 7.1.2).** Breaks identity and composition; equational reasoning dies.
+- **Inventing values in `Nothing`/`[]`.** Functor must not tear or fabricate structure (Ch 7).
+- **Monad mysticism (Ch 20).** Not burritos; not "for IO." It is duct tape for Kleisli arrows.
+- **Inlining glue instead of composing (Ch 20).** Named intermediates + ad-hoc combination hide that you needed a lawful fish.
+- **Non-monoidal log/state combiner.** Writer laws fail if `mappend` is not associative / `mempty` is not a unit (Ch 20.1).
+- **Continuation spaghetti (Ch 20.3).** Handler-calls-handler without bind/`do`/coroutines.
+
+---
+
+## Chapter index
+
+**Part I** — 1 Composition laws · 2 Types · 3 Categories great/small, monoids · 4 Kleisli / Writer · 5 Products, coproducts · 6 ADTs · 7 Functors · 8 Functoriality, profunctors · 9 Function types, CCC, Curry-Howard · 10 Natural transformations
+
+**Part II** — 11 Declarative · 12 Limits/colimits · 13 Free monoids · 14 Representable functors · 15 Yoneda · 16 Yoneda embedding
+
+**Part III** — 17 Morphisms · 18 Adjunctions · 19 Free/forgetful · 20 Monad (programmer) · 21 Effects · 22 Monads categorically · 23 Comonads · 24 F-algebras · 25 Algebras for monads · 26 Ends/coends · 27 Kan extensions · 28 Enriched categories · 29 Topoi · 30 Lawvere theories · 31 Monads, monoids, categories
+
+## Topic index
+
+- **associativity / identity** → Ch 1.2, Ch 20.1
+- **composability / types** → Ch 2.2
+- **Kleisli / fish / return** → Ch 4, Ch 20.1
+- **sum types / Maybe / Either** → Ch 5, Ch 6.3–6.4
+- **functor laws / fmap** → Ch 7, Ch 7.1.2
+- **naturality** → Ch 10
+- **monad laws / bind / join / do** → Ch 20
+- **effects as embellishment** → Ch 21
+
+## Scope
+
+Book content only (blog-post compilation). Not a Haskell tutorial and not a substitute for Mac Lane. For applying these laws in review/tests, combine with `coding-conventions` and `test-driven-development`.
+
+

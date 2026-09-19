@@ -1,0 +1,45 @@
+{
+  "delegation_id": "deleg_bf0a2040",
+  "started": "2026-09-16 22:58:23",
+  "task_count": 5,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "1) Ingest Applied Nonlinear Control (Slotine & Li) into a Hermes skill and 2) patch loop-pid.py with improved Lyapunov analysis.\n\nBOOK: /var/home/rainbow/Downloads/Slotine and Li applied nonlinear control- bad quality.pdf\n\nA) INGEST THE BOOK:\nRead the PDF using read_file('/var/home/rainbow/Downloads/Slotine and Li applied nonlinear control- bad quality.pdf', offset=1, limit=150) and then more chunks.\nFocus on extracting: Ch 4-5 (Lyapunov), Ch 6 (sliding mode), Ch 7 (adaptive control).\n\nCreate sk",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_bf0a2040/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "1) Ingest Bandit Algorithms (Lattimore & Szepesvari) into a Hermes skill and 2) implement UCB1 adaptive source weighting in unified-recall.py.\n\nBOOK: 8 chapter PDFs in /var/home/rainbow/Downloads/ with names starting 'Bandit Algorithms __'\n\nA) INGEST THE BOOK:\nRead each chapter PDF - start with:\n- read_file('/var/home/rainbow/Downloads/Bandit Algorithms __ Stochastic Bandits with Finitely Many Arms.pdf', offset=1, limit=100)\n- read_file('/var/home/rainbow/Downloads/Bandit Algorithms __ Adversari",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_bf0a2040/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "1) Ingest Understanding Machine Learning (Shalev-Shwartz & Ben-David) into a Hermes skill and 2) add FTRL routing calibration logging to memory-query-router.py and calibration drift check to consistency_scorer.py.\n\nBOOK: /var/home/rainbow/Downloads/understanding-machine-learning-theory-algorithms.pdf\n\nA) INGEST:\nRead the PDF in chunks. Focus on online learning (Ch 11), PAC learning (Ch 1-2), regularization (Ch 13).\n\nCreate skill:\n- name: shalev-shwartz-understanding-ml\n- category: research\n- des",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_bf0a2040/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "1) Ingest Bayesian Data Analysis 3rd ed (Gelman et al) into a Hermes skill and 2) add Beta-Binomial trust posterior to memory-provenance.py and recall-miss logging to memory-ttl-purge.py.\n\nBOOK: /var/home/rainbow/Downloads/BDA3.pdf (53MB - read small chunks)\n\nA) INGEST BDA3:\nStart with offset=1, limit=60 to get the ToC. Then read only the key sections you find from the ToC.\nFocus on Ch 1-2 (Bayes theorem, priors) and Ch 6-7 (model checking, posterior predictive checks).\n\nCreate skill:\n- name: ge",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_bf0a2040/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 4,
+      "goal": "1) Ingest Multiagent Systems (Shoham & Leyton-Brown) into a Hermes skill, 2) fix the l1-graphiti-reconcile.py race with a lockfile, 3) add embedding loop detection to metacognitive-harness.py, 4) stagger the cron interval, 5) update ARCHITECTURE.md.\n\nBOOK: /var/home/rainbow/Downloads/shoham09a.pdf\n\nA) INGEST SHOHAM:\nRead the PDF. Focus on Ch 2-3 (game theory), Ch 5-6 (adversarial multi-agent), Ch 7 (mechanism design).\n\nCreate skill:\n- name: shoham-multiagent-systems\n- category: research\n- descri",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_bf0a2040/task-4.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-16 23:12:38"
+}

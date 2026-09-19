@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_698e2048",
+  "started": "2026-09-20 00:35:28",
+  "task_count": 1,
+  "model": "grok-4.6",
+  "provider": "xai",
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Perform a cold-context bottleneck audit of the Hermes 'fork' profile on this machine. You have zero prior knowledge of what was done — audit from raw evidence only.\n\nAudit scope (check each independently):\n\n1. PATH RESOLVER: For every job in ~/.hermes/profiles/fork/cron/jobs.json with a 'script' field, verify (a) the resolved path exists on disk and (b) it falls under ~/.hermes/profiles/fork/scripts/. Report any that fail either test.\n\n2. HERMES_HOME HARDCODES: For every .py file in ~/.hermes/pr",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_698e2048/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-20 00:41:12"
+}

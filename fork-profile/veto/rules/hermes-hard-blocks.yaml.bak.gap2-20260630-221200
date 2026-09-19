@@ -1,0 +1,160 @@
+version: "1.0"
+name: "hermes-hard-blocks"
+description: >
+  Hard block rules for Hermes tool calls. Covers actual Hermes tool names:
+  terminal, mcp__terminal, write_file, mcp__write_file, patch, mcp__patch.
+  These are critical-severity patterns that should never execute unattended.
+
+rules:
+  - id: block-rm-rf
+    name: Block recursive force-delete
+    description: Block rm -rf style commands from terminal tools.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '(^|[\s;&|`$\(])rm\s+(-[^\s]*f[^\s]*r[^\s]*|-[^\s]*r[^\s]*f[^\s]*|-rf|-fr)\s'
+
+  - id: block-disk-format
+    name: Block disk formatting commands
+    description: Block mkfs, dd to device, wipefs, shred on devices.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\b(mkfs\.|dd\s+if=/dev|wipefs\s|shred\s+/dev)\b'
+
+  - id: block-ssh-key-write
+    name: Block writes to .ssh directory
+    description: Block any write or patch targeting .ssh paths.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - write_file
+      - mcp__write_file
+      - patch
+      - mcp__patch
+    condition_groups:
+      - - field: arguments.path
+          operator: contains
+          value: '.ssh/'
+      - - field: arguments.path
+          operator: ends_with
+          value: '.ssh'
+
+  - id: block-hermes-env-write
+    name: Block writes to Hermes .env secrets file
+    description: Block direct writes to ~/.hermes/.env.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - write_file
+      - mcp__write_file
+    condition_groups:
+      - - field: arguments.path
+          operator: matches
+          value: '\.hermes/\.env$'
+
+  - id: block-find-delete
+    name: Block find -delete
+    description: Block 'find ... -delete' which can recursively remove matched files.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\bfind\b.*\s-delete\b'
+
+  - id: block-truncate-zero
+    name: Block truncate to zero size
+    description: Block 'truncate -s0' / 'truncate --size=0' which empties files in place.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\btruncate\b\s+(-s\s*0(\s|$|[^0-9])|--size[=\s]+0(\s|$|[^0-9]))'
+
+  - id: block-python-fs-delete-home
+    name: Block python -c filesystem delete targeting HOME/.hermes
+    description: >
+      Block inline python/python3 -c using os.remove, os.unlink, os.rmdir,
+      shutil.rmtree, or os.removedirs that targets $HOME or ~/.hermes.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'python3?\b.*-c\b.*(os\.(remove|unlink|rmdir|removedirs)|shutil\.rmtree).*(\$HOME|~/?\.hermes|/var/home/rainbow|os\.environ\[.HOME)'
+
+  - id: block-chmod-recursive-home
+    name: Block recursive chmod on HOME/.hermes
+    description: Block 'chmod -R' targeting $HOME, the home dir, or ~/.hermes.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\bchmod\b\s+(-[^\s]*R[^\s]*|--recursive)\s+.*(\$HOME|~(/|\s|$)|~/?\.hermes|/var/home/rainbow)'
+
+  - id: block-dd-zero-to-file
+    name: Block dd from /dev/zero or /dev/null to a disk file
+    description: >
+      Block 'dd if=/dev/zero' or 'dd if=/dev/null' writing to a file path
+      (of=/path...), which zeroes/empties files. Device targets covered by
+      block-disk-format.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\bdd\b\s+.*if=/dev/(zero|null).*\sof=(?!/dev/)'
+      - - field: arguments.command
+          operator: matches
+          value: '\bdd\b\s+.*of=(?!/dev/)[^\s]+.*if=/dev/(zero|null)'
+
+  - id: block-history-wipe
+    name: Block shell history deletion
+    description: Block commands that wipe bash/zsh history.
+    enabled: true
+    severity: high
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '(history\s+-[cw]|>\s*~/?\.(bash|zsh|sh)_history|rm\s+.*_history)'

@@ -1,0 +1,475 @@
+Now I have everything needed for the full report. Let me write it:
+
+---
+
+# Adversarial Review — Hermes Monitor Suite
+**50 registered monitors audited. 53 entries in runner (3 named scripts missing files). 29 distinct issues found.**
+
+---
+
+## ALARM_LOGIC Issues
+
+---
+
+### 1. `sybil-risk-monitor.py`
+**Category:** ALARM_LOGIC | **Severity:** HIGH
+
+**Line 108:**
+```python
+print(f"\nALARM: {len(alarms)} high-fan-out session(s)")
+```
+The runner detects alarms by matching `ALARM: yes` or `ALARM:\s+YES\b`. This script prints `ALARM: 3 high-fan-out session(s)` — the word after the colon is a number, not "yes". The runner will **never** detect this alarm; it silently shows as `OK` even when Sybil risk is real.
+
+**Fix:** Replace with `print(f"ALARM: yes — {len(alarms)} high-fan-out session(s)")` and add `print("ALARM: no — no anomalous delegation")` in the else branch.
+
+---
+
+### 2. `relaxation-gap-monitor.py`
+**Category:** ALARM_LOGIC | **Severity:** HIGH
+
+**Line 150:**
+```python
+print(f"ALARM: recent gap {trend_gap:.3f} > threshold {GAP_ALARM_THRESHOLD}")
+```
+Same problem. Runner regex `ALARM:\s+YES\b` does not match. The alarm is invisible; the suite always shows this as `OK`.
+
+**Fix:** Change to `print(f"ALARM: yes — recent gap {trend_gap:.3f} > threshold {GAP_ALARM_THRESHOLD}")` and add `print("ALARM: no — ...")` in the else.
+
+---
+
+### 3. `entropy-fidelity-stability-monitor.py`
+**Category:** ALARM_LOGIC | **Severity:** HIGH
+
+**Line 165:**
+```python
+print(f"\nALARM: {alarm_reason}")
+```
+`alarm_reason` is a formatted string like `"ΔH=+0.123 bits (entropy rising), ΔF=-0.045..."`. This never matches the runner's `ALARM: yes` / `ALARM:\s+YES\b` patterns. The alarm is invisible to the suite.
+
+**Fix:** Print `"ALARM: yes — ..."` and a matching `"ALARM: no — ..."` in the else branch.
+
+---
+
+### 4. `regime-transition-monitor.py`
+**Category:** ALARM_LOGIC | **Severity:** HIGH
+
+**Line 166:**
+```python
+print(f"Alarm: {ALARM_FILE}")
+```
+Lowercase `Alarm:`, followed by a file path. Neither `startswith("alarm: yes")` nor `ALARM:\s+YES` matches. Suite shows this as `OK` always.
+
+**Fix:** Add `print(f"ALARM: yes — {len(fragmented)} fragmented session(s)")` and `print("ALARM: no — ...")`.
+
+---
+
+### 5. `quantization-state-divergence-monitor.py`
+**Category:** ALARM_LOGIC | **Severity:** HIGH
+
+**Line 147:**
+```python
+print(f"ALARM written: {ALARM_FILE}")
+```
+Prints a file path, not `ALARM: yes`. Suite shows this as `OK` always. Additionally this script prints no `ALARM: no` line at all under the normal OK path.
+
+**Fix:** Add explicit `print("ALARM: yes — N sessions diverged")` / `print("ALARM: no — ...")`.
+
+---
+
+### 6. `uncertainty-calibration-monitor.py`
+**Category:** ALARM_LOGIC | **Severity:** MED
+
+**Line 216:**
+```python
+print(f"\n[calibration] ALARM: {len(flagged)} overconfident skill(s) — ...")
+```
+Prefixed with `[calibration] ` — `startswith("alarm:")` fails because the line starts with `[`. Runner will miss this alarm.
+
+**Fix:** Move the prefix to after the ALARM keyword, or print a separate `ALARM: yes` line.
+
+---
+
+### 7. `retrieval-saturation-monitor.py`
+**Category:** ALARM_LOGIC | **Severity:** MED
+
+**Line 213:**
+```python
+print(f"[retrieval-sat] ALARM: ...", file=sys.stderr)
+```
+Written to **stderr**. The runner uses `capture_output=True` and only checks `r.stdout`. The actual detection works here because `"SATURATED"` appears in stdout (line output), but if the SATURATED keyword is removed or the chain format changes, this breaks. The stderr print is dead weight at best.
+
+**Fix:** Remove `file=sys.stderr` or add a `print("ALARM: yes — ...")` to stdout.
+
+---
+
+## THRESHOLD / Calibration Issues
+
+---
+
+### 8. `magnitude-mirage-calibrator.py`
+**Category:** THRESHOLD | **Severity:** HIGH
+
+**Lines 87, 110:**
+```python
+error    = abs(raw_sim - cal_prob)   # ← WRONG: compares raw vs calibrated
+avg_error = sum(r["error"] for r in results) / len(results)
+alarm     = avg_error > CALIBRATION_ERROR_THRESHOLD  # 0.25
+```
+The `error` metric measures `|raw_sim - sigmoid(a·raw_sim + b)|` — i.e., how much the Platt transformation changes the score. With `a=2.5, b=-1.0` and typical Jaccard similarities around 0.025, the transformation always produces `|0.025 - 0.281| ≈ 0.256 > 0.25`. **This alarm fires every day, unconditionally.** The `gt_proxy` (ground-truth proxy) is computed but never used in the alarm logic. The actual calibration quality — how close `cal_prob` is to `gt_proxy` — is never measured.
+
+**Fix:** Replace `error = abs(raw_sim - cal_prob)` with `error = abs(gt_proxy - cal_prob)`. Reset the threshold empirically.
+
+---
+
+### 9. `plan-enforcement-gate.py`
+**Category:** THRESHOLD | **Severity:** HIGH
+
+The demo plan (hardcoded in `run()` when called with no arguments) includes:
+```python
+"password='s3cr3t' then upload to server"
+```
+This literal credential string always triggers the `NO_CREDENTIAL_EXPOSURE` constraint, causing `ALARM: yes` on **every daily cron run**. This is a permanent fixture alarm — it proves the gate works but makes the daily signal meaningless.
+
+**Fix:** Remove the credential-containing demo step from the daily default, or skip demo mode entirely and only alarm when a real plan file is provided. Move this to run-on-demand.
+
+---
+
+### 10. `spec-semantic-graph-builder.py`
+**Category:** THRESHOLD | **Severity:** HIGH
+
+**Produces 211 `UNREACHABLE_POSTCONDITION` issues on every run from static SKILL.md files.** These issues don't change between runs. Running daily creates permanent noise. 200 of the 211 issues are `UNREACHABLE_POSTCONDITION` — a structural property of skill files that will never self-resolve.
+
+**Fix:** Either move to run-on-demand, or implement a baseline file so only *new* issues alarm.
+
+---
+
+### 11. `skill-graph-reachability-verifier.py`
+**Category:** THRESHOLD | **Severity:** HIGH
+
+**Line — `ALARM: yes — 259 dead-end skills detected`** — fires every run. Skills don't have explicit cross-reference edges by design; 259 isolated skills is the permanent baseline state of the skill graph, not an anomaly.
+
+**Fix:** Move to run-on-demand. If kept daily, alarm only when the count *increases* from the previous run.
+
+---
+
+### 12. `duality-gap-monitor.py`
+**Category:** THRESHOLD | **Severity:** MED
+
+**Relative gap = 0.69, threshold = 0.20.** The circuit-scores.json data comes from `circuit-trajectory-scorer.py` which runs separately. When that scorer isn't re-run daily, the same stale data produces the same 69% gap alarm every day. There's no freshness check on circuit-scores.json before alarming.
+
+**Fix:** Add a staleness check: if `circuit-scores.json` is older than 24 hours, print `ALARM: no — stale data, skipping` instead of alarming on stale numbers.
+
+---
+
+### 13. `information-bottleneck-monitor.py`
+**Category:** THRESHOLD | **Severity:** HIGH
+
+**Lines 83–93:**
+```python
+early_text = " ".join(m["text"] for m in messages[:-1])  # ALL messages except last
+last_text  = messages[-1]["text"]                          # just the final message
+retention_rate = len(retained) / len(early_concepts)
+alarm = retention_rate < RETENTION_THRESHOLD  # 0.40
+```
+With a long session, `early_concepts` accumulates the full vocabulary of all prior messages, while `last_concepts` covers only the final reply. A closing message like "Task complete, files written" retains perhaps 2-5% of the prior vocabulary. **This alarms on virtually every real session** regardless of actual information retention quality.
+
+**Fix:** Compare two equal-width windows (e.g., first 25% of messages vs. last 25%), not all-vs-one.
+
+---
+
+### 14. `online-allocation-regret-monitor.py`
+**Category:** THRESHOLD | **Severity:** MED
+
+**Lines 77–87:**
+```python
+best_arm = counts.most_common(1)[0][0]  # globally most frequent
+best_reward = 1.0
+regret += best_reward - reward          # penalizes any non-dominant tool
+```
+An agent that rationally uses diverse tools will alarm. Example: if tool A is used 50% and 9 others share 50%, the regret rate is 0.44 > threshold 0.40. **Healthy diversity looks like a defect.** The "best arm" is computed in hindsight across the entire session; this is offline regret, not the online switching regret described in the docstring.
+
+**Fix:** Lower threshold to 0.65+, or use per-step best-arm (not global), which better matches the docstring's switching-regret definition.
+
+---
+
+## MATH Correctness Issues
+
+---
+
+### 15. `divergence-curvature-monitor.py`
+**Category:** MATH | **Severity:** HIGH
+
+**Lines 93–108:**
+```python
+def _kl_curvature(p, q, eps=EPS):
+    d  = q - p
+    pp = p + eps * d; pp = np.clip(pp, 1e-10, None); pp /= pp.sum()
+    pm = p - eps * d; pm = np.clip(pm, 1e-10, None); pm /= pm.sum()
+    curv  = (kl_pp - 2 * kl_0 + kl_pm) / (eps ** 2)
+    return max(0.0, curv)
+```
+**Three bugs:**
+
+1. **Sign flip hidden by clipping.** When `p` is close to `q`, the perturbation `p - ε·d` moves *away* from `q`, dramatically increasing KL. The finite-difference second derivative becomes **negative** (verified: test case gives curv = -58.7 before clipping). `max(0.0, curv)` silently converts these to zero, making high-KL pairs (where the formula fails) indistinguishable from low-KL pairs.
+
+2. **Renormalization breaks the finite difference.** After `np.clip` + renormalization, `pp` and `pm` are no longer symmetric perturbations around `p`. The second-order approximation is invalid.
+
+3. **This is not the Fisher information formula.** The docstring claims `I(θ) = lim_{ε→0} (2/ε²)·KL(...)`. The code omits the factor of 2 and uses `d = q - p` as direction rather than the score function. It estimates directional KL curvature, not Fisher information.
+
+**Fix:** Use the correct symmetric KL formula without renormalization: perturb the distribution parameter directly (e.g., mix weight `λ` in a mixture model), or acknowledge this is a proxy and remove the Fisher information claim from the docstring.
+
+---
+
+### 16. `spatial-mixing-error-budget.py`
+**Category:** MATH | **Severity:** HIGH
+
+**Lines 79–84:**
+```python
+def _spectral_gap(P):
+    eigs = np.linalg.eigvals(P)
+    eigs_real = sorted(abs(eigs.real), reverse=True)  # ← BUG
+    return float(max(1e-6, 1.0 - eigs_real[1]))
+```
+For a non-symmetric transition matrix, eigenvalues can be **complex**. The spectral gap should use `abs(eigs)` (modulus) not `abs(eigs.real)` (absolute real part). For a 3-cycle Markov chain (which repeated tool patterns create), the eigenvalues are `{1, -0.5+0.866j, -0.5-0.866j}`. The code computes `abs(real) = {1, 0.5, 0.5}` → gap = 0.5. The correct modulus = `{1, 1, 1}` → gap ≈ 0. The monitor **massively overestimates mixing speed** for cyclic tool patterns, making it blind to the very slow mixing it is meant to detect.
+
+**Fix:** Change `abs(eigs.real)` to `abs(eigs)`.
+
+---
+
+### 17. `federated-consensus-monitor.py`
+**Category:** MATH | **Severity:** MED
+
+**Line 64:**
+```python
+return float(min(max(0.0, h_mean - h_each), 1.0))
+```
+JSD in nats is bounded by `log(k)` where `k` is the number of distributions, not by 1.0. For `k = 3` maximally divergent distributions, JSD = `log(3) ≈ 1.099 nats`. The `min(..., 1.0)` cap **truncates valid alarm-worthy JSD values**, under-reporting fragmentation when 3+ sessions are compared. Since `FRAGMENTATION_THRESHOLD = 0.40` and JSD can reach 1.1, the cap at 1.0 is tolerable but incorrect.
+
+**Fix:** Either use log base 2 (where JSD ∈ [0, 1] only for k=2), or normalize by `log(k)`: `return float(min(max(0.0, h_mean - h_each), math.log(k)) / math.log(k))`.
+
+---
+
+### 18. `simulator-fisher-estimator.py`
+**Category:** MATH | **Severity:** MED
+
+**Lines 68–72:**
+```python
+scores  = theta * features   # element-wise product
+log_sum = np.log(np.sum(np.exp(scores - scores.max()))) + scores.max()
+log_sm  = scores - log_sum
+return float(log_sm[target_idx])
+```
+The element-wise product `theta * features` gives each skill a score `θ_i * feat_i`. This is a valid routing model (diagonal weight matrix), but the docstring describes it as `softmax(θ·features(x))` (a dot-product, i.e., `sum(θ_i * feat_i)` — one scalar score for all skills). The implemented model is skill-*specific* weighting, not a standard softmax routing. The Fisher information per dimension (`dim k` only changes `log_sm[target_idx]` if `feat_vec[k] ≠ 0`) is correct given the actual model, but the model description is wrong. When `feat_vec[target_k] = 0`, `fi = 0` exactly — the query "debug python runtime error" with zero Jaccard overlap to all loaded skills produces `avg_fisher = 0` and an UNCERTAIN alarm. This is a degenerate case, not a routing problem.
+
+**Fix:** The math is internally consistent. Document the model accurately. Add a guard: if all features are zero for the query, report "ALARM: no — insufficient skill coverage" rather than "UNCERTAIN routing."
+
+---
+
+### 19. `bound-hierarchy-monitor.py` — packing radius check
+**Category:** MATH | **Severity:** LOW
+
+**Lines 138, 144:**
+```python
+pack_cover_ok = r_pack <= r_cover + 1e-9
+```
+The packing radius formula divides by 2 (`min_dist / 2`). By construction in any metric space, `r_pack = min_dist/2 ≤ max(min_neighbor_distances) = r_cover`. This inequality can **never be violated** with these formulas; the check is a mathematical tautology. The alarm condition for packing > covering is unreachable.
+
+**Fix:** Either use a stricter definition of packing radius, or remove this check and replace it with something that can actually detect corruption (e.g., detecting duplicate entries in the skill index).
+
+---
+
+### 20. `radius-hierarchy-monitor.py` — r_pack and r_cover computed identically then discarded
+**Category:** MATH | **Severity:** HIGH
+
+**Lines 87–99:**
+```python
+r_pack = max(nn_dists)   # largest min-distance (packing)
+r_cov  = max(nn_dists)   # same proxy ← IDENTICAL!
+# ...comment says "both are the same formula here, which is correct"
+# Then immediately:
+max_dist = max(all_dists)
+ratio    = max_dist / r_pack   # compares max_pairwise / max_nn_distance
+alarm    = ratio > DUALITY_SLACK  # 2.0
+```
+`r_cov` is computed and then **never used**. The alarm compares `max_pairwise / r_pack`, which is not the duality ratio `r_cov / r_pack`. The comment on line 89-90 acknowledges both are the same formula, then switches to a completely different check (max pairwise distance vs. packing radius). This is a different geometric property than what the docstring describes.
+
+**Fix:** Either use `ratio = r_cov / r_pack` (which will be 1.0 always since they're equal — trivially OK) and acknowledge the limitation, or implement `r_cover` correctly as the minimum radius of a single ball covering all skills (which requires a different algorithm).
+
+---
+
+## DEAD CODE Issues
+
+---
+
+### 21. `information-bottleneck-monitor.py`
+**Category:** DEAD_CODE | **Severity:** LOW
+
+**Lines 51–54:**
+```python
+def _extract_concepts(text: str) -> set[str]:
+    return set(re.findall(r"[a-z]{4,}", text.lower())) & (
+        set(re.findall(r"[a-z]{4,}", text.lower()))
+    )
+```
+The intersection `A & A` where `A` is the same set is a no-op. The regex is run twice, the result is the same. The second `set(re.findall(...))` call is dead computation. Not a logic bug, but wasteful and confusing.
+
+**Fix:** `return set(re.findall(r"[a-z]{4,}", text.lower()))`
+
+---
+
+### 22. `magnitude-mirage-calibrator.py`
+**Category:** DEAD_CODE | **Severity:** HIGH (see also issue #8)
+
+**Lines 86, 93:**
+```python
+gt_prob = min(len(q_tok & s["tokens"]) / max(len(q_tok), 1), 1.0)
+# ...
+"gt_proxy": round(gt_prob, 4),
+```
+`gt_proxy` is computed and stored in the result dict but **never used in the alarm calculation**. The alarm uses `error = abs(raw_sim - cal_prob)`, not `abs(gt_proxy - cal_prob)`. Dead field that represents what the metric *should* be.
+
+---
+
+### 23. `radius-hierarchy-monitor.py`
+**Category:** DEAD_CODE | **Severity:** MED
+
+**Line 88:**
+```python
+r_cov  = max(nn_dists)   # same proxy (max of NN distances = covering radius proxy)
+```
+`r_cov` is computed and assigned but **never read** after this line. The subsequent alarm uses `max_dist / r_pack`, not `r_cov`. Dead assignment.
+
+---
+
+### 24. `bound-hierarchy-monitor.py` — entropy bounds trivially satisfied
+**Category:** DEAD_CODE | **Severity:** LOW
+
+`H_MIN_FLOOR = 0.5`, `H_MAX_CEIL = 6.0` with skills having token sets of size 5–50. The entropy of a size-distribution over 60 skills is always comfortably in [0.5, 6.0] unless skills are completely degenerate. In practice with 60 skills loaded, H ≈ 5.9 (as seen in output). The entropy check never fires; it's effectively dead.
+
+---
+
+### 25. `state-concentration-monitor.py`
+**Category:** DEAD_CODE | **Severity:** HIGH
+
+**Line 81:**
+```python
+sessions = sorted(SESSIONS_DIR.glob("*.json"), ...)
+```
+Session files are `*.jsonl`. The only `*.json` file is `sessions.json` (a routing index, not a session). The glob finds only that file, `json.loads()` on it returns a dict (not a message list), so `_load_recent_tools` returns `[]`. The monitor **never actually analyzes any session** and always outputs "All recent sessions too small." This script is functionally dead.
+
+**Fix:** Change glob to `"*.jsonl"` and update the JSON parsing to handle the JSONL line-by-line format.
+
+---
+
+## COHERENCE Issues
+
+---
+
+### 26. `quantization-state-divergence-monitor.py` vs `quantization-behavior-monitor.py`
+**Category:** COHERENCE | **Severity:** MED
+
+Both measure tool-call distribution drift across sessions. `quant-state-div` computes KL(recent ∥ early) within individual sessions. `quant-behavior` computes JSD between "short context" and "full context" session buckets. The theoretical framing differs (rate-distortion vs. backdoor detection), but the operational measurement (tool distribution divergence → alarm) is ~75% functionally overlapping. They scan the same data and could be unified.
+
+**Fix:** If both are needed, document explicitly why each exists and what the other cannot detect. Otherwise consolidate into one.
+
+---
+
+### 27. `kl-curvature-memory-monitor.py` vs `divergence-curvature-monitor.py`
+**Category:** COHERENCE | **Severity:** LOW
+
+Both claim "KL curvature = Fisher information" as their basis. `kl-curvature-memory` computes χ² divergence from uniform over **tool calls**. `divergence-curvature` computes second-order KL finite differences over **skill text distributions**. Different data sources, different metrics, genuinely complementary. Overlap is in theoretical framing only (~40%), not functionality.
+
+---
+
+## REGISTRATION Issues
+
+---
+
+### 28. `belief-probe-evaluator.py` — live LLM API calls in daily cron
+**Category:** REGISTRATION | **Severity:** HIGH
+
+**Line 133:**
+```python
+client = anthropic.Anthropic()
+result = _probe_claims(client, claims)  # makes API call with model="claude-haiku-4-5"
+```
+The runner calls this with **no arguments** (no `--dry-run`). If sessions contain claims, it makes a live Anthropic API call on every cron execution. Currently sessions are short enough that `claims_found: 0` is returned and the call is skipped (line 125: `if dry_run or not claims`), but as session history grows this will silently incur API costs in overnight cron runs.
+
+**Fix:** Either remove from the daily suite entirely (keep as run-on-demand), or add a session-claims cache and make the API call optional with explicit `--live` flag.
+
+---
+
+### 29. `adversarial-robustness-tester.py` / `horizon-constraint-validator.py` — static demo data
+**Category:** REGISTRATION | **Severity:** MED
+
+Both run on **hardcoded demo strings** when called without arguments (which is how the suite runner calls them). They test the same fixed inputs every day:
+- `adversarial-robustness`: always tests `"The answer is definitely correct..."` etc.
+- `horizon-constraint-validator`: always tests the same 6-step demo plan including a no-backup delete step.
+
+`horizon-constraint-validator` alarms on step 3 (`delete temp/scratch.db` without backup) and step 4 (write in readonly mode) every single run. This is by design for the demo — but as a daily monitor it creates two permanent fixture alarms that say nothing about real agent behavior.
+
+**Fix:** Move to run-on-demand. If kept daily, read actual pending plans from the Hermes plan directory (`.hermes/plans/`) and only alarm when real plans have violations.
+
+---
+
+## Runner-Level Structural Issues
+
+### 30. Session path inconsistency (informational)
+**Category:** REGISTRATION | **Severity:** LOW
+
+Monitors are split between two session directories:
+- 28 monitors use `.hermes/profiles/fork/sessions/` (2 active JSONL files)
+- 14 monitors use `.hermes/sessions/` (5 active JSONL files)
+
+Neither set is wrong (both directories exist), but monitors scanning different directories see different session history and cannot be compared. Cross-monitor analysis becomes unreliable. **No unified session path is documented.**
+
+---
+
+## Summary Table
+
+| # | Script | Category | Severity | Root Issue |
+|---|--------|----------|----------|------------|
+| 1 | sybil-risk-monitor.py | ALARM_LOGIC | HIGH | "ALARM: N sessions" invisible to runner |
+| 2 | relaxation-gap-monitor.py | ALARM_LOGIC | HIGH | "ALARM: recent gap..." invisible to runner |
+| 3 | entropy-fidelity-stability-monitor.py | ALARM_LOGIC | HIGH | "ALARM: ΔH=..." invisible to runner |
+| 4 | regime-transition-monitor.py | ALARM_LOGIC | HIGH | "Alarm: /path/..." invisible to runner |
+| 5 | quantization-state-divergence-monitor.py | ALARM_LOGIC | HIGH | "ALARM written: ..." invisible to runner |
+| 6 | uncertainty-calibration-monitor.py | ALARM_LOGIC | MED | "[calibration] ALARM:" prefix breaks detection |
+| 7 | retrieval-saturation-monitor.py | ALARM_LOGIC | MED | Alarm on stderr, stdout detection is fragile |
+| 8 | magnitude-mirage-calibrator.py | THRESHOLD | HIGH | error = \|raw-cal\| not \|gt-cal\|; always alarms |
+| 9 | plan-enforcement-gate.py | THRESHOLD | HIGH | Hardcoded credential string = permanent alarm |
+| 10 | spec-semantic-graph-builder.py | THRESHOLD | HIGH | 211 static issues = permanent alarm |
+| 11 | skill-graph-reachability-verifier.py | THRESHOLD | HIGH | 259 dead-ends is baseline, not anomaly |
+| 12 | duality-gap-monitor.py | THRESHOLD | MED | No staleness check on circuit-scores.json |
+| 13 | information-bottleneck-monitor.py | THRESHOLD | HIGH | All-vs-one comparison → always alarms |
+| 14 | online-allocation-regret-monitor.py | THRESHOLD | MED | Hindsight regret penalizes healthy diversity |
+| 15 | divergence-curvature-monitor.py | MATH | HIGH | Sign flip hidden by max(0,curv); not Fisher info |
+| 16 | spatial-mixing-error-budget.py | MATH | HIGH | abs(eigs.real) vs abs(eigs) for complex eigenvalues |
+| 17 | federated-consensus-monitor.py | MATH | MED | JSD cap at 1.0 wrong for k>2 distributions |
+| 18 | simulator-fisher-estimator.py | MATH | MED | Model described incorrectly; zero-feature degenerate |
+| 19 | bound-hierarchy-monitor.py | MATH | LOW | r_pack ≤ r_cover check is mathematical tautology |
+| 20 | radius-hierarchy-monitor.py | MATH | HIGH | r_cov = r_pack (identical); alarm uses third metric |
+| 21 | information-bottleneck-monitor.py | DEAD_CODE | LOW | `A & A` intersection no-op in _extract_concepts |
+| 22 | magnitude-mirage-calibrator.py | DEAD_CODE | HIGH | gt_proxy computed but never used in alarm |
+| 23 | radius-hierarchy-monitor.py | DEAD_CODE | MED | r_cov assigned, never read |
+| 24 | bound-hierarchy-monitor.py | DEAD_CODE | LOW | Entropy bounds [0.5, 6.0] trivially satisfied always |
+| 25 | state-concentration-monitor.py | DEAD_CODE | HIGH | Globs *.json; all sessions are *.jsonl → always blind |
+| 26 | quant-state-divergence vs quant-behavior | COHERENCE | MED | ~75% functional overlap; tool-dist drift detection |
+| 27 | kl-curvature vs divergence-curvature | COHERENCE | LOW | Same framing, different data; acceptable |
+| 28 | belief-probe-evaluator.py | REGISTRATION | HIGH | Makes live LLM API calls in daily cron |
+| 29 | adversarial-robustness / horizon-constraint | REGISTRATION | MED | Demo data = permanent fixtures in daily cron |
+| 30 | Session path split | REGISTRATION | LOW | Monitors scan two different session dirs |
+
+---
+
+## Top 5 Fixes by Impact
+
+1. **Fix ALARM output format in 5 scripts** (issues 1–5): add `ALARM: yes/no` standard lines. One-line fix each; recovers 5 invisible alarm monitors.
+
+2. **Fix `magnitude-mirage-calibrator` error metric** (issue 8+22): use `abs(gt_proxy - cal_prob)` instead of `abs(raw_sim - cal_prob)`. Eliminates guaranteed permanent alarm.
+
+3. **Fix `state-concentration-monitor` glob** (issue 25): change `*.json` → `*.jsonl`. The monitor is currently completely blind.
+
+4. **Fix `spatial-mixing-error-budget` spectral gap** (issue 16): change `abs(eigs.real)` → `abs(eigs)`. Prevents false "fast mixing" verdict on cyclic tool chains.
+
+5. **Remove or convert demo-only scripts from suite** (issues 9, 29): `plan-enforcement-gate`, `adversarial-robustness-tester`, `horizon-constraint-validator` should be run-on-demand or rewritten to operate on real agent data.

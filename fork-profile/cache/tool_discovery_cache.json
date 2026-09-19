@@ -1,0 +1,1277 @@
+{
+"/var/home/rainbow/.hermes/hermes-fork/tools/annotate_preview_tool.py": [
+1789305612584926640,
+3947,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/ansi_strip.py": [
+1789305612584926640,
+4341,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/apply_layout_tool.py": [
+1789305612584926640,
+2335,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/approval.py": [
+1789745925816150709,
+64111,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/approval_context.py": [
+1789305612585098976,
+14454,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/approval_detection.py": [
+1789745925819150697,
+82954,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/approval_floors.py": [
+1789745925819150697,
+9676,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/approval_gateway_wait.py": [
+1789305612585098976,
+8362,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/approval_human_wait.py": [
+1789305612586099040,
+8416,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/approval_prompt.py": [
+1789305612586099040,
+15007,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/approval_smart.py": [
+1789745925821150690,
+8325,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/arg_coercion.py": [
+1789305612586099040,
+9068,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/async_delegation.py": [
+1789745925821150690,
+56743,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/audio_container.py": [
+1789305612586099040,
+2674,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/binary_extensions.py": [
+1789305612586099040,
+2274,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/blueprints.py": [
+1789305612586099040,
+9210,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/bot_failure_reasons.py": [
+1789305612586099040,
+3516,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/bot_live_delivery.py": [
+1789305612586099040,
+8872,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/bot_mode_dm.py": [
+1789305612586099040,
+33243,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/bot_mode_probe.py": [
+1789305612586099040,
+15592,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/bot_relay.py": [
+1789305612587099105,
+24582,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_camofox.py": [
+1789745925821150690,
+28441,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_camofox_state.py": [
+1789305612587099105,
+1566,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_cdp_tool.py": [
+1789305612587099105,
+22348,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_dialog_tool.py": [
+1789305612587099105,
+5405,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_extension_router.py": [
+1789305612587099105,
+6355,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_lightpanda.py": [
+1789305612587099105,
+13117,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_supervisor.py": [
+1789305612587099105,
+27452,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_supervisor_dialogs.py": [
+1789305612587099105,
+15371,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_supervisor_frames.py": [
+1789305612587099105,
+8335,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_tool.py": [
+1789745925822150685,
+67293,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_tool_cdp.py": [
+1789305612588099169,
+6285,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_tool_cloud.py": [
+1789745925823150682,
+12295,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_tool_eval_policy.py": [
+1789305612588099169,
+8639,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_tool_install.py": [
+1789305612588099169,
+16089,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_tool_lifecycle.py": [
+1789745925823150682,
+31732,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_tool_lightpanda_fallback.py": [
+1789305612589099234,
+10116,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_tool_origin.py": [
+1789305612589099234,
+2913,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_tool_real_profile.py": [
+1789305612589099234,
+16067,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_tool_session.py": [
+1789305612589099234,
+30545,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_tool_snapshot.py": [
+1789305612589099234,
+5350,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_tool_vision.py": [
+1789305612589099234,
+7148,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_use_cli.py": [
+1789745925823150682,
+41088,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/browser_vault_tool.py": [
+1789305612589099234,
+36137,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/budget_config.py": [
+1789305612589099234,
+5629,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/checkpoint_manager.py": [
+1789745925823150682,
+57825,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/clarify_gateway.py": [
+1789305612591099363,
+14074,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/clarify_tool.py": [
+1789305612591099363,
+15373,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/close_preview_tool.py": [
+1789305612591099363,
+2571,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/close_terminal_tool.py": [
+1789305612591099363,
+2056,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/code_execution_env.py": [
+1789745925823150682,
+13537,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/code_execution_rpc.py": [
+1789305612591099363,
+8696,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/code_execution_tool.py": [
+1789745925824150677,
+47906,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/code_kernel.py": [
+1789305612591099363,
+36091,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/code_kernel_remote.py": [
+1789305612591099363,
+18303,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/computer_use_tool.py": [
+1789305612593099492,
+1104,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/connections_tool.py": [
+1789305612593099492,
+22541,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/connector_search.py": [
+1789305612593099492,
+6755,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/credential_files.py": [
+1789745925825150674,
+17937,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/cronjob_job_args.py": [
+1789305612593099492,
+20122,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/cronjob_prompt_scan.py": [
+1789305612594099556,
+7861,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/cronjob_tools.py": [
+1789745925825150674,
+58252,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/daemon_pool.py": [
+1789305612594099556,
+2533,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/debug_helpers.py": [
+1789305612594099556,
+2187,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/delegate_tool.py": [
+1789745925825150674,
+44275,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/delegate_tool_child_run.py": [
+1789305612594099556,
+46599,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/delegate_tool_config.py": [
+1789305612594099556,
+30271,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/delegate_tool_dispatch.py": [
+1789305612594099556,
+25408,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/delegate_tool_progress.py": [
+1789745925829150657,
+21080,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/delegate_tool_registry.py": [
+1789305612595099620,
+15610,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/delegate_tool_results.py": [
+1789305612595099620,
+20948,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/delegate_tool_tasks.py": [
+1789305612595099620,
+6381,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/delegate_tool_toolsets.py": [
+1789305612595099620,
+5489,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/delegation_live_log.py": [
+1789305612595099620,
+13883,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/delegation_output_schema.py": [
+1789305612595099620,
+5232,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/desktop_ui.py": [
+1789305612595099620,
+2770,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/discord_tool.py": [
+1789305612595099620,
+31472,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/drive_preview_tool.py": [
+1789305612595099620,
+7033,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/env_passthrough.py": [
+1789745925829150657,
+6793,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/env_probe.py": [
+1789305612595099620,
+11445,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/fal_common.py": [
+1789305612597099749,
+7548,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/feishu_doc_tool.py": [
+1789305612598099814,
+3603,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/feishu_drive_tool.py": [
+1789305612598099814,
+8198,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/feishu_lark.py": [
+1789305612598099814,
+3248,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/file_operations.py": [
+1789745925832150646,
+77970,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/file_operations_common.py": [
+1789305612598099814,
+10396,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/file_operations_lint.py": [
+1789305612598099814,
+13701,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/file_operations_search.py": [
+1789305612598099814,
+49937,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/file_state.py": [
+1789305612598099814,
+9713,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/file_tools.py": [
+1789745925834150638,
+67187,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/file_tools_paths.py": [
+1789305612599099878,
+8884,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/file_tools_read_tracking.py": [
+1789305612599099878,
+11085,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/file_tools_write_guards.py": [
+1789745925834150638,
+22094,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/focus_pane_tool.py": [
+1789305612599099878,
+2631,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/fuzzy_match.py": [
+1789745925834150638,
+28350,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/homeassistant_tool.py": [
+1789305612599099878,
+14025,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/hook_output_spill.py": [
+1789305612599099878,
+4878,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/image_generation_catalog.py": [
+1789745925835150634,
+18850,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/image_generation_tool.py": [
+1789745925835150634,
+42796,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/image_source.py": [
+1789745925835150634,
+14590,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/interpreter_shutdown.py": [
+1789305612600099943,
+1225,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/interrupt.py": [
+1789305612600099943,
+4884,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/kanban_tools.py": [
+1789745925835150634,
+50465,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/kanban_tools_schemas.py": [
+1789305612600099943,
+21807,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/kanban_toolset_context.py": [
+1789745925836150630,
+1013,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/lazy_deps.py": [
+1789745925837150626,
+36631,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/managed_gateway_auth.py": [
+1789305612600099943,
+2896,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/managed_tool_gateway.py": [
+1789745925837150626,
+16774,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_dashboard_oauth.py": [
+1789305612600099943,
+5491,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_death_supervisor.py": [
+1789305612600099943,
+9341,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_oauth.py": [
+1789305612601100007,
+54006,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_oauth_device.py": [
+1789305612601100007,
+9489,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_oauth_manager.py": [
+1789305612601100007,
+23926,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_oauth_provider.py": [
+1789305612601100007,
+8163,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_schema_cache.py": [
+1789305612601100007,
+5175,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_agent.py": [
+1789305612601100007,
+14029,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_common.py": [
+1789305612601100007,
+5746,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_config.py": [
+1789745925838150622,
+16312,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_content.py": [
+1789305612601100007,
+11489,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_discovery.py": [
+1789745925840150614,
+28311,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_errors.py": [
+1789745925840150614,
+18453,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_handlers.py": [
+1789745925840150614,
+34922,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_health.py": [
+1789745925840150614,
+15879,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_lifecycle.py": [
+1789745925840150614,
+16566,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_loop.py": [
+1789745925840150614,
+13304,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_registration.py": [
+1789745925840150614,
+27536,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_sampling.py": [
+1789305612602100072,
+18431,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_schema.py": [
+1789305612602100072,
+11299,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_scope.py": [
+1789745925840150614,
+3012,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_server_run.py": [
+1789745925841150610,
+24347,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/mcp_tool_transport.py": [
+1789745925841150610,
+32657,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/memory_tool.py": [
+1789305612602100072,
+20728,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/memory_tool_store.py": [
+1789745925841150610,
+24858,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/microsoft_graph_auth.py": [
+1789305612602100072,
+7438,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/microsoft_graph_client.py": [
+1789305612603100136,
+10885,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/neutts_synth.py": [
+1789305612606100330,
+3134,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/open_preview_tool.py": [
+1789305612606100330,
+3854,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/openrouter_client.py": [
+1789305612606100330,
+1587,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/osv_check.py": [
+1789305612606100330,
+10273,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/patch_parser.py": [
+1789745925841150610,
+20376,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/path_security.py": [
+1789305612606100330,
+1508,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/plugin_guard.py": [
+1789305612606100330,
+7845,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/preview_tool.py": [
+1789305612606100330,
+3535,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/process_registry.py": [
+1789745925847150586,
+121858,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/process_registry_checkpoint.py": [
+1789745925847150586,
+6124,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/process_registry_notifications.py": [
+1789305612606100330,
+19065,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/process_registry_results.py": [
+1789305612606100330,
+4300,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/project_tools.py": [
+1789305612607100394,
+6450,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/pty_query_responder.py": [
+1789745925847150586,
+4709,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/react_to_message_tool.py": [
+1789305612607100394,
+6336,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/read_extract.py": [
+1789745925847150586,
+25189,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/read_preview_tool.py": [
+1789305612607100394,
+3262,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/read_terminal_tool.py": [
+1789305612607100394,
+3275,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/read_window_tool.py": [
+1789305612607100394,
+2613,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/schema_sanitizer.py": [
+1789305612607100394,
+19583,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/self_repo_guard.py": [
+1789305612607100394,
+21197,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/send_message_senders.py": [
+1789305612607100394,
+35757,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/send_message_targets.py": [
+1789305612607100394,
+11099,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/send_message_tool.py": [
+1789745925852150566,
+39570,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/session_search_tool.py": [
+1789745925854150558,
+36518,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/setup_mcp_tool.py": [
+1789305612608100459,
+4603,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/shell_heredoc.py": [
+1789305612608100459,
+8788,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skill_ledger.py": [
+1789305612608100459,
+18664,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skill_linter.py": [
+1789305612608100459,
+11118,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skill_manager_batch.py": [
+1789305612608100459,
+9964,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skill_manager_guards.py": [
+1789305612608100459,
+15422,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skill_manager_tool.py": [
+1789745925857150546,
+45926,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skill_provenance.py": [
+1789305612609100523,
+1885,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skill_usage.py": [
+1789305612609100523,
+36245,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skillevaluator_scan.py": [
+1789305612609100523,
+7363,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_ast_audit.py": [
+1789305612609100523,
+4142,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_guard.py": [
+1789745925857150546,
+43783,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_hub.py": [
+1789745925857150546,
+17714,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_hub_clawhub.py": [
+1789745925858150542,
+27464,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_hub_github.py": [
+1789745925858150542,
+26107,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_hub_install.py": [
+1789305612610100588,
+14728,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_hub_models.py": [
+1789305612610100588,
+14518,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_hub_official.py": [
+1789305612610100588,
+18828,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_hub_search.py": [
+1789305612610100588,
+8827,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_hub_skillssh.py": [
+1789305612610100588,
+17634,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_hub_sources.py": [
+1789305612610100588,
+20944,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_sync.py": [
+1789305612610100588,
+23396,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_sync_bundled_ops.py": [
+1789305612610100588,
+10119,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_sync_client.py": [
+1789305612610100588,
+27582,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_sync_client_org.py": [
+1789305612610100588,
+14522,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_sync_client_wire.py": [
+1789305612611100652,
+17289,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_sync_optional.py": [
+1789305612611100652,
+11390,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_tool.py": [
+1789745925858150542,
+37321,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_tool_dedup.py": [
+1789305612611100652,
+3721,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_tool_plugin.py": [
+1789305612611100652,
+8474,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/skills_tool_setup.py": [
+1789305612611100652,
+6848,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/slash_confirm.py": [
+1789305612611100652,
+4839,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/spill_safety.py": [
+1789305612611100652,
+3063,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/subagent_worktree.py": [
+1789305612611100652,
+9397,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/terminal_hints.py": [
+1789305612611100652,
+8388,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/terminal_scope.py": [
+1789745925860150534,
+9185,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/terminal_tool.py": [
+1789745925860150534,
+66513,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/terminal_tool_backends.py": [
+1789305612612100717,
+17908,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/terminal_tool_background.py": [
+1789305612612100717,
+13023,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/terminal_tool_config.py": [
+1789305612612100717,
+4896,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/terminal_tool_guards.py": [
+1789305612612100717,
+11522,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/terminal_tool_lifecycle.py": [
+1789305612612100717,
+13516,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/terminal_tool_result.py": [
+1789745925861150530,
+15093,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/terminal_tool_sudo.py": [
+1789745925861150530,
+21968,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/thread_context.py": [
+1789305612612100717,
+3381,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/threat_patterns.py": [
+1789305612612100717,
+9493,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tip_tool.py": [
+1789305612612100717,
+3222,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tirith_security.py": [
+1789745925861150530,
+25813,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/todo_tool.py": [
+1789305612612100717,
+13102,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tool_backend_helpers.py": [
+1789745925861150530,
+12545,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tool_output_limits.py": [
+1789745925866150510,
+2710,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tool_result_storage.py": [
+1789745925866150510,
+12368,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tool_search.py": [
+1789305612613363414,
+31592,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tool_search_catalog.py": [
+1789305612613363414,
+11709,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tool_search_validation.py": [
+1789305612613363414,
+8609,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tour_tool.py": [
+1789745925866150510,
+6589,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/transcription_audio.py": [
+1789305612613363414,
+14540,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/transcription_cloud.py": [
+1789305612613363414,
+23337,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/transcription_command.py": [
+1789305612613363414,
+14244,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/transcription_common.py": [
+1789305612613363414,
+3926,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/transcription_local.py": [
+1789305612614100846,
+13836,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/transcription_tools.py": [
+1789305612614100846,
+31333,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tts_command_provider.py": [
+1789305612614100846,
+15550,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tts_streaming.py": [
+1789305612614100846,
+14997,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tts_text_normalize.py": [
+1789305612614100846,
+10598,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tts_tool.py": [
+1789745925868150502,
+37613,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tts_tool_delivery.py": [
+1789305612614100846,
+21080,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tts_tool_lifecycle.py": [
+1789305612614100846,
+8070,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tts_tool_local.py": [
+1789305612614100846,
+9524,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tts_tool_openai.py": [
+1789305612615100910,
+7872,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tts_tool_plugins.py": [
+1789305612615100910,
+4576,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tts_tool_providers.py": [
+1789305612615100910,
+30749,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/tts_tool_speaker.py": [
+1789305612615100910,
+16419,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/url_safety.py": [
+1789305612615100910,
+26138,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/video_generation_tool.py": [
+1789745925868150502,
+17367,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/vision_tools.py": [
+1789305612615100910,
+52035,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/vision_tools_image_prep.py": [
+1789305612615100910,
+11330,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/voice_client_config.py": [
+1789305612616100974,
+10455,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/voice_live.py": [
+1789745925868150502,
+9332,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/voice_mode.py": [
+1789305612616100974,
+72573,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/voice_mode_transcript.py": [
+1789305612616100974,
+5530,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/wake_word.py": [
+1789305612616100974,
+37289,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/wake_word_engines.py": [
+1789305612616100974,
+12022,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/web_result_cache.py": [
+1789305612619101168,
+13605,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/web_tools.py": [
+1789305612619101168,
+28374,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/web_tools_extract.py": [
+1789745925868150502,
+10856,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/web_tools_rescue.py": [
+1789305612619101168,
+5397,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/web_tools_truncate.py": [
+1789305612619101168,
+8375,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/website_policy.py": [
+1789305612619101168,
+8873,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/working_diff.py": [
+1789305612620101233,
+4440,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/write_approval.py": [
+1789305612620101233,
+12431,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/x_search_tool.py": [
+1789305612620101233,
+15035,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/xai_http.py": [
+1789305612620101233,
+10948,
+false
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/xai_video_tools.py": [
+1789305612620101233,
+4599,
+true
+],
+"/var/home/rainbow/.hermes/hermes-fork/tools/yuanbao_tools.py": [
+1789305612620101233,
+21901,
+true
+]
+}

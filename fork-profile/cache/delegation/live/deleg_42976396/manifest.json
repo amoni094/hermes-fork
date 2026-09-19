@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_42976396",
+  "started": "2026-09-18 23:00:47",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 11, Agent A). Read every file listed below IN FULL before writing a single finding. Do not skim — read all lines.\n\nFiles:\n1. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py\n2. /var/home/rainbow/.hermes/scripts/calibration_loop.py\n3. /var/home/rainbow/.hermes/scripts/confidence_tracker.py\n4. /var/home/rainbow/.hermes/scripts/gate_audit.py\n5. /var/home/rainbow/.hermes/scripts/lyapunov_monitor.py\n\nFocus areas for Pass 11 (check th",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_42976396/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 11, Agent B). Read every file listed below IN FULL before writing a single finding.\n\nFiles:\n1. /var/home/rainbow/.hermes/scripts/compaction_utils.py\n2. /var/home/rainbow/.hermes/scripts/segment_level_compactor.py\n3. /var/home/rainbow/.hermes/scripts/crystal_fidelity_tiers.py\n4. /var/home/rainbow/.hermes/scripts/occam_audit.py\n5. /var/home/rainbow/.hermes/scripts/proper_scoring.py\n6. /var/home/rainbow/.hermes/scripts/mdp_retention_policy.py\n7. /var/home/r",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_42976396/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "You are an INTEGRATION TESTER (Pass 11, Agent C). Your job is to write and run a regression suite for the P10 fixes, then run all existing test suites.\n\nStep 1: Write /tmp/test_p11_regression.py covering:\n- V1: EVSI latch fix — simulate a session where all messages are clear-tier (p_middle=0). After the fix, evsi_latch_adjusted must be > evsi_min (Jev should NOT be permanently suppressed). Check that the uncertainty_term floor keeps evsi_latch_adjusted above the skip threshold.\n- V2: EVSI formul",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_42976396/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-18 23:07:55"
+}

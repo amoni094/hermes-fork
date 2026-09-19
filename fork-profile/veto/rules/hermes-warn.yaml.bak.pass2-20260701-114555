@@ -1,0 +1,137 @@
+version: "1.0"
+name: "hermes-warn"
+description: >
+  Warn rules for Hermes — logged to audit trail, tool still executes.
+  Covers destructive-but-sometimes-legitimate patterns worth noting.
+
+rules:
+  - id: warn-etc-write
+    name: Warn on /etc writes
+    description: Flag writes targeting system configuration paths.
+    enabled: true
+    severity: high
+    action: warn
+    tools:
+      - write_file
+      - mcp__write_file
+      - patch
+      - mcp__patch
+    condition_groups:
+      - - field: arguments.path
+          operator: starts_with
+          value: '/etc/'
+
+  - id: warn-curl-pipe-sh
+    name: Warn on curl/wget piped to shell
+    description: Flag command patterns that download and execute scripts.
+    enabled: true
+    severity: high
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '(curl|wget)\s+.*\|\s*(ba)?sh'
+
+  - id: warn-git-force-push
+    name: Warn on git force push
+    description: Flag git push --force which can destroy remote history.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'git\s+push\s+.*(-f\b|--force\b)'
+
+  - id: warn-systemctl-stop
+    name: Warn on stopping system services
+    description: Flag systemctl stop/disable/mask commands.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'systemctl\s+(stop|disable|mask)\s'
+
+  - id: warn-chmod-777
+    name: Warn on world-writable chmod
+    description: Flag chmod 777 or similar world-writable permission sets.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'chmod\s+(-R\s+)?[0-7]*7[0-7]{2}\s'
+
+  - id: warn-env-var-shell-exec
+    name: Warn on env-var-assigned command execution
+    description: >
+      Warn when a command assigns a string to a variable and then executes it
+      via $VAR or eval, which can indirectly bypass pattern-based blocks.
+      Legitimate in build scripts; flag for audit review.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '[A-Z_][A-Z0-9_]*=["''][^"'']{10,}["'']\s*;?\s*\$\1'
+      - - field: arguments.command
+          operator: matches
+          value: '(CMD|COMMAND|RUN|EXEC)=["\''`].*["\''`]\s*;?\s*\$\{'
+
+  - id: warn-heredoc-exec
+    name: Warn on heredoc written to file then executed
+    description: >
+      Warn on patterns that write a heredoc to a file and immediately execute it.
+      Can be used to deliver obfuscated scripts outside veto's inline inspection.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'cat\s*<<\s*[''"]?EOF[''"]?.*chmod.*\+x'
+      - - field: arguments.command
+          operator: matches
+          value: 'cat\s*<<\s*[''"]?EOF[''"]?.*\|\s*(ba)?sh'
+
+  - id: warn-cdp-attach
+    name: Warn on external CDP attach attempts
+    description: >
+      Warn when a terminal command attempts to connect to the local Chrome
+      DevTools Protocol endpoint (localhost:9222). Any local process can
+      attach to CDP while a browser session is live and read cookies/navigate.
+    enabled: true
+    severity: high
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '(localhost|127\.0\.0\.1):9222'
+      - - field: arguments.command
+          operator: matches
+          value: '--remote-debugging-port'

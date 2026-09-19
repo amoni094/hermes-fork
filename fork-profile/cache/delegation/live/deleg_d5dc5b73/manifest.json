@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_d5dc5b73",
+  "started": "2026-09-18 21:15:58",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a COLD ADVERSARIAL WIRING AUDITOR. Read the jev-compaction plugin and its support files IN FULL before writing any finding. Your job: verify that every Wave 3 change is correctly wired end-to-end.\n\nFiles to read IN FULL:\n1. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py\n2. /var/home/rainbow/.hermes/scripts/calibration_loop.py\n3. /var/home/rainbow/.hermes/scripts/confidence_tracker.py\n4. /var/home/rainbow/.hermes/scripts/kolmogorov_predicates.py\n5. /var/home/ra",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_d5dc5b73/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "You are a COLD INTEGRATION TESTER for a jev-compaction plugin wiring audit. Read the plugin and support scripts IN FULL before writing tests. Then write /tmp/test_wave3_wiring.py and run it.\n\nFiles to read first:\n1. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py\n2. /var/home/rainbow/.hermes/scripts/calibration_loop.py\n3. /var/home/rainbow/.hermes/scripts/confidence_tracker.py\n4. /var/home/rainbow/.hermes/scripts/kolmogorov_predicates.py\n5. /var/home/rainbow/.hermes/sc",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_d5dc5b73/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "You are a COLD DATA-FLOW AUDITOR for a Hermes jev-compaction plugin. Read all four files IN FULL before writing any findings.\n\nFiles to read:\n1. /var/home/rainbow/.hermes/scripts/cot_phase_scorer.py\n2. /var/home/rainbow/.hermes/scripts/segment_level_compactor.py\n3. /var/home/rainbow/.hermes/scripts/crystal_fidelity_tiers.py\n4. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py\n\nFor each script:\n\ncot_phase_scorer.py: What is the public API (function names, signatures, retu",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_d5dc5b73/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-18 21:20:42"
+}

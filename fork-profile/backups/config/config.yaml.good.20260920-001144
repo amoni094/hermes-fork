@@ -1,0 +1,819 @@
+_config_version: 44
+adaptive_reasoning:
+  adaptive_sc:
+    cost_model: cached
+    default_k: 1
+    enabled: true
+    max_k: 4
+    threshold: 0.75
+  budgets:
+    long: 3000
+    medium: 1200
+    none: 0
+    short: 300
+  context_dashboard:
+    enabled: true
+    show_at_level: L2
+    show_progress: true
+    update_every_n_checkpoints: 1
+    update_every_n_turns_l2: 4
+    update_every_n_turns_l3: 2
+  memory_augmented_cod:
+    enabled: true
+    max_cards: 3
+    tag_filter: reasoning-pattern
+  mode_router: heuristic
+  retrieval_order: lexical_first
+  self_correction:
+    enabled: true
+    max_self_refine: 2
+    require_new_evidence: true
+    strategy: role_relabeling
+  temporal_constraints:
+    enabled: true
+    require_confirm_before_external: true
+    require_dryrun_before_irreversible: true
+    require_verify_before_mutate: true
+  tts:
+    branch_k: 3
+    complex_operator: branch
+    dcr_enabled: true
+    dcr_gate_on_disagreement: true
+    default_operator: none
+    hard_operator: branch
+agent:
+  api_max_retries: 5
+  cron_drain_timeout: 30
+  environment_probe: false
+  gateway_timeout: 1800
+  max_turns: 500
+  restart_drain_timeout: 25
+  session_stall_timeout: 900
+  task_completion_guidance: false
+  tool_use_enforcement: strict
+  verify_on_stop: auto
+aimd_budgets:
+  compiler: 4
+  extractor: 8
+  llm_checks: 2
+  profiler: 2
+  structural: 2
+aimd_enabled: true
+approvals:
+  destructive_slash_confirm: false
+  mode: smart
+auxiliary:
+  compression:
+    fallback_chain:
+    - model: claude-haiku-4-5
+      provider: anthropic
+    - base_url: https://api.sambanova.ai/v1
+      model: gemma-4-31B-it
+      provider: sambanova
+    max_concurrency: 2
+    max_tokens: 4096
+    model: claude-haiku-4-5
+    provider: anthropic
+  curator:
+    base_url: https://api.mistral.ai/v1
+    model: mistral-small-latest
+    provider: mistral
+  title_generation:
+    base_url: https://api.mistral.ai/v1
+    model: mistral-small-latest
+    provider: mistral
+  triage_specifier:
+    base_url: https://api.mistral.ai/v1
+    model: mistral-small-latest
+    provider: mistral
+  vision:
+    model: claude-haiku-4-5
+    provider: anthropic
+  web_extract:
+    base_url: https://api.mistral.ai/v1
+    model: mistral-small-latest
+    provider: mistral
+browser:
+  args: --no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage
+  executable_path: /var/home/rainbow/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome
+calibration_gate:
+  commitment_threshold: 0.3
+  enabled: true
+  warn_on_authoritative_display: true
+command_allowlist:
+- systemctl *
+- hermes update*
+compression:
+  enabled: true
+  idle_compact_after_seconds: 1800
+  intent_conditioned_offload: true
+  micro_compact: true
+  micro_compact_defrag_threshold_tokens: 2000
+  micro_compact_every_n_turns: 3
+  min_tail_user_messages: 3
+  proactive_prune_min_reclaim_tokens: 4096
+  proactive_prune_min_result_chars: 8000
+  proactive_prune_tokens: 48000
+  prospect_pruning:
+    enabled: true
+    score_threshold: 0.3
+    turns_before_eligible: 5
+  protect_last_n: 32
+  rr_scorer_lambda: 0.7
+  threshold: 0.5
+  threshold_tokens: 120000
+  use_rr_scorer: true
+computer_use:
+  wayland: true
+concurrency_limits:
+  max_parallel_subagents: 8
+  max_parallel_tool_calls: 4
+  throttle_on_429: true
+constraint_freshness:
+  enabled: true
+  max_constraint_age_days: 90
+  require_freshness_on_promote: true
+  warn_on_stale_constraint: true
+cost_guard:
+  compiler_usd: 0.2
+  extractor_usd: 0.1
+  session_total_usd: 1.0
+critique_bank:
+  enabled: true
+  max_critiques_per_injection: 3
+  path: cache/critique-bank.jsonl
+  source_model: cheap-family
+cron:
+  allow_agent_scheduling: false
+custom_providers:
+- api_mode: chat_completions
+  base_url: https://api.openai.com/v1
+  context_length: 128000
+  key_env: OPENAI_API_KEY
+  max_output_tokens: 16384
+  models:
+    gpt-5.4:
+      context_length: 1050000
+    gpt-5.5:
+      context_length: 1050000
+    gpt-5.6-sol:
+      context_length: 1050000
+  name: openai
+- api_mode: chat_completions
+  base_url: https://api.cerebras.ai/v1
+  key_env: CEREBRAS_API_KEY
+  models:
+    gemma-4-31b: {}
+    gpt-oss-120b: {}
+    qwen-3.8-27b: {}
+  models_discovered: true
+  name: cerebras
+- api_mode: chat_completions
+  base_url: https://api.sambanova.ai/v1
+  key_env: SAMBANOVA_API_KEY
+  models:
+    DeepSeek-V3.1: {}
+    DeepSeek-V3.2: {}
+    Meta-Llama-3.3-70B-Instruct: {}
+    MiniMax-M2.7: {}
+    MiniMax-M3: {}
+    gemma-4-31B-it: {}
+    gpt-oss-120b: {}
+  models_discovered: true
+  name: sambanova
+- api_mode: chat_completions
+  base_url: https://api.mistral.ai/v1
+  key_env: MISTRAL_API_KEY
+  models:
+    codestral-2508: {}
+    codestral-embed: {}
+    codestral-embed-2505: {}
+    codestral-latest: {}
+    labs-leanstral-1-5: {}
+    labs-leanstral-1-5-1: {}
+    magistral-medium-latest: {}
+    magistral-small-latest: {}
+    ministral-14b-2512: {}
+    ministral-14b-latest: {}
+    ministral-3b-2512: {}
+    ministral-3b-latest: {}
+    ministral-8b-2512: {}
+    ministral-8b-latest: {}
+    mistral-code-fim-latest: {}
+    mistral-code-latest: {}
+    mistral-embed: {}
+    mistral-embed-2312: {}
+    mistral-medium: {}
+    mistral-medium-2604: {}
+    mistral-medium-3: {}
+    mistral-medium-3-5: {}
+    mistral-medium-3.5: {}
+    mistral-medium-latest: {}
+    mistral-moderation-2603: {}
+    mistral-ocr-2512: {}
+    mistral-ocr-3: {}
+    mistral-ocr-3-0: {}
+    mistral-ocr-4: {}
+    mistral-ocr-4-0: {}
+    mistral-ocr-4-1: {}
+    mistral-ocr-latest: {}
+    mistral-small-2603: {}
+    mistral-small-latest: {}
+    mistral-vibe-cli-fast: {}
+    mistral-vibe-cli-latest: {}
+    mistral-vibe-cli-with-tools: {}
+    voxtral-mini-2602: {}
+    voxtral-mini-latest: {}
+    voxtral-mini-realtime-2602: {}
+    voxtral-mini-realtime-latest: {}
+    voxtral-mini-transcribe-realtime-2602: {}
+    voxtral-mini-tts-2603: {}
+    voxtral-mini-tts-latest: {}
+    voxtral-small-2507: {}
+    voxtral-small-latest: {}
+  models_discovered: true
+  name: mistral
+database:
+  journal_mode: delete
+  journal_size_limit: 16777216
+delegation:
+  child_timeout_seconds: 900
+  default_toolset_policy: minimal
+  hierarchy_aware: true
+  max_concurrent_children: 10
+  max_spawn_depth: 1
+  model: grok-4.6
+  provider: xai
+  toolset_escalation: true
+  toolset_profiles:
+    code:
+      enabled_toolsets:
+      - terminal
+      - file
+      escalation_toolsets:
+      - terminal
+      - file
+      - delegation
+    cross_domain:
+      enabled_toolsets:
+      - web
+      - terminal
+      - file
+      escalation_toolsets:
+      - web
+      - terminal
+      - file
+      - memory
+      - session_search
+      - delegation
+    research:
+      enabled_toolsets:
+      - web
+      - file
+      escalation_toolsets:
+      - web
+      - file
+      - memory
+      - session_search
+    write:
+      enabled_toolsets:
+      - file
+      escalation_toolsets:
+      - file
+      - web
+display:
+  resume_display: compact
+  resume_exchanges: 3
+  show_cost: true
+  tool_progress: all
+durable_file_write_gate:
+  enabled: true
+  guarded_paths:
+  - ~/.hermes/profiles/fork/memories/MEMORY.md
+  - ~/.hermes/profiles/fork/skills/
+  - AGENTS.md
+  - ~/.hermes/profiles/fork/
+  skill_spec_gate:
+    block_on_fail: false
+    enabled: true
+    smoke_test_scripts: false
+    validator_script: ~/.hermes/scripts/validate-skill-ssl.py
+fallback_providers:
+- model: grok-4.6
+  provider: xai
+- base_url: https://api.mistral.ai/v1
+  model: mistral-large-latest
+  provider: mistral
+- base_url: https://api.sambanova.ai/v1
+  model: gemma-4-31B-it
+  provider: sambanova
+file_read_max_chars: 200000
+first_chunk_rank:
+  apply_to_tools:
+  - web_extract
+  - read_file
+  - terminal
+  chunk_size_chars: 2000
+  enabled: true
+  threshold_chars: 8000
+  top_chunks: 3
+handoff:
+  full_trajectory_on_model_switch: false
+  lint_constraints: true
+  prefer_structured_wm: true
+harness_fingerprint:
+  enabled: false
+  hash_inputs:
+  - tools
+  - skills
+  - compaction_policy
+  - approval_mode
+  - timeout
+improvement_governance:
+  auto_approve_low: true
+  cooldown_seconds: 3600
+  high_requires_senior: true
+  max_proposals_per_hour: 5
+  medium_reviewers_required: 1
+information_flow_control:
+  default_tool_result_label: session
+  enabled: false
+  labels:
+  - public
+  - session
+  - private
+ledger_orchestration:
+  enabled: false
+  ledger_file: cache/session-ledger.jsonl
+loop_harness:
+  dag_task_tracker:
+    _note: feature_list.json documents available reasoning subcommands. Not runtime-enforced
+      — used as a capability inventory for skill routing.
+    enabled: true
+    feature_list_path: cache/loop-harness/feature_list.json
+    regression_check: true
+  decay_disabled: true
+  enabled: true
+  irreversible_action_cap: 5
+  loop_contract:
+    contract_dir: cache/loop-harness/contracts
+    enabled: true
+    hash_lock: true
+    verify_on_stop: auto
+  loop_risk_floor: 0.0
+  loop_risk_floor_enabled: true
+  memory_health_gate:
+    check_graphiti_nodes: true
+    check_wal_status: true
+    enabled: true
+    rejected_routes_dir: cache/rejected-routes
+  post_compact_verify:
+    enabled: true
+    reacquisition_spike_threshold: 3
+  reasoning_hooks:
+    _note: Skill-invocation hints consumed by LLM at skill-load time. These are NOT
+      automated runtime gates — no script reads these keys. They document WHEN to
+      invoke the corresponding script subcommands during task execution. See reasoning_selection.selector
+      for the entry-point command.
+    mid_task_switch_framework: true
+    on_attribution_causal_check: true
+    on_failure_hypothesize: true
+    on_framework_conflict_resolve: true
+    pre_action_lookahead: true
+    pre_completion_boundary_check: true
+    pre_subtask_subplan_verify: true
+    pre_task_select_frameworks: true
+    pre_tool_call_kapro_check: true
+  risk_floor_path: cache/loop-harness/risk-floor.json
+lsp:
+  idle_timeout: 300
+  servers:
+    bash-language-server:
+      command:
+      - /var/home/rainbow/.hermes/lsp/bin/bash-language-server-wrapped
+      - start
+mcp_discovery_timeout: 30
+mcp_servers:
+  graphiti:
+    enabled: true
+    url: http://127.0.0.1:8765/mcp/
+  mempalace:
+    command: /var/home/rainbow/.hermes/scripts/mempalace-mcp.sh
+    enabled: false
+  qmd:
+    args:
+    - mcp
+    command: /var/home/rainbow/.hermes/scripts/qmd-local.sh
+    enabled: false
+  scrapfly:
+    enabled: false
+    url: https://mcp.scrapfly.io/mcp
+  stealth-browser-mcp:
+    args:
+    - /var/home/rainbow/.hermes/mcp/stealth-browser-mcp/src/server.py
+    command: /var/home/rainbow/.hermes/mcp/stealth-browser-mcp/.venv/bin/python
+    defer_loading: true
+    enabled: true
+    workdir: /var/home/rainbow/.hermes/mcp/stealth-browser-mcp/src
+memory:
+  memory_char_limit: 2200
+  provider: hindsight
+  rdm:
+    ephemeral: 0.4
+    rdm_lambda: 0.05
+    stable: 1.0
+    volatile: 0.75
+  retry_budgets:
+    auth:
+      backoff: 1.0
+      base_delay: 5.0
+      max_attempts: 1
+    fatal:
+      backoff: 1.0
+      base_delay: 0.0
+      max_attempts: 0
+    resource:
+      backoff: 1.0
+      base_delay: 30.0
+      max_attempts: 2
+    semantic:
+      backoff: 1.0
+      base_delay: 1.0
+      max_attempts: 2
+    transient:
+      backoff: 2.0
+      base_delay: 2.0
+      max_attempts: 5
+  size_caps:
+    max_fact_bytes: 16384
+    max_tool_excerpt_bytes: 2048
+  tier_thresholds:
+    graphiti_halt_nodes: 50000
+    graphiti_warn_nodes: 40000
+    laplace_alpha: 1
+    laplace_note: Jaynes Ch18 rule of succession - smooths zero-observation skill
+      priors
+    laplace_smoothing: true
+    max_ephemeral_facts: 500
+    max_volatile_sessions: 20
+    min_retention_promote: 0.45
+    min_score_stage: 2
+    promote_thresholds:
+      ephemeral: 0.55
+      stable: 0.45
+      volatile: 0.3
+    ttl_days_stable: 365
+    ttl_days_volatile: 30
+  user_char_limit: 1600
+  working_memory:
+    constraint_binding_required: true
+    dir: cache/working-memory
+    enabled: true
+    skill_selection_from_wm: true
+moa:
+  default_preset: default
+  presets:
+    default:
+      aggregator:
+        model: claude-sonnet-4-6
+        provider: anthropic
+      enabled: false
+      reference_max_tokens: 600
+      reference_models:
+      - model: claude-haiku-4-5
+        provider: anthropic
+model:
+  context_length: 200000
+  default: claude-sonnet-4-6
+  provider: anthropic
+nl_permission_policies:
+  enabled: false
+  policy_dir: ~/.hermes/policies
+observer_skip_list:
+  enabled: true
+  log_body_char_count: true
+  max_tail_messages: 5
+  skip_tool_bodies:
+  - read_file
+  - search_files
+  - web_extract
+  - browser_snapshot
+onboarding:
+  seen:
+    busy_input_prompt: true
+    openclaw_residue_cleanup: true
+    tool_progress_prompt: true
+persona_execution_split:
+  enabled: false
+persona_isolation:
+  enabled: true
+  persona_in_system_prompt_only: true
+  strip_persona_from_tool_context: false
+platform_toolsets:
+  cli:
+  - browser
+  - clarify
+  - code_execution
+  - computer_use
+  - cronjob
+  - delegation
+  - file
+  - memory
+  - session_search
+  - skills
+  - terminal
+  - todo
+  - vision
+  - web
+plugins:
+  enabled:
+  - context-pressure-guard
+  - tool-result-audit
+  - jev-compaction
+  - cobra-guard
+  - orca-status
+  - tool-auth-gate
+  entries:
+    cobra-guard:
+      allow_tool_override: false
+  jev_compaction:
+    budget_tokens: 100000
+    call_budget: 8
+    ema_alpha: 0.15
+    enabled: true
+    rr_lambda: 0.18
+    sprt_skip_ratio: 0.6
+    thresholds:
+      assistant: 0.61
+      system: 1.0
+      tool_result: 0.55
+      user: 0.72
+prompt_caching:
+  cache_ttl: 1h
+providers:
+  anthropic:
+    stale_timeout_seconds: 900
+reasoning_research:
+  compression_research:
+    arc_offload_future: true
+    arc_offload_status: NOT_IMPLEMENTED
+    avoid_retention_below: 0.4
+    d_state_fields:
+    - goal
+    - active_subgoal
+    - open_files
+    - last_error
+    - pending_steps
+    pin_types:
+    - rule
+    - preference
+    - constraint
+    - safety
+    - policy
+  consensus:
+    default_aggregator_closed: independent_majority
+    default_aggregator_open: list_wise_dcr
+    down_weight_outliers: true
+    halt_on_agreement: true
+    homogeneous_peer_debate_ban: true
+    initial_agents: 2
+    mode: progressive
+    outlier_precedes_sentinel: false
+    round0_independence: true
+    ungrounded_claim_weight: 0.0
+  metacognitive_harness:
+    abstain_gate:
+      confidence_threshold: 0.8
+      enabled: true
+      irreversible_keywords:
+      - delete
+      - remove
+      - send
+      - publish
+      - deploy
+      - overwrite
+      - email
+      - pay
+    compositional_uncertainty:
+      enabled: true
+      gate_threshold: 0.4
+      irreversible_weight: 1.0
+      optional_weight: 0.3
+    confidence_gate:
+      confidence_threshold: 0.8
+      scope: L2_L3_factual_and_irreversible
+    fok_jol_enabled: true
+    fok_jol_gap_threshold: 0.3
+    freshness:
+      enabled: true
+      half_lives_hours:
+        code_docs: 168
+        config_api: 24
+        constants: 999999
+        identities: 720
+        prices_status: 1
+      stale_threshold: 0.5
+    jol_stop_threshold: 0.8
+    max_attempts_before_list_wise: 2
+    progress_gated_routing:
+      enabled: true
+      escalate_on_stall: true
+      stall_detection_steps: 2
+    reflection_loop:
+      max_revision_cycles: 2
+      sentinel: CONFIRMED
+    research_final_step:
+      abort_on_mid_trajectory_low_confidence: false
+      enabled: true
+      restart_threshold_jol: 0.7
+    skill_profile:
+      blended_weight: 0.5
+      delegate_threshold: 0.6
+      min_samples_before_delegating: 5
+    steer_conf:
+      enabled: true
+      level_gate: L2
+    typed_uncertainty:
+      enabled: true
+  planning:
+    horizon_expand_max_steps: 3
+    milestone_tag: milestone
+    plan_over_skills: true
+    planning_stack_order:
+    - milestone_orient
+    - coarse_expand_current
+    - horizon_expand_max_steps_3
+    - bind_constraints
+    - load_skill_current_step
+    - adaptive_redecompose
+    - commit_then_verify
+    - code_control_flow
+    progress_belief_update: true
+  reasoning_frameworks:
+    abductive_reasoning:
+      enabled: true
+      max_hypotheses: 3
+      trigger_on_failure_mode:
+      - constraint_skip
+      - retry_loop
+      - stale_assumption
+      - false_attribution
+    action_boundary:
+      check_on_completion: true
+      check_on_verify_gate: true
+      ebp_prompting: true
+      enabled: true
+    causal_reasoning:
+      auto_trigger_on:
+      - debugging
+      - root_cause_analysis
+      - financial_analysis
+      - scientific_research
+      confound_check: true
+      counterfactual_test: true
+      enabled: true
+    ethical_reasoning:
+      enabled: false
+      note: deontic/permissibility check pending research
+    future_aware_planning:
+      enabled: true
+      lookahead_steps: 3
+      trigger_on_horizon_gt: 5
+      trigger_on_irreversible: true
+    reasoning_selection:
+      conflict_resolution:
+        auto_resolve_threshold: 0.2
+        both_unknown_action: escalate
+        cascade_order:
+        - abstain-check
+        - causal-check
+        - lookahead
+        - subplan-verify
+        - hypothesize
+        - boundary-check
+        - kapro-check
+        enabled: true
+        resolver_script: ~/.hermes/scripts/metacognitive-harness.py
+        resolver_subcommand: conflict-resolve
+      dynamic_switching:
+        enabled: true
+        max_switches_per_session: 3
+        switcher_script: ~/.hermes/scripts/working-memory.py
+        switcher_subcommand: switch-framework
+      enabled: true
+      selector_script: ~/.hermes/scripts/reasoning-complexity-classifier.py
+      selector_subcommand: select-frameworks
+    social_reasoning:
+      enabled: false
+      note: theory-of-mind primitive pending research
+  recovery:
+    bounded_retry_brief: true
+    classify_before_retry: true
+    loop_detection_window: 5
+    max_same_args_retries: 3
+    recovery_ladder_max_attempts: 2
+    root_cause_isolation: true
+    sprt_early_exit:
+      alpha: 0.05
+      beta: 0.1
+      enabled: true
+      note: Wald 1945 SPRT - anytime sequential test for memory retention
+      script: ~/.hermes/scripts/memory-zscore-retention.py
+      subcommand: sprt-check
+    structured_error_format: json
+  tool_use:
+    agentspec_future: true
+    agentspec_status: NOT_IMPLEMENTED
+    bidirectional_verify_patches: true
+    max_same_args_identical_calls: 3
+    shannon_context_monitor:
+      consecutive_calls_trigger: 3
+      enabled: true
+      note: Shannon 1948 - context utilization = mutual info / log2(vocab); below
+        10% = underutilized
+      underutilization_threshold: 0.1
+    six_verb_enabled: true
+    width_first_enabled: true
+    width_first_target_calls: 4
+session_reset:
+  mode: none
+session_warm_start:
+  cache_file: /var/home/rainbow/.hermes/profiles/fork/cache/last-session-type.json
+  enabled: true
+  max_age_hours: 24
+shadow_flags:
+  shadow_aimd_controller: false
+  shadow_consistency_scoring: false
+  shadow_coverage_audit: false
+  shadow_loop_detection: false
+  shadow_middle_section_rerun: false
+skill_state:
+  activate_threshold_steps: 10
+  dir: cache/skill-state
+  enabled: true
+  gc_after_hours: 24
+  obs_ring_buffer: 3
+skill_wiki:
+  dir: cache/skill-wiki
+  enabled: true
+  export_on_weekly_review: true
+  upsert_on_skill_update: true
+skills:
+  disabled:
+  - humanizer
+  - nab-formatting
+  - powerpoint
+  - research-document-output
+  - rich-pdf-generation
+  - thunderbird-cli-anything
+  mdl_dedup:
+    enabled: true
+    note: Li-Vitanyi 2008 MDL - detect redundant skills by compressed description
+      length
+    run_on_skill_update: true
+    script: ~/.hermes/scripts/occam-skill-ranker.py
+    subcommand: mdl-dedup
+terminal:
+  backend: local
+  timeout: 180
+tool_loop_guardrails:
+  hard_stop_enabled: true
+  tool_result_cache:
+    enabled: true
+    excluded_tools:
+    - terminal
+    - browser_navigate
+    - browser_click
+    - browser_type
+    - browser_press
+    - browser_scroll
+    - computer_use
+    - cronjob
+    - delegate_task
+    - process
+    - process_manage
+    - execute_code
+    - skill_manage
+    - write_file
+    - patch
+    max_entries: 200
+    scope: session
+    ttl_seconds: 86400
+  warn_after:
+    delegation_event_budget: 24
+    exact_failure: 2
+    idempotent_no_progress: 2
+    no_effective_progress: 3
+    same_tool_failure: 3
+  warnings_enabled: true
+tool_slo:
+  emit_metrics: true
+  enabled: true
+  retries_without_progress_max: 3
+  same_args_retry_max: 2
+  schema_valid_min: 0.95
+toolsets:
+- hermes-cli
+web:
+  extract_backend: firecrawl
+  search_backend: ddgs

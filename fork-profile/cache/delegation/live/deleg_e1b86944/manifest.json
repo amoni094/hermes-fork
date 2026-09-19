@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_e1b86944",
+  "started": "2026-09-19 15:38:33",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "COLD adversarial saturation check. Repo: /tmp/hello_agent.\n\nYou are a cold reviewer who has NOT seen any previous review passes. Read the following commits fresh and look for any HIGH or MEDIUM issues that may have been introduced by the fixes themselves (regression bugs, incomplete guards, test false-positives, etc.).\n\nCommits to review (in order, all on main or PR branches):\n\n1. pr-2072 branch HEAD (21e4fbaf7): commit message 'fix(eval): validate_only=true guard, passed NOTE comment, agreement",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_e1b86944/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 15:42:55"
+}

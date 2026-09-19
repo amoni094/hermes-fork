@@ -1,0 +1,38 @@
+{
+  "delegation_id": "deleg_5d60914a",
+  "started": "2026-09-17 11:05:36",
+  "task_count": 4,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Implement bottleneck #2 closure: FTRL routing weight feedback loop for memory-query-router.py.\n\nCONTEXT:\n- /var/home/rainbow/.hermes/scripts/memory-query-router.py (449 lines) — writes routing decisions to ~/.hermes/cache/routing-calibration.jsonl via _log_routing_decision()\n- /var/home/rainbow/.hermes/scripts/calibration-threshold-updater.py (72 lines) — reads calibration-log.jsonl (consistency scorer) but NOT routing-calibration.jsonl\n- FTRL theory: w_{t+1} = argmin_w [sum loss_s(w) + R(w)]; f",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_5d60914a/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Implement bottleneck #6 closure: wire context-pressure-reader.py into the live Hermes fork agent path via the pre_llm_call plugin hook.\n\nCONTEXT:\n- Fork plugin dir: /var/home/rainbow/.hermes/hermes-fork/plugins/user/\n- Existing plugin reference: /var/home/rainbow/.hermes/hermes-fork/plugins/user/lambda-tuner/__init__.py\n  This uses: ctx.register_hook('pre_llm_call', on_pre_llm_call) and ctx.register_hook('pre_compress', on_pre_compress)\n  Hook signature: def on_pre_llm_call(*, agent=None, sessio",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_5d60914a/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Implement bottleneck #9 closure: wire tool-auth-shim.py into the live Hermes fork agent path via the post_tool_call plugin hook.\n\nCONTEXT:\n- Fork plugin dir: /var/home/rainbow/.hermes/hermes-fork/plugins/user/\n- Existing plugin reference: /var/home/rainbow/.hermes/hermes-fork/plugins/user/lambda-tuner/__init__.py\n- post_tool_call hook kwargs: tool_name (str), args (dict), result (Any), status (str ok/error/blocked/cancelled), session_id, tool_call_id, turn_id, duration_ms, middleware_trace\n- /va",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_5d60914a/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Cold adversarial review of the Hermes fork wiring sprint. Read all modified scripts and new plugins fresh. Report CRITICAL/HIGH/MEDIUM/LOW findings only — no false positive padding.\n\nFILES TO REVIEW (read each one):\n\nScripts:\n1. /var/home/rainbow/.hermes/scripts/unified-recall.py — UCB1 feedback, trust posterior wiring, tool-auth wiring\n2. /var/home/rainbow/.hermes/scripts/metacognitive-harness.py — rephrased-loop wiring in cmd_gate, H6 logger fix\n3. /var/home/rainbow/.hermes/scripts/memory-ttl-",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_5d60914a/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-17 11:09:01"
+}

@@ -1,0 +1,38 @@
+{
+  "delegation_id": "deleg_f7d16ef0",
+  "started": "2026-09-19 00:15:50",
+  "task_count": 4,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Fix F02, F04, F01, and F16 in the Hermes fork at ~/.hermes/hermes-fork.\n\nThese are fixes the parent session cannot make upstream. Apply them directly to the fork files.\n\n--- F04 + F02: on_session_start fires without agent=; _pm._agent is a process-global ---\n\nFile: ~/.hermes/hermes-fork/agent/conversation_loop.py, around line 766.\nCurrent code:\n    _invoke_hook(\n        \"on_session_start\", session_id=agent.session_id, model=agent.model,\n        platform=getattr(agent, \"platform\", None) or \"\",\n  ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_f7d16ef0/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Fix F08, F09, F11, and the gateway bot-loop-guard bypass (F10-gateway) in the Hermes fork at ~/.hermes/hermes-fork.\n\nAll fixes land directly in fork files — no upstream dependency.\n\n--- F08: on_session_finalize failures fully suppressed ---\n\nFile: ~/.hermes/hermes-fork/agent/cli_session_mixin.py, around line 447.\nGrep for 'on_session_finalize' to find the exact location.\nCurrent: the exception handler around on_session_finalize has no log entry — plugin shutdown data loss is silent.\n\nFix: Add `l",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_f7d16ef0/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Fix CLI-1, CLI-4, CLI-5, CLI-7, S-1, S-5, M-5, and M-8 in the Hermes fork at ~/.hermes/hermes-fork.\n\nAll fixes land directly in fork files.\n\n--- CLI-1: main.py:234 HERMES_HOME hardcode before profile system init ---\n\nFile: ~/.hermes/hermes-fork/hermes_cli/main.py around line 234.\nGrep: grep -n 'expanduser.*\\.hermes\\|Path.home.*\\.hermes' hermes_cli/main.py | head -10\nFix: Replace Path.home()/'.hermes' with os.environ.get('HERMES_HOME', str(Path.home()/'.hermes')) at every occurrence before the pr",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_f7d16ef0/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Fix M-1 (hindsight memory mirroring), F05 (Anthropic prefix cache bust on failover), and create a fork_patches module that documents all architectural overrides made in this fork.\n\n--- M-1: memory mirroring — same fact written to Hindsight twice ---\n\nFile: ~/.hermes/hermes-fork/plugins/memory/hindsight/__init__.py\nGrep for 'on_memory_write\\|notify_memory_tool_write\\|sync_turn' to find the double-write path.\n\nThe bug: explicit builtin memory-tool writes trigger notify_memory_tool_write() → on_mem",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_f7d16ef0/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 00:52:57"
+}

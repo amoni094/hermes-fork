@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_44b0c786",
+  "started": "2026-09-19 22:03:55",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Cold adversarial review of wave-12 fixes to hermes-fork scripts. Read the actual on-disk files and verify each claim with line-number evidence. Report PASS/FAIL/PARTIAL per claim. Flag any new issues introduced. Write a markdown report to /tmp/adversarial_wave12.md.\n\nClaims to verify:\n\n1. W12-A: shadow-gate-nightly.py — TELEMETRY_DIR is now profile-aware. Check that the file no longer has `Path.home() / \".hermes\" / \"cache\" / \"shadow-telemetry\"` as TELEMETRY_DIR, and instead derives the path from",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_44b0c786/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 22:05:30"
+}

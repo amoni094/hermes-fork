@@ -1,0 +1,45 @@
+{
+  "delegation_id": "deleg_6d912c0f",
+  "started": "2026-09-15 15:40:21",
+  "task_count": 5,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Implement HAT-1, HAT-2, HAT-3 (skill graph topology analysis) and HAT-6 (domain co-occurrence) by adding subcommands to skill-graph-walk.py.\n\nHAT-1: Add a 'topology' subcommand that: (1) loads the full skill graph with networkx, (2) computes H0 = number of connected components (isolated skill clusters), (3) computes H1 = number of independent cycles = E - V + H0 (Euler characteristic for a graph), (4) prints a report: 'H0 (components)=N, H1 (cycles)=N, chi=V-E'. Interpret: H0>1 means disconnecte",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_6d912c0f/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Implement KHALIL-1, KHALIL-7, and KHALIL-3 in loop-pid.py and/or as a standalone lyapunov-analysis.py script.\n\nKHALIL-1: Add a 'lyapunov-check' subcommand to loop-pid.py that: (1) reads the PID history log (ts, e, u) from the state file, (2) computes V(k) = e(k)^2 + (Ki/Kp)*integrator(k)^2 at each step, (3) checks whether DeltaV = V(k+1) - V(k) < 0 for each transition (empirical decrease condition), (4) reports: steps_checked, steps_decreasing, steps_non_decreasing, and whether the loop appears ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_6d912c0f/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Implement CRYPTO-1 (weakened), CRYPTO-2 (weakened), CRYPTO-4 (weakened), CRYPTO-5 (weakened), CRYPTO-6 (weakened), CRYPTO-8 (weakened), and CRYPTO-3 (KEEP).\n\nCRYPTO-1 (WEAKEN): Create a new standalone script ~/.hermes/scripts/skill-integrity-check.py that: (1) scans all SKILL.md files in ~/.hermes/profiles/fork/skills/, (2) computes HMAC-SHA256(master_key, file_bytes) for each, (3) stores the MACs in ~/.hermes/cache/skill-integrity.json, (4) on subsequent runs, verifies current file vs stored MA",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_6d912c0f/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Implement GS-3 (weakened), GS-4 (KEEP), GS-7 (weakened), ROY-1 (weakened), ROY-7 (weakened), KHALIL-5 (weakened).\n\nGS-3 (WEAKEN): Add a 'frequency-estimate' subcommand to kl-skill-prior.py that: reads skill invocation data from lifecycle.db or skill-profiles in metacognitive.db, computes empirical frequency p_k = count_k / sum(counts) for each skill, outputs a sorted frequency table. No LLN proof needed — just label it 'empirical frequency estimate (LLN intuition: converges as N->inf)'.\n\nGS-4 (K",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_6d912c0f/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 4,
+      "goal": "Implement OT-4 (weakened), OT-9 (weakened), OT-11 (weakened), OT-14 (weakened).\n\nFor all of these: you need a simple Sinkhorn implementation available as a utility. Create ~/.hermes/scripts/ot_utils.py with: (1) sinkhorn(a, b, C, reg=0.05, max_iter=100) -> (P, cost) where a,b are 1D numpy arrays (marginals), C is cost matrix, reg is entropic regularization, (2) tf_to_vec(tf_dict_a, tf_dict_b) -> (a, b, C) that converts two TF token dicts to numpy marginals and a binary cost matrix (C_ij = 0 if t",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_6d912c0f/task-4.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 15:47:49"
+}

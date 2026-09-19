@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_8bab8eab",
+  "started": "2026-09-16 18:11:06",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Cold adversarial review of commit 8f0681a on /tmp/hello_agent, branch feature/theory-grounded-research.\n\nFOCUS FILES (read each with sed -n before reviewing):\n1. src/pipeline/obligation_tracker.py — SDL pre-screen added to extract_from_analysis()\n2. src/eval/reasoning_checks.py — causal_attribution_dimension() added\n3. src/reasoning/deontic_engine.py — is_contrary_to_duty_pair() Case 1 guard\n4. src/reasoning/active_learning_engine.py — _validate_committee() extended\n\nCHECK 1 — obligation_tracker",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_8bab8eab/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-16 18:13:06"
+}

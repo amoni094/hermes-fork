@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_312ae853",
+  "started": "2026-09-18 20:16:09",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a corpus-calibration engineer. Your job is to build NEW infrastructure and predicates for the Hermes jev-compaction plugin, grounded in specific theorems from the math/CS corpus. You must implement, run, and verify everything.\n\n## What already exists (DO NOT redo)\n- /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py — 3-tier RR+Jev compaction plugin\n- /var/home/rainbow/.hermes/scripts/jev_verify_fn.py — logprob_classify, calibrated_gate, consistency sampling\n- /va",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_312ae853/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER. Your job is to find real bugs, design flaws, and failure modes in the jev-compaction plugin and its supporting infrastructure. Be specific: cite exact line numbers, failure conditions, severity HIGH/MED/LOW. Find things the previous adversarial pass MISSED.\n\nFiles to review:\n1. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py\n2. /var/home/rainbow/.hermes/scripts/proper_scoring.py\n3. /var/home/rainbow/.hermes/scripts/calibration_loop.",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_312ae853/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "You are a WIRING AUDITOR. Your job is to verify every integration point between the jev-compaction plugin and the Hermes runtime, AFTER the following changes were made:\n\n1. pre_compress added to VALID_HOOKS in /var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins.py (line ~198)\n2. invoke_hook('pre_compress', agent=agent, session_id=_session_id, context_tokens=_ctx_tokens) added to _resolve_compress_call() in /var/home/rainbow/.hermes/hermes-agent/agent/conversation_compression.py (line ~2668",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_312ae853/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-18 20:23:55"
+}

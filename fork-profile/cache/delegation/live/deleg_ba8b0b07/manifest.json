@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_ba8b0b07",
+  "started": "2026-09-18 22:23:15",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 8, Agent A). Read every file listed below IN FULL before writing a single finding.\n\nFiles to read IN FULL:\n1. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py\n2. /var/home/rainbow/.hermes/scripts/compaction_utils.py\n3. /var/home/rainbow/.hermes/scripts/calibration_loop.py\n4. /var/home/rainbow/.hermes/scripts/confidence_tracker.py\n5. /var/home/rainbow/.hermes/scripts/gate_audit.py\n6. /var/home/rainbow/.hermes/scripts/proper_scori",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_ba8b0b07/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 8, Agent B). Read every file listed below IN FULL before writing a single finding.\n\nFiles to read IN FULL:\n1. /var/home/rainbow/.hermes/scripts/compaction_utils.py\n2. /var/home/rainbow/.hermes/scripts/segment_level_compactor.py\n3. /var/home/rainbow/.hermes/scripts/crystal_fidelity_tiers.py\n4. /var/home/rainbow/.hermes/scripts/cot_phase_scorer.py\n5. /var/home/rainbow/.hermes/scripts/kolmogorov_predicates.py\n6. /var/home/rainbow/.hermes/scripts/occam_audit",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_ba8b0b07/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "You are a COLD INTEGRATION VERIFIER (Pass 8, Agent C).\n\nStep 1: Run ALL suites (python3 /tmp/test_*.py for each).\n\nStep 2: Write /tmp/test_p8_regression.py covering:\n  U1: crystal_lossy_compress on [{'image_url': 'http://x'}] — verify returns deepcopy unchanged (no text to compress)\n  U2: crystal_fidelity_decide on msg with content=None at rr_score=0.5 → 'demote'\n  U3: crystal_fidelity_decide on msg with content=None at rr_score=0.9 → 'lossless'\n  U4: segment_compact_message on msg with content=",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_ba8b0b07/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-18 22:27:59"
+}

@@ -1,0 +1,38 @@
+{
+  "delegation_id": "deleg_cb10468b",
+  "started": "2026-09-19 19:24:58",
+  "task_count": 4,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Wire the 7 dark output files in the Hermes fork pipeline into their appropriate consumers.\n\nContext:\n- Scripts dir: /var/home/rainbow/.hermes/scripts/\n- Fork cache: /var/home/rainbow/.hermes/profiles/fork/cache/\n- Profile pattern: _base = Path(os.environ.get('HERMES_HOME', str(Path.home()/'.hermes'))); _profile = os.environ.get('HERMES_PROFILE',''); _root = (_base/'profiles'/_profile) if _profile and 'profiles' not in str(_base) else _base\n\nThe 7 dark outputs:\n1. alarm-summary.json  — written by",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_cb10468b/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Persist retry-budget-guard.py counters to disk so process restarts don't reset AUTH and RESOURCE budgets.\n\nContext:\n- Scripts dir: /var/home/rainbow/.hermes/scripts/\n- Fork cache: /var/home/rainbow/.hermes/profiles/fork/cache/\n- Profile pattern: _base = Path(os.environ.get('HERMES_HOME', str(Path.home()/'.hermes'))); _profile = os.environ.get('HERMES_PROFILE',''); _root = (_base/'profiles'/_profile) if _profile and 'profiles' not in str(_base) else _base\n\nCurrent state (from recon):\n- attempt_co",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_cb10468b/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Implement the H-I1 skillspector-guard pre-commit git hook so skill SKILL.md files are scanned before commit, not just in batch cron.\n\nContext:\n- Scripts dir: /var/home/rainbow/.hermes/scripts/\n- Fork profile: /var/home/rainbow/.hermes/profiles/fork/\n- Hermes fork repo: /var/home/rainbow/.hermes/hermes-fork/ (git repo)\n- skillspector_guard.py CLI: python3 skillspector_guard.py [--enforce] — exits non-zero when high-risk skills found\n- Skills root (fork): /var/home/rainbow/.hermes/profiles/fork/sk",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_cb10468b/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Adversarial cold pass on the 3 structural fixes from this wave. Wait 90 seconds before reading files.\n\nFixes to verify:\n1. monitor-suite-runner.py — does it read alarm-summary.json at end of main()? Is it fail-open? Profile-aware path?\n2. alarm-aggregator.py — does it read gate-audit.json and add it to alarm-summary entries? Schema: overall_verdict / summary.overall_verdict?\n3. skillspector_guard.py — does it read skill-integrity.json and skill-merkle.json at end of main()? Are the paths profile",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_cb10468b/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 19:29:41"
+}

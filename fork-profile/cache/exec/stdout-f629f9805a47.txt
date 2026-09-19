@@ -1,0 +1,490 @@
+=== All invoke_hook calls ===
+/var/home/rainbow/.hermes/hermes-agent/agent/api_request_hooks.py:174:            _lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/agent/turn_api_request.py:53:        from hermes_cli.lifecycle import has_hook, invoke_hook as _invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/agent/turn_api_request.py:64:            _invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/agent/turn_response_intake.py:62:        from hermes_cli.lifecycle import has_hook, invoke_hook as _invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/agent/turn_response_intake.py:64:            _invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/agent/conversation_loop.py:764:            from hermes_cli.lifecycle import invoke_hook as _invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/agent/conversation_loop.py:765:            _invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/agent/error_classifier.py:520:    provider plugin can add or correct verdicts). invoke_hook isolates callback
+/var/home/rainbow/.hermes/hermes-agent/agent/outbound_webhooks.py:3:manager, so every ``invoke_hook()`` site can POST lifecycle events (mirror of
+/var/home/rainbow/.hermes/hermes-agent/agent/outbound_webhooks.py:223:    """Build the notify-only closure ``invoke_hook()`` calls per firing."""
+/var/home/rainbow/.hermes/hermes-agent/agent/turn_finalizer.py:99:def _invoke_hook_safely(name: str, logger: logging.Logger, **kwargs) -> list:
+/var/home/rainbow/.hermes/hermes-agent/agent/turn_finalizer.py:102:        from hermes_cli.lifecycle import invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/agent/turn_finalizer.py:103:        return invoke_hook(name, **kwargs)
+/var/home/rainbow/.hermes/hermes-agent/agent/turn_finalizer.py:409:    for _hook_result in _invoke_hook_safely(
+/var/home/rainbow/.hermes/hermes-agent/agent/turn_finalizer.py:421:        _invoke_hook_safely(
+/var/home/rainbow/.hermes/hermes-agent/agent/turn_finalizer.py:628:        _invoke_hook_safely(
+/var/home/rainbow/.hermes/hermes-agent/agent/shell_hooks.py:2:callbacks on the plugin hook manager, so every ``invoke_hook()`` site dispatches to the scripts.
+/var/home/rainbow/.hermes/hermes-agent/agent/shell_hooks.py:335:    """Build the closure that ``invoke_hook()`` will call per firing."""
+/var/home/rainbow/.hermes/hermes-agent/agent/turn_context.py:673:        from hermes_cli.lifecycle import invoke_hook as _invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/agent/turn_context.py:674:        _pre_results = _invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/gateway/run_agent_cache.py:479:                from hermes_cli.plugins import invoke_hook as _invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/gateway/run_agent_cache.py:481:                _invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/gateway/run_inbound.py:48:            from hermes_cli.lifecycle import invoke_hook as _invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/gateway/run_inbound.py:49:            _hook_results = _invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/gateway/run_adapters.py:1409:            from hermes_cli.lifecycle import has_hook, invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/gateway/run_adapters.py:1411:                invoke_hook("gateway_platform_event", **event)
+/var/home/rainbow/.hermes/hermes-agent/gateway/slash_commands_session.py:209:            from hermes_cli.lifecycle import invoke_hook as _invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/gateway/slash_commands_session.py:210:            _invoke_hook("on_session_reset", session_id=_new_sid, reason="new_session",
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/hooks.py:103:# Synthetic kwargs matching the real invoke_hook() call sites. They go verbatim to
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/lifecycle.py:23:    return plugins.invoke_hook(hook_name, **kwargs)
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/lifecycle.py:26:def invoke_hook(hook_name: str, **kwargs: Any) -> List[Any]:
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins_dispatch.py:152:    def _invoke_hook_callback(callback: Callable, payload: Dict[str, Any]) -> Any:
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins_dispatch.py:172:    def invoke_hook(self, hook_name: str, **kwargs: Any) -> List[Any]:
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins_dispatch.py:199:                    ret = self._invoke_hook_callback(cb, kwargs)
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins_dispatch.py:240:                outcome["value"] = context.run(self._invoke_hook_callback, cb, kwargs)
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/cli_session_mixin.py:431:            from hermes_cli.lifecycle import finalize_session, invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/cli_session_mixin.py:440:                invoke_hook(event_type, **context)
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/kanban_db.py:143:        from hermes_cli.lifecycle import invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/kanban_db.py:145:        invoke_hook(event, task_id=task_id, profile_name=_hook_profile_name(), **fields)
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/kanban_db.py:241:        from hermes_cli.lifecycle import invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/kanban_db.py:254:        invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins.py:8:(core fires ``invoke_hook(name, **kwargs)``) and tools via ``PluginContext.register_tool()``.
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins.py:185:    # invoke_hook. This surface grants no adapter handles or platform actions. Fired today: Telegram
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins.py:1681:def invoke_hook(hook_name: str, **kwargs: Any) -> List[Any]:
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins.py:1692:    return _delivery_manager().invoke_hook(hook_name, **kwargs)
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins.py:1701:    """Invoke registered middleware callbacks (lazy-discovers like :func:`invoke_hook`).
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins.py:1703:    Lazy-discovers plugins on first use — same delivery-parity guarantee as :func:`invoke_hook` (tracking
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins.py:1746:        results = manager.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins.py:1795:    from hermes_cli.lifecycle import invoke_hook as invoke_lifecycle_hook
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins.py:1903:    hook_results = invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins.py:1930:    overrides. Dispatch is run-all-then-pick-first: ``invoke_hook`` runs every registered callback with
+/var/home/rainbow/.hermes/hermes-agent/hermes_cli/plugins.py:1938:    hook_results = invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_gateway_turn_sidecar.py:154:        with patch("hermes_cli.plugins.invoke_hook", return_value=[]):
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_gateway_turn_sidecar.py:170:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_gateway_turn_sidecar.py:179:        with patch("hermes_cli.plugins.invoke_hook", return_value=[]):
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_gateway_turn_sidecar.py:195:        with patch("hermes_cli.plugins.invoke_hook", return_value=[]):
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_api_content_sidecar.py:252:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_api_content_sidecar.py:267:        with patch("hermes_cli.plugins.invoke_hook", return_value=[]):
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_api_content_sidecar.py:278:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_api_content_sidecar.py:463:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_api_content_sidecar.py:579:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_api_content_sidecar.py:632:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_api_content_sidecar.py:978:            with patch("hermes_cli.plugins.invoke_hook", return_value=[]):
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_api_content_sidecar.py:999:            with patch("hermes_cli.plugins.invoke_hook", return_value=[]):
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_plugin_llm.py:573:    the real ``invoke_hook`` machinery, and check the call landed."""
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_plugin_llm.py:613:        manager.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_plugin_llm.py:654:        manager.invoke_hook("post_tool_call", tool_name="x", args={}, result="y")
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_subagent_lifecycle.py:136:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_subagent_stop_hook.py:116:        real_invoke = plugins.invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_subagent_stop_hook.py:124:             patch("hermes_cli.plugins.invoke_hook", side_effect=_tracking_invoke):
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_subagent_stop_hook.py:190:        real_invoke = plugins.invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_subagent_stop_hook.py:198:             patch("hermes_cli.plugins.invoke_hook", side_effect=_tracking_invoke):
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_surrogate_chokepoints.py:49:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_surrogate_chokepoints.py:82:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_turn_finalizer_final_response_persistence.py:96:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_turn_finalizer_final_response_persistence.py:143:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_turn_finalizer_final_response_persistence.py:288:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_turn_finalizer_final_response_persistence.py:345:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_turn_finalizer_final_response_persistence.py:375:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_turn_finalizer_final_response_persistence.py:415:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_turn_finalizer_iteration_limit_exit.py:142:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_turn_finalizer_iteration_limit_exit.py:169:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_turn_finalizer_iteration_limit_exit.py:204:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_turn_finalizer_iteration_limit_exit.py:243:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_turn_finalizer_iteration_limit_exit.py:284:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_turn_finalizer_iteration_limit_exit.py:318:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_turn_finalizer_iteration_limit_exit.py:348:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_api_content_row_addressed_backfill.py:91:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_api_content_row_addressed_backfill.py:142:                "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_api_content_row_addressed_backfill.py:175:            with patch("hermes_cli.plugins.invoke_hook", return_value=[]):
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_api_content_row_addressed_backfill.py:229:                "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_pre_compress_checkpoint_contract.py:493:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_a, **_kw: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_detached_fork_lifecycle_hooks.py:42:        patch("hermes_cli.lifecycle.invoke_hook") as lifecycle_hook,
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_detached_fork_lifecycle_hooks.py:61:    with patch("agent.turn_finalizer._invoke_hook_safely", side_effect=invoke_output_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_detached_fork_lifecycle_hooks.py:75:        patch("hermes_cli.lifecycle.invoke_hook") as lifecycle_hook,
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_detached_fork_lifecycle_hooks.py:97:    with patch("agent.turn_finalizer._invoke_hook_safely", side_effect=invoke_output_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_turn_finalizer_cleanup_guard.py:187:    with patch("agent.turn_finalizer._invoke_hook_safely", side_effect=capture):
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_outbound_webhooks.py:368:        """Outbound webhooks are notify-only — invoke_hook must see None."""
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_outbound_webhooks.py:374:        results = get_plugin_manager().invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_outbound_webhooks.py:416:        plugins.get_plugin_manager().invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_outbound_webhooks.py:442:        get_plugin_manager().invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_outbound_webhooks.py:474:        get_plugin_manager().invoke_hook("on_session_end", session_id="s")
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_outbound_webhooks.py:493:        manager.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_outbound_webhooks.py:496:        manager.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_outbound_webhooks.py:555:        get_plugin_manager().invoke_hook("on_session_end", session_id="s1")
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_outbound_webhooks.py:593:            "get_plugin_manager().invoke_hook('on_session_end', session_id='exit_test')\n"
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_first_chunk_at_hook.py:87:        patch("hermes_cli.lifecycle.invoke_hook", side_effect=_record_hook),
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_run_agent.py:1723:        monkeypatch.setattr("hermes_cli.lifecycle.invoke_hook", _capture_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_run_agent.py:1754:            "hermes_cli.lifecycle.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_run_agent.py:1781:            "hermes_cli.lifecycle.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_run_agent.py:1808:            "hermes_cli.lifecycle.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_run_agent.py:2324:            "hermes_cli.lifecycle.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_run_agent.py:2513:            "hermes_cli.lifecycle.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_run_agent.py:3299:            patch("hermes_cli.lifecycle.invoke_hook", side_effect=_record_hook),
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_run_agent.py:3369:        def _invoke_hook(_name, **_kwargs):
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_run_agent.py:3375:        monkeypatch.setattr("hermes_cli.lifecycle.invoke_hook", _invoke_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_run_agent.py:3419:            patch("hermes_cli.lifecycle.invoke_hook", return_value=[]),
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_sequential_tool_timeout.py:198:                "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_verification_continuation_budget.py:74:        patch("hermes_cli.plugins.invoke_hook", return_value=[]),
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_verification_continuation_budget.py:99:        patch("hermes_cli.plugins.invoke_hook", return_value=[]),
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_verification_continuation_budget.py:118:        patch("hermes_cli.plugins.invoke_hook", return_value=[]),
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_verification_continuation_budget.py:140:        patch("hermes_cli.plugins.invoke_hook", return_value=[]),
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_verification_continuation_budget.py:174:        patch("hermes_cli.plugins.invoke_hook", return_value=[]),
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_verification_continuation_budget.py:209:        patch("hermes_cli.plugins.invoke_hook", return_value=[]),
+/var/home/rainbow/.hermes/hermes-agent/tests/agent/test_verification_continuation_budget.py:245:        patch("hermes_cli.plugins.invoke_hook", return_value=[]),
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_discord_platform_events.py:358:        orig_invoke = lifecycle.invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_discord_platform_events.py:359:        lifecycle.invoke_hook = invoked
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_discord_platform_events.py:363:            lifecycle.invoke_hook = orig_invoke
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_discord_platform_events.py:377:        orig_invoke = lifecycle.invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_discord_platform_events.py:378:        lifecycle.invoke_hook = invoked
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_discord_platform_events.py:382:            lifecycle.invoke_hook = orig_invoke
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_gateway_platform_event_hook.py:141:        with patch("hermes_cli.lifecycle.invoke_hook", invoke):
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_gateway_platform_event_hook.py:154:        with patch("hermes_cli.lifecycle.invoke_hook", invoke):
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_gateway_platform_event_hook.py:172:            "hermes_cli.lifecycle.invoke_hook", invoke
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_gateway_platform_event_hook.py:190:        with patch("hermes_cli.lifecycle.invoke_hook", invoke):
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_timestamp_sidecar_replay.py:57:        "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_clarify_thread_followup_not_swallowed.py:105:    with patch("hermes_cli.plugins.invoke_hook", return_value=[]), \
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_max_concurrent_sessions.py:96:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *args, **kwargs: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_pre_gateway_dispatch.py:78:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", _fake_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_pre_gateway_dispatch.py:111:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", _fake_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_slack_runner_ignored_channels.py:33:        "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_agent_loop_stopped_hook.py:59:@patch("hermes_cli.plugins.invoke_hook")
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_agent_loop_stopped_hook.py:60:async def test_interrupt_fires_agent_loop_stopped_hook(mock_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_agent_loop_stopped_hook.py:79:    mock_invoke_hook.assert_any_call(
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_agent_loop_stopped_hook.py:89:@patch("hermes_cli.plugins.invoke_hook")
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_agent_loop_stopped_hook.py:90:async def test_hook_not_fired_for_pending_sentinel_stop(mock_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_agent_loop_stopped_hook.py:110:        call for call in mock_invoke_hook.call_args_list
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_agent_loop_stopped_hook.py:120:@patch("hermes_cli.plugins.invoke_hook")
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_agent_loop_stopped_hook.py:121:async def test_hook_not_fired_when_no_running_agent(mock_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_agent_loop_stopped_hook.py:137:        call for call in mock_invoke_hook.call_args_list
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_agent_loop_stopped_hook.py:144:@patch("hermes_cli.plugins.invoke_hook")
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_agent_loop_stopped_hook.py:145:async def test_hook_dispatch_failure_does_not_break_interrupt(mock_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/gateway/test_agent_loop_stopped_hook.py:147:    mock_invoke_hook.side_effect = RuntimeError("plugin exploded")
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_lifecycle.py:7:def test_invoke_hook_notifies_builtin_observers_before_plugins(monkeypatch):
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_lifecycle.py:10:        invoke_hook=lambda name, **kwargs: calls.append(("plugin", name, kwargs)) or ["ok"]
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_lifecycle.py:17:    monkeypatch.setattr(plugins, "invoke_hook", manager.invoke_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_lifecycle.py:19:    result = lifecycle.invoke_hook("on_session_start", session_id="session-1")
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_lifecycle.py:28:        invoke_hook=lambda name, **kwargs: calls.append(("plugin", name, kwargs)) or []
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_lifecycle.py:38:    monkeypatch.setattr(plugins, "invoke_hook", manager.invoke_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_lifecycle.py:52:    manager = SimpleNamespace(invoke_hook=lambda name, **kwargs: [name, kwargs])
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_lifecycle.py:60:    assert plugins.invoke_hook("custom", value=1) == ["custom", {"value": 1}]
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugin_api_compat.py:44:    results = manager.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_kanban_dispatch_tick_hook.py:118:    real_invoke = lifecycle.invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_kanban_dispatch_tick_hook.py:124:    monkeypatch.setattr(lifecycle, "invoke_hook", _spy)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_kanban_lifecycle_hooks.py:35:    invoke_hook reads) and restores it afterward.
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_kanban_task_updated_hook.py:105:    real_invoke = lifecycle.invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_kanban_task_updated_hook.py:111:    monkeypatch.setattr(lifecycle, "invoke_hook", _spy)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_kanban_worker_lifecycle_hooks.py:197:    real_invoke = lifecycle.invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_kanban_worker_lifecycle_hooks.py:203:    monkeypatch.setattr(lifecycle, "invoke_hook", _spy)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:274:    lifecycle.invoke_hook("on_session_start", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:275:    lifecycle.invoke_hook("pre_llm_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:276:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:281:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:289:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:297:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:309:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:315:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:325:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:335:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:501:    lifecycle.invoke_hook("on_session_start", **success)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:502:    lifecycle.invoke_hook("pre_llm_call", **success, messages=[prompt_canary])
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:503:    lifecycle.invoke_hook("pre_api_request", **success, retry_count=0)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:504:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:511:    lifecycle.invoke_hook("pre_api_request", **success, retry_count=1)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:512:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:519:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:527:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:538:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:544:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:555:    lifecycle.invoke_hook("on_session_start", **failed)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:556:    lifecycle.invoke_hook("pre_llm_call", **failed, messages=[prompt_canary])
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:557:    lifecycle.invoke_hook("pre_api_request", **failed, retry_count=0)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:558:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:565:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:575:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:582:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:593:    lifecycle.invoke_hook("on_session_start", **cancelled)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:594:    lifecycle.invoke_hook("pre_llm_call", **cancelled, messages=[prompt_canary])
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:595:    lifecycle.invoke_hook("pre_api_request", **cancelled, retry_count=0)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:596:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:603:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:613:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:765:    monkeypatch.setattr(plugins, "invoke_hook", plugin_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:777:    lifecycle.invoke_hook("on_session_start", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:778:    lifecycle.invoke_hook("pre_llm_call", **base, messages=["sensitive-prompt"])
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:791:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:801:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:854:    lifecycle.invoke_hook("on_session_start", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:855:    lifecycle.invoke_hook("pre_llm_call", **base, messages=["timeout-sensitive-prompt"])
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:856:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:863:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:870:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:879:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1671:    lifecycle.invoke_hook("pre_api_request", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1672:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1707:    lifecycle.invoke_hook("pre_api_request", **base, retry_count=0)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1708:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1719:    lifecycle.invoke_hook("pre_api_request", **fallback, retry_count=0)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1720:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1745:        lifecycle.invoke_hook("pre_llm_call", **common, task_id=task_id)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1746:        lifecycle.invoke_hook("pre_api_request", **common, task_id=task_id)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1748:    lifecycle.invoke_hook("post_api_request", **common)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1752:        lifecycle.invoke_hook("post_api_request", **common, task_id=task_id)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1753:        lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1785:    lifecycle.invoke_hook("pre_llm_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1794:        lifecycle.invoke_hook("pre_tool_call", **call, args={"command": "private"})
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1795:        lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1802:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1834:    lifecycle.invoke_hook("pre_llm_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1835:    lifecycle.invoke_hook("pre_tool_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1836:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1842:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1876:    lifecycle.invoke_hook("pre_llm_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1877:    lifecycle.invoke_hook("pre_tool_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1879:        lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1885:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1918:    lifecycle.invoke_hook("pre_llm_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1920:        lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1926:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1932:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1963:        lifecycle.invoke_hook("pre_llm_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1964:        lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:1973:        lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2012:    lifecycle.invoke_hook("pre_llm_call", **first)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2013:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2020:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2037:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2046:    lifecycle.invoke_hook("pre_llm_call", **second)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2047:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2056:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2096:    lifecycle.invoke_hook("on_session_start", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2097:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2104:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2112:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2153:    lifecycle.invoke_hook("pre_llm_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2154:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2192:    lifecycle.invoke_hook("pre_llm_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2193:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2202:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2225:    lifecycle.invoke_hook("on_session_start", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2226:    lifecycle.invoke_hook("pre_llm_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2227:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2233:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2262:    lifecycle.invoke_hook("pre_llm_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2263:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2270:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2308:    lifecycle.invoke_hook("pre_llm_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2309:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2317:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2341:    lifecycle.invoke_hook("pre_llm_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2342:    lifecycle.invoke_hook("pre_api_request", **base, retry_count=0)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2343:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2349:    lifecycle.invoke_hook("pre_api_request", **base, retry_count=1)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2350:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2356:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2361:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2366:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2412:        lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2418:        lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2458:    lifecycle.invoke_hook("on_skill_lifecycle", **common, action="created")
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2459:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2467:    lifecycle.invoke_hook("on_skill_lifecycle", **common, action="patched")
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2468:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2515:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2541:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2564:    lifecycle.invoke_hook("pre_llm_call", **base)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2565:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2574:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_relay_shared_metrics_runtime.py:2603:    lifecycle.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_hooks_cli.py:85:        shape invoke_hook() would at runtime.  Prior to this fix,
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:802:        results = mgr.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:832:        results = mgr.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:851:    Salvaged from PR #64188 (@Bartok9): module-level invoke_hook /
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:871:    def test_module_invoke_hook_lazily_discovers(self, monkeypatch):
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:882:        results = plugins_mod.invoke_hook("kanban_task_claimed", task_id="t1")
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:885:        # invoke_hook may enrich kwargs (e.g. telemetry_schema_version);
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:921:    def test_invoke_hook_tolerates_mock_managers(self, monkeypatch):
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:927:        stub = types.SimpleNamespace(invoke_hook=lambda name, **kw: ["stubbed"])
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:930:        assert plugins_mod.invoke_hook("anything") == ["stubbed"]
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:946:        results = mgr.invoke_hook("pre_llm_call", session_id="s1", user_message="hi",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:951:        """Gateway handlers call invoke_hook from inside asyncio; a bare asyncio.run would raise.
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:966:            return mgr.invoke_hook("post_tool_call", tool_name="t", args={}, result="r", duration_ms=1)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1088:        results = mgr.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1107:        assert mgr.invoke_hook("pre_llm_call", session_id="s1") == [
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1121:        assert mgr.invoke_hook("post_tool_call") == ["survived"]
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1154:        assert mgr.invoke_hook("subagent_stop", parent_session_id="p1") == ["ok"]
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1177:        assert mgr.invoke_hook("post_tool_call") == []
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1178:        assert mgr.invoke_hook("post_tool_call") == []
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1254:        assert mgr.invoke_hook("pre_tool_call") == [
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1257:        assert mgr.invoke_hook("pre_tool_call") == []
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1356:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1376:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1406:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1418:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1436:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1463:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1492:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1508:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1522:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1537:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1551:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1566:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1581:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1593:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1605:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1623:        monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda hook_name, **kwargs: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1633:        monkeypatch.setattr("hermes_cli.plugins.invoke_hook", capture)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1650:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1667:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1686:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1981:    by invoke_hook(). These tests verify the return format works correctly and
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:1995:        """Plugin returning a context dict is collected by invoke_hook."""
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:2006:        results = mgr.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_plugins.py:2039:        results = mgr.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_pre_command_hook.py:46:        def invoke_hook(self, name, **kwargs):
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_pre_command_hook.py:74:        def invoke_hook(self, name, **kwargs):  # pragma: no cover
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_pre_command_hook.py:75:            raise AssertionError("invoke_hook must not be called")
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_cli_shutdown_memory_messages.py:24:@patch("hermes_cli.plugins.invoke_hook")
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_cli_shutdown_memory_messages.py:25:def test_cleanup_forwards_session_messages(mock_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_cli_shutdown_memory_messages.py:53:@patch("hermes_cli.plugins.invoke_hook")
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_cli_shutdown_memory_messages.py:54:def test_cleanup_provider_exception_is_swallowed(mock_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_handoff_cleanup_race.py:68:    with patch("hermes_cli.lifecycle.invoke_hook") as mock_hook:
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_handoff_cleanup_race.py:94:    with patch("hermes_cli.lifecycle.invoke_hook") as mock_hook:
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_handoff_cleanup_race.py:114:        patch("hermes_cli.plugins.invoke_hook"),
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_handoff_cleanup_race.py:134:        patch("hermes_cli.plugins.invoke_hook"),
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_session_boundary_hooks.py:16:@patch("hermes_cli.lifecycle.invoke_hook")
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_session_boundary_hooks.py:18:def test_session_finalize_on_reset(mock_finalize_session, mock_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_session_boundary_hooks.py:39:        for c in mock_invoke_hook.call_args_list
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_session_boundary_hooks.py:64:@patch("hermes_cli.lifecycle.invoke_hook")
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_session_boundary_hooks.py:65:def test_interrupted_session_end_helper_emits_observer_shape(mock_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_session_boundary_hooks.py:82:    mock_invoke_hook.assert_called_once()
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_session_boundary_hooks.py:83:    call = mock_invoke_hook.call_args
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_session_boundary_hooks.py:94:@patch("hermes_cli.plugins.invoke_hook")
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_session_boundary_hooks.py:95:def test_hook_errors_are_caught(mock_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_session_boundary_hooks.py:106:    results = mgr.invoke_hook("on_session_finalize", session_id="test", platform="cli")
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_single_query_session_finalize.py:46:    def invoke_hook(name, **kwargs):
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_single_query_session_finalize.py:50:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", invoke_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_single_query_session_finalize.py:65:    def invoke_hook(name, **kwargs):
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_single_query_session_finalize.py:68:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", invoke_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/hermes_cli/test_tui_terminal_reset_on_exit.py:140:                patch("hermes_cli.plugins.invoke_hook", lambda *a, **k: None),
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_memory_hook_registration.py:48:    return manager.invoke_hook("pre_llm_call", session_id="")
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_api_error_classification_hook.py:68:        plugins_mod, "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_api_error_classification_hook.py:87:        plugins_mod, "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_api_error_classification_hook.py:96:        plugins_mod, "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_api_error_classification_hook.py:113:        plugins_mod, "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_api_error_classification_hook.py:131:        plugins_mod, "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_api_error_classification_hook.py:155:        plugins_mod, "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_api_error_classification_hook.py:194:    """register() + real invoke_hook + classify_api_error, no mocks."""
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_llm_output_hook.py:6:invoke_hook dispatch semantics that the wiring in ``run_agent.py``
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_llm_output_hook.py:68:    results = mgr.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_llm_output_hook.py:85:    PluginManager.invoke_hook catches per-callback exceptions, logs a
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_llm_output_hook.py:105:    results = mgr.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_llm_output_hook.py:123:    """With no plugins loaded, invoke_hook returns [] and the response is unchanged."""
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_llm_output_hook.py:128:    results = mgr.invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_tool_result_hook.py:24:    invoke_hook=_UNSET,
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_tool_result_hook.py:36:    if invoke_hook is not _UNSET:
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_tool_result_hook.py:38:        monkeypatch.setattr("hermes_cli.plugins.invoke_hook", invoke_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_tool_result_hook.py:39:        # Supplying a custom invoke_hook means the test expects hooks to
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_tool_result_hook.py:63:        invoke_hook=lambda hook_name, **kw: [None, {"x": 1}, "first", "second"],
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_tool_result_hook.py:81:        invoke_hook=_hook,
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_tool_result_hook.py:104:        invoke_hook=_hook,
+/var/home/rainbow/.hermes/hermes-agent/tests/plugins/test_transform_tool_result_hook.py:125:        invoke_hook=_hook,
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_skill_usage.py:119:        "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_skill_usage.py:158:        "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_skill_usage.py:188:        "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_skill_usage.py:208:        "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_skill_usage.py:231:        "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_skill_usage.py:272:        "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_approval_hook_session_id.py:39:                "hermes_cli.lifecycle.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_approval_hook_session_id.py:64:                "hermes_cli.lifecycle.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_approval_hook_session_id.py:81:            "hermes_cli.lifecycle.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_approval_plugin_hooks.py:64:        def fake_invoke_hook(hook_name, **kwargs):
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_approval_plugin_hooks.py:72:        with patch("hermes_cli.plugins.invoke_hook", side_effect=fake_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_approval_plugin_hooks.py:104:        def fake_invoke_hook(hook_name, **kwargs):
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_approval_plugin_hooks.py:111:        with patch("hermes_cli.plugins.invoke_hook", side_effect=fake_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_approval_plugin_hooks.py:137:        with patch("hermes_cli.plugins.invoke_hook", side_effect=boom):
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_approval_plugin_hooks.py:185:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_approval_plugin_hooks.py:225:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_approval_plugin_hooks.py:253:            patch("hermes_cli.plugins.invoke_hook"),
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_approval_plugin_hooks.py:270:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_approval_plugin_hooks.py:295:                "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_approval_plugin_hooks.py:331:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_request_tool_approval.py:76:            "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_terminal_output_transform_hook.py:36:    invoke_hook=_UNSET,
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_terminal_output_transform_hook.py:55:    if invoke_hook is not _UNSET:
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_terminal_output_transform_hook.py:56:        monkeypatch.setattr("hermes_cli.plugins.invoke_hook", invoke_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_terminal_output_transform_hook.py:80:        invoke_hook=lambda hook_name, **kwargs: [f" \x1b[31mOPENAI_API_KEY={secret}\x1b[0m "],
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_terminal_output_transform_hook.py:124:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", _hook_spy)
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_terminal_output_transform_hook.py:162:        invoke_hook=lambda hook_name, **kwargs: ["replaced output"],
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_tool_search.py:449:            "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:43:            patch("hermes_cli.plugins.invoke_hook") as mock_invoke_hook,
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:48:            c.args[0]: c.kwargs for c in mock_invoke_hook.call_args_list
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:67:            patch("hermes_cli.plugins.invoke_hook") as mock_invoke_hook,
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:72:            hook.args[0]: hook.kwargs for hook in mock_invoke_hook.call_args_list
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:90:            patch("hermes_cli.plugins.invoke_hook") as mock_invoke_hook,
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:95:        fired = {c.args[0] for c in mock_invoke_hook.call_args_list}
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:128:            "hermes_cli.plugins.invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:157:        monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_args, **_kwargs: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:161:            "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:189:        monkeypatch.setattr("hermes_cli.plugins.invoke_hook", lambda *_args, **_kwargs: [])
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:193:            "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:249:        def fake_invoke_hook(hook_name, **kwargs):
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:263:        monkeypatch.setattr("hermes_cli.plugins.invoke_hook", fake_invoke_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:279:        def fake_invoke_hook(hook_name, **kwargs):
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:284:        monkeypatch.setattr("hermes_cli.plugins.invoke_hook", fake_invoke_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:296:        def fake_invoke_hook(hook_name, **kwargs):
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:305:        monkeypatch.setattr("hermes_cli.plugins.invoke_hook", fake_invoke_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:320:        def fake_invoke_hook(hook_name, **kwargs):
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_model_tools.py:333:        monkeypatch.setattr("hermes_cli.plugins.invoke_hook", fake_invoke_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_plugin_skills.py:265:            "invoke_hook",
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_pre_transcription_hook.py:11:4. No hook registered → invoke_hook is never called and the backend
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_pre_transcription_hook.py:53:    """Install fake has_hook/invoke_hook returning *results* and capture kwargs."""
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_pre_transcription_hook.py:62:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", _invoke)
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_pre_transcription_hook.py:67:    """No hook registered: has_hook is False and invoke_hook must not fire."""
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_pre_transcription_hook.py:70:            "invoke_hook must not be called when has_hook() is False"
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_pre_transcription_hook.py:74:    monkeypatch.setattr("hermes_cli.plugins.invoke_hook", _boom)
+/var/home/rainbow/.hermes/hermes-agent/tests/tools/test_pre_transcription_hook.py:294:        _no_hooks(monkeypatch)  # invoke_hook raises if ever called
+/var/home/rainbow/.hermes/hermes-agent/tests/tui_gateway/test_finalize_session_persist.py:251:    @patch("hermes_cli.plugins.invoke_hook")
+/var/home/rainbow/.hermes/hermes-agent/tests/tui_gateway/test_finalize_session_persist.py:252:    def test_hook_fired_with_interrupted_true(self, mock_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/tui_gateway/test_finalize_session_persist.py:263:        mock_invoke_hook.assert_any_call(
+/var/home/rainbow/.hermes/hermes-agent/tests/tui_gateway/test_interrupt_agent_loop_stopped_hook.py:21:def _hook_calls(mock_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/tui_gateway/test_interrupt_agent_loop_stopped_hook.py:24:        for call in mock_invoke_hook.call_args_list
+/var/home/rainbow/.hermes/hermes-agent/tests/tui_gateway/test_interrupt_agent_loop_stopped_hook.py:29:@patch("hermes_cli.plugins.invoke_hook")
+/var/home/rainbow/.hermes/hermes-agent/tests/tui_gateway/test_interrupt_agent_loop_stopped_hook.py:30:def test_interrupt_running_turn_fires_agent_loop_stopped(mock_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/tui_gateway/test_interrupt_agent_loop_stopped_hook.py:37:    calls = _hook_calls(mock_invoke_hook)
+/var/home/rainbow/.hermes/hermes-agent/tests/tui_gateway/test_interrupt_agent_loop_stopped_hook.py:47:@patch("hermes_cli.plugins.invoke_hook")
+/var/home/rainbow/.hermes/hermes-agent/tests/tui_gateway/test_interrupt_agent_loop_stopped_hook.py:48:def test_interrupt_idle_session_does_not_fire_hook(mock_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/tui_gateway/test_interrupt_agent_loop_stopped_hook.py:56:    assert _hook_calls(mock_invoke_hook) == []
+/var/home/rainbow/.hermes/hermes-agent/tests/tui_gateway/test_interrupt_agent_loop_stopped_hook.py:59:@patch("hermes_cli.plugins.invoke_hook")
+/var/home/rainbow/.hermes/hermes-agent/tests/tui_gateway/test_interrupt_agent_loop_stopped_hook.py:60:def test_hook_failure_does_not_break_interrupt(mock_invoke_hook):
+/var/home/rainbow/.hermes/hermes-agent/tests/tui_gateway/test_interrupt_agent_loop_stopped_hook.py:62:    mock_invoke_hook.side_effect = RuntimeError("plugin exploded")
+/var/home/rainbow/.hermes/hermes-agent/tools/approval_context.py:61:        from hermes_cli.lifecycle import invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tools/approval_context.py:69:        invoke_hook(hook_name, **kwargs)
+/var/home/rainbow/.hermes/hermes-agent/tools/approval_context.py:71:        # invoke_hook() swallows per-callback errors; this is the dispatch layer itself failing.
+/var/home/rainbow/.hermes/hermes-agent/tools/skill_usage.py:442:        from hermes_cli.lifecycle import has_hook, invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tools/skill_usage.py:444:            invoke_hook("on_skill_lifecycle", action=action, skill_name=skill_name,
+/var/home/rainbow/.hermes/hermes-agent/tools/delegate_tool_results.py:349:        from hermes_cli.plugins import invoke_hook as invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tools/delegate_tool_results.py:351:        invoke_hook = None
+/var/home/rainbow/.hermes/hermes-agent/tools/delegate_tool_results.py:361:        if invoke_hook is None:
+/var/home/rainbow/.hermes/hermes-agent/tools/delegate_tool_results.py:365:            invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tools/delegate_tool.py:285:        from hermes_cli.lifecycle import invoke_hook as _invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tools/delegate_tool.py:286:        _invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tools/terminal_tool_result.py:140:        from hermes_cli.lifecycle import invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tools/terminal_tool_result.py:141:        results = invoke_hook("transform_terminal_output", command=command, output=output,
+/var/home/rainbow/.hermes/hermes-agent/tools/transcription_command.py:226:        from hermes_cli.plugins import has_hook, invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tools/transcription_command.py:229:        hook_results = invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tui_gateway/session_lifecycle.py:18:        from hermes_cli.lifecycle import finalize_session, invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tui_gateway/session_lifecycle.py:22:            invoke_hook(event_type, session_id=session_id, platform=_resolve_agent_platform(platform))
+/var/home/rainbow/.hermes/hermes-agent/tui_gateway/session_lifecycle.py:238:            from hermes_cli.lifecycle import invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tui_gateway/session_lifecycle.py:239:            invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/tui_gateway/session_lifecycle.py:413:            from hermes_cli.plugins import invoke_hook as _invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/tui_gateway/session_lifecycle.py:414:            _invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/website/docs/developer-guide/tools-runtime.md:141:[Plugin pre-hook] → invoke_hook("pre_tool_call", ...)
+/var/home/rainbow/.hermes/hermes-agent/website/docs/developer-guide/tools-runtime.md:152:[Plugin post-hook] → invoke_hook("post_tool_call", ...)
+/var/home/rainbow/.hermes/hermes-agent/website/docs/user-guide/features/hooks.md:1169:**Fires:** In `tools/delegate_tool.py`, after `ThreadPoolExecutor.as_completed()` drains all child futures. `invoke_hook("subagent_stop", ...)` is marshalled to the parent thread so authors don't see child-pool re-entrancy, and callbacks stay on that caller thread.
+/var/home/rainbow/.hermes/hermes-agent/website/docs/user-guide/features/hooks.md:1920:Both Python plugin hooks and shell hooks flow through the same `invoke_hook()` dispatcher. Python plugins are registered first (`discover_and_load()`), shell hooks second (`register_from_config()`), so Python `pre_tool_call` block decisions take precedence in tie cases. The first valid block wins — the aggregator returns as soon as any callback produces `{"action": "block", "message": str}` with a non-empty message.
+/var/home/rainbow/.hermes/hermes-agent/website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/user-guide/features/hooks.md:1374:Python 插件 hook 和 shell hook 都流经同一个 `invoke_hook()` 分发器。Python 插件先注册（`discover_and_load()`），shell hook 后注册（`register_from_config()`），因此在平局情况下 Python `pre_tool_call` 的 block 决定优先。第一个有效的 block 生效——聚合器在任何回调产生带非空 message 的 `{"action": "block", "message": str}` 时立即返回。
+/var/home/rainbow/.hermes/hermes-agent/website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/developer-guide/tools-runtime.md:141:[插件 pre-hook] → invoke_hook("pre_tool_call", ...)
+/var/home/rainbow/.hermes/hermes-agent/website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/developer-guide/tools-runtime.md:152:[插件 post-hook] → invoke_hook("post_tool_call", ...)
+/var/home/rainbow/.hermes/hermes-agent/.pytest_cache/v/cache/nodeids:20997:  "tests/hermes_cli/test_lifecycle.py::test_invoke_hook_notifies_builtin_observers_before_plugins",
+/var/home/rainbow/.hermes/hermes-agent/.pytest_cache/v/cache/nodeids:22989:  "tests/hermes_cli/test_plugins.py::TestDeliveryParity::test_invoke_hook_tolerates_mock_managers",
+/var/home/rainbow/.hermes/hermes-agent/.pytest_cache/v/cache/nodeids:22991:  "tests/hermes_cli/test_plugins.py::TestDeliveryParity::test_module_invoke_hook_lazily_discovers",
+/var/home/rainbow/.hermes/hermes-agent/model_tools.py:676:        from hermes_cli.lifecycle import has_hook, invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/model_tools.py:681:        invoke_hook(
+/var/home/rainbow/.hermes/hermes-agent/model_tools.py:758:    # pre_tool_call fires exactly once per execution: one invoke_hook pass yields
+/var/home/rainbow/.hermes/hermes-agent/model_tools.py:842:        from hermes_cli.lifecycle import has_hook, invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/model_tools.py:845:            hook_results = invoke_hook("transform_tool_result", tool_name=function_name, args=function_args,
+/var/home/rainbow/.hermes/hermes-agent/cli.py:869:        from hermes_cli.lifecycle import invoke_hook as _invoke_hook
+/var/home/rainbow/.hermes/hermes-agent/cli.py:870:        _invoke_hook(

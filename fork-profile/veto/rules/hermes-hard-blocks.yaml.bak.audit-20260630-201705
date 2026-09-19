@@ -1,0 +1,82 @@
+version: "1.0"
+name: "hermes-hard-blocks"
+description: >
+  Hard block rules for Hermes tool calls. Covers actual Hermes tool names:
+  terminal, mcp__terminal, write_file, mcp__write_file, patch, mcp__patch.
+  These are critical-severity patterns that should never execute unattended.
+
+rules:
+  - id: block-rm-rf
+    name: Block recursive force-delete
+    description: Block rm -rf style commands from terminal tools.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '(^|[\s;&|`$\(])rm\s+(-[^\s]*f[^\s]*r[^\s]*|-[^\s]*r[^\s]*f[^\s]*|-rf|-fr)\s'
+
+  - id: block-disk-format
+    name: Block disk formatting commands
+    description: Block mkfs, dd to device, wipefs, shred on devices.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\b(mkfs\.|dd\s+if=/dev|wipefs\s|shred\s+/dev)\b'
+
+  - id: block-ssh-key-write
+    name: Block writes to .ssh directory
+    description: Block any write or patch targeting .ssh paths.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - write_file
+      - mcp__write_file
+      - patch
+      - mcp__patch
+    condition_groups:
+      - - field: arguments.path
+          operator: contains
+          value: '.ssh/'
+      - - field: arguments.path
+          operator: ends_with
+          value: '.ssh'
+
+  - id: block-hermes-env-write
+    name: Block writes to Hermes .env secrets file
+    description: Block direct writes to ~/.hermes/.env.
+    enabled: true
+    severity: critical
+    action: block
+    tools:
+      - write_file
+      - mcp__write_file
+    condition_groups:
+      - - field: arguments.path
+          operator: matches
+          value: '\.hermes/\.env$'
+
+  - id: block-history-wipe
+    name: Block shell history deletion
+    description: Block commands that wipe bash/zsh history.
+    enabled: true
+    severity: high
+    action: block
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '(history\s+-[cw]|>\s*~/?\.(bash|zsh|sh)_history|rm\s+.*_history)'

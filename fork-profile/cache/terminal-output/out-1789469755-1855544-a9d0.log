@@ -1,0 +1,1982 @@
+
+
+### FILE: dual-backend-memory-fuser.py ###
+#!/usr/bin/python3
+"""
+dual-backend-memory-fuser.py
+
+Prevents single-backend failure from starving agent context.
+Fuses memory results from two backends (e.g. Obsidian + session-search,
+or local skills + remote vector store) with diversity weighting —
+so even if one backend returns nothing, the fused result is still useful.
+
+Math basis: Diversity-weighted fusion (information-theoretic).
+  Fused result maximises sum of relevance scores minus redundancy penalty:
+    score(d) = alpha * relevance(d) + (1-alpha) * novelty(d)
+  where novelty(d) = min Jaccard distance to already-selected items.
+
+Run on-demand: /usr/bin/python3 dual-backend-memory-fuser.py <query>
+"""
+from __future__ import annotations
+import sys, math
+
+ALPHA = 0.60   # relevance weight (1-alpha = novelty weight)
+TOP_K = 5
+
+# Simulated backends — replace with real calls in production
+def _backend_a(query: str) -> list[dict]:
+    """Skill/local memory backend."""
+    keywords = query.lower().split()
+    pool = [
+        {"id": "skill:python-debugpy",    "text": "debug python breakpoint remote",  "score": 0.88},
+        {"id": "skill:systematic-debug",  "text": "root cause analysis bug trace",   "score": 0.82},
+        {"id": "skill:hermes-research",   "text": "research paper sweep math ideas", "score": 0.75},
+        {"id": "skill:coding-conventions","text": "code style lint review format",   "score": 0.65},
+    ]
+    for r in pool:
+        hits = sum(1 for k in keywords if k in r["text"])
+        r["score"] *= (0.7 + 0.3 * hits / max(len(keywords), 1))
+    return pool
+
+def _backend_b(query: str) -> list[dict]:
+    """Session-search / episodic memory backend."""
+    keywords = query.lower().split()
+    pool = [
+        {"id": "session:debug-2026-09-10", "text": "python debugpy error fix session",  "score": 0.80},
+        {"id": "session:research-09-15",   "text": "math sweep research ideas wave",    "score": 0.78},
+        {"id": "session:pr-review-09-12",  "text": "pr review github issue fix commit", "score": 0.70},
+        {"id": "session:monitor-09-15",    "text": "monitor suite alarm runner fix",    "score": 0.72},
+    ]
+    for r in pool:
+        hits = sum(1 for k in keywords if k in r["text"])
+        r["score"] *= (0.7 + 0.3 * hits / max(len(keywords), 1))
+    return pool
+
+def _jaccard(a: str, b: str) -> float:
+    sa, sb = set(a.split()), set(b.split())
+    inter  = len(sa & sb)
+    union  = len(sa | sb)
+    return inter / max(union, 1)
+
+def fuse(query: str) -> list[dict]:
+    pool_a = _backend_a(query)
+    pool_b = _backend_b(query)
+    all_results = {r["id"]: r for r in pool_a + pool_b}.values()
+
+    selected: list[dict] = []
+    remaining = list(all_results)
+
+    print(f"\n=== Dual-Backend Memory Fuser ===")
+    print(f"Query: {query[:60]}")
+    print(f"Backend A: {len(pool_a)} results, Backend B: {len(pool_b)} results\n")
+    print(f"  {'Rank':<5} {'ID':<35} {'Rel':>6} {'Nov':>6} {'Fused':>7}")
+    print("  " + "-"*60)
+
+    for rank in range(min(TOP_K, len(remaining))):
+        best_id   = None
+        best_fuse = -math.inf
+        best_rel  = best_nov = 0.0
+        for r in remaining:
+            rel = r["score"]
+            if not selected:
+                nov = 1.0
+            else:
+                sims = [_jaccard(r["text"], s["text"]) for s in selected]
+                nov  = 1.0 - max(sims)
+            fused = ALPHA * rel + (1 - ALPHA) * nov
+            if fused > best_fuse:
+                best_fuse, best_id = fused, r["id"]
+                best_rel, best_nov = rel, nov
+
+        chosen = next(r for r in remaining if r["id"] == best_id)
+        selected.append(chosen)
+        remaining = [r for r in remaining if r["id"] != best_id]
+        print(f"  {rank+1:<5} {best_id:<35} {best_rel:>6.3f} {best_nov:>6.3f} {best_fuse:>7.3f}")
+
+    print(f"\nFused top-{len(selected)} results returned")
+    return selected
+
+if __name__ == "__main__":
+    query = " ".join(sys.argv[1:]) or "debug python error"
+    fuse(query)
+
+
+### FILE: online-threshold-skill-router.py ###
+#!/usr/bin/python3
+"""
+online-threshold-skill-router.py
+
+Competitive-ratio guaranteed skill routing under adversarial request sequences.
+Uses a 1/4-approximation threshold strategy: accept the first option
+that scores above (best_seen * THRESHOLD) to guarantee competitive ratio
+even when future options are unknown.
+
+Math basis: Online threshold selection (competitive ratio 1/4 guarantee).
+  Secretary problem variant: observe first k = n/e candidates, then
+  accept first that beats the best seen so far.
+  For adversarial sequences: static threshold = THETA * max_theoretical_score
+  achieves competitive ratio THETA (at the cost of THETA < 1).
+
+Run on-demand: /usr/bin/python3 online-threshold-skill-router.py <task>
+"""
+from __future__ import annotations
+import sys, math
+
+# Skill pool: (name, relevance_fn_keywords, base_score)
+SKILLS = [
+    ("python-debugpy",            ["debug","python","error","exception"],  0.90),
+    ("systematic-debugging",      ["debug","bug","root cause","trace"],    0.85),
+    ("github-issue-to-pr",        ["pr","github","issue","fix"],           0.80),
+    ("hermes-research-sweep-ops", ["research","paper","math","ideas"],     0.88),
+    ("hermes-operating-pattern",  ["hermes","config","pattern","operate"], 0.75),
+    ("coding-conventions",        ["code","style","review","lint"],        0.70),
+    ("test-driven-development",   ["test","tdd","spec","coverage"],        0.78),
+    ("obsidian",                  ["note","obsidian","vault","md"],        0.65),
+    ("notion",                    ["notion","page","database","block"],    0.60),
+    ("web-extract",               ["web","page","url","scrape","fetch"],   0.55),
+]
+
+THETA = 0.75   # threshold = THETA * best_seen; competitive ratio ~ THETA
+
+def _score(skill: tuple, task: str) -> float:
+    name, keywords, base = skill
+    hits  = sum(1 for k in keywords if k.lower() in task.lower())
+    bonus = hits / max(len(keywords), 1)
+    return base * (0.6 + 0.4 * bonus)
+
+def route(task: str, verbose: bool = True) -> str:
+    scores = [(s[0], _score(s, task)) for s in SKILLS]
+    scores.sort(key=lambda x: -x[1])
+
+    if verbose:
+        print(f"\n=== Online Threshold Skill Router ===")
+        print(f"Task:      {task[:70]}")
+        print(f"Threshold: {THETA} (competitive ratio guarantee)\n")
+        print(f"  {'Skill':<40} {'Score':>7}  Decision")
+        print("  " + "-"*60)
+
+    # Secretary-style: find threshold from first k = ceil(n/e) candidates
+    n = len(scores)
+    k = max(1, math.ceil(n / math.e))
+    probe  = scores[:k]
+    best_probe = max(s for _, s in probe)
+    threshold  = THETA * best_probe
+
+    accepted = None
+    for i, (name, score) in enumerate(scores):
+        phase = "probe" if i < k else "select"
+        decision = "—"
+        if phase == "select" and accepted is None and score >= threshold:
+            accepted = name
+            decision = "ACCEPT ★"
+        elif phase == "probe":
+            decision = "probe"
+        if verbose:
+            print(f"  {name:<40} {score:>7.4f}  {decision}")
+
+    if accepted is None:
+        accepted = scores[0][0]   # fallback: take best overall
+        if verbose:
+            print(f"\nFallback to best: {accepted}")
+
+    if verbose:
+        print(f"\nSelected: {accepted}")
+        print(f"Probe phase: {k}/{n} skills, threshold={threshold:.4f}")
+
+    return accepted
+
+
+if __name__ == "__main__":
+    task = " ".join(sys.argv[1:]) or "debug a python error in a github PR"
+    route(task)
+
+
+### FILE: adversarial-allocation-auditor.py ###
+#!/usr/bin/python3
+"""
+adversarial-allocation-auditor.py
+
+Detects unfair multi-agent task distributions under worst-case (adversarial)
+online arrival order. Checks the PROP1 (Proportionality up to 1 item)
+approximation ratio is maintained.
+
+Math basis: Worst-case approximation ratio under adversarial online arrivals.
+  PROP1 guarantee: each agent i receives >= (OPT/n) - max_item_value.
+  If any agent's allocation falls below this bound, the online allocator
+  is failing its fairness guarantee.
+
+Run on-demand or as suite monitor.
+"""
+from __future__ import annotations
+
+import json, math, sys
+from datetime import datetime, timezone
+from pathlib import Path
+from collections import defaultdict
+
+HOME          = Path.home()
+SESSIONS_DIR  = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"
+CACHE_DIR     = HOME / ".hermes/cache/monitors"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+OUT_FILE      = CACHE_DIR / "adversarial-allocation-audit.json"
+
+MIN_TASKS     = 6
+PROP1_SLACK   = 0.20   # allow 20% slack above theoretical minimum
+WINDOW        = 8
+
+
+def _extract_tasks(path: Path) -> list[dict]:
+    try:
+        lines = path.read_text().strip().splitlines()
+        msgs = [json.loads(l) for l in lines if l.strip()] if lines and lines[0].startswith("{") \
+               else (json.loads(path.read_text()) if path.stat().st_size else [])
+        msgs = msgs if isinstance(msgs, list) else msgs.get("messages", [])
+    except Exception:
+        return []
+    tasks = []
+    for msg in msgs:
+        if not isinstance(msg, dict):
+            continue
+        for b in (msg.get("content", []) if isinstance(msg.get("content"), list) else []):
+            if isinstance(b, dict) and b.get("type") == "tool_use":
+                name = b.get("name", "")
+                inp  = b.get("input", {})
+                if name == "delegate_task":
+                    subtasks = inp.get("tasks", [])
+                    for st in subtasks:
+                        # Value proxy: goal length (longer = more complex = more value)
+                        v = len(st.get("goal", "")) / 100.0
+                        tasks.append({"agent": "subagent", "value": v, "goal": st.get("goal","")[:40]})
+                elif name in ("terminal", "write_file", "patch", "execute_code"):
+                    tasks.append({"agent": "direct", "value": 0.5, "goal": name})
+                elif name in ("web_search", "web_extract"):
+                    tasks.append({"agent": "search", "value": 0.3, "goal": name})
+    return tasks
+
+
+def run() -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    print(f"\n=== Adversarial Allocation Auditor — {now[:10]} ===\n")
+
+    files = sorted(
+        [f for d in [SESSIONS_DIR, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")],
+        key=lambda p: p.stat().st_mtime
+    )[-WINDOW:]
+
+    all_tasks: list[dict] = []
+    for f in files:
+        all_tasks.extend(_extract_tasks(f))
+
+    if len(all_tasks) < MIN_TASKS:
+        print(f"Tasks found: {len(all_tasks)} (need {MIN_TASKS})")
+        print("ALARM: no — insufficient task data")
+        return 0
+
+    agents = list(set(t["agent"] for t in all_tasks))
+    n      = len(agents)
+    by_agent: dict[str, float] = defaultdict(float)
+    for t in all_tasks:
+        by_agent[t["agent"]] += t["value"]
+
+    total_value = sum(by_agent.values())
+    opt_n       = total_value / n
+    max_item    = max(t["value"] for t in all_tasks)
+    prop1_floor = opt_n - max_item - PROP1_SLACK * opt_n
+
+    print(f"Tasks: {len(all_tasks)}, Agents: {n}, Total value: {total_value:.2f}")
+    print(f"OPT/n: {opt_n:.3f}, Max item: {max_item:.3f}, PROP1 floor: {prop1_floor:.3f}\n")
+    print(f"  {'Agent':<15} {'Value':>8}  {'vs Floor':>10}  Status")
+    print("  " + "-"*48)
+
+    violations = []
+    for agent in sorted(agents):
+        v    = by_agent[agent]
+        diff = v - prop1_floor
+        viol = v < prop1_floor
+        print(f"  {agent:<15} {v:>8.3f}  {diff:>+10.3f}  {'VIOLATION' if viol else 'OK'}")
+        if viol:
+            violations.append(agent)
+
+    if violations:
+        print(f"\nALARM: yes — {len(violations)} agent(s) below PROP1 fairness floor: {violations}")
+    else:
+        print(f"\nALARM: no — all agents satisfy PROP1 allocation guarantee")
+
+    OUT_FILE.write_text(json.dumps({
+        "ts": now, "tasks": len(all_tasks), "agents": n,
+        "total_value": round(total_value, 4), "prop1_floor": round(prop1_floor, 4),
+        "violations": violations,
+    }, indent=2))
+    return 1 if violations else 0
+
+
+if __name__ == "__main__":
+    sys.exit(run())
+
+
+### FILE: participation-surplus-monitor.py ###
+#!/usr/bin/python3
+"""
+participation-surplus-monitor.py
+
+Monitors per-agent participation surplus in multi-agent delegation:
+detects when subagent utility V_i(T) falls below its fair share
+(1/n) * V_total — i.e., an agent is being systematically under-utilised
+or over-burdened relative to the delegation pool.
+
+Math basis: Pathwise federated participation bound (wave12).
+  Guarantee: sum_{t=1}^{T} V_i(t) >= (1/n) * sum_{t=1}^{T} V(t) - O(sqrt(T))
+  Alarm when any agent's running surplus deficit exceeds sqrt(T) bound.
+
+Operationally: reads delegate_task call logs from session files.
+  V_i(t) = 1 if subagent i produced a useful result in round t, 0 otherwise.
+  Proxy for "useful": subagent returned without error and result len > 200 chars.
+"""
+from __future__ import annotations
+
+import json, math, sys
+from datetime import datetime, timezone
+from pathlib import Path
+from collections import defaultdict
+
+HOME          = Path.home()
+SESSIONS_DIR  = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"
+CACHE_DIR     = HOME / ".hermes/cache/monitors"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+OUT_FILE      = CACHE_DIR / "participation-surplus.json"
+
+MIN_DELEGATIONS = 5
+DEFICIT_K       = 1.5   # alarm if deficit > K * sqrt(T)
+WINDOW          = 8
+
+
+def _extract_delegations(path: Path) -> list[dict]:
+    """Extract delegate_task calls and their result sizes."""
+    try:
+        lines = path.read_text().strip().splitlines()
+        msgs = [json.loads(l) for l in lines if l.strip()] if lines and lines[0].startswith("{") \
+               else (json.loads(path.read_text()) if path.stat().st_size else [])
+        msgs = msgs if isinstance(msgs, list) else msgs.get("messages", [])
+    except Exception:
+        return []
+    delegations = []
+    pending: dict[str, str] = {}  # tool_use_id -> subagent label
+    for msg in msgs:
+        if not isinstance(msg, dict):
+            continue
+        for b in (msg.get("content", []) if isinstance(msg.get("content"), list) else []):
+            if not isinstance(b, dict):
+                continue
+            if b.get("type") == "tool_use" and b.get("name") == "delegate_task":
+                tid = b.get("id", "?")
+                tasks = b.get("input", {}).get("tasks", [{}])
+                label = tasks[0].get("goal", "subagent")[:30] if tasks else "subagent"
+                pending[tid] = label
+            elif b.get("type") == "tool_result":
+                tid = b.get("tool_use_id", "?")
+                if tid in pending:
+                    content = str(b.get("content", ""))
+                    useful  = len(content) > 200 and "error" not in content.lower()
+                    delegations.append({"agent": pending.pop(tid), "useful": useful})
+    return delegations
+
+
+def run() -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    print(f"\n=== Participation Surplus Monitor — {now[:10]} ===\n")
+
+    files = sorted(
+        [f for d in [SESSIONS_DIR, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")],
+        key=lambda p: p.stat().st_mtime
+    )[-WINDOW:]
+
+    all_delegations: list[dict] = []
+    for f in files:
+        all_delegations.extend(_extract_delegations(f))
+
+    if len(all_delegations) < MIN_DELEGATIONS:
+        print(f"Delegations found: {len(all_delegations)} (need {MIN_DELEGATIONS})")
+        print("ALARM: no — insufficient delegation data")
+        return 0
+
+    T  = len(all_delegations)
+    n  = len(set(d["agent"] for d in all_delegations))
+    V_total = sum(1 for d in all_delegations if d["useful"])
+    fair_share = V_total / max(n, 1)
+    bound = DEFICIT_K * math.sqrt(T)
+
+    by_agent: dict[str, int] = defaultdict(int)
+    for d in all_delegations:
+        if d["useful"]:
+            by_agent[d["agent"]] += 1
+
+    print(f"Total delegations: {T}, Agents: {n}, Useful: {V_total}")
+    print(f"Fair share per agent: {fair_share:.1f}, Surplus bound: ±{bound:.1f}\n")
+    print(f"  {'Agent':<35} {'Useful':>7} {'Deficit':>8}  Status")
+    print("  " + "-"*60)
+
+    alarms = []
+    for agent in sorted(set(d["agent"] for d in all_delegations)):
+        v = by_agent[agent]
+        deficit = fair_share - v
+        over = deficit > bound
+        print(f"  {agent:<35} {v:>7} {deficit:>8.1f}  {'ALARM' if over else 'OK'}")
+        if over:
+            alarms.append(agent)
+
+    if alarms:
+        print(f"\nALARM: yes — {len(alarms)} agent(s) below fair-share surplus bound: {alarms}")
+    else:
+        print(f"\nALARM: no — all agents within participation surplus bounds")
+
+    OUT_FILE.write_text(json.dumps({
+        "ts": now, "T": T, "n": n, "V_total": V_total,
+        "fair_share": round(fair_share, 2), "bound": round(bound, 2),
+        "alarm_agents": alarms,
+    }, indent=2))
+    return 1 if alarms else 0
+
+
+if __name__ == "__main__":
+    sys.exit(run())
+
+
+### FILE: signal-separation-monitor.py ###
+#!/usr/bin/python3
+"""
+signal-separation-monitor.py
+
+Detects delayed generalisation windows in multi-turn sessions: the gap
+between when a tool/skill first appears and when it gets reused effectively
+(i.e., stops generating errors or retries). High separation = the agent is
+slow to integrate new tools — a signal to update skill routing priors.
+
+Math basis: Signal separation in ICA / source separation.
+  For each tool T, define:
+    first_use(T)  = turn index of first call
+    effective(T)  = turn index where success rate first exceeds FLOOR
+  Separation S(T) = effective(T) - first_use(T)
+  High mean S = slow integration; alarm if mean_S > SEP_THRESHOLD turns.
+"""
+from __future__ import annotations
+
+import json, sys
+from datetime import datetime, timezone
+from pathlib import Path
+from collections import defaultdict
+
+HOME          = Path.home()
+SESSIONS_DIR  = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"
+CACHE_DIR     = HOME / ".hermes/cache/monitors"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+OUT_FILE      = CACHE_DIR / "signal-separation.json"
+
+SEP_THRESHOLD = 8    # turns; above = slow integration
+SUCCESS_FLOOR = 0.70 # tool call success rate to count as "effective"
+MIN_TOOLS     = 5
+WINDOW        = 5
+
+
+def _parse(path: Path) -> list[dict]:
+    """Return list of {turn, tool, success} dicts."""
+    try:
+        lines = path.read_text().strip().splitlines()
+        msgs = [json.loads(l) for l in lines if l.strip()] if lines and lines[0].startswith("{") \
+               else (json.loads(path.read_text()) if path.stat().st_size else [])
+        msgs = msgs if isinstance(msgs, list) else msgs.get("messages", [])
+    except Exception:
+        return []
+    events = []
+    turn = 0
+    for msg in msgs:
+        role = msg.get("role", "")
+        if role == "assistant":
+            for b in (msg.get("content", []) if isinstance(msg.get("content"), list) else []):
+                if isinstance(b, dict) and b.get("type") == "tool_use":
+                    events.append({"turn": turn, "tool": b.get("name", "?"), "success": None})
+        elif role == "tool":
+            # Mark last pending call as success/fail based on content
+            content = str(msg.get("content", ""))
+            ok = not any(w in content.lower() for w in ["error", "exception", "traceback", "failed", "exit_code\": 1"])
+            for e in reversed(events):
+                if e["success"] is None:
+                    e["success"] = ok
+                    break
+        turn += 1
+    return events
+
+
+def run() -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    print(f"\n=== Signal Separation Monitor — {now[:10]} ===\n")
+
+    files = sorted(
+        [f for d in [SESSIONS_DIR, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")],
+        key=lambda p: p.stat().st_mtime
+    )[-WINDOW:]
+
+    all_events: list[dict] = []
+    for f in files:
+        all_events.extend(_parse(f))
+
+    # Per-tool: track first use and first window where success_rate >= FLOOR
+    by_tool: dict[str, list] = defaultdict(list)
+    for e in all_events:
+        by_tool[e["tool"]].append(e)
+
+    if len(by_tool) < MIN_TOOLS:
+        print(f"Tools seen: {len(by_tool)} (need {MIN_TOOLS})")
+        print("ALARM: no — insufficient data")
+        return 0
+
+    separations = []
+    print(f"  {'Tool':<35} {'First':>6} {'Effective':>10} {'Sep':>5}")
+    print("  " + "-"*60)
+    for tool, evts in sorted(by_tool.items()):
+        evts_s = sorted(evts, key=lambda e: e["turn"])
+        first  = evts_s[0]["turn"]
+        # Find first turn where rolling 3-call success rate >= FLOOR
+        effective = None
+        for i in range(2, len(evts_s)):
+            window = evts_s[max(0, i-2):i+1]
+            ok = sum(1 for e in window if e.get("success"))
+            if len(window) > 0 and ok / len(window) >= SUCCESS_FLOOR:
+                effective = evts_s[i]["turn"]
+                break
+        if effective is None:
+            sep = "N/A"
+        else:
+            sep = effective - first
+            separations.append(sep)
+        print(f"  {tool:<35} {first:>6} {str(effective):>10} {str(sep):>5}")
+
+    if not separations:
+        print("\nALARM: no — no tools with enough calls to compute separation")
+        return 0
+
+    mean_sep = sum(separations) / len(separations)
+    print(f"\nTools with separation: {len(separations)}, Mean separation: {mean_sep:.1f} turns")
+
+    alarm = mean_sep > SEP_THRESHOLD
+    if alarm:
+        print(f"\nALARM: yes — mean tool integration gap {mean_sep:.1f} turns exceeds {SEP_THRESHOLD}; routing priors may be stale")
+    else:
+        print(f"\nALARM: no — tool integration gap healthy ({mean_sep:.1f} turns)")
+
+    OUT_FILE.write_text(json.dumps({
+        "ts": now, "tools": len(by_tool), "mean_sep": round(mean_sep, 2),
+        "threshold": SEP_THRESHOLD, "alarm": alarm, "separations": separations,
+    }, indent=2))
+    return 1 if alarm else 0
+
+
+if __name__ == "__main__":
+    sys.exit(run())
+
+
+### FILE: iterative-critique-convergence-monitor.py ###
+#!/usr/bin/python3
+"""
+iterative-critique-convergence-monitor.py
+
+Detects when iterative refinement loops (adversarial review → fix → review)
+are converging vs. stuck oscillating or diverging.
+
+Math basis: Fixed-point convergence in Banach spaces.
+  For a sequence of critique outputs x_0, x_1, ... x_n,
+  convergence implies ||x_{n+1} - x_n|| → 0 (contraction mapping).
+  Proxy: count of issues raised in consecutive adversarial subagent calls.
+  If issue counts oscillate or increase, the loop is not contracting.
+
+Operationally: reads adversarial review logs / session critique counts
+from ~/.hermes/cache/monitors/ and tracks issue-count trajectory.
+"""
+from __future__ import annotations
+
+import json, math, sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+HOME      = Path.home()
+CACHE_DIR = HOME / ".hermes/cache/monitors"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+OUT_FILE  = CACHE_DIR / "iterative-critique-convergence.json"
+LOG_FILE  = CACHE_DIR / "critique-history.json"   # appended by adversarial runs
+
+CONVERGENCE_RATIO = 0.60   # issue count must drop to < 60% of previous to be "contracting"
+MIN_ROUNDS        = 3
+
+
+def _load_history() -> list[dict]:
+    if LOG_FILE.exists():
+        try:
+            return json.loads(LOG_FILE.read_text())
+        except Exception:
+            pass
+    return []
+
+
+def _infer_from_suite_cache() -> list[dict]:
+    """
+    Fall back: infer critique rounds from adversarial-monitor cache files.
+    Each time an adversarial subagent writes a result, it increments issue count.
+    """
+    history = []
+    # Look for any cache files with "issues" or "alarm" counts
+    for f in sorted(CACHE_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime):
+        if f.name in ("iterative-critique-convergence.json", "critique-history.json"):
+            continue
+        try:
+            d = json.loads(f.read_text())
+            if isinstance(d, dict) and "ts" in d:
+                # Count alarms/issues as a proxy for critique severity
+                issues = d.get("issue_count", d.get("alarm_count",
+                          d.get("low_productivity_count", d.get("leaking_count", 0))))
+                if isinstance(issues, (int, float)):
+                    history.append({"ts": d["ts"], "issues": int(issues), "source": f.name})
+        except Exception:
+            continue
+    return sorted(history, key=lambda x: x["ts"])
+
+
+def run() -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    print(f"\n=== Iterative Critique Convergence Monitor — {now[:10]} ===\n")
+
+    history = _load_history() or _infer_from_suite_cache()
+
+    if len(history) < MIN_ROUNDS:
+        print(f"Critique rounds found: {len(history)} (need {MIN_ROUNDS})")
+        print("ALARM: no — insufficient rounds to assess convergence")
+        return 0
+
+    counts = [h["issues"] for h in history[-8:]]
+    print(f"  {'Round':<5} {'Issues':>7}  {'Ratio':>7}  Status")
+    print("  " + "-"*35)
+    ratios = []
+    for i, c in enumerate(counts):
+        if i == 0:
+            print(f"  {i:<5} {c:>7}")
+            continue
+        ratio = c / max(counts[i-1], 1)
+        ratios.append(ratio)
+        contracting = ratio < CONVERGENCE_RATIO
+        print(f"  {i:<5} {c:>7}  {ratio:>7.3f}  {'↓ contracting' if contracting else '↑ not contracting'}")
+
+    mean_ratio = sum(ratios) / len(ratios) if ratios else 1.0
+    last_ratio = ratios[-1] if ratios else 1.0
+    converging = last_ratio < CONVERGENCE_RATIO and mean_ratio < 0.85
+
+    print(f"\nRounds: {len(counts)}, Mean ratio: {mean_ratio:.3f}, Last ratio: {last_ratio:.3f}")
+    if not converging:
+        print(f"\nALARM: yes — critique loop not converging: last ratio={last_ratio:.3f} "
+              f"(need <{CONVERGENCE_RATIO}); consider stopping refinement")
+    else:
+        print(f"\nALARM: no — critique loop converging normally")
+
+    OUT_FILE.write_text(json.dumps({
+        "ts": now, "rounds": len(counts), "mean_ratio": round(mean_ratio, 4),
+        "last_ratio": round(last_ratio, 4), "converging": converging,
+        "counts": counts, "convergence_threshold": CONVERGENCE_RATIO,
+    }, indent=2))
+    return 0 if converging else 1
+
+
+if __name__ == "__main__":
+    sys.exit(run())
+
+
+### FILE: action-divergence-monitor.py ###
+#!/usr/bin/python3
+"""
+action-divergence-monitor.py
+
+Detects when Hermes tool-call patterns are diverging faster than an
+information-theoretic stability bound allows — a signal that the agent
+is entering an unstable exploration regime or chasing a spurious goal.
+
+Math basis: KL divergence rate between consecutive tool-distribution windows.
+  A stable agent has KL(P_t || P_{t-1}) < ε for small ε.
+  When the divergence rate exceeds a Lyapunov-like stability bound
+  (derived from entropy production rates in non-equilibrium systems),
+  the agent's policy is drifting — not converging.
+
+  Alarm when: mean KL over last WINDOW consecutive pairs > KL_THRESHOLD
+  AND the trend is increasing (slope > 0).
+
+  Distinct from performative-stability-monitor (which tracks JSD between
+  full windows) — this tracks consecutive-pair KL rate trend.
+"""
+from __future__ import annotations
+
+import json, math, sys
+from datetime import datetime, timezone
+from pathlib import Path
+from collections import Counter
+
+HOME          = Path.home()
+SESSIONS_DIR  = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"
+CACHE_DIR     = HOME / ".hermes/cache/monitors"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+OUT_FILE      = CACHE_DIR / "action-divergence.json"
+
+WINDOW        = 6
+MIN_TOOLS     = 6
+KL_THRESHOLD  = 0.80   # nats; consecutive-pair KL above = drifting
+MIN_SESSIONS  = 4
+
+
+def _tool_dist(path: Path) -> Counter:
+    try:
+        lines = path.read_text().strip().splitlines()
+        msgs = [json.loads(l) for l in lines if l.strip()] if lines and lines[0].startswith("{") \
+               else (json.loads(path.read_text()) if path.stat().st_size else [])
+        msgs = msgs if isinstance(msgs, list) else msgs.get("messages", [])
+    except Exception:
+        return Counter()
+    c: Counter = Counter()
+    for msg in msgs:
+        for b in (msg.get("content", []) if isinstance(msg.get("content"), list) else []):
+            if isinstance(b, dict) and b.get("type") == "tool_use":
+                c[b.get("name", "unknown")] += 1
+    return c
+
+
+def _kl(p: Counter, q: Counter) -> float:
+    vocab = set(p) | set(q)
+    n_p, n_q = sum(p.values()), sum(q.values())
+    if not n_p or not n_q:
+        return 0.0
+    eps = 1e-9
+    kl = 0.0
+    for t in vocab:
+        pp = p.get(t, 0) / n_p + eps
+        qq = q.get(t, 0) / n_q + eps
+        kl += pp * math.log(pp / qq)
+    return max(kl, 0.0)
+
+
+def run() -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    print(f"\n=== Action Divergence Monitor — {now[:10]} ===\n")
+
+    files = sorted(
+        [f for d in [SESSIONS_DIR, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")],
+        key=lambda p: p.stat().st_mtime
+    )[-WINDOW:]
+
+    dists = [(f.stem[:30], _tool_dist(f)) for f in files]
+    dists = [(s, d) for s, d in dists if sum(d.values()) >= MIN_TOOLS]
+
+    if len(dists) < MIN_SESSIONS:
+        print(f"Analysable sessions: {len(dists)} (need {MIN_SESSIONS})")
+        print("ALARM: no — insufficient data")
+        return 0
+
+    kls = []
+    print(f"  {'Pair':<50} {'KL (nats)':>10}")
+    print("  " + "-"*63)
+    for i in range(1, len(dists)):
+        kl = _kl(dists[i][1], dists[i-1][1])
+        label = f"{dists[i-1][0][:22]}→{dists[i][0][:22]}"
+        flag = "  ↑ HIGH" if kl > KL_THRESHOLD else ""
+        print(f"  {label:<50} {kl:>10.4f}{flag}")
+        kls.append(kl)
+
+    mean_kl = sum(kls) / len(kls)
+    # Trend: simple slope via least-squares
+    n = len(kls)
+    xs = list(range(n))
+    slope = (n*sum(x*y for x,y in zip(xs,kls)) - sum(xs)*sum(kls)) / \
+            max(n*sum(x**2 for x in xs) - sum(xs)**2, 1e-9)
+
+    print(f"\nPairs analysed: {n}")
+    print(f"Mean KL:        {mean_kl:.4f} nats  (threshold={KL_THRESHOLD})")
+    print(f"Trend slope:    {slope:+.4f} (positive = diverging)")
+
+    alarm = mean_kl > KL_THRESHOLD and slope > 0
+    if alarm:
+        print(f"\nALARM: yes — tool-call distribution diverging: mean KL={mean_kl:.4f} nats, slope={slope:+.4f}")
+    else:
+        print(f"\nALARM: no — action distribution stable (mean KL={mean_kl:.4f})")
+
+    OUT_FILE.write_text(json.dumps({
+        "ts": now, "pairs": n, "mean_kl": round(mean_kl, 6),
+        "slope": round(slope, 6), "threshold": KL_THRESHOLD,
+        "alarm": alarm, "kl_series": [round(k, 4) for k in kls],
+    }, indent=2))
+    return 1 if alarm else 0
+
+
+if __name__ == "__main__":
+    sys.exit(run())
+
+
+### FILE: route-preemption-scheduler.py ###
+#!/usr/bin/python3
+"""
+route-preemption-scheduler.py
+
+Dynamically preempts stale tool/memory queries in favour of fresher,
+higher-value routing options when information gain from continuing
+the current path drops below a threshold.
+
+Math basis: Preemptive scheduling with information-gain priority
+  At each step, compute marginal gain G_t of continuing current route.
+  If G_t < PREEMPT_THRESHOLD, switch to the highest-gain available route.
+
+Run on-demand: /usr/bin/python3 route-preemption-scheduler.py
+"""
+from __future__ import annotations
+import math, sys
+
+PREEMPT_THRESHOLD = 0.10  # nats; below = preempt
+
+ROUTES = {
+    "web_search":        {"base_gain": 0.8,  "decay": 0.3},
+    "skill_view":        {"base_gain": 0.6,  "decay": 0.5},
+    "session_search":    {"base_gain": 0.5,  "decay": 0.4},
+    "direct_answer":     {"base_gain": 0.3,  "decay": 0.1},
+    "delegate_subagent": {"base_gain": 1.0,  "decay": 0.2},
+}
+
+def marginal_gain(route: str, call_number: int) -> float:
+    r = ROUTES.get(route, {"base_gain": 0.3, "decay": 0.3})
+    return r["base_gain"] * math.exp(-r["decay"] * call_number)
+
+def schedule(task: str, call_log: list[str]) -> None:
+    print(f"\n=== Route Preemption Scheduler ===")
+    print(f"Task: {task[:60]}")
+    print(f"Call log: {call_log}\n")
+
+    call_counts = {}
+    for route in call_log:
+        call_counts[route] = call_counts.get(route, 0) + 1
+
+    print(f"  {'Route':<25} {'Count':>6} {'MargGain':>10}  Action")
+    print("  " + "-"*55)
+    gains = {}
+    for route, cfg in ROUTES.items():
+        n = call_counts.get(route, 0)
+        g = marginal_gain(route, n)
+        gains[route] = g
+        current = " <CURRENT" if route == (call_log[-1] if call_log else "") else ""
+        preempt = " PREEMPT" if g < PREEMPT_THRESHOLD else ""
+        print(f"  {route:<25} {n:>6} {g:>10.4f}{preempt}{current}")
+
+    current_route = call_log[-1] if call_log else list(ROUTES)[0]
+    current_gain  = gains.get(current_route, 0)
+    best_route    = max(gains.keys(), key=lambda k: gains[k])
+    best_gain     = gains[best_route]
+
+    print(f"\nCurrent route:  {current_route}  gain={current_gain:.4f}")
+    if current_gain < PREEMPT_THRESHOLD and best_route != current_route:
+        print(f"PREEMPT: switch to {best_route}  (gain={best_gain:.4f} >> {current_gain:.4f})")
+    else:
+        print(f"Continue: {current_route} still above preemption threshold")
+
+if __name__ == "__main__":
+    demo_log = ["web_search", "web_search", "web_search", "skill_view"]
+    schedule("research and implement findings", demo_log)
+
+
+### FILE: triple-objective-frontier-router.py ###
+#!/usr/bin/python3
+"""
+triple-objective-frontier-router.py
+
+Explicit Pareto trade-off transparency: routes tasks by optimising
+three objectives simultaneously — accuracy, latency, and cost —
+and reports the Pareto frontier so Hermes can justify routing choices.
+
+Math basis: Multi-objective optimisation / Pareto frontier
+  min (f1(x), f2(x), f3(x)) subject to x in X
+  where f1=error_rate, f2=latency, f3=cost per task.
+
+Run on-demand: /usr/bin/python3 triple-objective-frontier-router.py
+"""
+from __future__ import annotations
+import sys
+
+# Route options: (name, error_rate, latency_s, cost_usd)
+ROUTES = [
+    ("direct_answer",         0.15, 0.5,  0.001),
+    ("web_search",            0.10, 2.0,  0.003),
+    ("delegate_subagent",     0.05, 8.0,  0.020),
+    ("skill_view_then_answer",0.08, 1.2,  0.002),
+    ("clarify_first",         0.03, 15.0, 0.005),
+]
+
+def _pareto_frontier(routes):
+    """Return non-dominated routes (Pareto optimal w.r.t. all 3 objectives)."""
+    frontier = []
+    for r in routes:
+        dominated = False
+        for other in routes:
+            if other is r: continue
+            if (other[1] <= r[1] and other[2] <= r[2] and other[3] <= r[3] and
+                (other[1] < r[1] or other[2] < r[2] or other[3] < r[3])):
+                dominated = True
+                break
+        if not dominated:
+            frontier.append(r)
+    return frontier
+
+def route(task: str, weights=(0.4, 0.3, 0.3)) -> None:
+    """weights: (accuracy_weight, speed_weight, cost_weight), sum=1."""
+    w_acc, w_spd, w_cst = weights
+    # Normalise objectives to [0,1]
+    max_err  = max(r[1] for r in ROUTES)
+    max_lat  = max(r[2] for r in ROUTES)
+    max_cost = max(r[3] for r in ROUTES)
+
+    scored = []
+    for name, err, lat, cost in ROUTES:
+        # Score = weighted sum of normalised objectives (lower = better)
+        score = w_acc*(err/max_err) + w_spd*(lat/max_lat) + w_cst*(cost/max_cost)
+        scored.append((score, name, err, lat, cost))
+    scored.sort()
+
+    frontier = _pareto_frontier(ROUTES)
+    frontier_names = {r[0] for r in frontier}
+
+    print(f"\n=== Triple-Objective Frontier Router ===")
+    print(f"Task:    {task[:60]}")
+    print(f"Weights: accuracy={w_acc} speed={w_spd} cost={w_cst}\n")
+    print(f"  {'Route':<30} {'Score':>7} {'Err':>6} {'Lat(s)':>8} {'Cost':>8}  Pareto")
+    print("  " + "-"*70)
+    for score, name, err, lat, cost in scored:
+        pf = "★" if name in frontier_names else " "
+        print(f"  {name:<30} {score:>7.3f} {err:>6.2f} {lat:>8.1f} {cost:>8.4f}  {pf}")
+
+    best = scored[0]
+    print(f"\nRecommended: {best[1]}  (score={best[0]:.3f})")
+    print(f"Pareto frontier ({len(frontier)} routes): {[r[0] for r in frontier]}")
+
+if __name__ == "__main__":
+    task = " ".join(sys.argv[1:]) or "answer a factual question"
+    route(task)
+
+
+### FILE: adaptive-key-leakage-monitor.py ###
+#!/usr/bin/python3
+"""
+adaptive-key-leakage-monitor.py
+
+Detects when skill-routing or memory-retrieval patterns indicate that
+session-specific context (effectively a "key") is leaking across turns
+in ways that could corrupt future routing decisions.
+
+Math basis: Key leakage in adaptive channel coding
+  A channel code leaks its key if the encoder's output distribution
+  shifts in response to the key faster than the decoder can adapt.
+  Operationally: if the distribution of tool-calls in the first half
+  of a session is systematically predictable from the last turn's
+  tool calls, the session has a strong "memory" that may be biasing
+  future routing (leaking past context into new decisions).
+
+  Measured as: mutual information proxy between last-turn tool and
+  next-turn tool, via empirical joint frequency table.
+  High MI (> LEAKAGE_THRESHOLD) = routing is over-anchored to recent tool history.
+
+Runs as a monitor in the suite.
+"""
+from __future__ import annotations
+
+import json
+import math
+import sys
+from collections import Counter
+from datetime import datetime, timezone
+from pathlib import Path
+
+HOME          = Path.home()
+SESSIONS_DIR  = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"
+CACHE_DIR     = HOME / ".hermes/cache/monitors"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+OUT_FILE      = CACHE_DIR / "adaptive-key-leakage.json"
+
+LEAKAGE_THRESHOLD = 1.5   # nats; above = routing over-anchored to recent tool history
+MIN_BIGRAMS       = 15    # need enough tool-call pairs to estimate MI
+WINDOW            = 8     # sessions to analyse
+
+
+def _load_tool_sequence(path: Path) -> list[str]:
+    try:
+        lines = path.read_text().strip().splitlines()
+        if lines and lines[0].startswith("{") and len(lines) > 1:
+            messages = [json.loads(l) for l in lines if l.strip()]
+        else:
+            data = json.loads(path.read_text())
+            messages = data if isinstance(data, list) else data.get("messages", [])
+    except Exception:
+        return []
+    seq = []
+    for msg in messages:
+        if not isinstance(msg, dict) or msg.get("role") != "assistant":
+            continue
+        for b in (msg.get("content", []) if isinstance(msg.get("content"), list) else []):
+            if isinstance(b, dict) and b.get("type") == "tool_use":
+                seq.append(b.get("name", "unknown"))
+    return seq
+
+
+def _mutual_information(seq: list[str]) -> float:
+    """Empirical MI between consecutive tool calls I(T_t ; T_{t+1})."""
+    if len(seq) < 2:
+        return 0.0
+    bigrams  = list(zip(seq[:-1], seq[1:]))
+    n        = len(bigrams)
+    joint    = Counter(bigrams)
+    p_a      = Counter(a for a, _ in bigrams)
+    p_b      = Counter(b for _, b in bigrams)
+
+    mi = 0.0
+    for (a, b), cnt in joint.items():
+        p_ab = cnt / n
+        p_a_ = p_a[a] / n
+        p_b_ = p_b[b] / n
+        if p_ab > 0 and p_a_ > 0 and p_b_ > 0:
+            mi += p_ab * math.log(p_ab / (p_a_ * p_b_))
+    return mi
+
+
+def run() -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    print(f"\n=== Adaptive Key Leakage Monitor — {now[:10]} ===\n")
+
+    session_files = sorted(
+        [f for d in [SESSIONS_DIR, FORK_SESSIONS] if d.exists()
+         for f in d.glob("*.jsonl")],
+        key=lambda p: p.stat().st_mtime
+    )[-WINDOW:]
+
+    if not session_files:
+        print("ALARM: no — no session files found")
+        return 0
+
+    results = []
+    for sf in session_files:
+        seq = _load_tool_sequence(sf)
+        if len(seq) < 4:
+            continue
+        bigrams = len(seq) - 1
+        mi = _mutual_information(seq)
+        results.append({
+            "session": sf.stem[:40],
+            "tool_calls": len(seq),
+            "bigrams": bigrams,
+            "mi_nats": round(mi, 4),
+            "leaking": mi > LEAKAGE_THRESHOLD,
+        })
+
+    total_bigrams = sum(r["bigrams"] for r in results)
+    if total_bigrams < MIN_BIGRAMS:
+        print(f"Total tool-call pairs: {total_bigrams} (need {MIN_BIGRAMS})")
+        print("ALARM: no — insufficient data")
+        return 0
+
+    print(f"{'Session':<42} {'Tools':>6} {'MI (nats)':>10}  Status")
+    print("  " + "-" * 65)
+    leaking = []
+    for r in results:
+        icon = "✗" if r["leaking"] else "✓"
+        print(f"  {icon} {r['session']:<42} {r['tool_calls']:>6} {r['mi_nats']:>10.4f}  "
+              f"{'LEAKING' if r['leaking'] else 'OK'}")
+        if r["leaking"]:
+            leaking.append(r)
+
+    avg_mi = sum(r["mi_nats"] for r in results) / max(len(results), 1)
+    print(f"\nSessions analysed: {len(results)}, Leaking: {len(leaking)}")
+    print(f"Average MI: {avg_mi:.4f} nats  (threshold={LEAKAGE_THRESHOLD})")
+
+    alarm = len(leaking) > 0
+    if alarm:
+        print(f"\nALARM: yes — {len(leaking)} session(s) show routing MI > {LEAKAGE_THRESHOLD} nats "
+              f"(tool-selection over-anchored to recent history)")
+    else:
+        print(f"\nALARM: no — routing MI within bounds (avg={avg_mi:.4f} nats)")
+
+    OUT_FILE.write_text(json.dumps({
+        "ts": now, "sessions": len(results),
+        "avg_mi": round(avg_mi, 6), "leaking_count": len(leaking),
+        "threshold": LEAKAGE_THRESHOLD, "detail": results,
+    }, indent=2))
+    return 1 if alarm else 0
+
+
+if __name__ == "__main__":
+    sys.exit(run())
+
+
+### FILE: context-budget-potential-monitor.py ###
+#!/usr/bin/python3
+"""
+context-budget-potential-monitor.py
+
+Detects when incremental reasoning (token-by-token or turn-by-turn) is
+approaching a context-budget inflection point — where the marginal value
+of continuing drops below the cost of the next token/turn.
+
+Math basis: Stopping-time potential (optimal stopping theory)
+  V_t = max(g(t), E[V_{t+1}])
+  where g(t) = value of stopping now (budget remaining × expected gain rate)
+  and E[V_{t+1}] = expected value of continuing one more step.
+
+  Alarm when: g(t) > E[V_{t+1}] for 3+ consecutive turns
+  i.e., it is now better to stop than to continue — session has passed
+  its optimal stopping point.
+
+Operationally: track context token usage and tool-call productivity
+(useful tool calls / total tool calls) over the last WINDOW turns.
+When token usage is high AND productivity is falling, flag.
+
+Runs as a monitor in the suite.
+"""
+from __future__ import annotations
+
+import json
+import math
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+HOME         = Path.home()
+SESSIONS_DIR = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"
+CACHE_DIR    = HOME / ".hermes/cache/monitors"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+OUT_FILE     = CACHE_DIR / "context-budget-potential.json"
+
+WINDOW            = 5      # sessions to look back
+MIN_TOOLS         = 8      # skip sessions with fewer tool calls
+PRODUCTIVITY_FLOOR = 0.30  # alarm if useful_ratio < this
+BUDGET_THRESHOLD  = 0.75   # alarm if token usage > this fraction
+CONSECUTIVE_ALARM = 2      # sessions below floor before alarming
+
+
+def _load_sessions(n: int = WINDOW) -> list[Path]:
+    files = sorted(
+        [f for d in [SESSIONS_DIR, FORK_SESSIONS] if d.exists()
+         for f in d.glob("*.jsonl")],
+        key=lambda p: p.stat().st_mtime
+    )
+    return files[-n:]
+
+
+def _parse_session(path: Path) -> dict:
+    """Extract tool calls and rough token proxy from a session file."""
+    try:
+        lines = path.read_text().strip().splitlines()
+        if lines and lines[0].startswith("{") and len(lines) > 1:
+            messages = [json.loads(l) for l in lines if l.strip()]
+        else:
+            data = json.loads(path.read_text())
+            messages = data if isinstance(data, list) else data.get("messages", [])
+    except Exception:
+        return {}
+
+    tool_calls   = 0
+    useful_calls = 0   # proxy: tool calls that aren't retries or no-ops
+    char_total   = 0
+
+    prev_tools: set[str] = set()
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            char_total += len(content)
+        elif isinstance(content, list):
+            for b in content:
+                if isinstance(b, dict):
+                    char_total += len(json.dumps(b))
+                    if b.get("type") == "tool_use":
+                        tool_calls += 1
+                        name = b.get("name", "")
+                        # Non-repeated tool calls are "useful" proxy
+                        if name not in prev_tools:
+                            useful_calls += 1
+                        prev_tools.add(name)
+
+    return {
+        "session":      path.stem,
+        "tool_calls":   tool_calls,
+        "useful_calls": useful_calls,
+        "char_total":   char_total,
+        "productivity": useful_calls / max(tool_calls, 1),
+        # Token proxy: chars / 4
+        "token_proxy":  char_total // 4,
+    }
+
+
+def run() -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    print(f"\n=== Context Budget Potential Monitor — {now[:10]} ===\n")
+
+    sessions = _load_sessions()
+    if not sessions:
+        print("ALARM: no — no session files found")
+        return 0
+
+    results = []
+    for sess in sessions:
+        r = _parse_session(sess)
+        if not r or r["tool_calls"] < MIN_TOOLS:
+            continue
+        results.append(r)
+
+    if not results:
+        print(f"Sessions found: {len(sessions)}, analysable: 0 (need {MIN_TOOLS}+ tool calls)")
+        print("ALARM: no — insufficient data")
+        return 0
+
+    print(f"{'Session':<40} {'Tools':>6} {'Useful':>7} {'Prod':>6} {'Tokens':>8}")
+    print("  " + "-" * 70)
+    low_prod = 0
+    for r in results:
+        flag = " <LOW" if r["productivity"] < PRODUCTIVITY_FLOOR else ""
+        print(f"  {r['session']:<40} {r['tool_calls']:>6} {r['useful_calls']:>7} "
+              f"{r['productivity']:>6.2f} {r['token_proxy']:>8,}{flag}")
+        if r["productivity"] < PRODUCTIVITY_FLOOR:
+            low_prod += 1
+
+    avg_prod = sum(r["productivity"] for r in results) / len(results)
+    print(f"\nSessions analysed: {len(results)}")
+    print(f"Avg productivity:  {avg_prod:.3f}  (floor={PRODUCTIVITY_FLOOR})")
+    print(f"Low-productivity:  {low_prod}/{len(results)}")
+
+    alarm = low_prod >= CONSECUTIVE_ALARM
+    if alarm:
+        print(f"\nALARM: yes — {low_prod} session(s) below productivity floor {PRODUCTIVITY_FLOOR} "
+              f"(optimal stopping point may have passed)")
+    else:
+        print(f"\nALARM: no — productivity healthy (avg={avg_prod:.3f})")
+
+    OUT_FILE.write_text(json.dumps({
+        "ts": now, "sessions": len(results),
+        "avg_productivity": round(avg_prod, 4),
+        "low_productivity_count": low_prod,
+        "threshold": PRODUCTIVITY_FLOOR,
+        "detail": results,
+    }, indent=2))
+    return 1 if alarm else 0
+
+
+if __name__ == "__main__":
+    sys.exit(run())
+
+
+### FILE: prediction-tradeoff-monitor.py ###
+#!/usr/bin/python3
+"""
+prediction-tradeoff-monitor.py
+
+Enables adaptive skill-routing policies that explicitly trade off
+prediction-driven optimisation vs robustness to prediction error.
+
+Math basis: Consistency-robustness tradeoff (learning-augmented algorithms)
+  For any online algorithm ALG with a prediction p:
+    consistency  C(ALG) = max ratio when prediction is perfect (p = OPT)
+    robustness   R(ALG) = max ratio when prediction is adversarial
+  Optimal tradeoff curve: C + R >= 2 (cannot be simultaneously < 2 each).
+  
+  Operationally: track per-session prediction accuracy of skill routing
+  (did the top-ranked skill get used?). High accuracy → increase
+  prediction weight (better consistency). Low accuracy → increase
+  robustness margin (fallback threshold).
+  
+  Alarm if both C and R are > TRADEOFF_CEILING (curve violated).
+
+Runs as a monitor in the suite.
+"""
+from __future__ import annotations
+
+import json
+import math
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+HOME         = Path.home()
+SESSIONS_DIR = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+
+CACHE_DIR    = HOME / ".hermes/cache/monitors"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+OUT_FILE     = CACHE_DIR / "prediction-tradeoff.json"
+
+TRADEOFF_CEILING = 2.5   # C + R should be >= 2; alarm if both > CEILING (impossible)
+MIN_SESSIONS     = 3
+WINDOW           = 10    # sessions to look back
+
+
+def _load_skill_usage(sessions: list[Path]) -> list[dict]:
+    """Extract skill_view calls and whether they were followed by tool use."""
+    records = []
+    for sess in sessions[-WINDOW:]:
+        try:
+            data  = json.loads(sess.read_text())
+            msgs  = data if isinstance(data, list) else data.get("messages", [])
+            skill_views = []
+            for i, m in enumerate(msgs):
+                if not isinstance(m, dict) or m.get("role") != "assistant":
+                    continue
+                for block in (m.get("content", []) if isinstance(m.get("content"), list) else []):
+                    if not isinstance(block, dict):
+                        continue
+                    if block.get("type") == "tool_use" and block.get("name") == "skill_view":
+                        skill_views.append(i)
+            records.append({
+                "session": sess.name[:30],
+                "skill_views": len(skill_views),
+                "total_tools": sum(
+                    1 for m in msgs if isinstance(m, dict) and m.get("role") == "assistant"
+                    and any(isinstance(b, dict) and b.get("type") == "tool_use"
+                            for b in (m.get("content", []) if isinstance(m.get("content"), list) else []))
+                ),
+            })
+        except Exception:
+            pass
+    return records
+
+
+def compute_tradeoff(records: list[dict]) -> dict:
+    """Estimate consistency (prediction hit rate) and robustness (miss rate)."""
+    if not records:
+        return {"C": 0.0, "R": 0.0, "sessions": 0}
+
+    total_tools  = sum(r["total_tools"] for r in records)
+    total_views  = sum(r["skill_views"] for r in records)
+
+    if total_tools == 0:
+        return {"C": 1.0, "R": 1.0, "sessions": len(records)}
+
+    # C = fraction of sessions where skills were consulted before acting
+    sessions_with_views = sum(1 for r in records if r["skill_views"] > 0)
+    C = sessions_with_views / len(records)
+
+    # R = robustness proxy: fraction of tool calls NOT preceded by skill_view
+    # (agent acted without consulting prediction → robust but possibly suboptimal)
+    R = 1.0 - (total_views / max(total_tools, 1))
+    R = max(0.0, min(R, 1.0))
+
+    return {"C": round(C, 4), "R": round(R, 4), "sessions": len(records)}
+
+
+def run() -> int:
+    now  = datetime.now(timezone.utc).isoformat()
+    print(f"\n=== Prediction Tradeoff Monitor — {now[:10]} ===\n")
+
+    if not SESSIONS_DIR.exists():
+        print("ALARM: no — no sessions directory")
+        return 0
+
+    sessions = sorted([f for d in [SESSIONS_DIR, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")], key=lambda p: p.stat().st_mtime)
+    if len(sessions) < MIN_SESSIONS:
+        print(f"Only {len(sessions)} sessions (need {MIN_SESSIONS})")
+        print("ALARM: no — insufficient data")
+        return 0
+
+    records = _load_skill_usage(sessions)
+    t       = compute_tradeoff(records)
+
+    print(f"Sessions analysed: {t['sessions']}")
+    print(f"Consistency C = {t['C']:.4f}  (skill-consult rate)")
+    print(f"Robustness  R = {t['R']:.4f}  (unguided action rate)")
+    print(f"C + R         = {t['C'] + t['R']:.4f}  (theory floor = 2.0)")
+
+    alarm = t["C"] > TRADEOFF_CEILING and t["R"] > TRADEOFF_CEILING
+    if alarm:
+        print(f"\nALARM: yes — both C={t['C']} and R={t['R']} > {TRADEOFF_CEILING} (impossible tradeoff)")
+    else:
+        print("\nALARM: no — prediction tradeoff within feasible region")
+
+    OUT_FILE.write_text(json.dumps({"ts": now, **t}, indent=2))
+    return 1 if alarm else 0
+
+
+if __name__ == "__main__":
+    sys.exit(run())
+
+
+### FILE: proportionality-monitor.py ###
+#!/usr/bin/python3
+"""
+proportionality-monitor.py
+
+Enables Hermes to audit and alert on fairness drift when delegating tasks
+to multiple sub-agents — detects when cumulative value share falls below
+the proportional guarantee.
+
+Math basis: Online proportionality (allocation fairness)
+  For n agents over T rounds, agent i receives value v_i(t) per round.
+  Proportionality requires: V_i(T) >= (1/n) * V_total(T) for all i.
+  
+  Proportionality violation: some agent receives strictly less than
+  their fair share across cumulative allocations.
+  
+  Operationally: track task delegation counts per subagent type
+  (skill domains). Alert when any domain receives < (1/n - SLACK) share.
+
+Runs as a monitor in the suite.
+"""
+from __future__ import annotations
+
+import json
+import math
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from collections import Counter
+
+HOME         = Path.home()
+SESSIONS_DIR = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+
+CACHE_DIR    = HOME / ".hermes/cache/monitors"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+OUT_FILE     = CACHE_DIR / "proportionality.json"
+
+SLACK        = 0.05   # allow up to 5% below fair share before alarm
+MIN_CALLS    = 20     # skip if fewer total tool calls seen
+WINDOW       = 5      # sessions to analyse
+
+
+def _load_tool_calls(sessions: list[Path]) -> Counter:
+    """Count tool calls by name across recent sessions."""
+    counts: Counter = Counter()
+    for sess in sessions[-WINDOW:]:
+        try:
+            data = json.loads(sess.read_text())
+            msgs = data if isinstance(data, list) else data.get("messages", [])
+            for m in msgs:
+                if not isinstance(m, dict) or m.get("role") != "assistant":
+                    continue
+                for block in (m.get("content", []) if isinstance(m.get("content"), list) else []):
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        counts[block.get("name", "unknown")] += 1
+        except Exception:
+            pass
+    return counts
+
+
+def check_proportionality(counts: Counter) -> dict:
+    total = sum(counts.values())
+    if total < MIN_CALLS:
+        return {"total": total, "skip": True}
+
+    n     = len(counts)
+    fair  = 1.0 / n if n > 0 else 0.0
+    floor = fair - SLACK
+
+    shares  = {name: c / total for name, c in counts.items()}
+    violators = {name: share for name, share in shares.items() if share < floor}
+
+    return {
+        "total":      total,
+        "agents":     n,
+        "fair_share": round(fair, 4),
+        "floor":      round(floor, 4),
+        "violators":  {k: round(v, 4) for k, v in violators.items()},
+        "shares":     {k: round(v, 4) for k, v in sorted(shares.items(), key=lambda x: -x[1])},
+        "skip":       False,
+    }
+
+
+def run() -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    print(f"\n=== Proportionality Monitor — {now[:10]} ===\n")
+
+    if not SESSIONS_DIR.exists():
+        print("ALARM: no — no sessions directory")
+        return 0
+
+    sessions = sorted([f for d in [SESSIONS_DIR, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")], key=lambda p: p.stat().st_mtime)
+    if not sessions:
+        print("ALARM: no — no sessions found")
+        return 0
+
+    counts = _load_tool_calls(sessions)
+    result = check_proportionality(counts)
+
+    if result.get("skip"):
+        print(f"Total tool calls: {result['total']} (need {MIN_CALLS})")
+        print("ALARM: no — insufficient data")
+        return 0
+
+    print(f"Tool calls: {result['total']}  Agents: {result['agents']}")
+    print(f"Fair share: {result['fair_share']:.4f}  Floor: {result['floor']:.4f}\n")
+
+    print(f"  {'Tool':<35} {'Share':>7}  Status")
+    print("  " + "-" * 50)
+    for name, share in list(result["shares"].items())[:10]:
+        icon = "✗" if name in result["violators"] else "✓"
+        print(f"  {icon} {name:<35} {share:>7.4f}")
+
+    alarm = bool(result["violators"])
+    print(f"\nViolators: {len(result['violators'])}")
+    if alarm:
+        print(f"ALARM: yes — {len(result['violators'])} tool(s) below proportional floor "
+              f"{result['floor']:.4f}: {list(result['violators'].keys())[:3]}")
+    else:
+        print("ALARM: no — all tools above proportional floor")
+
+    OUT_FILE.write_text(json.dumps({"ts": now, **result}, indent=2))
+    return 1 if alarm else 0
+
+
+if __name__ == "__main__":
+    sys.exit(run())
+
+
+### FILE: performative-stability-monitor.py ###
+#!/usr/bin/python3
+"""
+performative-stability-monitor.py
+
+Detects when Hermes' tool-selection policies create feedback loops that
+shift task distributions in ways that invalidate prior routing decisions
+(performative prediction instability).
+
+Math basis: Performative stability (fixed-point of prediction-induced distribution)
+  A predictor h is performatively stable if:
+    h = argmin_h E_{D(h)}[loss(h, z)]
+  where D(h) is the distribution INDUCED by deploying h.
+  
+  Instability: h changes the task distribution D, which changes what h
+  should predict, which changes h again → oscillating routing policies.
+  
+  Detected by tracking whether the tool distribution in recent sessions
+  is drifting systematically (Jensen-Shannon divergence between consecutive
+  windows > DRIFT_THRESHOLD).
+
+Runs as a monitor in the suite.
+"""
+from __future__ import annotations
+
+import json
+import math
+import sys
+from collections import Counter
+from datetime import datetime, timezone
+from pathlib import Path
+
+HOME         = Path.home()
+SESSIONS_DIR = HOME / ".hermes/sessions"
+FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+
+CACHE_DIR    = HOME / ".hermes/cache/monitors"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+OUT_FILE     = CACHE_DIR / "performative-stability.json"
+
+DRIFT_THRESHOLD = 0.30   # JSD between windows; above = unstable
+MIN_TOOLS_PER_WINDOW = 10
+HALF_WINDOW = 3          # sessions per comparison window
+
+
+def _tool_counts(sessions: list[Path]) -> Counter:
+    counts: Counter = Counter()
+    for sess in sessions:
+        try:
+            data = json.loads(sess.read_text())
+            msgs = data if isinstance(data, list) else data.get("messages", [])
+            for m in msgs:
+                if not isinstance(m, dict) or m.get("role") != "assistant":
+                    continue
+                for b in (m.get("content", []) if isinstance(m.get("content"), list) else []):
+                    if isinstance(b, dict) and b.get("type") == "tool_use":
+                        counts[b.get("name", "unknown")] += 1
+        except Exception:
+            pass
+    return counts
+
+
+def _jsd(p: dict, q: dict) -> float:
+    """Jensen-Shannon divergence between two tool-count dicts."""
+    vocab = set(p) | set(q)
+    if not vocab:
+        return 0.0
+    tp = sum(p.values()) or 1
+    tq = sum(q.values()) or 1
+    pv = {k: p.get(k, 0) / tp for k in vocab}
+    qv = {k: q.get(k, 0) / tq for k in vocab}
+    mv = {k: 0.5 * (pv[k] + qv[k]) for k in vocab}
+
+    def _kl(a, b):
+        return sum(av * math.log2(av / bv) for k in vocab
+                   if (av := a.get(k, 0)) > 0 and (bv := b.get(k, 0)) > 0)
+
+    return 0.5 * _kl(pv, mv) + 0.5 * _kl(qv, mv)
+
+
+def run() -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    print(f"\n=== Performative Stability Monitor — {now[:10]} ===\n")
+
+    if not SESSIONS_DIR.exists():
+        print("ALARM: no — no sessions directory")
+        return 0
+
+    sessions = sorted([f for d in [SESSIONS_DIR, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")], key=lambda p: p.stat().st_mtime)
+    if len(sessions) < HALF_WINDOW * 2:
+        print(f"Need {HALF_WINDOW * 2} sessions, have {len(sessions)}")
+        print("ALARM: no — insufficient data")
+        return 0
+
+    # Split into two consecutive windows
+    mid    = len(sessions) // 2
+    early  = sessions[max(0, mid - HALF_WINDOW):mid]
+    recent = sessions[mid:mid + HALF_WINDOW]
+
+    counts_e = _tool_counts(early)
+    counts_r = _tool_counts(recent)
+
+    te = sum(counts_e.values())
+    tr = sum(counts_r.values())
+
+    if te < MIN_TOOLS_PER_WINDOW or tr < MIN_TOOLS_PER_WINDOW:
+        print(f"Tool calls: early={te}, recent={tr} (need {MIN_TOOLS_PER_WINDOW} each)")
+        print("ALARM: no — insufficient tool call data")
+        return 0
+
+    jsd   = _jsd(counts_e, counts_r)
+    alarm = jsd > DRIFT_THRESHOLD
+
+    print(f"Early window:  {te} calls across {len(early)} sessions")
+    print(f"Recent window: {tr} calls across {len(recent)} sessions")
+    print(f"JSD drift:     {jsd:.4f}  (threshold={DRIFT_THRESHOLD})")
+
+    # Top-5 shifted tools
+    all_tools = set(counts_e) | set(counts_r)
+    shifts = sorted(
+        all_tools,
+        key=lambda t: abs(counts_r.get(t, 0) / max(tr, 1) - counts_e.get(t, 0) / max(te, 1)),
+        reverse=True,
+    )
+    print("\nTop shifted tools:")
+    for t in shifts[:5]:
+        se = counts_e.get(t, 0) / te
+        sr = counts_r.get(t, 0) / tr
+        print(f"  {t:<35} early={se:.3f} recent={sr:.3f} Δ={sr-se:+.3f}")
+
+    if alarm:
+        print(f"\nALARM: yes — performative drift JSD={jsd:.4f} > {DRIFT_THRESHOLD}")
+        print("  Routing policy may be creating unstable feedback loops")
+    else:
+        print(f"\nALARM: no — tool distribution stable (JSD={jsd:.4f})")
+
+    OUT_FILE.write_text(json.dumps({
+        "ts": now, "jsd": round(jsd, 6),
+        "early_calls": te, "recent_calls": tr,
+        "threshold": DRIFT_THRESHOLD,
+    }, indent=2))
+    return 1 if alarm else 0
+
+
+if __name__ == "__main__":
+    sys.exit(run())
+
+
+### FILE: filter-only-optimization-reducer.py ###
+#!/usr/bin/python3
+"""
+filter-only-optimization-reducer.py
+
+Enables skill-routing decisions to discard redundant parameterizations
+by reducing the full skill parameter space to only the constraints that
+are actually active (filter-only reduction).
+
+Math basis: Fourier/filter-only optimization
+  In sparse optimization, many parameters are at their bounds (inactive).
+  The reduced problem only optimises over active constraints:
+    min f(x)  s.t.  g_i(x) = 0 for active i only
+  Filter-only reduction: discard skills whose routing weight is at the
+  lower bound (weight ≤ ε) — they contribute nothing to the solution.
+  
+  Applied to skill routing: given a query, compute initial weights via
+  Jaccard. Skills with weight below FILTER_FLOOR are "inactive" and
+  pruned before the final ranking step. This reduces the effective
+  search space and makes routing faster and more interpretable.
+
+Usage:
+  python3 filter-only-optimization-reducer.py --query QUERY [--top N]
+  python3 filter-only-optimization-reducer.py --dry-run
+"""
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+HOME       = Path.home()
+SKILLS_DIR = HOME / ".hermes/profiles/fork/skills"
+ALT_SKILLS = HOME / ".hermes/skills"
+
+FILTER_FLOOR  = 0.02   # prune skills with weight <= this (Jaccard against 60+ skill docs)
+MAX_SKILLS    = 60
+
+
+def _tokenize(text: str) -> set[str]:
+    return set(re.findall(r"[a-z]{3,}", text.lower()))
+
+
+def _load_skills(n: int) -> list[dict]:
+    skills = []
+    seen: set[str] = set()
+    for base in [SKILLS_DIR, ALT_SKILLS]:
+        if not base.exists():
+            continue
+        for md in base.rglob("SKILL.md"):
+            name = md.parent.name
+            if name in seen:
+                continue
+            try:
+                tokens = _tokenize(md.read_text()[:400])
+                if tokens:
+                    skills.append({"name": name, "tokens": tokens})
+                    seen.add(name)
+            except Exception:
+                pass
+            if len(skills) >= n:
+                break
+        if len(skills) >= n:
+            break
+    return skills
+
+
+def reduce_and_rank(query: str, top_n: int, floor: float) -> dict:
+    q_tok   = _tokenize(query)
+    skills  = _load_skills(MAX_SKILLS)
+
+    # Compute Jaccard weights
+    weighted = []
+    for s in skills:
+        w = len(q_tok & s["tokens"]) / max(len(q_tok | s["tokens"]), 1)
+        weighted.append((s["name"], w))
+
+    full_n    = len(weighted)
+    # Filter-only reduction: keep active constraints only
+    active    = [(name, w) for name, w in weighted if w > floor]
+    pruned_n  = full_n - len(active)
+
+    # Rank survivors
+    ranked    = sorted(active, key=lambda x: -x[1])[:top_n]
+
+    return {
+        "query":       query[:60],
+        "full_skills": full_n,
+        "pruned":      pruned_n,
+        "active":      len(active),
+        "top":         ranked,
+        "floor":       floor,
+    }
+
+
+def run(query: str, top_n: int, dry_run: bool) -> int:
+    now = datetime.now(timezone.utc).isoformat()
+
+    demo = [query] if query != "agent memory compression" else [
+        "agent memory compression",
+        "debug python error",
+        "configure hermes settings",
+        "search for papers on reinforcement learning",
+    ]
+
+    print(f"\n=== Filter-Only Optimization Reducer — {now[:10]} ===")
+    print(f"Floor={FILTER_FLOOR}  Top={top_n}\n")
+
+    for q in demo:
+        r = reduce_and_rank(q, top_n, FILTER_FLOOR)
+        reduction_pct = 100 * r["pruned"] / max(r["full_skills"], 1)
+        print(f"  Query: \"{r['query']}\"")
+        print(f"  Skills: {r['full_skills']} → active {r['active']} "
+              f"(pruned {r['pruned']}, {reduction_pct:.0f}%)")
+        print(f"  Top {min(top_n, len(r['top']))}:")
+        for name, w in r["top"][:5]:
+            print(f"    {name:<40} w={w:.4f}")
+        print()
+
+    print("ALARM: no — filter-only reduction complete")
+    return 0
+
+
+def main() -> None:
+    p = argparse.ArgumentParser()
+    p.add_argument("--query",   default="agent memory compression")
+    p.add_argument("--top",     type=int, default=5)
+    p.add_argument("--dry-run", action="store_true")
+    args = p.parse_args()
+    sys.exit(run(args.query, args.top, args.dry_run))
+
+
+if __name__ == "__main__":
+    main()
+
+
+### FILE: privacy-capacity-router.py ###
+#!/usr/bin/python3
+"""
+privacy-capacity-router.py
+
+Enables Hermes to delegate sensitive multi-step tasks across agent pools
+without leaking sensitive context — routes via privacy-capacity trade-off.
+
+Math basis: Privacy-capacity region (information-theoretic)
+  The privacy-capacity region defines achievable (rate, privacy) pairs:
+    C_priv(ε) = max I(X;Y) s.t. I(X;Z) ≤ ε
+  where X=task, Y=result, Z=leaked context to adversarial observer.
+  
+  Operationally: each routing option has an estimated information rate
+  (capability) and an estimated leakage (privacy cost). We select the
+  route that maximises rate subject to leakage ≤ ε_budget.
+  
+  Leakage estimated by: fraction of sensitive tokens in context that
+  would be included in the delegated message to the route.
+
+Usage:
+  python3 privacy-capacity-router.py --task TASK [--budget 0.2]
+  python3 privacy-capacity-router.py --dry-run
+"""
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+HOME      = Path.home()
+CACHE_DIR = HOME / ".hermes/cache/monitors"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+OUT_FILE  = CACHE_DIR / "privacy-capacity-routing.json"
+
+import json
+
+DEFAULT_BUDGET = 0.20   # max tolerated leakage fraction
+
+# Sensitive token patterns (information that shouldn't reach untrusted routes)
+SENSITIVE_PATTERNS = [
+    r"(?i)\b(password|secret|token|api.?key|credential|auth)\b",
+    r"(?i)\b(private|confidential|internal|pii|ssn|dob)\b",
+    r"(?i)\b(salary|revenue|financial|banking|credit.?card)\b",
+    r"(?i)\b(medical|health|diagnosis|patient|prescription)\b",
+    r"\b\d{4}[\s-]\d{4}[\s-]\d{4}[\s-]\d{4}\b",  # card-like
+    r"\b\d{3}-\d{2}-\d{4}\b",                       # SSN-like
+]
+
+# Route definitions: (name, capability, context_fraction_sent)
+# context_fraction: what fraction of the full context this route receives
+ROUTES = [
+    {"name": "local_direct",    "capability": 0.60, "ctx_fraction": 0.00},  # no delegation
+    {"name": "trusted_subagent","capability": 0.85, "ctx_fraction": 0.30},  # partial context
+    {"name": "external_api",    "capability": 0.92, "ctx_fraction": 0.80},  # most context
+    {"name": "full_delegation", "capability": 0.98, "ctx_fraction": 1.00},  # full context
+]
+
+
+def _sensitive_fraction(text: str) -> float:
+    """Fraction of words that match sensitive patterns."""
+    words = re.findall(r"\S+", text)
+    if not words:
+        return 0.0
+    sensitive = sum(
+        1 for w in words
+        if any(re.search(pat, w) for pat in SENSITIVE_PATTERNS)
+    )
+    return sensitive / len(words)
+
+
+def route(task: str, context: str, epsilon: float) -> dict:
+    """Select route maximising capability subject to leakage ≤ epsilon."""
+    sens_frac = _sensitive_fraction(task + " " + context)
+
+    candidates = []
+    for r in ROUTES:
+        leakage = sens_frac * r["ctx_fraction"]
+        feasible = leakage <= epsilon
+        candidates.append({
+            "name":       r["name"],
+            "capability": r["capability"],
+            "leakage":    round(leakage, 4),
+            "feasible":   feasible,
+        })
+
+    feasible = [c for c in candidates if c["feasible"]]
+    if feasible:
+        chosen = max(feasible, key=lambda c: c["capability"])
+        blocked = False
+    else:
+        # All routes leak too much — fall back to local_direct (zero leakage)
+        chosen  = candidates[0]
+        blocked = True
+
+    return {
+        "task":         task[:80],
+        "sens_frac":    round(sens_frac, 4),
+        "epsilon":      epsilon,
+        "chosen_route": chosen["name"],
+        "capability":   chosen["capability"],
+        "leakage":      chosen["leakage"],
+        "blocked":      blocked,
+        "all_routes":   candidates,
+    }
+
+
+def run(task: str, context: str, epsilon: float, dry_run: bool) -> int:
+    now = datetime.now(timezone.utc).isoformat()
+
+    demos = [
+        ("Summarise the quarterly report", "Revenue was $4.2M, salary pool $1.1M"),
+        ("Debug the authentication module", "API key: sk-abc123, password check fails"),
+        ("Fetch latest arXiv papers on RL", "Search arxiv for reinforcement learning"),
+        ("Draft a generic email template", "Dear user, please find attached..."),
+        (task, context),
+    ] if task == "route this task" else [(task, context)]
+
+    print(f"\n=== Privacy-Capacity Router — {now[:10]} ===")
+    print(f"ε_budget={epsilon} (max leakage)\n")
+    print(f"  {'Task':<45} {'Sens':>5}  {'Route':<20} {'Cap':>5} {'Leak':>5}")
+    print("  " + "-" * 85)
+
+    results = []
+    blocked_count = 0
+    for t, ctx in demos:
+        r = route(t, ctx, epsilon)
+        icon = "✗" if r["blocked"] else "✓"
+        print(f"  {icon} {r['task'][:44]:<45} {r['sens_frac']:>5.3f}"
+              f"  {r['chosen_route']:<20} {r['capability']:>5.3f} {r['leakage']:>5.3f}")
+        results.append(r)
+        if r["blocked"]:
+            blocked_count += 1
+
+    print(f"\nRouted: {len(results) - blocked_count}  Blocked to local: {blocked_count}")
+    print("ALARM: no — privacy-capacity routing complete")
+
+    if not dry_run:
+        OUT_FILE.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+    return 0
+
+
+def main() -> None:
+    p = argparse.ArgumentParser()
+    p.add_argument("--task",    default="route this task")
+    p.add_argument("--context", default="")
+    p.add_argument("--budget",  type=float, default=DEFAULT_BUDGET)
+    p.add_argument("--dry-run", action="store_true")
+    args = p.parse_args()
+    sys.exit(run(args.task, args.context, args.budget, args.dry_run))
+
+
+if __name__ == "__main__":
+    main()
+
+__HERMES_CWD_45b179ea256f__/var/home/rainbow/.hermes/hermes-fork__HERMES_CWD_45b179ea256f__

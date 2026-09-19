@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_072b45cb",
+  "started": "2026-09-18 22:32:52",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 9, Agent A). Read every file listed below IN FULL before writing a single finding.\n\nFiles:\n1. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py\n2. /var/home/rainbow/.hermes/scripts/calibration_loop.py\n3. /var/home/rainbow/.hermes/scripts/confidence_tracker.py\n4. /var/home/rainbow/.hermes/scripts/gate_audit.py\n5. /var/home/rainbow/.hermes/scripts/proper_scoring.py\n6. /var/home/rainbow/.hermes/scripts/lyapunov_monitor.py\n\nFocus:\n- ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_072b45cb/task-0.log",
+      "status": "interrupted",
+      "exit_reason": "interrupted"
+    },
+    {
+      "index": 1,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 9, Agent B). Read every file listed below IN FULL before writing a single finding.\n\nFiles:\n1. /var/home/rainbow/.hermes/scripts/compaction_utils.py\n2. /var/home/rainbow/.hermes/scripts/segment_level_compactor.py\n3. /var/home/rainbow/.hermes/scripts/crystal_fidelity_tiers.py\n4. /var/home/rainbow/.hermes/scripts/cot_phase_scorer.py\n5. /var/home/rainbow/.hermes/scripts/kolmogorov_predicates.py\n6. /var/home/rainbow/.hermes/scripts/occam_audit.py\n7. /var/home",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_072b45cb/task-1.log",
+      "status": "interrupted",
+      "exit_reason": "interrupted"
+    },
+    {
+      "index": 2,
+      "goal": "You are a COLD INTEGRATION VERIFIER (Pass 9, Agent C).\n\nStep 1: Run all 12 suites.\n\nStep 2: Write /tmp/test_p9_regression.py covering:\n  V1: _apply_js_shrinkage k=3 — with tool_result=0.55, assistant=0.90, user=0.70 — verify thresholds change (shrinkage fires) and stay in [0.20, 0.95] — P8A-04\n  V2: lyapunov stall then one-step descent-to-zero — after STALL_THRESHOLD stalls, single call with current=target → is_stable() True immediately — P8B-12\n  V3: on_session_end cleans MIDDLE_TIER_COUNTS and",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_072b45cb/task-2.log",
+      "status": "interrupted",
+      "exit_reason": "interrupted"
+    }
+  ],
+  "completed": "2026-09-18 22:35:08"
+}

@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_9e033ca9",
+  "started": "2026-09-18 20:20:29",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a corpus-calibration engineer running Wave 2 of a recursive corpus-driven improvement pass on the Hermes jev-compaction plugin. Your job is to implement NEW infrastructure grounded in theorems from books that were NOT covered in Wave 1.\n\nWave 1 covered: Jaynes, Wald, Cover-Thomas, Lattimore, Gelman, Grimmett-Stirzaker, Shalev-Shwartz, Hastie.\n\nWave 2 covers these new books and their gaps:\n\n1. PEARL CAUSALITY — Confounder fix\nThe EMA threshold update conditions on `score` which is confoun",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_9e033ca9/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "You are a corpus-calibration engineer running Wave 2 of a recursive corpus-driven improvement pass on the Hermes jev-compaction plugin. Your job is to implement NEW infrastructure grounded in remaining books.\n\nWave 2b covers:\n\n1. PUTERMAN MDP — Value-function-based retention policy\nWrite `~/.hermes/scripts/mdp_retention_policy.py` implementing a simple 2-state, 2-action MDP for the retention decision:\n  States: S = {LOW_PRESSURE, HIGH_PRESSURE} (based on context_tokens vs budget)\n  Actions: A = ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_9e033ca9/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER for Wave 2 of the Hermes jev-compaction corpus-calibration project. Your job is to find real bugs in BOTH the existing plugin AND any new Wave 2 scripts once they exist.\n\nREAD THESE FILES in full before reviewing:\n1. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py\n2. /var/home/rainbow/.hermes/scripts/proper_scoring.py\n3. /var/home/rainbow/.hermes/scripts/calibration_loop.py\n4. /var/home/rainbow/.hermes/scripts/gate_audit.py\n5. /var/h",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_9e033ca9/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-18 20:25:59"
+}

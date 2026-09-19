@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_ddee69df",
+  "started": "2026-09-16 12:10:11",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are an adversarial reviewer for the cognitive legal reasoning module in Denuto, a legal-tech contract review AI. Your job: find real bugs — incorrect math, violated contracts, wrong theory, misleading citations, edge cases that crash or silently misbehave. Be maximally skeptical. Do NOT accept plausible-looking code as correct.\n\nRead all files from /tmp/cognitive_reasoning_src.json. Focus on src/reasoning/relevance_engine.py and src/reasoning/defeasible_engine.py and their tests.\n\nFor each i",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_ddee69df/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "You are an adversarial reviewer for the cognitive legal reasoning module in Denuto, a legal-tech contract review AI. Find real bugs — incorrect math, wrong theory, violated contracts, edge cases. Be maximally skeptical.\n\nRead all files from /tmp/cognitive_reasoning_src.json. Focus on src/reasoning/analogical_engine.py, src/reasoning/abductive_engine.py, and their tests.\n\nFor each issue found, classify:\n- CRITICAL: wrong output / crash\n- HIGH: theoretically wrong / contract violation\n- MEDIUM: ed",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_ddee69df/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "You are a cohesion auditor for the cognitive legal reasoning module in Denuto (legal-tech contract review AI). Your job: assess whether the 5 new modules form a COHERENT, INTEGRATED whole that genuinely improves legal reasoning, not just a bag of disconnected functions.\n\nRead all files from /tmp/cognitive_reasoning_src.json.\n\nEvaluate:\n1. THEORETICAL COHERENCE: Do the 5 theories (relevance realization, defeasible argumentation, dual-process, analogical, abductive) genuinely address DIFFERENT asp",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_ddee69df/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-16 12:19:56"
+}

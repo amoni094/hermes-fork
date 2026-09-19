@@ -1,0 +1,24 @@
+{
+  "delegation_id": "deleg_561b054a",
+  "started": "2026-09-15 13:39:46",
+  "task_count": 2,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Implement wave-2 HIGH findings A and B for Hermes Agent. Read each target file first, patch cleanly, verify.\n\nFINDING A: arXiv:2606.04990 — Agent Traces to Trust (Evidence Tracing Survey)\nSignal: Trust functions — weight recall results by provenance tier. unified-recall.py fuse_results has a 'source' field on each result (values: 'hindsight', 'graphiti', 'lifecycle-pending'). The l1-graphiti-write.py already tags episodes with source_type (internal/cron/external) in Graphiti metadata.\nImplementa",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_561b054a/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Implement wave-2 HIGH findings C and D for Hermes Agent. Read each target file first, patch cleanly, verify.\n\nFINDING C: arXiv:2606.31650 — ECHO: Selective Turn Memory with Source-Indexed Credit Routing\nSignal: Reuse-weighted retention — memory facts that are frequently retrieved should get TTL extensions (credit routing). ECHO routes positive outcome credit back to reused evidence turns.\nImplementation:\n(1) Patch ~/.hermes/scripts/memory-ttl-purge.py: find where TTL is applied to a fact. After ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_561b054a/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 13:41:54"
+}

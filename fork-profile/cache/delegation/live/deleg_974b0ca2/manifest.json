@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_974b0ca2",
+  "started": "2026-09-18 23:10:47",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 12, Agent A). Read every file listed IN FULL before writing a single finding.\n\nFiles:\n1. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py\n2. /var/home/rainbow/.hermes/scripts/calibration_loop.py\n3. /var/home/rainbow/.hermes/scripts/confidence_tracker.py\n4. /var/home/rainbow/.hermes/scripts/gate_audit.py\n5. /var/home/rainbow/.hermes/scripts/lyapunov_monitor.py\n\nFocus for Pass 12:\n- P11-01 TOCTOU fix: the re-check under lock now r",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_974b0ca2/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 12, Agent B). Read every file listed IN FULL before writing a single finding.\n\nFiles:\n1. /var/home/rainbow/.hermes/scripts/compaction_utils.py\n2. /var/home/rainbow/.hermes/scripts/segment_level_compactor.py\n3. /var/home/rainbow/.hermes/scripts/crystal_fidelity_tiers.py\n4. /var/home/rainbow/.hermes/scripts/occam_audit.py\n5. /var/home/rainbow/.hermes/scripts/proper_scoring.py\n6. /var/home/rainbow/.hermes/scripts/mdp_retention_policy.py\n7. /var/home/rainbow",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_974b0ca2/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "You are an INTEGRATION TESTER (Pass 12, Agent C).\n\nStep 1: Write /tmp/test_p12_regression.py covering:\n- V1: EVSI bootstrap cliff: at total_seen == n_min_passes (exactly 5 by default), p_middle=0, the hard floor is gone. Compute evsi_latch_adjusted manually and verify whether evsi_skip fires. If it fires, this is a cliff regression.\n- V2: JS all-3-roles guard: simulate a session with only tool_result + assistant FTRL updates (no user). Verify JS does NOT fire (thresholds unchanged after the scor",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_974b0ca2/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-18 23:17:21"
+}

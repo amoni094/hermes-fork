@@ -1,0 +1,38 @@
+{
+  "delegation_id": "deleg_80eea519",
+  "started": "2026-09-16 12:37:43",
+  "task_count": 4,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Implement src/reasoning/temporal_engine.py and tests/reasoning/test_temporal_engine.py in the repo at /tmp/hello_agent on branch feature/theory-grounded-research.\n\nTHEORY: Allen (1983) interval algebra — 13 temporal relations (BEFORE, MEETS, OVERLAPS, STARTS, DURING, FINISHES, EQUALS, and their inverses). Ladkin & Maddux (1994) arc-consistency constraint propagation over interval networks.\n\nDOMAIN: Denuto is a legal-tech contract review AI for Australian financial services. The obligation_tracke",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_80eea519/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Implement src/reasoning/causal_engine.py and tests/reasoning/test_causal_engine.py in the repo at /tmp/hello_agent on branch feature/theory-grounded-research.\n\nTHEORY: Pearl (2009) Causality Ch.3-5 — structural causal models (SCM), do-calculus, d-separation (Ch.1), backdoor criterion (Ch.3.3), front-door criterion (Ch.3.4). Spirtes, Glymour & Scheines (2000) — PC algorithm structure learning sketch.\n\nDOMAIN: Denuto's feedback pipeline (src/feedback/analysis.py) has clustering and Wasserstein-1 f",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_80eea519/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Implement src/reasoning/active_learning_engine.py and tests/reasoning/test_active_learning_engine.py in the repo at /tmp/hello_agent on branch feature/theory-grounded-research.\n\nTHEORY: Settles (2009) Active Learning Literature Survey — uncertainty sampling, query-by-committee, expected model change. Cohn, Ghahramani & Jordan (1996) Active learning with statistical models. The conformal abstention infrastructure in src/eval/conformal_abstention.py already computes per-clause abstention scores. T",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_80eea519/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Implement src/reasoning/deontic_engine.py and tests/reasoning/test_deontic_engine.py in the repo at /tmp/hello_agent on branch feature/theory-grounded-research.\n\nTHEORY:\n- Standard Deontic Logic (SDL, von Wright 1951): O(p) = obligatory p, P(p) = permitted p, F(p) = forbidden p\n- Carmo & Jones (2002) survey: DSDL3 — actual/primary obligations, contrary-to-duty (CTD) conditionals\n- Forrester (1984) paradox: 'You ought to do X; If you do X you ought to do Y; If you don't do X you ought to do Z' — ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_80eea519/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-16 12:52:21"
+}

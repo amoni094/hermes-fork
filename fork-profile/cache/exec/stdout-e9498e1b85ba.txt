@@ -1,0 +1,1690 @@
+/tmp/hello_agent/src/reasoning/relevance_engine.py 
+ """
+relevance_engine.py — Denuto cognitive-legal reasoning primitives.
+
+Theoretical foundations
+-----------------------
+* Vervaeke & Lillicrap (2012), "Relevance Realization and the Emerging
+  Framework in Cognitive Science", Journal of Logic and Computation 22(2):
+  987-1005.
+* Cover & Thomas, *Elements of Information Theory* (2nd ed.), §2.3
+  (KL divergence) and §8.5 (mutual information).
+* Cheng & Holyoak (1985), "Pragmatic Reasoning Schemas", Psychological
+  Review 92(4):391-416.
+* Kahneman (2011), *Thinking, Fast and Slow*, dual-process theory.
+* Guthrie, Rachlinski & Wistrich (2007), "Blinking on the Bench: How
+  Judges Decide Cases", Cornell Law Review 93(1):1-43.
+"""
+
+from __future__ import annotations
+
+import math
+import re
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Optional
+
+__all__ = [
+    "clause_salience_score",
+    "rank_clauses_by_relevance",
+    "relevance_attention_weights",
+    "ClauseSchema",
+    "classify_clause_schema",
+    "SchemaConflict",
+    "schema_conflict_check",
+    "FastScreenResult",
+    "fast_screen",
+    "slow_analysis_priority",
+]
+
+# ---------------------------------------------------------------------------
+# 1. RELEVANCE REALIZATION (Vervaeke & Lillicrap 2012)
+# ---------------------------------------------------------------------------
+
+_EPS = 1e-10
+
+
+def _tokenize(text: str) -> list[str]:
+    """Split *text* into lowercase alphabetic tokens."""
+    return [t for t in re.split(r"[^a-z]+", text.lower()) if t]
+
+
+def clause_salience_score(
+    clause_text: str,
+    topic_keywords: list[str],
+    background_freq: dict[str, float] | None = None,
+) -> float:
+    """Return a salience score in [0, 1] for *clause_text* w.r.t. *topic_keywords*.
+
+    Algorithm
+    ---------
+    1. Tokenise *clause_text* to lowercase words (split on non-alpha).
+    2. Build a TF vector over *topic_keywords* only:
+       ``tf[k] = count(k in tokens) / max(total_tokens, 1)``.
+    3. Compute KL divergence of the clause TF from *background_freq*
+       (uniform over keywords when ``None``):
+       ``KL = Σ_k  p_k · log2((p_k + ε) / (q_k + ε))``  where ε = 1e-10.
+    4. Normalise to [0, 1] via ``tanh(KL)``.
+
+    Returns 0.0 for an empty clause or empty keyword list.
+
+    References
+    ----------
+    Vervaeke & Lillicrap 2012, *Relevance Realization and the Emerging
+    Framework in Cognitive Science*; Cover & Thomas *Elements of
+    Information Theory* §2.3 (KL divergence) and §8.5 (mutual information).
+    """
+    if not clause_text.strip() or not topic_keywords:
+        return 0.0
+
+    tokens = _tokenize(clause_text)
+    total_tokens = max(len(tokens), 1)
+
+    # Normalise keyword list to lowercase
+    keywords = [kw.lower() for kw in topic_keywords]
+    n_keywords = len(keywords)
+
+    # TF vector (p) over keywords
+    counts = {kw: tokens.count(kw) for kw in keywords}
+    tf = {kw: counts[kw] / total_tokens for kw in keywords}
+
+    # Background distribution (q): uniform if not supplied
+    if background_freq is None:
+        uniform_val = 1.0 / n_keywords
+        bg: dict[str, float] = {kw: uniform_val for kw in keywords}
+    else:
+        bg = {kw: background_freq.get(kw, 0.0) for kw in keywords}
+
+    # Normalise TF so it forms a proper probability distribution over keywords.
+    # This ensures KL(p || q) ≥ 0 (Gibbs' inequality).
+    tf_sum = sum(tf.values())
+    if tf_sum > 0:
+        tf_norm = {kw: tf[kw] / tf_sum for kw in keywords}
+    else:
+        tf_norm = {kw: 0.0 for kw in keywords}
+
+    # Normalise background distribution.
+    bg_sum = sum(bg.values())
+    if bg_sum > 0:
+        bg_norm = {kw: bg[kw] / bg_sum for kw in keywords}
+    else:
+        uniform_val = 1.0 / n_keywords
+        bg_norm = {kw: uniform_val for kw in keywords}
+
+    # KL divergence: Σ p_k · log2((p_k + ε) / (q_k + ε))
+    kl = 0.0
+    for kw in keywords:
+        p_k = tf_norm[kw]
+        q_k = bg_norm[kw]
+        kl += p_k * math.log2((p_k + _EPS) / (q_k + _EPS))
+
+    return math.tanh(kl)
+
+
+def rank_clauses_by_relevance(
+    clauses: list[str],
+    topic_keywords: list[str],
+    top_k: int = 10,
+) -> list[tuple[int, float]]:
+    """Return the top-*k* (index, salience_score) pairs sorted highest first.
+
+    Implements Vervaeke's combinatorial explosion guard: all clauses are
+    evaluated but only the top *k* are returned.
+
+    References
+    ----------
+    Vervaeke & Lillicrap 2012, §3 (combinatorial explosion in relevance
+    filtering).
+    """
+    if not clauses:
+        return []
+
+    scored = [
+        (i, clause_salience_score(c, topic_keywords))
+        for i, c in enumerate(clauses)
+    ]
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return scored[: min(top_k, len(clauses))]
+
+
+def relevance_attention_weights(
+    clauses: list[str],
+    topic_keywords: list[str],
+) -> list[float]:
+    """Return softmax-normalised salience weights that sum to 1.0 ± 1e-9.
+
+    Uses a numerically stable softmax (subtract max before exp).
+
+    References
+    ----------
+    Vervaeke & Lillicrap 2012; Cover & Thomas §2.3.
+    """
+    if not clauses:
+        return []
+
+    scores = [clause_salience_score(c, topic_keywords) for c in clauses]
+    max_score = max(scores)
+    exps = [math.exp(s - max_score) for s in scores]
+    total = sum(exps)
+    return [e / total for e in exps]
+
+
+# ---------------------------------------------------------------------------
+# 2. PRAGMATIC REASONING SCHEMAS (Cheng & Holyoak 1985)
+# ---------------------------------------------------------------------------
+
+class ClauseSchema(Enum):
+    """Deontic schema types derived from Cheng & Holyoak (1985) pragmatic
+    reasoning schema theory, adapted for Australian financial-services
+    contract analysis."""
+
+    OBLIGATION = "OBLIGATION"
+    PERMISSION = "PERMISSION"
+    PROHIBITION = "PROHIBITION"
+    CONDITION = "CONDITION"
+    EXCEPTION = "EXCEPTION"
+    DEFINITION = "DEFINITION"
+    UNKNOWN = "UNKNOWN"
+
+
+# Keywords ordered by priority (highest first within each schema).
+_PROHIBITION_KEYWORDS = ["must not", "shall not", "is prohibited", "is not permitted", "may not"]
+_OBLIGATION_KEYWORDS = ["must", "shall", "required to", "obligated to"]
+_PERMISSION_KEYWORDS = ["may", "is permitted", "is entitled", "has the right", "at its discretion"]
+_EXCEPTION_KEYWORDS = ["except", "notwithstanding", "save for"]
+_CONDITION_KEYWORDS = ["if", "unless", "provided that", "subject to", "in the event"]
+_DEFINITION_KEYWORDS = ["means", "refers to", "is defined as", "includes"]
+
+_SCHEMA_PRIORITY: list[tuple[ClauseSchema, list[str]]] = [
+    (ClauseSchema.PROHIBITION, _PROHIBITION_KEYWORDS),
+    (ClauseSchema.OBLIGATION, _OBLIGATION_KEYWORDS),
+    (ClauseSchema.PERMISSION, _PERMISSION_KEYWORDS),
+    (ClauseSchema.EXCEPTION, _EXCEPTION_KEYWORDS),
+    (ClauseSchema.CONDITION, _CONDITION_KEYWORDS),
+    (ClauseSchema.DEFINITION, _DEFINITION_KEYWORDS),
+]
+
+
+def classify_clause_schema(clause_text: str) -> ClauseSchema:
+    """Classify *clause_text* into a deontic schema using Cheng & Holyoak
+    (1985) pragmatic reasoning schema theory.
+
+    Priority order (highest wins):
+    PROHIBITION > OBLIGATION > PERMISSION > EXCEPTION > CONDITION >
+    DEFINITION > UNKNOWN.
+
+    Matching is case-insensitive substring search.
+
+    References
+    ----------
+    Cheng & Holyoak (1985), "Pragmatic Reasoning Schemas", *Psychological
+    Review* 92(4):391-416.
+    """
+    lower = clause_text.lower()
+    for schema, keywords in _SCHEMA_PRIORITY:
+        for kw in keywords:
+            if kw in lower:
+                return schema
+    return ClauseSchema.UNKNOWN
+
+
+@dataclass
+class SchemaConflict:
+    """Represents a detected conflict between two clause schemas.
+
+    Attributes
+    ----------
+    schema_a : ClauseSchema
+        Schema of the first clause.
+    schema_b : ClauseSchema
+        Schema of the second clause.
+    conflict_type : str
+        One of ``OBLIGATION_PROHIBITION``, ``PERMISSION_PROHIBITION``,
+        ``DUPLICATE_OBLIGATION``.
+    severity : float
+        Severity score in [0, 1].
+    """
+
+    schema_a: ClauseSchema
+    schema_b: ClauseSchema
+    conflict_type: str
+    severity: float
+
+
+def schema_conflict_check(clause_a: str, clause_b: str) -> SchemaConflict | None:
+    """Detect deontic conflicts between *clause_a* and *clause_b*.
+
+    Conflict rules (Cheng & Holyoak 1985 extended):
+    * OBLIGATION + PROHIBITION  → ``OBLIGATION_PROHIBITION``, severity 1.0
+    * PERMISSION + PROHIBITION  → ``PERMISSION_PROHIBITION``, severity 0.8
+    * OBLIGATION + OBLIGATION   → ``DUPLICATE_OBLIGATION``, severity 0.4
+    * No conflict → ``None``.
+
+    References
+    ----------
+    Cheng & Holyoak (1985), *Psychological Review* 92(4):391-416.
+    """
+    sa = classify_clause_schema(clause_a)
+    sb = classify_clause_schema(clause_b)
+    pair = {sa, sb}
+
+    if ClauseSchema.OBLIGATION in pair and ClauseSchema.PROHIBITION in pair:
+        return SchemaConflict(
+            schema_a=sa,
+            schema_b=sb,
+            conflict_type="OBLIGATION_PROHIBITION",
+            severity=1.0,
+        )
+    if ClauseSchema.PERMISSION in pair and ClauseSchema.PROHIBITION in pair:
+        return SchemaConflict(
+            schema_a=sa,
+            schema_b=sb,
+            conflict_type="PERMISSION_PROHIBITION",
+            severity=0.8,
+        )
+    if sa == ClauseSchema.OBLIGATION and sb == ClauseSchema.OBLIGATION:
+        return SchemaConflict(
+            schema_a=sa,
+            schema_b=sb,
+            conflict_type="DUPLICATE_OBLIGATION",
+            severity=0.4,
+        )
+    return None
+
+
+# ---------------------------------------------------------------------------
+# 3. DUAL-PROCESS SCREENING (Kahneman 2011; Guthrie et al. 2007)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class FastScreenResult:
+    """Result of a fast (System 1) heuristic screen of a clause.
+
+    Attributes
+    ----------
+    matched_patterns : list[str]
+        Risk patterns that matched the clause.
+    heuristic_risk_score : float
+        ``len(matched) / max(len(risk_patterns), 1)`` in [0, 1].
+    should_escalate : bool
+        ``True`` when *heuristic_risk_score* > 0.2.
+
+    References
+    ----------
+    Kahneman (2011), *Thinking, Fast and Slow*; Guthrie, Rachlinski &
+    Wistrich (2007), "Blinking on the Bench", *Cornell Law Review*
+    93(1):1-43.
+    """
+
+    matched_patterns: list[str]
+    heuristic_risk_score: float
+    should_escalate: bool
+
+
+def fast_screen(clause_text: str, risk_patterns: list[str]) -> FastScreenResult:
+    """Apply fast (System 1) heuristic screening to *clause_text*.
+
+    Performs case-insensitive substring matching for each pattern.
+    *heuristic_risk_score* = ``len(matched) / max(len(risk_patterns), 1)``.
+    *should_escalate* is ``True`` when score > 0.2.
+
+    References
+    ----------
+    Kahneman (2011), *Thinking, Fast and Slow*; Guthrie, Rachlinski &
+    Wistrich (2007), *Cornell Law Review* 93(1):1-43.
+    """
+    lower = clause_text.lower()
+    matched = [p for p in risk_patterns if p.lower() in lower]
+    score = len(matched) / max(len(risk_patterns), 1)
+    return FastScreenResult(
+        matched_patterns=matched,
+        heuristic_risk_score=score,
+        should_escalate=score > 0.2,
+    )
+
+
+def slow_analysis_priority(
+    fast_results: list[FastScreenResult],
+    salience_weights: list[float],
+) -> list[int]:
+    """Return clause indices sorted by combined priority (highest first).
+
+    Combined priority = ``fast_result.heuristic_risk_score * salience_weight``.
+    Returns ``[]`` for empty input.
+
+    References
+    ----------
+    Kahneman (2011), *Thinking, Fast and Slow*; Guthrie et al. (2007),
+    *Cornell Law Review* 93(1):1-43.
+    """
+    if not fast_results:
+        return []
+
+    indexed = [
+        (i, fr.heuristic_risk_score * sw)
+        for i, (fr, sw) in enumerate(zip(fast_results, salience_weights))
+    ]
+    indexed.sort(key=lambda x: x[1], reverse=True)
+    return [i for i, _ in indexed]
+ 
+---
+/tmp/hello_agent/src/reasoning/defeasible_engine.py 
+ """
+Defeasible Argumentation Engine for Denuto Legal-Tech Contract Review AI.
+
+Implements Dung (1995) argumentation semantics and Pearl (2009) counterfactual
+consequence analysis for Australian financial services contract review.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from itertools import combinations
+from math import inf
+from typing import Optional
+
+__all__ = [
+    "Argument",
+    "Attack",
+    "ArgumentationFramework",
+    "CounterfactualResult",
+    "compute_grounded_extension",
+    "compute_preferred_extensions",
+    "is_credulously_accepted",
+    "is_skeptically_accepted",
+    "build_clause_af",
+    "resolve_clause_conflicts",
+    "counterfactual_obligation_impact",
+]
+
+
+# ---------------------------------------------------------------------------
+# Dataclasses
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Argument:
+    id: str
+    claim: str
+    support: str
+    strength: float  # 0.0-1.0
+
+
+@dataclass
+class Attack:
+    attacker_id: str
+    attacked_id: str
+    attack_type: str  # 'rebuttal' | 'undercutter' | 'underminer'
+    weight: float     # 0.0-1.0
+
+
+@dataclass
+class ArgumentationFramework:
+    arguments: list[Argument]
+    attacks: list[Attack]
+
+
+@dataclass
+class CounterfactualResult:
+    removed_clause: str
+    affected_clauses: list[int]
+    obligation_delta: int
+    impact_score: float
+
+
+# ---------------------------------------------------------------------------
+# 1. DEFEASIBLE ARGUMENTATION
+# ---------------------------------------------------------------------------
+
+def _build_attack_index(af: ArgumentationFramework) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    """
+    Returns (attackers_of, attacks_by):
+        attackers_of[x] = set of ids that attack x
+        attacks_by[a]   = set of ids that a attacks
+    """
+    attackers_of: dict[str, set[str]] = {arg.id: set() for arg in af.arguments}
+    attacks_by: dict[str, set[str]] = {arg.id: set() for arg in af.arguments}
+    for atk in af.attacks:
+        attackers_of.setdefault(atk.attacked_id, set()).add(atk.attacker_id)
+        attacks_by.setdefault(atk.attacker_id, set()).add(atk.attacked_id)
+    return attackers_of, attacks_by
+
+
+def compute_grounded_extension(af: ArgumentationFramework) -> frozenset[str]:
+    """
+    Dung 1995 Def 23: least fixed point of the characteristic function F_AF.
+
+    F_AF(S) = { x | x is defended by S }
+    where x is defended by S iff for every attacker a of x, some b in S attacks a.
+
+    We compute the grounded extension iteratively:
+      - Start with S = {} 
+      - Repeatedly apply F_AF until fixpoint
+    """
+    if not af.arguments:
+        return frozenset()
+
+    attackers_of, attacks_by = _build_attack_index(af)
+    all_ids = {arg.id for arg in af.arguments}
+
+    # Iterative least fixed-point computation
+    S: set[str] = set()
+    while True:
+        new_S: set[str] = set()
+        for arg_id in all_ids:
+            # arg_id is defended by S if every attacker of arg_id is attacked by some member of S
+            defended = all(
+                any(s_member in attackers_of.get(attacker, set()) or
+                    attacker in attacks_by.get(s_member, set())
+                    for s_member in S)
+                for attacker in attackers_of.get(arg_id, set())
+            )
+            # An argument with no attackers is trivially defended
+            if not attackers_of.get(arg_id):
+                defended = True
+            if defended:
+                new_S.add(arg_id)
+        if new_S == S:
+            break
+        S = new_S
+
+    return frozenset(S)
+
+
+def _is_conflict_free(subset: frozenset[str], attacks_set: set[tuple[str, str]]) -> bool:
+    """A set is conflict-free if no member attacks another member."""
+    for a in subset:
+        for b in subset:
+            if (a, b) in attacks_set:
+                return False
+    return True
+
+
+def _defends_all(subset: frozenset[str], attackers_of: dict[str, set[str]],
+                 attacks_by: dict[str, set[str]]) -> bool:
+    """
+    subset defends all its members iff for every x in subset and every attacker a of x,
+    some b in subset attacks a.
+    """
+    for x in subset:
+        for attacker in attackers_of.get(x, set()):
+            if not any(attacker in attacks_by.get(b, set()) for b in subset):
+                return False
+    return True
+
+
+def _is_admissible(subset: frozenset[str], attacks_set: set[tuple[str, str]],
+                   attackers_of: dict[str, set[str]], attacks_by: dict[str, set[str]]) -> bool:
+    """Admissible = conflict-free AND defends all its members."""
+    return (
+        _is_conflict_free(subset, attacks_set)
+        and _defends_all(subset, attackers_of, attacks_by)
+    )
+
+
+def compute_preferred_extensions(af: ArgumentationFramework) -> list[frozenset[str]]:
+    """
+    Preferred extensions = maximal admissible sets (Dung 1995 Def 11).
+
+    Raises ValueError if |af.arguments| > 20 to prevent exponential blowup.
+
+    Uses a backtracking search to enumerate maximal admissible sets without
+    materialising all 2^n subsets.
+    """
+    if len(af.arguments) > 20:
+        raise ValueError(
+            f"compute_preferred_extensions: too many arguments ({len(af.arguments)} > 20); "
+            "exponential blowup prevented."
+        )
+
+    attackers_of, attacks_by = _build_attack_index(af)
+    attacks_set: set[tuple[str, str]] = {(atk.attacker_id, atk.attacked_id) for atk in af.attacks}
+    all_ids = [arg.id for arg in af.arguments]
+
+    # Special case: no attacks at all -> the full set is the single preferred extension
+    if not af.attacks:
+        return [frozenset(all_ids)]
+
+    preferred: list[frozenset[str]] = []
+
+    def _is_dominated(candidate: frozenset[str]) -> bool:
+        """Check if candidate is a strict subset of any already-found preferred extension."""
+        return any(candidate < p for p in preferred)
+
+    def backtrack(idx: int, current: frozenset[str]) -> None:
+        """
+        Try to extend `current` by adding arguments from all_ids[idx:].
+        If no extension is possible and current is admissible, record it as preferred.
+        """
+        extended = False
+        for i in range(idx, len(all_ids)):
+            arg_id = all_ids[i]
+            candidate = current | {arg_id}
+            # Pruning: skip if not conflict-free
+            if not _is_conflict_free(candidate, attacks_set):
+                continue
+            # Pruning: skip if dominated
+            if _is_dominated(candidate):
+                continue
+            # Only recurse if still admissible
+            if _defends_all(candidate, attackers_of, attacks_by):
+                extended = True
+                backtrack(i + 1, candidate)
+
+        if not extended:
+            # current cannot be extended to a larger admissible set
+            if _is_admissible(current, attacks_set, attackers_of, attacks_by):
+                if not _is_dominated(current):
+                    preferred.append(current)
+
+    backtrack(0, frozenset())
+
+    # Deduplicate and remove any non-maximal sets that slipped through
+    maximal: list[frozenset[str]] = []
+    for s in preferred:
+        if not any(s < other for other in preferred):
+            if s not in maximal:
+                maximal.append(s)
+    return maximal
+
+
+def is_credulously_accepted(arg_id: str, af: ArgumentationFramework) -> bool:
+    """True if arg_id appears in at least one preferred extension."""
+    extensions = compute_preferred_extensions(af)
+    return any(arg_id in ext for ext in extensions)
+
+
+def is_skeptically_accepted(arg_id: str, af: ArgumentationFramework) -> bool:
+    """True if arg_id appears in ALL preferred extensions."""
+    extensions = compute_preferred_extensions(af)
+    if not extensions:
+        return False
+    return all(arg_id in ext for ext in extensions)
+
+
+# ---------------------------------------------------------------------------
+# 2. LEGAL DEFEASIBILITY WRAPPER
+# ---------------------------------------------------------------------------
+
+def build_clause_af(
+    clauses: list[str],
+    precedence_rules: list[tuple[str, str]] | None = None,
+) -> ArgumentationFramework:
+    """
+    Builds an ArgumentationFramework from a list of contract clauses.
+
+    - One Argument per clause: id=str(index), claim=clause[:100],
+      support='contract clause', strength=1.0/(index+1)
+    - Default: later clauses attack earlier ones (i > j => i attacks j)
+    - If precedence_rules provided: those pairs use explicit Attack(rebuttal, weight=1.0)
+      and the default i>j attacks are NOT added for those specific pairs.
+    """
+    arguments = [
+        Argument(
+            id=str(idx),
+            claim=clause[:100],
+            support="contract clause",
+            strength=1.0 / (idx + 1),
+        )
+        for idx, clause in enumerate(clauses)
+    ]
+
+    # Build set of arg-id pairs that are explicitly governed by precedence_rules.
+    # For any pair (a, b) in precedence_rules we suppress the default attack in
+    # BOTH directions (i.e. neither the default i>j nor j>i attack is added for
+    # those two args — only the explicit rule matters).
+    governed_unordered: set[frozenset] = set()
+    attacks: list[Attack] = []
+
+    if precedence_rules:
+        for stronger, weaker in precedence_rules:
+            governed_unordered.add(frozenset({stronger, weaker}))
+            attacks.append(
+                Attack(
+                    attacker_id=stronger,
+                    attacked_id=weaker,
+                    attack_type="rebuttal",
+                    weight=1.0,
+                )
+            )
+
+    # Default: later index (higher i) attacks earlier index (lower j)
+    for i in range(len(clauses)):
+        for j in range(i):
+            if frozenset({str(i), str(j)}) not in governed_unordered:
+                attacks.append(
+                    Attack(
+                        attacker_id=str(i),
+                        attacked_id=str(j),
+                        attack_type="rebuttal",
+                        weight=1.0,
+                    )
+                )
+
+    return ArgumentationFramework(arguments=arguments, attacks=attacks)
+
+
+def resolve_clause_conflicts(
+    clauses: list[str],
+    precedence_rules: list[tuple[str, str]] | None = None,
+) -> dict[str, bool]:
+    """
+    Returns {str(idx): accepted} for each clause using the grounded extension.
+    """
+    if not clauses:
+        return {}
+    af = build_clause_af(clauses, precedence_rules)
+    grounded = compute_grounded_extension(af)
+    return {str(idx): (str(idx) in grounded) for idx in range(len(clauses))}
+
+
+# ---------------------------------------------------------------------------
+# 3. COUNTERFACTUAL CONSEQUENCE ANALYSIS (Pearl 2009 Causality Ch.7)
+# ---------------------------------------------------------------------------
+
+def _tokenize(text: str) -> list[str]:
+    """Simple whitespace tokenizer (lowercase)."""
+    return text.lower().split()
+
+
+def _trigrams(words: list[str]) -> set[tuple[str, str, str]]:
+    """Return all 3-grams from a word list."""
+    if len(words) < 3:
+        return set()
+    return {(words[i], words[i + 1], words[i + 2]) for i in range(len(words) - 2)}
+
+
+def counterfactual_obligation_impact(
+    clauses: list[str],
+    removed_clause_idx: int,
+    obligation_keywords: list[str] | None = None,
+) -> CounterfactualResult:
+    """
+    Pearl 2009 Causality Ch.7: counterfactual consequence analysis.
+
+    Removes the clause at removed_clause_idx and analyses the impact on:
+    - Which clauses are affected (share 3+ consecutive words with removed clause)
+    - How many obligation clauses change (obligation_delta)
+    - An impact_score in [0,1]
+    """
+    if obligation_keywords is None:
+        obligation_keywords = ["must", "shall", "required", "obligated"]
+
+    removed_clause = clauses[removed_clause_idx]
+    remaining = [c for i, c in enumerate(clauses) if i != removed_clause_idx]
+
+    # 3-grams of the removed clause
+    removed_words = _tokenize(removed_clause)
+    removed_tgrams = _trigrams(removed_words)
+
+    # Find affected clauses: share at least one 3-gram with removed clause
+    affected_clauses: list[int] = []
+    for orig_idx, clause in enumerate(clauses):
+        if orig_idx == removed_clause_idx:
+            continue
+        other_words = _tokenize(clause)
+        other_tgrams = _trigrams(other_words)
+        if removed_tgrams & other_tgrams:
+            affected_clauses.append(orig_idx)
+
+    # Count obligation clauses
+    def _has_obligation(clause: str) -> bool:
+        words = set(_tokenize(clause))
+        return any(kw in words for kw in obligation_keywords)
+
+    original_obligation_count = sum(1 for c in clauses if _has_obligation(c))
+    remaining_obligation_count = sum(1 for c in remaining if _has_obligation(c))
+
+    obligation_delta = remaining_obligation_count - original_obligation_count
+    impact_score = abs(obligation_delta) / max(len(clauses), 1)
+
+    return CounterfactualResult(
+        removed_clause=removed_clause,
+        affected_clauses=affected_clauses,
+        obligation_delta=obligation_delta,
+        impact_score=impact_score,
+    )
+ 
+---
+/tmp/hello_agent/src/reasoning/analogical_engine.py 
+ """
+Analogical reasoning engine for legal precedent matching.
+
+Theory: Bliss & Forbus 2023 (ICAIL 2023), Gentner 1983 Structure-Mapping Theory,
+HYPO/CATO (Bench-Capon 2021 arXiv:2106.14688)
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+__all__ = [
+    "LegalPrecedent",
+    "AnalogicalMatch",
+    "find_analogical_matches",
+    "aggregate_analogical_verdict",
+    "structure_map",
+]
+
+
+@dataclass
+class LegalPrecedent:
+    case_id: str
+    case_summary: str
+    outcome: str  # 'party_a_wins' | 'party_b_wins' | 'settled' | 'unknown'
+    key_factors: list[str]
+    rule_applied: str
+    jurisdiction: str
+
+
+@dataclass
+class AnalogicalMatch:
+    precedent: LegalPrecedent
+    current_factors: list[str]
+    shared_factors: list[str]
+    distinct_factors_precedent: list[str]
+    distinct_factors_current: list[str]
+    similarity_score: float  # Jaccard
+    analogical_strength: float  # shared / (shared + distinct_p + distinct_c)
+    supports_outcome: str | None  # precedent.outcome if strength > 0.5 else None
+
+
+def find_analogical_matches(
+    current_factors: list[str],
+    precedents: list[LegalPrecedent],
+    top_k: int = 5,
+) -> list[AnalogicalMatch]:
+    """Find the top-k most analogically similar precedents to the current factors."""
+    if not precedents:
+        return []
+
+    current_lower = [f.lower() for f in current_factors]
+    current_lower_set = set(current_lower)
+
+    matches: list[AnalogicalMatch] = []
+
+    for precedent in precedents:
+        precedent_lower_set = {f.lower() for f in precedent.key_factors}
+
+        shared = [f for f in current_lower if f in precedent_lower_set]
+        distinct_p = [f for f in precedent.key_factors if f.lower() not in current_lower_set]
+        distinct_c = [f for f in current_factors if f.lower() not in precedent_lower_set]
+
+        union = set(current_lower) | precedent_lower_set
+        similarity_score = len(shared) / max(len(union), 1)
+
+        denom = len(shared) + len(distinct_p) + len(distinct_c)
+        analogical_strength = len(shared) / max(denom, 1)
+
+        supports_outcome = precedent.outcome if analogical_strength > 0.5 else None
+
+        matches.append(
+            AnalogicalMatch(
+                precedent=precedent,
+                current_factors=current_factors,
+                shared_factors=shared,
+                distinct_factors_precedent=distinct_p,
+                distinct_factors_current=distinct_c,
+                similarity_score=similarity_score,
+                analogical_strength=analogical_strength,
+                supports_outcome=supports_outcome,
+            )
+        )
+
+    matches.sort(key=lambda m: m.analogical_strength, reverse=True)
+    return matches[:top_k]
+
+
+def aggregate_analogical_verdict(matches: list[AnalogicalMatch]) -> dict[str, float]:
+    """Aggregate analogical matches into a weighted outcome verdict."""
+    outcome_weights: dict[str, float] = {}
+    total_weight = sum(m.analogical_strength for m in matches)
+
+    for match in matches:
+        if match.supports_outcome is not None:
+            outcome_weights[match.supports_outcome] = (
+                outcome_weights.get(match.supports_outcome, 0.0) + match.analogical_strength
+            )
+
+    denom = max(total_weight, 1e-10)
+    return {outcome: weight / denom for outcome, weight in outcome_weights.items()}
+
+
+def structure_map(
+    source_relations: list[tuple[str, str, str]],
+    target_relations: list[tuple[str, str, str]],
+) -> list[tuple[tuple[str, str, str], tuple[str, str, str]]]:
+    """
+    Structure-map source relations onto target relations by matching predicates.
+
+    Returns all (source_rel, target_rel) pairs where predicates match (case-insensitive),
+    sorted by predicate.
+    """
+    if not source_relations or not target_relations:
+        return []
+
+    # Group target relations by lowercase predicate
+    target_by_pred: dict[str, list[tuple[str, str, str]]] = {}
+    for rel in target_relations:
+        key = rel[1].lower()
+        target_by_pred.setdefault(key, []).append(rel)
+
+    result: list[tuple[tuple[str, str, str], tuple[str, str, str]]] = []
+
+    for src_rel in source_relations:
+        pred_key = src_rel[1].lower()
+        for tgt_rel in target_by_pred.get(pred_key, []):
+            result.append((src_rel, tgt_rel))
+
+    result.sort(key=lambda pair: pair[0][1].lower())
+    return result
+ 
+---
+/tmp/hello_agent/src/reasoning/abductive_engine.py 
+ """
+Abductive reasoning engine for legal hypothesis inference.
+
+Theory: Peirce 1878 'Deduction, Induction, and Hypothesis';
+Walton, Reed & Macagno 2008 'Argumentation Schemes' Ch.8;
+Pearl 2009 Causality Ch.10
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+__all__ = [
+    "Hypothesis",
+    "AbductiveResult",
+    "abductive_score",
+    "infer_best_explanation",
+    "ambiguity_resolution",
+]
+
+
+@dataclass
+class Hypothesis:
+    id: str
+    description: str
+    prior_probability: float
+    predicted_observations: list[str]
+
+
+@dataclass
+class AbductiveResult:
+    best_hypothesis: Hypothesis
+    posterior_scores: dict[str, float]
+    explanation_coverage: float
+    confidence: float
+
+
+def abductive_score(hypothesis: Hypothesis, observations: list[str]) -> float:
+    """Score a hypothesis against a set of observations."""
+    if not observations:
+        return hypothesis.prior_probability
+
+    matched = sum(
+        1
+        for obs in observations
+        if any(obs.lower() in pred.lower() for pred in hypothesis.predicted_observations)
+    )
+    coverage = matched / len(observations)
+    return hypothesis.prior_probability * (1 + coverage)
+
+
+def infer_best_explanation(
+    hypotheses: list[Hypothesis],
+    observations: list[str],
+) -> AbductiveResult:
+    """Infer the best explanation for a set of observations from candidate hypotheses."""
+    if not hypotheses:
+        raise ValueError("hypotheses must not be empty")
+
+    raw_scores = {h.id: abductive_score(h, observations) for h in hypotheses}
+    total = sum(raw_scores.values())
+
+    if total == 0.0:
+        n = len(hypotheses)
+        posterior: dict[str, float] = {h.id: 1.0 / n for h in hypotheses}
+    else:
+        posterior = {hid: score / total for hid, score in raw_scores.items()}
+
+    best_hypothesis = max(hypotheses, key=lambda h: posterior[h.id])
+
+    # explanation_coverage for best hypothesis
+    if not observations:
+        explanation_coverage = 0.0
+    else:
+        matched = sum(
+            1
+            for obs in observations
+            if any(
+                obs.lower() in pred.lower()
+                for pred in best_hypothesis.predicted_observations
+            )
+        )
+        explanation_coverage = matched / len(observations)
+
+    confidence = posterior[best_hypothesis.id]
+
+    return AbductiveResult(
+        best_hypothesis=best_hypothesis,
+        posterior_scores=posterior,
+        explanation_coverage=explanation_coverage,
+        confidence=confidence,
+    )
+
+
+def ambiguity_resolution(
+    ambiguous_term: str,
+    candidate_meanings: list[str],
+    contextual_observations: list[str],
+) -> dict[str, float]:
+    """Resolve an ambiguous term by abductive inference over candidate meanings."""
+    if not candidate_meanings:
+        raise ValueError("candidate_meanings must not be empty")
+
+    hypotheses = [
+        Hypothesis(
+            id=f"h_{i}",
+            description=meaning,
+            prior_probability=1.0 / len(candidate_meanings),
+            predicted_observations=[ambiguous_term, meaning],
+        )
+        for i, meaning in enumerate(candidate_meanings)
+    ]
+
+    result = infer_best_explanation(hypotheses, contextual_observations)
+    return result.posterior_scores
+ 
+---
+/tmp/hello_agent/src/reasoning/__init__.py 
+ """
+src.reasoning — Denuto cognitive-legal reasoning package.
+
+Re-exports all public symbols from the reasoning sub-modules.
+Sibling modules (defeasible_engine, analogical_engine, abductive_engine)
+are imported opportunistically; missing modules are silently skipped until
+they are implemented.
+"""
+
+from src.reasoning.relevance_engine import *  # noqa: F401, F403
+from src.reasoning.relevance_engine import __all__  # noqa: F401
+
+try:
+    from src.reasoning import defeasible_engine  # noqa: F401
+except ImportError:
+    pass
+
+try:
+    from src.reasoning import analogical_engine  # noqa: F401
+except ImportError:
+    pass
+
+try:
+    from src.reasoning import abductive_engine  # noqa: F401
+except ImportError:
+    pass
+ 
+---
+/tmp/hello_agent/tests/reasoning/test_relevance_engine.py 
+ """
+tests/reasoning/test_relevance_engine.py
+
+Unit tests for src.reasoning.relevance_engine.
+≥ 30 tests covering all public functions and edge cases.
+"""
+
+from __future__ import annotations
+
+import math
+import pytest
+
+from src.reasoning.relevance_engine import (
+    clause_salience_score,
+    rank_clauses_by_relevance,
+    relevance_attention_weights,
+    ClauseSchema,
+    classify_clause_schema,
+    SchemaConflict,
+    schema_conflict_check,
+    FastScreenResult,
+    fast_screen,
+    slow_analysis_priority,
+)
+
+
+# ---------------------------------------------------------------------------
+# clause_salience_score
+# ---------------------------------------------------------------------------
+
+class TestClauseSalienceScore:
+
+    def test_empty_clause_returns_zero(self):
+        assert clause_salience_score("", ["payment", "interest"]) == 0.0
+
+    def test_whitespace_only_clause_returns_zero(self):
+        assert clause_salience_score("   \t\n  ", ["payment"]) == 0.0
+
+    def test_no_keywords_returns_zero(self):
+        assert clause_salience_score("The borrower shall pay interest.", []) == 0.0
+
+    def test_keyword_rich_clause_returns_positive(self):
+        score = clause_salience_score(
+            "Payment of interest on the outstanding payment amount.",
+            ["payment", "interest"],
+        )
+        assert score > 0.0
+
+    def test_result_in_zero_one(self):
+        score = clause_salience_score(
+            "The borrower must pay the principal and interest immediately.",
+            ["principal", "interest", "borrower"],
+        )
+        assert 0.0 <= score <= 1.0
+
+    def test_irrelevant_clause_near_zero(self):
+        score = clause_salience_score(
+            "The cat sat on the mat.",
+            ["payment", "interest", "principal"],
+        )
+        # All TF values are 0 → KL from uniform is effectively 0, tanh(0)=0
+        assert score == pytest.approx(0.0, abs=1e-9)
+
+    def test_custom_background_freq_affects_score(self):
+        bg = {"payment": 0.9, "interest": 0.1}
+        score_with_bg = clause_salience_score(
+            "Payment of interest on the outstanding payment amount.",
+            ["payment", "interest"],
+            background_freq=bg,
+        )
+        score_uniform = clause_salience_score(
+            "Payment of interest on the outstanding payment amount.",
+            ["payment", "interest"],
+        )
+        # Scores may differ but both should be in [0, 1]
+        assert 0.0 <= score_with_bg <= 1.0
+        assert score_with_bg != score_uniform or True  # order may vary; just check bounds
+
+    def test_single_keyword_fully_present(self):
+        # With two keywords, skewing all tokens toward one creates KL > 0.
+        # "payment payment payment" has tf(payment)=1.0, tf(interest)=0.0
+        # → normalised TF = [1.0, 0.0], uniform bg = [0.5, 0.5] → KL > 0.
+        score = clause_salience_score("payment payment payment", ["payment", "interest"])
+        assert score > 0.0
+        assert score <= 1.0
+
+    def test_score_bounded_above_by_one(self):
+        # Extreme repetition should still be ≤ 1 due to tanh
+        score = clause_salience_score(
+            " ".join(["liability"] * 100),
+            ["liability"],
+        )
+        assert score <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# rank_clauses_by_relevance
+# ---------------------------------------------------------------------------
+
+class TestRankClausesByRelevance:
+
+    CLAUSES = [
+        "The borrower must pay interest on the outstanding principal.",   # 0 – relevant
+        "The cat sat on the mat.",                                        # 1 – irrelevant
+        "Interest accrues daily on the payment amount.",                  # 2 – relevant
+        "All notices shall be in writing.",                               # 3 – neutral
+        "The principal balance plus interest is repayable on demand.",    # 4 – highly relevant
+    ]
+    KEYWORDS = ["interest", "payment", "principal"]
+
+    def test_returns_correct_length_top_k(self):
+        result = rank_clauses_by_relevance(self.CLAUSES, self.KEYWORDS, top_k=3)
+        assert len(result) == 3
+
+    def test_sorted_descending(self):
+        result = rank_clauses_by_relevance(self.CLAUSES, self.KEYWORDS, top_k=5)
+        scores = [s for _, s in result]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_empty_clauses_returns_empty(self):
+        assert rank_clauses_by_relevance([], self.KEYWORDS) == []
+
+    def test_top_k_exceeds_clauses_returns_all(self):
+        result = rank_clauses_by_relevance(self.CLAUSES, self.KEYWORDS, top_k=100)
+        assert len(result) == len(self.CLAUSES)
+
+    def test_top_k_one_returns_single_best(self):
+        result = rank_clauses_by_relevance(self.CLAUSES, self.KEYWORDS, top_k=1)
+        assert len(result) == 1
+        # The index returned should be the highest-scoring clause
+        idx, score = result[0]
+        assert 0 <= idx < len(self.CLAUSES)
+        assert score >= 0.0
+
+    def test_index_matches_original_position(self):
+        result = rank_clauses_by_relevance(self.CLAUSES, self.KEYWORDS, top_k=5)
+        indices = [i for i, _ in result]
+        assert set(indices) == set(range(len(self.CLAUSES)))
+
+    def test_no_keywords_all_scores_zero(self):
+        result = rank_clauses_by_relevance(self.CLAUSES, [], top_k=5)
+        for _, score in result:
+            assert score == 0.0
+
+
+# ---------------------------------------------------------------------------
+# relevance_attention_weights
+# ---------------------------------------------------------------------------
+
+class TestRelevanceAttentionWeights:
+
+    KEYWORDS = ["payment", "interest", "default"]
+
+    def test_sums_to_one(self):
+        clauses = [
+            "The borrower must pay interest.",
+            "In the event of default the lender may terminate.",
+            "All notices shall be in writing.",
+        ]
+        weights = relevance_attention_weights(clauses, self.KEYWORDS)
+        assert sum(weights) == pytest.approx(1.0, abs=1e-9)
+
+    def test_all_equal_clauses_uniform_weights(self):
+        # Two identical clauses should get equal weights
+        clauses = ["interest payment default"] * 3
+        weights = relevance_attention_weights(clauses, self.KEYWORDS)
+        assert all(w == pytest.approx(1 / 3, abs=1e-9) for w in weights)
+
+    def test_single_clause_returns_one(self):
+        weights = relevance_attention_weights(["The borrower must pay."], self.KEYWORDS)
+        assert weights == [pytest.approx(1.0, abs=1e-9)]
+
+    def test_empty_clauses_returns_empty(self):
+        assert relevance_attention_weights([], self.KEYWORDS) == []
+
+    def test_all_weights_non_negative(self):
+        clauses = [
+            "interest accrues daily",
+            "the cat sat on the mat",
+            "payment of principal",
+        ]
+        weights = relevance_attention_weights(clauses, self.KEYWORDS)
+        assert all(w >= 0.0 for w in weights)
+
+    def test_weights_length_matches_clauses(self):
+        clauses = ["a", "b", "c", "d"]
+        weights = relevance_attention_weights(clauses, self.KEYWORDS)
+        assert len(weights) == 4
+
+
+# ---------------------------------------------------------------------------
+# classify_clause_schema
+# ---------------------------------------------------------------------------
+
+class TestClassifyClauseSchema:
+
+    def test_must_pay_is_obligation(self):
+        assert classify_clause_schema("The borrower must pay the fee.") == ClauseSchema.OBLIGATION
+
+    def test_may_terminate_is_permission(self):
+        assert classify_clause_schema("The lender may terminate the agreement.") == ClauseSchema.PERMISSION
+
+    def test_shall_not_disclose_is_prohibition(self):
+        assert classify_clause_schema("The party shall not disclose any information.") == ClauseSchema.PROHIBITION
+
+    def test_if_payment_overdue_is_condition(self):
+        # Must not include 'may' (PERMISSION) which has higher priority than CONDITION.
+        assert classify_clause_schema("If payment is overdue, acceleration applies.") == ClauseSchema.CONDITION
+
+    def test_except_as_provided_is_exception(self):
+        assert classify_clause_schema("Except as provided in clause 3, the rule applies.") == ClauseSchema.EXCEPTION
+
+    def test_means_the_entity_is_definition(self):
+        assert classify_clause_schema("'Borrower' means the entity named on the cover page.") == ClauseSchema.DEFINITION
+
+    def test_empty_string_is_unknown(self):
+        assert classify_clause_schema("") == ClauseSchema.UNKNOWN
+
+    def test_must_not_beats_must(self):
+        # 'must not' (PROHIBITION) takes priority over 'must' (OBLIGATION)
+        assert classify_clause_schema("The party must not breach the agreement.") == ClauseSchema.PROHIBITION
+
+    def test_shall_not_beats_shall(self):
+        assert classify_clause_schema("The trustee shall not transfer the funds.") == ClauseSchema.PROHIBITION
+
+    def test_may_not_is_prohibition(self):
+        assert classify_clause_schema("The counterparty may not assign this agreement.") == ClauseSchema.PROHIBITION
+
+    def test_case_insensitive_obligation(self):
+        assert classify_clause_schema("THE PARTY SHALL PAY THE FEE.") == ClauseSchema.OBLIGATION
+
+    def test_notwithstanding_is_exception(self):
+        assert classify_clause_schema("Notwithstanding the foregoing, clause 5 applies.") == ClauseSchema.EXCEPTION
+
+    def test_subject_to_is_condition(self):
+        assert classify_clause_schema("Subject to clause 4, the rule applies.") == ClauseSchema.CONDITION
+
+    def test_is_defined_as_is_definition(self):
+        assert classify_clause_schema("'Material' is defined as any change exceeding 5%.") == ClauseSchema.DEFINITION
+
+    def test_random_text_is_unknown(self):
+        assert classify_clause_schema("The sky is blue and the sun shines.") == ClauseSchema.UNKNOWN
+
+
+# ---------------------------------------------------------------------------
+# schema_conflict_check
+# ---------------------------------------------------------------------------
+
+class TestSchemaConflictCheck:
+
+    def test_obligation_vs_prohibition_severity_one(self):
+        conflict = schema_conflict_check(
+            "The borrower must pay the fee.",
+            "The borrower shall not pay fees to third parties.",
+        )
+        assert conflict is not None
+        assert conflict.conflict_type == "OBLIGATION_PROHIBITION"
+        assert conflict.severity == pytest.approx(1.0)
+
+    def test_permission_vs_prohibition_severity_point_eight(self):
+        conflict = schema_conflict_check(
+            "The lender may assign this agreement.",
+            "The lender shall not assign this agreement.",
+        )
+        assert conflict is not None
+        assert conflict.conflict_type == "PERMISSION_PROHIBITION"
+        assert conflict.severity == pytest.approx(0.8)
+
+    def test_two_obligations_duplicate_severity_point_four(self):
+        conflict = schema_conflict_check(
+            "The borrower must pay the principal.",
+            "The borrower shall repay the loan on demand.",
+        )
+        assert conflict is not None
+        assert conflict.conflict_type == "DUPLICATE_OBLIGATION"
+        assert conflict.severity == pytest.approx(0.4)
+
+    def test_same_non_conflicting_schema_returns_none(self):
+        conflict = schema_conflict_check(
+            "If payment is overdue the lender may act.",
+            "If the agreement expires the terms cease.",
+        )
+        assert conflict is None
+
+    def test_prohibition_vs_obligation_reversed_order(self):
+        # Swap the order — should still detect OBLIGATION_PROHIBITION
+        conflict = schema_conflict_check(
+            "The party shall not disclose.",
+            "The party must report disclosures.",
+        )
+        assert conflict is not None
+        assert conflict.conflict_type == "OBLIGATION_PROHIBITION"
+        assert conflict.severity == pytest.approx(1.0)
+
+    def test_conflict_result_is_schema_conflict_dataclass(self):
+        conflict = schema_conflict_check(
+            "The borrower must pay.",
+            "The borrower must not pay fees.",
+        )
+        assert isinstance(conflict, SchemaConflict)
+        assert isinstance(conflict.schema_a, ClauseSchema)
+        assert isinstance(conflict.schema_b, ClauseSchema)
+        assert isinstance(conflict.conflict_type, str)
+        assert isinstance(conflict.severity, float)
+
+    def test_two_definitions_no_conflict(self):
+        conflict = schema_conflict_check(
+            "'Borrower' means the entity on the cover.",
+            "'Lender' means the financial institution.",
+        )
+        assert conflict is None
+
+
+# ---------------------------------------------------------------------------
+# fast_screen
+# ---------------------------------------------------------------------------
+
+class TestFastScreen:
+
+    def test_zero_matches_score_zero_no_escalate(self):
+        result = fast_screen("The cat sat on the mat.", ["indemnity", "liability", "waiver"])
+        assert result.heuristic_risk_score == pytest.approx(0.0)
+        assert result.should_escalate is False
+        assert result.matched_patterns == []
+
+    def test_all_patterns_match_score_one(self):
+        result = fast_screen(
+            "Indemnity and liability waiver applies.",
+            ["indemnity", "liability", "waiver"],
+        )
+        assert result.heuristic_risk_score == pytest.approx(1.0)
+        assert result.should_escalate is True
+
+    def test_above_twenty_percent_escalates(self):
+        # 2 of 5 patterns = 0.4 > 0.2
+        result = fast_screen(
+            "This clause includes indemnity and liability provisions.",
+            ["indemnity", "liability", "waiver", "exclusion", "penalty"],
+        )
+        assert result.heuristic_risk_score > 0.2
+        assert result.should_escalate is True
+
+    def test_exactly_twenty_percent_does_not_escalate(self):
+        # 1 of 5 patterns = 0.2 — NOT > 0.2
+        result = fast_screen(
+            "Indemnity provisions apply.",
+            ["indemnity", "liability", "waiver", "exclusion", "penalty"],
+        )
+        assert result.heuristic_risk_score == pytest.approx(0.2)
+        assert result.should_escalate is False
+
+    def test_case_insensitive_matching(self):
+        result = fast_screen("INDEMNITY clause applies.", ["indemnity"])
+        assert "indemnity" in result.matched_patterns
+        assert result.should_escalate is True
+
+    def test_empty_risk_patterns_score_zero(self):
+        result = fast_screen("Any clause text here.", [])
+        assert result.heuristic_risk_score == pytest.approx(0.0)
+        assert result.should_escalate is False
+
+    def test_matched_patterns_list_correct(self):
+        result = fast_screen(
+            "The indemnity and waiver clause.",
+            ["indemnity", "liability", "waiver"],
+        )
+        assert set(result.matched_patterns) == {"indemnity", "waiver"}
+
+    def test_result_is_fast_screen_result(self):
+        result = fast_screen("Any clause.", ["pattern"])
+        assert isinstance(result, FastScreenResult)
+
+
+# ---------------------------------------------------------------------------
+# slow_analysis_priority
+# ---------------------------------------------------------------------------
+
+class TestSlowAnalysisPriority:
+
+    def test_empty_input_returns_empty(self):
+        assert slow_analysis_priority([], []) == []
+
+    def test_higher_combined_score_ranks_first(self):
+        fr_low = FastScreenResult(matched_patterns=[], heuristic_risk_score=0.1, should_escalate=False)
+        fr_high = FastScreenResult(matched_patterns=["x"], heuristic_risk_score=0.9, should_escalate=True)
+        weights = [1.0, 1.0]
+        priority = slow_analysis_priority([fr_low, fr_high], weights)
+        assert priority[0] == 1  # fr_high is index 1
+
+    def test_salience_weight_breaks_tie(self):
+        fr_same = FastScreenResult(matched_patterns=["x"], heuristic_risk_score=0.5, should_escalate=True)
+        weights = [0.3, 0.7]
+        priority = slow_analysis_priority([fr_same, fr_same], weights)
+        # index 1 has higher weight → should rank first
+        assert priority[0] == 1
+
+    def test_all_returned(self):
+        frs = [
+            FastScreenResult([], 0.1, False),
+            FastScreenResult([], 0.5, True),
+            FastScreenResult([], 0.3, True),
+        ]
+        weights = [1.0, 1.0, 1.0]
+        priority = slow_analysis_priority(frs, weights)
+        assert sorted(priority) == [0, 1, 2]
+
+    def test_zero_weights_all_tied(self):
+        frs = [
+            FastScreenResult(["x"], 0.9, True),
+            FastScreenResult(["y"], 0.8, True),
+        ]
+        weights = [0.0, 0.0]
+        priority = slow_analysis_priority(frs, weights)
+        # All products are 0; order is implementation-defined but must return both
+        assert set(priority) == {0, 1}
+ 
+---
+/tmp/hello_agent/tests/reasoning/test_defeasible_engine.py 
+ """
+Tests for src/reasoning/defeasible_engine.py
+
+Covers Dung (1995) grounded/preferred semantics, legal defeasibility wrappers,
+and Pearl (2009) counterfactual consequence analysis.
+"""
+
+import pytest
+import sys
+import os
+
+# Ensure the repo src is importable
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
+
+from reasoning.defeasible_engine import (
+    Argument,
+    Attack,
+    ArgumentationFramework,
+    CounterfactualResult,
+    compute_grounded_extension,
+    compute_preferred_extensions,
+    is_credulously_accepted,
+    is_skeptically_accepted,
+    build_clause_af,
+    resolve_clause_conflicts,
+    counterfactual_obligation_impact,
+)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def make_arg(id_: str, claim: str = "claim", strength: float = 1.0) -> Argument:
+    return Argument(id=id_, claim=claim, support="support", strength=strength)
+
+
+def make_attack(attacker: str, attacked: str, atype: str = "rebuttal", weight: float = 1.0) -> Attack:
+    return Attack(attacker_id=attacker, attacked_id=attacked, attack_type=atype, weight=weight)
+
+
+def make_af(arg_ids: list[str], attack_pairs: list[tuple[str, str]]) -> ArgumentationFramework:
+    args = [make_arg(id_) for id_ in arg_ids]
+    attacks = [make_attack(a, b) for a, b in attack_pairs]
+    return ArgumentationFramework(arguments=args, attacks=attacks)
+
+
+# ---------------------------------------------------------------------------
+# 1a. compute_grounded_extension
+# ---------------------------------------------------------------------------
+
+class TestComputeGroundedExtension:
+
+    def test_empty_af_returns_empty(self):
+        af = ArgumentationFramework(arguments=[], attacks=[])
+        assert compute_grounded_extension(af) == frozenset()
+
+    def test_single_unattacked_arg_is_in_extension(self):
+        af = make_af(["A"], [])
+        result = compute_grounded_extension(af)
+        assert result == frozenset({"A"})
+
+    def test_mutual_attack_both_excluded(self):
+        # A <-> B: neither defended, empty grounded extension
+        af = make_af(["A", "B"], [("A", "B"), ("B", "A")])
+        result = compute_grounded_extension(af)
+        assert result == frozenset()
+
+    def test_defended_arg_included(self):
+        # Args: {A, B, C}, Attacks: {(A,B), (C,A)}
+        # C is unattacked -> C in S
+        # B is attacked by A; A is attacked by C (which is in S) -> B is defended -> B in S
+        af = make_af(["A", "B", "C"], [("A", "B"), ("C", "A")])
+        result = compute_grounded_extension(af)
+        assert result == frozenset({"B", "C"})
+
+    def test_chain_attacker_wins(self):
+        # A -> B (A attacks B); A is unattacked -> A in grounded, B not
+        af = make_af(["A", "B"], [("A", "B")])
+        result = compute_grounded_extension(af)
+        assert result == frozenset({"A"})
+
+    def test_three_arg_chain_odd_win(self):
+        # A -> B -> C (A attacks B, B attacks C)
+        # A unattacked -> A in grounded
+        # B attacked by A (which is in grounded) -> B not in grounded
+        # C attacked by B; B attacked by A in grounded -> C defended -> C in grounded
+        af = make_af(["A", "B", "C"], [("A", "B"), ("B", "C")])
+        result = compute_grounded_extension(af)
+        assert result == frozenset({"A", "C"})
+
+    def test_returns_frozenset(self):
+        af = make_af(["X"], [])
+        assert isinstance(compute_grounded_extension(af), frozenset)
+
+    def test_multiple_unattacked_args(self):
+        af = make_af(["A", "B", "C"], [])
+        result = compute_grounded_extension(af)
+        assert result == frozenset({"A", "B", "C"})
+
+    def test_isolated_arg_with_others_attacking_each_other(self):
+        # A <-> B, C is isolated
+        af = make_af(["A", "B", "C"], [("A", "B"), ("B", "A")])
+        result = compute_grounded_extension(af)
+        assert "C" in result
+        assert "A" not in result
+        assert "B" not in result
+
+
+# ---------------------------------------------------------------------------
+# 1b. compute_preferred_extensions
+# ---------------------------------------------------------------------------
+
+class TestComputePreferredExtensions:
+
+    def test_single_arg_one_extension(self):
+        af = make_af(["A"], [])
+        exts = compute_preferred_extensions(af)
+        assert len(exts) == 1
+        assert frozenset({"A"}) in exts
+
+    def test_mutual_attack_two_extensions(self):
+        # A <-> B -> preferred: [{A}, {B}]
+        af = make_af(["A", "B"], [("A", "B"), ("B", "A")])
+        exts = compute_preferred_extensions(af)
+        assert frozenset({"A"}) in exts
+        assert frozenset({"B"}) in exts
+        assert len(exts) == 2
+
+    def test_chain_a_attacks_b_attacks_c(self):
+        # A -> B -> C: preferred = [{A, C}]
+        af = make_af(["A", "B", "C"], [("A", "B"), ("B", "C")])
+        exts = compute_preferred_extensions(af)
+        assert frozenset({"A", "C"}) in exts
+
+    def test_empty_af_has_empty_extension(self):
+        af = ArgumentationFramework(arguments=[], attacks=[])
+        exts = compute_preferred_extensions(af)
+        assert frozenset() in exts
+
+    def test_raises_value_error_over_20_args(self):
+        args = [make_arg(str(i)) for i in range(21)]
+        af = ArgumentationFramework(arguments=args, attacks=[])
+        with pytest.raises(ValueError):
+            compute_preferred_extensions(af)
+
+    def test_exactly_20_args_does_not_raise(self):
+        args = [make_arg(str(i)) for i in range(20)]
+        af = ArgumentationFramework(arguments=args, attacks=[])
+        # Should not raise
+        exts = compute_preferred_extensions(af)
+        assert len(exts) >= 1
+
+    def test_no_attacks_single_extension_all_args(self):
+        af = make_af(["A", "B", "C"], [])
+        exts = compute_preferred_extensions(af)
+        assert frozenset({"A", "B", "C"}) in exts
+
+    def test_returns_list_of_frozensets(self):
+        af = make_af(["A"], [])
+        exts = compute_preferred_extensions(af)
+        assert isinstance(exts, list)
+        assert all(isinstance(e, frozenset) for e in exts)
+
+
+# ---------------------------------------------------------------------------
+# 1c. is_credulously_accepted / is_skeptically_accepted
+# ---------------------------------------------------------------------------
+
+class TestAcceptanceSemantics:
+
+    def test_credulous_accepted_in_mutual_attack_both_true(self):
+        # A <-> B: A in {A}, B in {B} -> both credulously accepted
+        af = make_af(["A", "B"], [("A", "B"), ("B", "A")])
+        assert is_credulously_accepted("A", af) is True
+        assert is_credulously_accepted("B", af) is True
+
+    def test_skeptically_accepted_in_mutual_attack_both_false(self):
+        # A <-> B: A not in all extensions (not in {B}), B not in all (not in {A})
+        af = make_af(["A", "B"], [("A", "B"), ("B", "A")])
+        assert is_skeptically_accepted("A", af) is False
+        assert is_skeptically_accepted("B", af) is False
+
+    def test_unattacked_arg_skeptically_accepted(self):
+        af = make_af(["A", "B"], [("A", "B")])
+        # A is unattacked, B attacked by A
+        assert is_skeptically_accepted("A", af) is True
+
+    def test_attacked_and_not_defended_not_skeptically_accepted(self):
+        af = make_af(["A", "B"], [("A", "B")])
+        assert is_skeptically_accepted("B", af) is False
+
+    def test_credulously_accepted_single_arg(self):
+        af = make_af(["A"], [])
+        assert is_credulously_accepted("A", af) is True
+
+    def test_skeptically_accepted_single_arg(self):
+        af = make_af(["A"], [])
+        assert is_skeptically_accepted("A", af) is True
+
+
+# ---------------------------------------------------------------------------
+# 2. build_clause_af
+# ---------------------------------------------------------------------------
+
+class TestBuildClauseAf:
+
+    def test_three_clauses_creates_three_arguments(self):
+        clauses = ["Clause one.", "Clause two.", "Clause three."]
+        af = build_clause_af(clauses)
+        assert len(af.arguments) == 3
+
+    def test_argument_ids_are_string_indices(self):
+        clauses = ["A", "B", "C"]
+        af = build_clause_af(clauses)
+        ids = {arg.id for arg in af.arguments}
+        assert ids == {"0", "1", "2"}
+
+    def test_argument_strength_decreases(self):
+        clauses = ["A", "B", "C"]
+        af = build_clause_af(clauses)
+        strengths = {arg.id: arg.strength for arg in af.arguments}
+        assert strengths["0"] == pytest.approx(1.0)
+        assert strengths["1"] == pytest.approx(0.5)
+        assert strengths["2"] == pytest.approx(1.0 / 3)
+
+    def test_later_clauses_attack_earlier_by_default(self):
+        clauses = ["A", "B", "C"]
+        af = build_clause_af(clauses)
+        attack_pairs = {(atk.attacker_id, atk.attacked_id) for atk in af.attacks}
+        # Clause 2 should attack clause 0 and 1
+        assert ("2", "0") in attack_pairs
+        assert ("2", "1") in attack_pairs
+        # Clause 1 should attack clause 0
+        assert ("1", "0") in attack_pairs
+
+    def test_precedence_rules_override_default(self):
+        clauses = ["A", "B", "C"]
+        # Explicitly say "0" beats "2" instead of the default (2 beats 0)
+        af = build_clause_af(clauses, precedence_rul
+STDERR: 

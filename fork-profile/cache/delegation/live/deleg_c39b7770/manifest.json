@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_c39b7770",
+  "started": "2026-09-18 23:35:01",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Do a deep adversarial code review of the hermes-fork lambda-tuner plugin and context compressor integration. Read these files fully and produce a structured findings table with severity (HIGH/MEDIUM/LOW), category, description, and exact location.\n\nFiles to review:\n- ~/.hermes/hermes-fork/plugins/user/lambda-tuner/__init__.py (full file)\n- ~/.hermes/hermes-fork/plugins/user/lambda-tuner/complexity.py (if exists)\n- ~/.hermes/hermes-fork/plugins/user/lambda-tuner/predicates.py (if exists)\n- ~/.her",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_c39b7770/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Do a deep wiring audit of the Hermes fork runtime scripts. Produce a structured findings table with severity (HIGH/MEDIUM/LOW), category, description, and exact location.\n\nFiles to inspect:\n1. ~/.hermes/scripts/ — list all .py files, then read each one\n2. ~/.hermes/profiles/fork/cron/jobs.json — read fully\n3. ~/.hermes/profiles/fork/ARCHITECTURE.md — read fully\n\nSpecific checks to run:\n\nA. MISSING SCRIPT CHECK: For every cron job in jobs.json that has 'no_agent: true' and a 'script' field, verif",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_c39b7770/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Do a deep adversarial audit of the hermes-fork config, ARCHITECTURE.md, and plugin hook system for consistency, dead config sections, gate gaps, and documentation drift. Produce a structured findings table.\n\nFiles to read:\n1. ~/.hermes/profiles/fork/config.yaml — full content\n2. ~/.hermes/profiles/fork/ARCHITECTURE.md — full content (already available in context)\n3. ~/.hermes/hermes-fork/plugins/user/lambda-tuner/__init__.py — hook registration section only\n4. ~/.hermes/hermes-fork/hermes_cli/pl",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_c39b7770/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-18 23:48:20"
+}

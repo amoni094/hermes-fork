@@ -1,0 +1,44 @@
+{
+  "anthropic": [
+    "/var/home/rainbow/.hermes/profiles/fork/auth.json",
+    [
+      1789361796791596245,
+      637
+    ],
+    null,
+    "/var/home/rainbow/.hermes/auth.json",
+    [
+      1789825819213009738,
+      3120
+    ],
+    null
+  ],
+  "xai-oauth": [
+    "/var/home/rainbow/.hermes/profiles/fork/auth.json",
+    [
+      1789361796791596245,
+      637
+    ],
+    null,
+    "/var/home/rainbow/.hermes/auth.json",
+    [
+      1789825819213009738,
+      3120
+    ],
+    null
+  ],
+  "openai-codex": [
+    "/var/home/rainbow/.hermes/profiles/fork/auth.json",
+    [
+      1789361796791596245,
+      637
+    ],
+    null,
+    "/var/home/rainbow/.hermes/auth.json",
+    [
+      1789822676191485161,
+      3120
+    ],
+    null
+  ]
+}

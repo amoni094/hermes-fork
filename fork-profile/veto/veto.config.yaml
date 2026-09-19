@@ -1,0 +1,5 @@
+# Veto local policy config for Hermes pre_tool_call governance
+# mode: strict = enforce block rules; warn = log only
+mode: strict
+validation_mode: local
+rules_dir: ~/.hermes/veto/rules

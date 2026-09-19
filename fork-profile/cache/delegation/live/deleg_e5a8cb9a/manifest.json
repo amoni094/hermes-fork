@@ -1,0 +1,52 @@
+{
+  "delegation_id": "deleg_e5a8cb9a",
+  "started": "2026-09-15 12:04:23",
+  "task_count": 6,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Implement R1: MemForest EventTree partitioning for Hermes agent context micro-compaction.\n\nContext:\n- Hermes fork is at ~/.hermes/hermes-fork/\n- Target: add event-type partitioning to micro-compaction\n- Related: agent/micro_compaction.py, agent/context_compressor.py\n\nWhat to build:\n1. First read agent/micro_compaction.py to understand its structure\n2. Add a function partition_messages_by_event(messages) -> dict that classifies each message into one of: tool_call, tool_result, reasoning, user, as",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_e5a8cb9a/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Implement R3 + R4: Counterfactual context pre-filter and cross-domain skill fingerprints.\n\nR3 - Counterfactual context pre-filter:\n1. Check if ~/.hermes/scripts/unified-recall.py exists\n2. If yes, read it and add function counterfactual_prefilter(query, candidates) that filters redundant candidates - those within 0.10 cosine of a higher-ranked candidate AND in the bottom 30 percent of scores. Use stdlib only, no scipy. Compute cosine as dot product divided by product of norms.\n3. If unified-reca",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_e5a8cb9a/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Implement S2 (FILLS GAP), S7, S8: Three skill patches for agent loop correctness.\n\nS2 - Confidence-gated debate threshold (FILLS GAP in hermes-swarm-consensus):\n1. Read the SKILL.md file\n2. Find the MAAGL section. It says debate only when at least 1 agent is low-confidence but gives no threshold.\n3. Find that sentence and append immediately after it: MAAGL debate threshold: trigger debate round if any coalition member confidence is below 0.65 (Wald-optimal for alpha=0.10, beta=0.20 under 3-agent",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_e5a8cb9a/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Implement S3, S5, S6, S9, and C3 across 4 skill patches and 1 new script.\n\nS3 - Typed federated routing artifacts (dispatching-parallel-agents skill):\n1. Read ~/.hermes/profiles/fork/skills/autonomous-ai-agents/dispatching-parallel-agents/SKILL.md\n2. Add section titled Cross-Agent Routing Artifacts: After any 3 or more tool-call sequence that passes verification-before-completion, append a routing artifact to ~/.hermes/cache/routing-artifacts.jsonl with schema containing ts, agent_id, trigger_pa",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_e5a8cb9a/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 4,
+      "goal": "Implement M1, M2, M3: Memory architecture improvements for provenance, new TTL type, and contradiction detection.\n\nM1 plus M3 - Provenance and contradiction detection in l1-graphiti-write.py:\n1. Run ls ~/.hermes/scripts/ to see what scripts exist\n2. If l1-graphiti-write.py exists:\n   a. Read the script\n   b. Add provenance metadata to each episode write: build a dict with session_id from os.environ.get HERMES_SESSION_ID defaulting to UNKNOWN, agent_id as socket.gethostname() plus underscore plus",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_e5a8cb9a/task-4.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 5,
+      "goal": "Implement R5 and C1: Authority-scoped capability tokens and UPA governance config.\n\nR5 - Authority-scoped capability tokens:\n1. Search for the tool-auth-gate plugin: check ~/.hermes/hermes-fork/plugins/user/tool-auth-gate/, then ~/.hermes/plugins/tool-auth-gate/, then do find ~/.hermes/hermes-fork/plugins -name tool-auth-gate -type d\n2. Read the __init__.py of the found plugin\n3. Add function derive_scope_token that takes session_id as string and delegation_depth as int, and returns hashlib.sha2",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_e5a8cb9a/task-5.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 12:06:41"
+}

@@ -1,0 +1,24 @@
+{
+  "delegation_id": "deleg_c70198a9",
+  "started": "2026-09-15 16:27:28",
+  "task_count": 2,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Build ~/.hermes/scripts/lyapunov-analysis.py from scratch.\n\nThis script implements KHALIL-3 (Khalil 'Nonlinear Systems' 3rd ed, Chapter 4) phase portrait and Lyapunov stability analysis for Hermes agent loops.\n\nSubcommands:\n1. phase-portrait: given --system (one of: 'pid', 'retry', 'memory') plot a 2D phase portrait by numerically integrating a 2D ODE system using scipy.integrate.odeint. For 'pid': dx/dt = y, dy/dt = -x - 0.5*y (damped oscillator). For 'retry': dx/dt = -x*(x-1)*(x-2), dy/dt = -y",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_c70198a9/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Add OT-12 (Bregman barycenter --ot-stack) to ~/.hermes/scripts/skill-stacking.py AND add OT-13 (W1-discriminative routing) to ~/.hermes/scripts/memory-query-router.py.\n\nSTEP 1 — Read both files first before touching anything:\n  cat ~/.hermes/scripts/skill-stacking.py\n  cat ~/.hermes/scripts/memory-query-router.py\n\nSTEP 2 — skill-stacking.py: Add --ot-stack flag to the existing CLI (find the argparse section). When --ot-stack is passed:\n  - Load skill TF vectors for the top-k skills in the curren",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_c70198a9/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-15 16:29:21"
+}

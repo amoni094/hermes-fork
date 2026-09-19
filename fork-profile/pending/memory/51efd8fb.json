@@ -1,0 +1,14 @@
+{
+  "id": "51efd8fb",
+  "subsystem": "memory",
+  "action": "replace",
+  "summary": "background review consolidation (replace on user): - replace: Security hardening + over-hardening check. 'Wait for it' = hold fixes until cold subagent reports, apply in one shot. jesterG1979=hello_ag",
+  "origin": "background_review",
+  "created_at": 1789810065.0205264,
+  "payload": {
+    "action": "replace",
+    "target": "user",
+    "content": "Security hardening + over-hardening check. 'Wait for it' = hold fixes until cold subagent reports, apply in one shot. jesterG1979=hello_agent; amoni094=push reviewer. PR-monitor crons self-delete.\nRecursive audit style: 'fix all' means full scope, no gaps left, no check-ins — saturate until nothing remains. Waves of parallel subagents + adversarial pass per wave until the gap list is empty. User does not want progress updates mid-wave; they want a clean close report at the end.",
+    "old_text": "Security hardening + over-hardening check. 'Wait for it' = hold fixes until cold subagent reports, apply in one shot. jesterG1979=hello_agent; amoni094=push reviewer. PR-monitor crons self-delete."
+  }
+}

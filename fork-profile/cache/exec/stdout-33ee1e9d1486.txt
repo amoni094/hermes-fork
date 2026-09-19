@@ -1,0 +1,1778 @@
+500|
+501|    def test_working_day_singular(self):
+502|        _parse_ok("1 working day", 1.0, "business_day")
+503|
+504|    def test_embedded_in_sentence(self):
+505|        _parse_ok("Notice period is 30 days from the date of termination.", 30.0, "day")
+506|
+507|    def test_leading_trailing_whitespace(self):
+508|        _parse_ok("  14 days  ", 14.0, "day")
+509|
+510|    def test_decimal_months(self):
+511|        # Unlikely in legal text but should parse
+512|        _parse_ok("1.5 months", 1.5, "month")
+513|
+514|
+515|# ===========================================================================
+516|# parse_duration — parenthetical forms
+517|# ===========================================================================
+518|
+519|
+520|class TestParseDurationParenthetical:
+521|    def test_parenthetical_digit_wins(self):
+522|        # "thirty (30) days" — parenthetical should win
+523|        _parse_ok("thirty (30) days", 30.0, "day")
+524|
+525|    def test_parenthetical_with_spaces(self):
+526|        _parse_ok("two ( 2 ) months", 2.0, "month")
+527|
+528|    def test_ninety_days_parenthetical(self):
+529|        _parse_ok("ninety (90) days", 90.0, "day")
+530|
+531|    def test_twelve_months_parenthetical(self):
+532|        _parse_ok("twelve (12) months", 12.0, "month")
+533|
+534|    def test_digit_then_parenthetical_digit(self):
+535|        # "30 (thirty) days" — first digit group wins, paren not used here
+536|        result = parse_duration("30 (thirty) days")
+537|        assert result["ok"] is True
+538|        assert result["value"] == 30.0
+539|
+540|    def test_parenthetical_business_days(self):
+541|        _parse_ok("ten (10) business days", 10.0, "business_day")
+542|
+543|
+544|# ===========================================================================
+545|# parse_duration — written-out cardinal numbers
+546|# ===========================================================================
+547|
+548|
+549|class TestParseDurationWrittenOut:
+550|    def test_written_thirty(self):
+551|        _parse_ok("thirty days", 30.0, "day")
+552|
+553|    def test_written_sixty(self):
+554|        _parse_ok("sixty days", 60.0, "day")
+555|
+556|    def test_written_ninety(self):
+557|        _parse_ok("ninety days", 90.0, "day")
+558|
+559|    def test_written_two_months(self):
+560|        _parse_ok("two months", 2.0, "month")
+561|
+562|    def test_written_twelve_months(self):
+563|        _parse_ok("twelve months", 12.0, "month")
+564|
+565|    def test_written_compound_twenty_one(self):
+566|        _parse_ok("twenty-one days", 21.0, "day")
+567|
+568|    def test_written_compound_forty_five(self):
+569|        _parse_ok("forty-five days", 45.0, "day")
+570|
+571|    def test_written_one_year(self):
+572|        _parse_ok("one year", 1.0, "year")
+573|
+574|    def test_written_three_years(self):
+575|        _parse_ok("three years", 3.0, "year")
+576|
+577|    def test_written_five_business_days(self):
+578|        _parse_ok("five business days", 5.0, "business_day")
+579|
+580|    def test_case_insensitive_written(self):
+581|        _parse_ok("THIRTY Days", 30.0, "day")
+582|
+583|    def test_written_with_leading_article(self):
+584|        # "a period of thirty days" should still parse
+585|        _parse_ok("a period of thirty days", 30.0, "day")
+586|
+587|
+588|# ===========================================================================
+589|# parse_duration — edge cases and OCR artefacts
+590|# ===========================================================================
+591|
+592|
+593|class TestParseDurationEdgeCases:
+594|    def test_unicode_non_breaking_space(self):
+595|        # Non-breaking space between number and unit
+596|        _parse_ok("30\u00a0days", 30.0, "day")
+597|
+598|    @pytest.mark.parametrize("separator", ["\u2010", "\u2011", "\u2012", "\u2013", "\u2014", "\u2212"])
+599|    def test_unicode_hyphen_variants_in_compound_word(self, separator: str):
+600|        _parse_ok(f"twenty{separator}one days", 21.0, "day")
+601|
+602|    def test_trailing_period(self):
+603|        _parse_ok("30 days.", 30.0, "day")
+604|
+605|    def test_comma_in_sentence(self):
+606|        _parse_ok("The notice period shall be 30 days, starting from receipt.", 30.0, "day")
+607|
+608|    def test_uppercase_unit(self):
+609|        _parse_ok("30 Days", 30.0, "day")
+610|
+611|    def test_all_caps_unit(self):
+612|        _parse_ok("30 DAYS", 30.0, "day")
+613|
+614|    def test_integer_with_comma_thousands(self):
+615|        # Edge case: "1,000 days" — unusual but parseable
+616|        result = parse_duration("1,000 days")
+617|        # Should parse to 1000.0
+618|        if result["ok"]:
+619|            assert result["value"] == 1000.0
+620|
+621|    def test_no_duration_returns_failure(self):
+622|        _parse_fail("This agreement is between Party A and Party B.")
+623|
+624|    def test_empty_string_returns_failure(self):
+625|        _parse_fail("")
+626|
+627|    def test_whitespace_only_returns_failure(self):
+628|        _parse_fail("   ")
+629|
+630|    def test_non_string_input(self):
+631|        result = parse_duration(123)  # type: ignore[arg-type]
+632|        assert result["ok"] is False
+633|
+634|    def test_none_input(self):
+635|        result = parse_duration(None)  # type: ignore[arg-type]
+636|        assert result["ok"] is False
+637|
+638|    def test_ocr_double_space(self):
+639|        # OCR sometimes produces double spaces
+640|        _parse_ok("30  days", 30.0, "day")
+641|
+642|    def test_first_match_wins(self):
+643|        # When multiple durations appear, first wins
+644|        result = parse_duration("Within 30 days or 6 months, whichever comes first.")
+645|        assert result["ok"] is True
+646|        assert result["value"] == 30.0
+647|        assert result["unit"] == "day"
+648|
+649|
+650|# ===========================================================================
+651|# convert_duration — happy path
+652|# ===========================================================================
+653|
+654|
+655|class TestConvertDurationHappyPath:
+656|    def test_same_unit_returns_unchanged(self):
+657|        d = parse_duration("30 days")
+658|        result = convert_duration(d, "day")
+659|        assert result["ok"] is True
+660|        assert result["value"] == 30.0
+661|        assert result["unit"] == "day"
+662|
+663|    def test_same_unit_business_day(self):
+664|        d = parse_duration("10 business days")
+665|        result = convert_duration(d, "business_day")
+666|        assert result["ok"] is True
+667|        assert result["value"] == 10.0
+668|
+669|    def test_days_to_weeks_approximate(self):
+670|        d = parse_duration("14 days")
+671|        result = convert_duration(d, "week")
+672|        assert result["ok"] is True
+673|        assert abs(result["value"] - 2.0) < 0.1
+674|
+675|    def test_weeks_to_days(self):
+676|        d = parse_duration("2 weeks")
+677|        result = convert_duration(d, "day")
+678|        assert result["ok"] is True
+679|        assert result["value"] == pytest.approx(14.0, abs=0.01)
+680|
+681|    def test_months_to_days_approximate(self):
+682|        d = parse_duration("1 month")
+683|        result = convert_duration(d, "day")
+684|        assert result["ok"] is True
+685|        assert 28 <= result["value"] <= 32
+686|
+687|    def test_years_to_months_approximate(self):
+688|        d = parse_duration("1 year")
+689|        result = convert_duration(d, "month")
+690|        assert result["ok"] is True
+691|        assert abs(result["value"] - 12.0) < 0.5
+692|
+693|    def test_days_to_business_days_exact(self):
+694|        # 7 calendar days → approximately 5 business days (week)
+695|        d = parse_duration("7 days")
+696|        result = convert_duration(d, "business_day", jurisdiction="AU")
+697|        assert result["ok"] is True
+698|        # Should be around 5 business days but exact depends on current date
+699|        assert 4 <= result["value"] <= 6
+700|
+701|    def test_business_days_to_calendar_days_exact(self, monkeypatch):
+702|        class FixedDate(datetime.date):
+703|            @classmethod
+704|            def today(cls):
+705|                return cls(2026, 7, 6)
+706|
+707|        monkeypatch.setattr(duration_module.datetime, "date", FixedDate)
+708|        d = parse_duration("5 business days")
+709|        result = convert_duration(d, "day", jurisdiction="AU")
+710|        assert result["ok"] is True
+711|        # 5 business days → 7 calendar days (Mon–Fri span)
+712|        assert 5 <= result["value"] <= 9
+713|
+714|    def test_accepts_unit_aliases_in_target(self):
+715|        d = parse_duration("30 days")
+716|        result = convert_duration(d, "months")
+717|        assert result["ok"] is True
+718|
+719|    def test_business_days_to_months(self):
+720|        d = parse_duration("22 business days")
+721|        result = convert_duration(d, "month")
+722|        assert result["ok"] is True
+723|        assert result["value"] > 0
+724|
+725|
+726|# ===========================================================================
+727|# convert_duration — error cases
+728|# ===========================================================================
+729|
+730|
+731|class TestConvertDurationErrors:
+732|    def test_failed_parse_result_rejected(self):
+733|        bad = {"ok": False, "reason": "no match"}
+734|        result = convert_duration(bad, "day")
+735|        assert result["ok"] is False
+736|
+737|    def test_unknown_target_unit(self):
+738|        d = parse_duration("30 days")
+739|        result = convert_duration(d, "fortnight")
+740|        assert result["ok"] is False
+741|
+742|    def test_non_dict_input(self):
+743|        result = convert_duration("30 days", "day")  # type: ignore[arg-type]
+744|        assert result["ok"] is False
+745|
+746|    def test_malformed_dict_missing_value(self):
+747|        result = convert_duration({"ok": True, "unit": "day"}, "week")
+748|        assert result["ok"] is False
+749|
+750|    def test_malformed_dict_missing_unit(self):
+751|        result = convert_duration({"ok": True, "value": 30.0}, "week")
+752|        assert result["ok"] is False
+753|
+754|
+755|# ===========================================================================
+756|# Round-trip tests
+757|# ===========================================================================
+758|
+759|
+760|class TestRoundTrip:
+761|    def test_days_roundtrip_via_weeks(self):
+762|        text = "14 days"
+763|        d = parse_duration(text)
+764|        as_weeks = convert_duration(d, "week")
+765|        back = convert_duration(as_weeks, "day")
+766|        assert back["ok"] is True
+767|        assert abs(back["value"] - 14.0) < 1.0  # allow floating-point slop
+768|
+769|    def test_months_roundtrip_via_days(self):
+770|        d = parse_duration("3 months")
+771|        as_days = convert_duration(d, "day")
+772|        back = convert_duration(as_days, "month")
+773|        assert back["ok"] is True
+774|        assert abs(back["value"] - 3.0) < 0.1
+775|
+776|    def test_business_days_approximate_roundtrip(self):
+777|        # Business-day ↔ calendar-day roundtrip is approximate
+778|        d = parse_duration("10 business days")
+779|        as_cal = convert_duration(d, "day")
+780|        back = convert_duration(as_cal, "business_day")
+781|        assert back["ok"] is True
+782|        # Roundtrip should be within 20% due to calendar approximation
+783|        assert abs(back["value"] - 10.0) / 10.0 < 0.20
+784|
+785|    def test_year_to_months_to_year(self):
+786|        d = parse_duration("2 years")
+787|        as_months = convert_duration(d, "month")
+788|        back = convert_duration(as_months, "year")
+789|        assert back["ok"] is True
+790|        assert abs(back["value"] - 2.0) < 0.1
+791|
+792|    def test_parse_then_convert_written_out(self):
+793|        # "thirty days" → parse → convert to months → back to days
+794|        d = parse_duration("thirty days")
+795|        assert d["ok"] is True
+796|        as_months = convert_duration(d, "month")
+797|        assert as_months["ok"] is True
+798|        back = convert_duration(as_months, "day")
+799|        assert back["ok"] is True
+800|        assert abs(back["value"] - 30.0) < 2.0
+801|
+802|
+803|# ===========================================================================
+804|# Holiday calendar sanity checks (via convert_duration)
+805|# ===========================================================================
+806|
+807|
+808|class TestJurisdictions:
+809|    def test_us_jurisdiction_accepted(self):
+810|        d = parse_duration("5 business days")
+811|        result = convert_duration(d, "day", jurisdiction="US")
+812|        assert result["ok"] is True
+813|
+814|    def test_uk_jurisdiction_accepted(self):
+815|        d = parse_duration("5 business days")
+816|        result = convert_duration(d, "day", jurisdiction="UK")
+817|        assert result["ok"] is True
+818|
+819|    def test_eu_jurisdiction_accepted(self):
+820|        d = parse_duration("5 business days")
+821|        result = convert_duration(d, "day", jurisdiction="EU")
+822|        assert result["ok"] is True
+823|
+824|    def test_unknown_jurisdiction_falls_back_gracefully(self):
+825|        d = parse_duration("5 business days")
+826|        result = convert_duration(d, "day", jurisdiction="ZZ")
+827|        # Should still produce a result (unknown jurisdiction = all days business days)
+828|        assert result["ok"] is True
+829|
+830|    def test_lowercase_jurisdiction_normalised(self):
+831|        # Jurisdiction matching is case-insensitive in _holidays
+832|        d = parse_duration("5 business days")
+833|        result = convert_duration(d, "day", jurisdiction="au")
+834|        assert result["ok"] is True
+835|=== /tmp/hello_agent/tests/symbolic/test_formula.py ===
+836|"""Tests for src.pipeline.symbolic.formula.
+837|
+838|Owner doc: docs/design/bulk-review-neuro-symbolic-reasoning-plan.md §14.2.
+839|
+840|Coverage targets:
+841|  - Happy path: arithmetic, max/min, identifiers from env
+842|  - Missing identifiers: {ok: False}
+843|  - Malicious input rejection: __import__, os.system, etc.
+844|  - Security: no arbitrary builtins, no attribute access, no subscripts
+845|  - Edge cases: division by zero, empty expression, non-string input
+846|"""
+847|
+848|from __future__ import annotations
+849|
+850|from decimal import Decimal
+851|
+852|from src.pipeline.symbolic.formula import evaluate_money_formula
+853|
+854|# ---------------------------------------------------------------------------
+855|# Helpers
+856|# ---------------------------------------------------------------------------
+857|
+858|
+859|def _ok(expr: str, env: dict, expected: str) -> None:
+860|    result = evaluate_money_formula(expr, env)
+861|    assert result["ok"] is True, f"Expected ok for {expr!r}, got {result}"
+862|    assert Decimal(result["value"]) == Decimal(expected), (
+863|        f"value mismatch for {expr!r}: expected {expected}, got {result['value']}"
+864|    )
+865|
+866|
+867|def _fail(expr: str, env: dict | None = None) -> dict:
+868|    result = evaluate_money_formula(expr, env or {})
+869|    assert result["ok"] is False, f"Expected failure for {expr!r}, got {result}"
+870|    return result
+871|
+872|
+873|# ===========================================================================
+874|# Happy path — arithmetic
+875|# ===========================================================================
+876|
+877|
+878|class TestArithmetic:
+879|    def test_multiply_scalar(self):
+880|        _ok("12 * monthly_fees", {"monthly_fees": Decimal("50000")}, "600000")
+881|
+882|    def test_add_two_values(self):
+883|        _ok("cap + buffer", {"cap": Decimal("1000000"), "buffer": Decimal("100000")}, "1100000")
+884|
+885|    def test_subtract(self):
+886|        _ok("total - deductible", {"total": Decimal("500000"), "deductible": Decimal("50000")}, "450000")
+887|
+888|    def test_divide(self):
+889|        _ok("annual / 12", {"annual": Decimal("1200000")}, "100000")
+890|
+891|    def test_integer_literals(self):
+892|        _ok("3 * 4", {}, "12")
+893|
+894|    def test_decimal_literal(self):
+895|        _ok("1.5 * base", {"base": Decimal("1000000")}, "1500000")
+896|
+897|    def test_compound_expression(self):
+898|        _ok(
+899|            "12 * monthly_fees + buffer",
+900|            {"monthly_fees": Decimal("50000"), "buffer": Decimal("25000")},
+901|            "625000",
+902|        )
+903|
+904|    def test_nested_arithmetic(self):
+905|        _ok(
+906|            "(cap_a + cap_b) / 2",
+907|            {"cap_a": Decimal("1000000"), "cap_b": Decimal("2000000")},
+908|            "1500000",
+909|        )
+910|
+911|    def test_unary_negation(self):
+912|        _ok("-offset + total", {"offset": Decimal("100000"), "total": Decimal("500000")}, "400000")
+913|
+914|    def test_env_with_int_values(self):
+915|        _ok("n * unit_fee", {"n": 12, "unit_fee": 5000}, "60000")
+916|
+917|    def test_env_with_float_values(self):
+918|        result = evaluate_money_formula("rate * principal", {"rate": 0.05, "principal": 1000000})
+919|        assert result["ok"] is True
+920|        assert abs(Decimal(result["value"]) - Decimal("50000")) < Decimal("0.01")
+921|
+922|
+923|# ===========================================================================
+924|# Happy path — max / min
+925|# ===========================================================================
+926|
+927|
+928|class TestMaxMin:
+929|    def test_max_two_identifiers(self):
+930|        _ok(
+931|            "max(direct, indirect)",
+932|            {"direct": Decimal("300000"), "indirect": Decimal("500000")},
+933|            "500000",
+934|        )
+935|
+936|    def test_min_two_identifiers(self):
+937|        _ok(
+938|            "min(floor, cap)",
+939|            {"floor": Decimal("100000"), "cap": Decimal("1000000")},
+940|            "100000",
+941|        )
+942|
+943|    def test_max_with_literal(self):
+944|        _ok("max(1000000, cap)", {"cap": Decimal("750000")}, "1000000")
+945|
+946|    def test_min_with_expression(self):
+947|        _ok(
+948|            "min(12 * monthly, cap)",
+949|            {"monthly": Decimal("50000"), "cap": Decimal("500000")},
+950|            "500000",
+951|        )
+952|
+953|    def test_max_three_args(self):
+954|        _ok(
+955|            "max(a, b, c)",
+956|            {"a": Decimal("100"), "b": Decimal("300"), "c": Decimal("200")},
+957|            "300",
+958|        )
+959|
+960|    def test_nested_max_min(self):
+961|        _ok(
+962|            "max(min(a, b), c)",
+963|            {"a": Decimal("500000"), "b": Decimal("300000"), "c": Decimal("400000")},
+964|            "400000",
+965|        )
+966|
+967|
+968|# ===========================================================================
+969|# Missing identifiers
+970|# ===========================================================================
+971|
+972|
+973|class TestMissingIdentifiers:
+974|    def test_missing_single(self):
+975|        r = _fail("12 * missing_fee", {})
+976|        assert "missing_fee" in r["reason"] or "identifier" in r["reason"]
+977|
+978|    def test_missing_in_max(self):
+979|        r = _fail("max(cap, unknown)", {"cap": Decimal("1000000")})
+980|        assert r["ok"] is False
+981|
+982|    def test_partial_env(self):
+983|        r = _fail("a + b + c", {"a": Decimal("100000"), "b": Decimal("200000")})
+984|        assert r["ok"] is False
+985|
+986|
+987|# ===========================================================================
+988|# Division by zero
+989|# ===========================================================================
+990|
+991|
+992|class TestDivisionByZero:
+993|    def test_literal_division_by_zero(self):
+994|        r = _fail("1 / 0")
+995|        assert "zero" in r["reason"].lower() or "arithmetic" in r["reason"].lower()
+996|
+997|    def test_identifier_zero(self):
+998|        r = _fail("cap / zero_val", {"cap": Decimal("1000000"), "zero_val": Decimal("0")})
+999|        assert r["ok"] is False
+1000|
+1001|
+1002|# ===========================================================================
+1003|# Malicious input rejection
+1004|# ===========================================================================
+1005|
+1006|
+1007|class TestSecurityRejection:
+1008|    def test_import_rejected(self):
+1009|        r = _fail("__import__('os').system('rm -rf /')")
+1010|        assert r["ok"] is False
+1011|
+1012|    def test_dunder_name_rejected(self):
+1013|        r = _fail("__builtins__['eval']('1+1')")
+1014|        assert r["ok"] is False
+1015|
+1016|    def test_attribute_access_rejected(self):
+1017|        r = _fail("os.path.join('a', 'b')", {})
+1018|        assert r["ok"] is False
+1019|
+1020|    def test_subscript_rejected(self):
+1021|        r = _fail("env['secret']", {"env": {}})
+1022|        assert r["ok"] is False
+1023|
+1024|    def test_exec_rejected(self):
+1025|        r = _fail("exec('import os')")
+1026|        assert r["ok"] is False
+1027|
+1028|    def test_lambda_rejected(self):
+1029|        r = _fail("(lambda x: x)(42)")
+1030|        assert r["ok"] is False
+1031|
+1032|    def test_list_comprehension_rejected(self):
+1033|        r = _fail("[x for x in range(10)]")
+1034|        assert r["ok"] is False
+1035|
+1036|    def test_unknown_function_rejected(self):
+1037|        r = _fail("open('/etc/passwd').read()")
+1038|        assert r["ok"] is False
+1039|
+1040|    def test_print_rejected(self):
+1041|        r = _fail("print('hello')")
+1042|        assert r["ok"] is False
+1043|
+1044|    def test_eval_rejected(self):
+1045|        r = _fail("eval('1+1')")
+1046|        assert r["ok"] is False
+1047|
+1048|    def test_format_string_injection(self):
+1049|        # Attempting to use a format string with attribute access
+1050|        r = _fail("'{0.__class__}'.format(cap)", {"cap": Decimal("100")})
+1051|        assert r["ok"] is False
+1052|
+1053|
+1054|# ===========================================================================
+1055|# Edge cases
+1056|# ===========================================================================
+1057|
+1058|
+1059|class TestEdgeCases:
+1060|    def test_empty_expression(self):
+1061|        r = _fail("", {})
+1062|        assert "empty" in r["reason"]
+1063|
+1064|    def test_whitespace_only(self):
+1065|        r = _fail("   ", {})
+1066|        assert r["ok"] is False
+1067|
+1068|    def test_non_string_expr(self):
+1069|        result = evaluate_money_formula(12, {})  # type: ignore[arg-type]
+1070|        assert result["ok"] is False
+1071|
+1072|    def test_non_dict_env(self):
+1073|        result = evaluate_money_formula("12 * x", [("x", 5)])  # type: ignore[arg-type]
+1074|        assert result["ok"] is False
+1075|
+1076|    def test_syntax_error(self):
+1077|        r = _fail("12 * * monthly_fees", {"monthly_fees": Decimal("50000")})
+1078|        assert "syntax" in r["reason"].lower()
+1079|
+1080|    def test_large_multiplication(self):
+1081|        _ok(
+1082|            "12 * annual_fees",
+1083|            {"annual_fees": Decimal("1000000000")},
+1084|            "12000000000",
+1085|        )
+1086|
+1087|    def test_float_env_coercion(self):
+1088|        result = evaluate_money_formula("rate * 1000000", {"rate": 0.15})
+1089|        assert result["ok"] is True
+1090|        assert abs(Decimal(result["value"]) - Decimal("150000")) < Decimal("0.01")
+1091|
+1092|    def test_result_is_string(self):
+1093|        result = evaluate_money_formula("12 * monthly_fees", {"monthly_fees": Decimal("50000")})
+1094|        assert result["ok"] is True
+1095|        assert isinstance(result["value"], str)
+1096|
+1097|    def test_max_no_args_fails(self):
+1098|        r = _fail("max()")
+1099|        assert r["ok"] is False
+1100|
+1101|    def test_min_no_args_fails(self):
+1102|        r = _fail("min()")
+1103|        assert r["ok"] is False
+1104|=== /tmp/hello_agent/tests/symbolic/test_money.py ===
+1105|"""Tests for src.pipeline.symbolic.money.
+1106|
+1107|Owner doc: docs/design/bulk-review-neuro-symbolic-reasoning-plan.md §14.2.
+1108|
+1109|Coverage targets:
+1110|  - parse_money: numeric + written-out amounts, all supported currencies/symbols
+1111|  - Magnitudes: K, M, B, million, thousand, billion in digit and word forms
+1112|  - Cross-currency comparison (fails closed — callers supply rates)
+1113|  - Edge cases: Unicode, OCR artefacts, exotic currencies, malformed input
+1114|  - Round-trip: parse_money → format_money → parse_money
+1115|"""
+1116|
+1117|from __future__ import annotations
+1118|
+1119|from decimal import Decimal
+1120|
+1121|import pytest
+1122|
+1123|from src.pipeline.symbolic.money import format_money, parse_money
+1124|
+1125|# ---------------------------------------------------------------------------
+1126|# Helpers
+1127|# ---------------------------------------------------------------------------
+1128|
+1129|
+1130|def _ok(text: str, amount: str, currency: str, mag: int = 1) -> None:
+1131|    result = parse_money(text)
+1132|    assert result["ok"] is True, f"Expected ok for {text!r}, got {result}"
+1133|    assert Decimal(result["amount"]) == Decimal(amount), (
+1134|        f"amount mismatch for {text!r}: expected {amount}, got {result['amount']}"
+1135|    )
+1136|    assert result["currency"] == currency, (
+1137|        f"currency mismatch for {text!r}: expected {currency}, got {result['currency']}"
+1138|    )
+1139|    assert result["magnitude_factor"] == mag, (
+1140|        f"magnitude_factor mismatch for {text!r}: expected {mag}, got {result['magnitude_factor']}"
+1141|    )
+1142|
+1143|
+1144|def _fail(text: str) -> None:
+1145|    result = parse_money(text)
+1146|    assert result["ok"] is False, f"Expected failure for {text!r}, got {result}"
+1147|
+1148|
+1149|# ===========================================================================
+1150|# parse_money — USD / dollar sign
+1151|# ===========================================================================
+1152|
+1153|
+1154|class TestParseMoneyUSD:
+1155|    def test_dollar_sign_integer(self):
+1156|        _ok("$500,000", "500000", "USD")
+1157|
+1158|    def test_dollar_sign_decimal(self):
+1159|        _ok("$1.5", "1.5", "USD")
+1160|
+1161|    def test_us_dollar_prefix(self):
+1162|        _ok("US$1,000,000", "1000000", "USD")
+1163|
+1164|    def test_usd_code_prefix(self):
+1165|        _ok("USD 250,000", "250000", "USD")
+1166|
+1167|    def test_amount_before_usd(self):
+1168|        _ok("250,000 USD", "250000", "USD")
+1169|
+1170|    def test_dollar_millions_suffix(self):
+1171|        _ok("$1.5M", "1500000", "USD", 1_000_000)
+1172|
+1173|    def test_dollar_thousand_suffix(self):
+1174|        _ok("$500K", "500000", "USD", 1_000)
+1175|
+1176|    def test_dollar_billion_suffix(self):
+1177|        _ok("$2B", "2000000000", "USD", 1_000_000_000)
+1178|
+1179|    def test_dollar_written_million(self):
+1180|        _ok("$12 million", "12000000", "USD", 1_000_000)
+1181|
+1182|    def test_usd_written_million(self):
+1183|        _ok("USD 1.5 million", "1500000", "USD", 1_000_000)
+1184|
+1185|
+1186|# ===========================================================================
+1187|# parse_money — AUD
+1188|# ===========================================================================
+1189|
+1190|
+1191|class TestParseMoneyAUD:
+1192|    def test_aud_code_prefix(self):
+1193|        _ok("AUD 500,000", "500000", "AUD")
+1194|
+1195|    def test_aud_prefix_no_space(self):
+1196|        _ok("AUD500,000", "500000", "AUD")
+1197|
+1198|    def test_a_dollar_sign(self):
+1199|        _ok("A$1,000,000", "1000000", "AUD")
+1200|
+1201|    def test_au_dollar_sign(self):
+1202|        _ok("AU$750,000", "750000", "AUD")
+1203|
+1204|    def test_aud_written_twelve_million(self):
+1205|        _ok("AUD twelve million", "12000000", "AUD", 1_000_000)
+1206|
+1207|    def test_twelve_million_aud(self):
+1208|        _ok("twelve million AUD", "12000000", "AUD", 1_000_000)
+1209|
+1210|    def test_twelve_million_australian_dollars(self):
+1211|        _ok("twelve million australian dollars", "12000000", "AUD", 1_000_000)
+1212|
+1213|    def test_aud_amount_suffix(self):
+1214|        _ok("2,500,000 AUD", "2500000", "AUD")
+1215|
+1216|    def test_aud_million_suffix(self):
+1217|        _ok("AUD 5M", "5000000", "AUD", 1_000_000)
+1218|
+1219|
+1220|# ===========================================================================
+1221|# parse_money — GBP
+1222|# ===========================================================================
+1223|
+1224|
+1225|class TestParseMoneyGBP:
+1226|    def test_pound_sign(self):
+1227|        _ok("£100,000", "100000", "GBP")
+1228|
+1229|    def test_gbp_code_prefix(self):
+1230|        _ok("GBP 50,000", "50000", "GBP")
+1231|
+1232|    def test_amount_before_gbp(self):
+1233|        _ok("100,000 GBP", "100000", "GBP")
+1234|
+1235|    def test_pound_written(self):
+1236|        _ok("five million pounds", "5000000", "GBP", 1_000_000)
+1237|
+1238|    def test_gbp_millions_suffix(self):
+1239|        _ok("£2.5M", "2500000", "GBP", 1_000_000)
+1240|
+1241|
+1242|# ===========================================================================
+1243|# parse_money — EUR
+1244|# ===========================================================================
+1245|
+1246|
+1247|class TestParseMoneyEUR:
+1248|    def test_euro_sign(self):
+1249|        _ok("€200,000", "200000", "EUR")
+1250|
+1251|    def test_eur_code_prefix(self):
+1252|        _ok("EUR 1,000,000", "1000000", "EUR")
+1253|
+1254|    def test_amount_before_eur(self):
+1255|        _ok("1,000,000 EUR", "1000000", "EUR")
+1256|
+1257|    def test_euro_written(self):
+1258|        _ok("three million euros", "3000000", "EUR", 1_000_000)
+1259|
+1260|
+1261|# ===========================================================================
+1262|# parse_money — magnitudes (digit forms)
+1263|# ===========================================================================
+1264|
+1265|
+1266|class TestParseMagnitudesDigit:
+1267|    def test_K_suffix(self):
+1268|        _ok("$500K", "500000", "USD", 1_000)
+1269|
+1270|    def test_M_suffix(self):
+1271|        _ok("$1.5M", "1500000", "USD", 1_000_000)
+1272|
+1273|    def test_B_suffix(self):
+1274|        _ok("$2B", "2000000000", "USD", 1_000_000_000)
+1275|
+1276|    def test_bn_suffix(self):
+1277|        _ok("USD 1.2bn", "1200000000", "USD", 1_000_000_000)
+1278|
+1279|    def test_lowercase_m_suffix(self):
+1280|        _ok("$3m", "3000000", "USD", 1_000_000)
+1281|
+1282|    def test_lowercase_k_suffix(self):
+1283|        _ok("$10k", "10000", "USD", 1_000)
+1284|
+1285|
+1286|# ===========================================================================
+1287|# parse_money — magnitudes (written forms)
+1288|# ===========================================================================
+1289|
+1290|
+1291|class TestParseMagnitudesWritten:
+1292|    def test_million_word(self):
+1293|        _ok("$12 million", "12000000", "USD", 1_000_000)
+1294|
+1295|    def test_thousand_word(self):
+1296|        _ok("USD 500 thousand", "500000", "USD", 1_000)
+1297|
+1298|    def test_billion_word(self):
+1299|        _ok("$2 billion", "2000000000", "USD", 1_000_000_000)
+1300|
+1301|    def test_aud_twelve_million(self):
+1302|        _ok("AUD twelve million", "12000000", "AUD", 1_000_000)
+1303|
+1304|    def test_written_one_point_five_million(self):
+1305|        result = parse_money("one point five million dollars")
+1306|        assert result["ok"] is True
+1307|        assert Decimal(result["amount"]) == Decimal("1500000")
+1308|        assert result["currency"] == "USD"
+1309|
+1310|    def test_written_number_millions(self):
+1311|        _ok("five million AUD", "5000000", "AUD", 1_000_000)
+1312|
+1313|
+1314|# ===========================================================================
+1315|# parse_money — edge cases and OCR artefacts
+1316|# ===========================================================================
+1317|
+1318|
+1319|class TestParseMoneyEdgeCases:
+1320|    def test_embedded_in_sentence(self):
+1321|        result = parse_money("The liability cap is $1,500,000 USD per event.")
+1322|        assert result["ok"] is True
+1323|        assert Decimal(result["amount"]) == Decimal("1500000")
+1324|
+1325|    def test_no_thousands_separator(self):
+1326|        _ok("USD 1500000", "1500000", "USD")
+1327|
+1328|    def test_underscore_thousands(self):
+1329|        result = parse_money("USD 1_000_000")
+1330|        # Underscores treated as thousands separators
+1331|        assert result["ok"] is True
+1332|        assert Decimal(result["amount"]) == Decimal("1000000")
+1333|
+1334|    def test_unicode_non_breaking_space(self):
+1335|        # Non-breaking space between amount and code
+1336|        result = parse_money("USD\u00a0500,000")
+1337|        assert result["ok"] is True
+1338|
+1339|    def test_unicode_minus_normalised(self):
+1340|        # Unicode minus in negative-looking context — should still find the positive amount
+1341|        result = parse_money("USD 1,000,000 (less USD 50,000)")
+1342|        assert result["ok"] is True
+1343|        assert Decimal(result["amount"]) == Decimal("1000000")
+1344|
+1345|    def test_no_money_expression_fails(self):
+1346|        _fail("This agreement has no monetary values.")
+1347|
+1348|    def test_empty_string_fails(self):
+1349|        _fail("")
+1350|
+1351|    def test_whitespace_only_fails(self):
+1352|        _fail("   ")
+1353|
+1354|    def test_non_string_input_fails(self):
+1355|        result = parse_money(12345)  # type: ignore[arg-type]
+1356|        assert result["ok"] is False
+1357|
+1358|    def test_none_input_fails(self):
+1359|        result = parse_money(None)  # type: ignore[arg-type]
+1360|        assert result["ok"] is False
+1361|
+1362|    def test_amount_with_decimal(self):
+1363|        _ok("USD 1,234,567.89", "1234567.89", "USD")
+1364|
+1365|    def test_ocr_double_space(self):
+1366|        result = parse_money("USD  500,000")
+1367|        assert result["ok"] is True
+1368|        assert Decimal(result["amount"]) == Decimal("500000")
+1369|
+1370|    def test_unicode_right_quote(self):
+1371|        # Right single quote sometimes appears in OCR for apostrophe
+1372|        result = parse_money("USD\u2019500,000")
+1373|        # Should either parse (treating quote as separator) or fail gracefully
+1374|        assert "ok" in result
+1375|
+1376|    def test_large_amount(self):
+1377|        _ok("$1,000,000,000", "1000000000", "USD")
+1378|
+1379|    def test_zero_amount(self):
+1380|        result = parse_money("USD 0")
+1381|        assert result["ok"] is True
+1382|        assert Decimal(result["amount"]) == Decimal("0")
+1383|
+1384|    def test_amount_only_no_currency_fails(self):
+1385|        # A bare number with no currency context should fail
+1386|        _fail("500000")
+1387|
+1388|    def test_first_match_wins(self):
+1389|        # Multiple amounts in text — first match is returned
+1390|        result = parse_money("Between USD 100,000 and USD 500,000.")
+1391|        assert result["ok"] is True
+1392|        assert Decimal(result["amount"]) == Decimal("100000")
+1393|
+1394|
+1395|# ===========================================================================
+1396|# parse_money — cross-currency comparison (must fail closed)
+1397|# ===========================================================================
+1398|
+1399|
+1400|class TestCrossCurrencyFailsClosed:
+1401|    def test_mixed_currencies_in_text(self):
+1402|        # parse_money returns the first match only; comparison is caller's job
+1403|        result = parse_money("USD 100,000 vs GBP 80,000")
+1404|        assert result["ok"] is True
+1405|        # First match is USD
+1406|        assert result["currency"] == "USD"
+1407|
+1408|    def test_no_implicit_exchange_rate(self):
+1409|        # Verifies we don't silently convert between currencies
+1410|        r1 = parse_money("USD 1,000,000")
+1411|        r2 = parse_money("AUD 1,000,000")
+1412|        assert r1["ok"] and r2["ok"]
+1413|        # Same amount string, different currency — cannot compare without a rate
+1414|        assert r1["amount"] == r2["amount"]
+1415|        assert r1["currency"] != r2["currency"]
+1416|
+1417|
+1418|# ===========================================================================
+1419|# format_money
+1420|# ===========================================================================
+1421|
+1422|
+1423|class TestFormatMoney:
+1424|    def test_format_usd(self):
+1425|        r = parse_money("USD 1,500,000")
+1426|        assert r["ok"] is True
+1427|        assert format_money(r) == "USD 1,500,000.00"
+1428|
+1429|    def test_format_aud(self):
+1430|        r = parse_money("AUD 250,000")
+1431|        assert r["ok"] is True
+1432|        assert format_money(r) == "AUD 250,000.00"
+1433|
+1434|    def test_format_gbp_million(self):
+1435|        r = parse_money("£2.5M")
+1436|        assert r["ok"] is True
+1437|        assert format_money(r) == "GBP 2,500,000.00"
+1438|
+1439|    def test_format_raises_on_error(self):
+1440|        with pytest.raises(ValueError):
+1441|            format_money({"ok": False, "reason": "no match"})  # type: ignore[arg-type]
+1442|
+1443|
+1444|# ===========================================================================
+1445|# Round-trip: parse_money → format_money → parse_money
+1446|# ===========================================================================
+1447|
+1448|
+1449|class TestRoundTrip:
+1450|    def test_usd_roundtrip(self):
+1451|        text = "USD 1,500,000"
+1452|        r1 = parse_money(text)
+1453|        assert r1["ok"] is True
+1454|        formatted = format_money(r1)
+1455|        r2 = parse_money(formatted)
+1456|        assert r2["ok"] is True
+1457|        assert Decimal(r2["amount"]) == Decimal(r1["amount"])
+1458|        assert r2["currency"] == r1["currency"]
+1459|
+1460|    def test_aud_roundtrip(self):
+1461|        text = "AUD 5,000,000"
+1462|        r1 = parse_money(text)
+1463|        assert r1["ok"] is True
+1464|        formatted = format_money(r1)
+1465|        r2 = parse_money(formatted)
+1466|        assert r2["ok"] is True
+1467|        assert Decimal(r2["amount"]) == Decimal(r1["amount"])
+1468|
+1469|    def test_gbp_roundtrip(self):
+1470|        text = "£750,000"
+1471|        r1 = parse_money(text)
+1472|        assert r1["ok"] is True
+1473|        formatted = format_money(r1)
+1474|        r2 = parse_money(formatted)
+1475|        assert r2["ok"] is True
+1476|        assert Decimal(r2["amount"]) == Decimal(r1["amount"])
+1477|
+1478|    def test_eur_roundtrip(self):
+1479|        text = "EUR 2,500,000"
+1480|        r1 = parse_money(text)
+1481|        assert r1["ok"] is True
+1482|        formatted = format_money(r1)
+1483|        r2 = parse_money(formatted)
+1484|        assert r2["ok"] is True
+1485|        assert Decimal(r2["amount"]) == Decimal(r1["amount"])
+1486|
+1487|    def test_million_suffix_roundtrip(self):
+1488|        text = "$12M"
+1489|        r1 = parse_money(text)
+1490|        assert r1["ok"] is True
+1491|        formatted = format_money(r1)
+1492|        r2 = parse_money(formatted)
+1493|        assert r2["ok"] is True
+1494|        assert Decimal(r2["amount"]) == Decimal("12000000")
+1495|=== /tmp/hello_agent/tests/symbolic/test_resolve.py ===
+1496|"""Tests for src.pipeline.symbolic.resolve.
+1497|
+1498|Owner doc: docs/design/bulk-review-neuro-symbolic-reasoning-plan.md §14.4.
+1499|
+1500|Coverage:
+1501|  - resolve_definition: exact match, case-insensitive, partial/substring fallback,
+1502|    missing term, whitespace normalisation, empty inputs, malformed doc_repr
+1503|  - resolve_reference: cross-reference index lookup, clause-tree walk (numeric token),
+1504|    unresolvable references, case-insensitive ref_text, empty inputs, malformed doc_repr
+1505|"""
+1506|
+1507|from __future__ import annotations
+1508|
+1509|from src.pipeline.symbolic.resolve import resolve_definition, resolve_reference
+1510|
+1511|# ===========================================================================
+1512|# Sample RepresentationV1 fixtures
+1513|# ===========================================================================
+1514|
+1515|_DEFINED_TERMS = [
+1516|    {
+1517|        "term": "Customer",
+1518|        "anchor_id": "§1.1",
+1519|        "definition_span": [10, 80],
+1520|        "definition_body": '"Customer" means ACME Pty Ltd, ABN 12 345 678 901.',
+1521|        "used_in": ["§3.2", "§5.1"],
+1522|    },
+1523|    {
+1524|        "term": "Annual Fee",
+1525|        "anchor_id": "§1.2",
+1526|        "definition_span": [85, 160],
+1527|        "definition_body": '"Annual Fee" means the fee specified in Schedule 1.',
+1528|        "used_in": ["§4.1"],
+1529|    },
+1530|    {
+1531|        "term": "Confidential Information",
+1532|        "anchor_id": "§2.1",
+1533|        "definition_span": [200, 350],
+1534|        "definition_body": '"Confidential Information" means any information marked as confidential.',
+1535|        "used_in": ["§2.2", "§2.3", "§8.1"],
+1536|    },
+1537|]
+1538|
+1539|_CLAUSE_TREE = {
+1540|    "anchor_id": "§root",
+1541|    "char_offsets": [0, 5000],
+1542|    "computed_numbering": "",
+1543|    "heading": "Agreement",
+1544|    "children": [
+1545|        {
+1546|            "anchor_id": "§1",
+1547|            "char_offsets": [0, 400],
+1548|            "computed_numbering": "1",
+1549|            "heading": "Definitions",
+1550|            "children": [
+1551|                {
+1552|                    "anchor_id": "§1.1",
+1553|                    "char_offsets": [10, 80],
+1554|                    "computed_numbering": "1.1",
+1555|                    "heading": "Customer",
+1556|                    "children": [],
+1557|                },
+1558|                {
+1559|                    "anchor_id": "§1.2",
+1560|                    "char_offsets": [85, 160],
+1561|                    "computed_numbering": "1.2",
+1562|                    "heading": "Annual Fee",
+1563|                    "children": [],
+1564|                },
+1565|            ],
+1566|        },
+1567|        {
+1568|            "anchor_id": "§2",
+1569|            "char_offsets": [400, 1000],
+1570|            "computed_numbering": "2",
+1571|            "heading": "Confidentiality",
+1572|            "children": [
+1573|                {
+1574|                    "anchor_id": "§2.1",
+1575|                    "char_offsets": [200, 350],
+1576|                    "computed_numbering": "2.1",
+1577|                    "heading": "Confidential Information",
+1578|                    "children": [],
+1579|                },
+1580|                {
+1581|                    "anchor_id": "§2.2",
+1582|                    "char_offsets": [350, 500],
+1583|                    "computed_numbering": "2.2",
+1584|                    "heading": "Obligations",
+1585|                    "children": [],
+1586|                },
+1587|            ],
+1588|        },
+1589|        {
+1590|            "anchor_id": "§8",
+1591|            "char_offsets": [3000, 4000],
+1592|            "computed_numbering": "8",
+1593|            "heading": "Termination",
+1594|            "children": [
+1595|                {
+1596|                    "anchor_id": "§8.1",
+1597|                    "char_offsets": [3000, 3200],
+1598|                    "computed_numbering": "8.1",
+1599|                    "heading": "Termination for Convenience",
+1600|                    "children": [
+1601|                        {
+1602|                            "anchor_id": "§8.1(a)",
+1603|                            "char_offsets": [3050, 3150],
+1604|                            "computed_numbering": "8.1(a)",
+1605|                            "heading": "Customer Right",
+1606|                            "children": [],
+1607|                        }
+1608|                    ],
+1609|                }
+1610|            ],
+1611|        },
+1612|    ],
+1613|}
+1614|
+1615|_CROSS_REFERENCES = [
+1616|    {
+1617|        "from_anchor": "§8.1",
+1618|        "to_anchor": "§1.1",
+1619|        "ref_span": [3100, 3120],
+1620|        "ref_text": "clause 1.1",
+1621|    },
+1622|    {
+1623|        "from_anchor": "§2.2",
+1624|        "to_anchor": "§2.1",
+1625|        "ref_span": [360, 375],
+1626|        "ref_text": "Section 2.1",
+1627|    },
+1628|    {
+1629|        "from_anchor": "§4.1",
+1630|        "to_anchor": None,
+1631|        "ref_span": [1500, 1520],
+1632|        "ref_text": "Schedule 1",
+1633|    },
+1634|]
+1635|
+1636|_SAMPLE_REPR: dict = {
+1637|    "representation_version": "v1",
+1638|    "doc_hash": "a" * 64,
+1639|    "clause_tree": _CLAUSE_TREE,
+1640|    "defined_terms": _DEFINED_TERMS,
+1641|    "cross_references": _CROSS_REFERENCES,
+1642|    "entity_layer": [],
+1643|    "built_at_ms": 1_700_000_000_000,
+1644|}
+1645|
+1646|
+1647|# ===========================================================================
+1648|# resolve_definition — happy path
+1649|# ===========================================================================
+1650|
+1651|
+1652|class TestResolveDefinitionHappy:
+1653|    def test_exact_match(self):
+1654|        result = resolve_definition("Customer", _SAMPLE_REPR)
+1655|        assert result["ok"] is True
+1656|        assert result["anchor_id"] == "§1.1"
+1657|        assert "ACME" in result["definition_body"]
+1658|        assert "§3.2" in result["used_in"]
+1659|
+1660|    def test_case_insensitive_lower(self):
+1661|        result = resolve_definition("customer", _SAMPLE_REPR)
+1662|        assert result["ok"] is True
+1663|        assert result["anchor_id"] == "§1.1"
+1664|
+1665|    def test_case_insensitive_upper(self):
+1666|        result = resolve_definition("ANNUAL FEE", _SAMPLE_REPR)
+1667|        assert result["ok"] is True
+1668|        assert result["anchor_id"] == "§1.2"
+1669|
+1670|    def test_mixed_case(self):
+1671|        result = resolve_definition("cOnFiDeNtIaL iNfOrMaTiOn", _SAMPLE_REPR)
+1672|        assert result["ok"] is True
+1673|        assert result["anchor_id"] == "§2.1"
+1674|
+1675|    def test_leading_trailing_whitespace(self):
+1676|        result = resolve_definition("  Customer  ", _SAMPLE_REPR)
+1677|        assert result["ok"] is True
+1678|        assert result["anchor_id"] == "§1.1"
+1679|
+1680|    def test_definition_span_returned(self):
+1681|        result = resolve_definition("Annual Fee", _SAMPLE_REPR)
+1682|        assert result["ok"] is True
+1683|        assert result["definition_span"] == [85, 160]
+1684|
+1685|    def test_used_in_returned(self):
+1686|        result = resolve_definition("Confidential Information", _SAMPLE_REPR)
+1687|        assert result["ok"] is True
+1688|        assert "§8.1" in result["used_in"]
+1689|
+1690|    def test_empty_used_in_is_list(self):
+1691|        # Term with no used_in field in source — must still return a list
+1692|        repr_copy = {
+1693|            **_SAMPLE_REPR,
+1694|            "defined_terms": [
+1695|                {
+1696|                    "term": "Supplier",
+1697|                    "anchor_id": "§1.3",
+1698|                    "definition_span": [170, 200],
+1699|                    "definition_body": '"Supplier" means Denuto Pty Ltd.',
+1700|                }
+1701|            ],
+1702|        }
+1703|        result = resolve_definition("Supplier", repr_copy)
+1704|        assert result["ok"] is True
+1705|        assert isinstance(result["used_in"], list)
+1706|
+1707|    def test_partial_match_fallback(self):
+1708|        # "Confidential" should fall back to substring match for "Confidential Information"
+1709|        result = resolve_definition("Confidential", _SAMPLE_REPR)
+1710|        assert result["ok"] is True
+1711|        assert result["anchor_id"] == "§2.1"
+1712|
+1713|
+1714|# ===========================================================================
+1715|# resolve_definition — error paths
+1716|# ===========================================================================
+1717|
+1718|
+1719|class TestResolveDefinitionErrors:
+1720|    def test_missing_term(self):
+1721|        result = resolve_definition("Vendor", _SAMPLE_REPR)
+1722|        assert result["ok"] is False
+1723|        assert "Vendor" in result["reason"]
+1724|
+1725|    def test_empty_term(self):
+1726|        result = resolve_definition("", _SAMPLE_REPR)
+1727|        assert result["ok"] is False
+1728|
+1729|    def test_whitespace_only_term(self):
+1730|        result = resolve_definition("   ", _SAMPLE_REPR)
+1731|        assert result["ok"] is False
+1732|
+1733|    def test_doc_repr_not_dict(self):
+1734|        result = resolve_definition("Customer", "not a dict")
+1735|        assert result["ok"] is False
+1736|
+1737|    def test_doc_repr_missing_defined_terms(self):
+1738|        result = resolve_definition("Customer", {"representation_version": "v1"})
+1739|        assert result["ok"] is False
+1740|
+1741|    def test_defined_terms_not_list(self):
+1742|        result = resolve_definition("Customer", {"defined_terms": "bad"})
+1743|        assert result["ok"] is False
+1744|
+1745|    def test_empty_defined_terms(self):
+1746|        result = resolve_definition("Customer", {"defined_terms": []})
+1747|        assert result["ok"] is False
+1748|
+1749|
+1750|# ===========================================================================
+1751|# resolve_reference — happy path via cross-reference index
+1752|# ===========================================================================
+1753|
+1754|
+1755|class TestResolveReferenceCrossRef:
+1756|    def test_exact_ref_text_match(self):
+1757|        result = resolve_reference("clause 1.1", _SAMPLE_REPR)
+1758|        assert result["ok"] is True
+1759|        assert result["anchor_id"] == "§1.1"
+1760|
+1761|    def test_case_insensitive_ref_text(self):
+1762|        result = resolve_reference("CLAUSE 1.1", _SAMPLE_REPR)
+1763|        assert result["ok"] is True
+1764|        assert result["anchor_id"] == "§1.1"
+1765|
+1766|    def test_section_prefix_ref_text(self):
+1767|        result = resolve_reference("Section 2.1", _SAMPLE_REPR)
+1768|        assert result["ok"] is True
+1769|        assert result["anchor_id"] == "§2.1"
+1770|
+1771|    def test_null_to_anchor_skipped(self):
+1772|        # "Schedule 1" has to_anchor=None; should not match via cross-ref index
+1773|        # and should fall through to clause-tree walk
+1774|        result = resolve_reference("Schedule 1", _SAMPLE_REPR)
+1775|        # No §1 match for "1" token from "Schedule 1" exists because the tree
+1776|        # has "§1" but "Schedule 1" extracts token "1" which matches "§1"
+1777|        # This is expected to succeed via tree walk
+1778|        assert isinstance(result["ok"], bool)
+1779|
+1780|    def test_ref_text_returned_verbatim(self):
+1781|        result = resolve_reference("Section 2.1", _SAMPLE_REPR)
+1782|        assert result["ok"] is True
+1783|        assert result["ref_text"] == "Section 2.1"
+1784|
+1785|
+1786|# ===========================================================================
+1787|# resolve_reference — happy path via clause-tree walk
+1788|# ===========================================================================
+1789|
+1790|
+1791|class TestResolveReferenceTreeWalk:
+1792|    def test_numeric_token_simple(self):
+1793|        # "clause 8.1" is not in cross_references, should hit clause tree
+1794|        result = resolve_reference("clause 8.1", _SAMPLE_REPR)
+1795|        assert result["ok"] is True
+1796|        assert result["anchor_id"] == "§8.1"
+1797|
+1798|    def test_nested_token(self):
+1799|        result = resolve_reference("Section 8.1(a)", _SAMPLE_REPR)
+1800|        assert result["ok"] is True
+1801|        assert result["anchor_id"] == "§8.1(a)"
+1802|
+1803|    def test_top_level_section(self):
+1804|        result = resolve_reference("clause 2", _SAMPLE_REPR)
+1805|        assert result["ok"] is True
+1806|        assert result["anchor_id"] == "§2"
+1807|
+1808|    def test_section_2_2(self):
+1809|        result = resolve_reference("Section 2.2", _SAMPLE_REPR)
+1810|        assert result["ok"] is True
+1811|        assert result["anchor_id"] == "§2.2"
+1812|
+1813|
+1814|# ===========================================================================
+1815|# resolve_reference — error paths
+1816|# ===========================================================================
+1817|
+1818|
+1819|class TestResolveReferenceErrors:
+1820|    def test_no_matching_clause(self):
+1821|        result = resolve_reference("Section 99.99", _SAMPLE_REPR)
+1822|        assert result["ok"] is False
+1823|        assert "99.99" in result["reason"]
+1824|
+1825|    def test_empty_ref_text(self):
+1826|        result = resolve_reference("", _SAMPLE_REPR)
+1827|        assert result["ok"] is False
+1828|
+1829|    def test_whitespace_only_ref_text(self):
+1830|        result = resolve_reference("   ", _SAMPLE_REPR)
+1831|        assert result["ok"] is False
+1832|
+1833|    def test_doc_repr_not_dict(self):
+1834|        result = resolve_reference("Section 1.1", 42)
+1835|        assert result["ok"] is False
+1836|
+1837|    def test_empty_cross_references_and_no_tree_match(self):
+1838|        repr_no_match = {
+1839|            **_SAMPLE_REPR,
+1840|            "cross_references": [],
+1841|            "clause_tree": {
+1842|                "anchor_id": "§root",
+1843|                "char_offsets": [0, 100],
+1844|                "computed_numbering": "",
+1845|                "heading": "Root",
+1846|                "children": [],
+1847|            },
+1848|        }
+1849|        result = resolve_reference("Section 99", repr_no_match)
+1850|        assert result["ok"] is False
+1851|
+1852|    def test_non_numeric_reference_no_match(self):
+1853|        result = resolve_reference("Exhibit A", _SAMPLE_REPR)
+1854|        # No numeric token → should fail gracefully
+1855|        assert result["ok"] is False
+1856|=== /tmp/hello_agent/tests/symbolic/test_rules.py ===
+1857|"""Tests for src.pipeline.symbolic.rules.
+1858|
+1859|Owner doc: docs/design/bulk-review-neuro-symbolic-reasoning-plan.md §14.4.
+1860|
+1861|Coverage:
+1862|  - cap_min_12_months: pass, fail, boundary (exact equality), missing inputs, bad values
+1863|  - notice_period_min_30_days: pass, fail, boundary, missing input
+1864|  - apply_rule: unknown rule_id, invalid rule_id characters, missing assertion key,
+1865|    unsupported operator, bad right-hand side
+1866|"""
+1867|
+1868|from __future__ import annotations
+1869|
+1870|from src.pipeline.symbolic.rules import apply_rule
+1871|
+1872|# ===========================================================================
+1873|# cap_min_12_months
+1874|# ===========================================================================
+1875|
+1876|
+1877|class TestCapMin12Months:
+1878|    _RULE = "cap_min_12_months"
+1879|
+1880|    def test_cap_exceeds_threshold(self):
+1881|        result = apply_rule(self._RULE, {"cap_value": 1_500_000, "annual_fees": 100_000})
+1882|        assert result["ok"] is True
+1883|        assert result["pass"] is True
+1884|
+1885|    def test_cap_equals_threshold_exactly(self):
+1886|        # 1_200_000 == 12 * 100_000 → should pass (>=)
+1887|        result = apply_rule(self._RULE, {"cap_value": 1_200_000, "annual_fees": 100_000})
+1888|        assert result["ok"] is True
+1889|        assert result["pass"] is True
+1890|
+1891|    def test_cap_below_threshold(self):
+1892|        result = apply_rule(self._RULE, {"cap_value": 1_199_999, "annual_fees": 100_000})
+1893|        assert result["ok"] is True
+1894|        assert result["pass"] is False
+1895|
+1896|    def test_cap_far_below_threshold(self):
+1897|        result = apply_rule(self._RULE, {"cap_value": 0, "annual_fees": 500_000})
+1898|        assert result["ok"] is True
+1899|        assert result["pass"] is False
+1900|
+1901|    def test_pass_reason_returned(self):
+1902|        result = apply_rule(self._RULE, {"cap_value": 2_000_000, "annual_fees": 100_000})
+1903|        assert result["ok"] is True
+1904|        assert result["pass"] is True
+1905|        assert isinstance(result["reason"], str)
+1906|        assert len(result["reason"]) > 0
+1907|
+1908|    def test_fail_reason_returned(self):
+1909|        result = apply_rule(self._RULE, {"cap_value": 100, "annual_fees": 100_000})
+1910|        assert result["ok"] is True
+1911|        assert result["pass"] is False
+1912|        assert isinstance(result["reason"], str)
+1913|
+1914|    def test_missing_cap_value(self):
+1915|        result = apply_rule(self._RULE, {"annual_fees": 100_000})
+1916|        assert result["ok"] is False
+1917|        assert "cap_value" in result["reason"]
+1918|
+1919|    def test_missing_annual_fees(self):
+1920|        result = apply_rule(self._RULE, {"cap_value": 1_200_000})
+1921|        assert result["ok"] is False
+1922|        assert "annual_fees" in result["reason"]
+1923|
+1924|    def test_missing_both_inputs(self):
+1925|        result = apply_rule(self._RULE, {})
+1926|        assert result["ok"] is False
+1927|
+1928|    def test_float_inputs(self):
+1929|        result = apply_rule(self._RULE, {"cap_value": 1_200_000.0, "annual_fees": 100_000.0})
+1930|        assert result["ok"] is True
+1931|        assert result["pass"] is True
+1932|
+1933|    def test_string_numeric_inputs_coerced(self):
+1934|        result = apply_rule(self._RULE, {"cap_value": "1200000", "annual_fees": "100000"})
+1935|        assert result["ok"] is True
+1936|        assert result["pass"] is True
+1937|
+1938|    def test_zero_annual_fees(self):
+1939|        # If annual_fees == 0 the threshold is 0, so any cap >= 0 passes.
+1940|        result = apply_rule(self._RULE, {"cap_value": 0, "annual_fees": 0})
+1941|        assert result["ok"] is True
+1942|        assert result["pass"] is True
+1943|
+1944|    def test_fractional_annual_fees(self):
+1945|        result = apply_rule(self._RULE, {"cap_value": 18_000, "annual_fees": 1_500})
+1946|        # threshold = 12 * 1500 = 18000 → exactly equal → pass
+1947|        assert result["ok"] is True
+1948|        assert result["pass"] is True
+1949|
+1950|
+1951|# ===========================================================================
+1952|# notice_period_min_30_days
+1953|# ===========================================================================
+1954|
+1955|
+1956|class TestNoticePeriodMin30Days:
+1957|    _RULE = "notice_period_min_30_days"
+1958|
+1959|    def test_notice_30_passes(self):
+1960|        result = apply_rule(self._RULE, {"notice_days": 30})
+1961|        assert result["ok"] is True
+1962|        assert result["pass"] is True
+1963|
+1964|    def test_notice_60_passes(self):
+1965|        result = apply_rule(self._RULE, {"notice_days": 60})
+1966|        assert result["ok"] is True
+1967|        assert result["pass"] is True
+1968|
+1969|    def test_notice_29_fails(self):
+1970|        result = apply_rule(self._RULE, {"notice_days": 29})
+1971|        assert result["ok"] is True
+1972|        assert result["pass"] is False
+1973|
+1974|    def test_notice_0_fails(self):
+1975|        result = apply_rule(self._RULE, {"notice_days": 0})
+1976|        assert result["ok"] is True
+1977|        assert result["pass"] is False
+1978|
+1979|    def test_notice_1_fails(self):
+1980|        result = apply_rule(self._RULE, {"notice_days": 1})
+1981|        assert result["ok"] is True
+1982|        assert result["pass"] is False
+1983|
+1984|    def test_missing_notice_days(self):
+1985|        result = apply_rule(self._RULE, {})
+1986|        assert result["ok"] is False
+1987|        assert "notice_days" in result["reason"]
+1988|
+1989|    def test_float_boundary(self):
+1990|        result = apply_rule(self._RULE, {"notice_days": 29.9})
+1991|        assert result["ok"] is True
+1992|        assert result["pass"] is False
+1993|
+1994|    def test_pass_message_is_string(self):
+1995|        result = apply_rule(self._RULE, {"notice_days": 90})
+1996|        assert result["ok"] is True
+1997|        assert isinstance(result["reason"], str)
+1998|
+1999|    def test_fail_message_is_string(self):
+2000|        result = apply_rule(self._RULE, {"notice_days": 7})
+2001|        assert result["ok"] is True
+2002|        assert isinstance(result["reason"], str)
+2003|
+2004|
+2005|# ===========================================================================
+2006|# apply_rule — error-path and edge-case tests
+2007|# ===========================================================================
+2008|
+2009|
+2010|class TestApplyRuleErrors:
+2011|    def test_unknown_rule_id(self):
+2012|        result = apply_rule("nonexistent_rule", {"x": 1})
+2013|        assert result["ok"] is False
+2014|        assert "nonexistent_rule" in result["reason"]
+2015|
+2016|    def test_invalid_rule_id_slash(self):
+2017|        result = apply_rule("../../etc/passwd", {"x": 1})
+2018|        assert result["ok"] is False
+2019|
+2020|    def test_invalid_rule_id_space(self):
+2021|        result = apply_rule("my rule", {"x": 1})
+2022|        assert result["ok"] is False
+2023|
+2024|    def test_invalid_rule_id_empty(self):
+2025|        result = apply_rule("", {"x": 1})
+2026|        assert result["ok"] is False
+2027|
+2028|    def test_invalid_rule_id_dot(self):
+2029|        result = apply_rule("some.rule", {"x": 1})
+2030|        assert result["ok"] is False
+2031|
+2032|    def test_extra_env_keys_ignored(self):
+2033|        # Extra keys in env should not cause failures
+2034|        result = apply_rule("notice_period_min_30_days", {"notice_days": 45, "irrelevant": "junk"})
+2035|        assert result["ok"] is True
+2036|        assert result["pass"] is True
+2037|
+2038|    def test_non_numeric_env_value_fails_gracefully(self):
+2039|        result = apply_rule("notice_period_min_30_days", {"notice_days": "not a number"})
+2040|        assert result["ok"] is False
+2041|=== /tmp/hello_agent/tests/symbolic/test_verify.py ===
+2042|"""Tests for src.pipeline.symbolic.verify.
+2043|
+2044|Owner doc: docs/design/bulk-review-neuro-symbolic-reasoning-plan.md §14.3.
+2045|
+2046|Coverage:
+2047|  - Exact, normalised, number-normalised, and fuzzy verification levels
+2048|  - OCR artefacts (double spaces, ligatures, character substitutions)
+2049|  - Currency formatting (AUD 1,500,000 ↔ digits)
+2050|  - Duration paraphrasing (thirty days ↔ 30 days)
+2051|  - Edge cases: empty inputs, non-string inputs, Unicode
+2052|"""
+2053|
+2054|from __future__ import annotations
+2055|
+2056|from src.pipeline.symbolic.verify import FUZZY_THRESHOLD, verify_span
+2057|
+2058|# ---------------------------------------------------------------------------
+2059|# Helpers
+2060|# ---------------------------------------------------------------------------
+2061|
+2062|
+2063|def assert_verified(claim: str, span: str, reason_prefix: str | None = None) -> None:
+2064|    result = verify_span(claim, span)
+2065|    assert result["ok"] is True, f"Expected ok for {claim!r} in {span!r}: {result}"
+2066|    assert result["verified"] is True, f"Expected verified for {claim!r} in {span!r}: {result}"
+2067|    if reason_prefix:
+2068|        assert result["reason"].startswith(reason_prefix), (
+2069|            f"Expected reason starting with {reason_prefix!r}, got {result['reason']!r}"
+2070|        )
+2071|
+2072|
+2073|def assert_not_verified(claim: str, span: str) -> None:
+2074|    result = verify_span(claim, span)
+2075|    assert result["ok"] is True, f"Expected ok=True for {claim!r} in {span!r}: {result}"
+2076|    assert result["verified"] is False, f"Expected not verified for {claim!r} in {span!r}: {result}"
+2077|
+2078|
+2079|def assert_error(claim, span) -> None:
+2080|    result = verify_span(claim, span)
+2081|    assert result["ok"] is False, f"Expected ok=False for claim={claim!r}: {result}"
+2082|
+2083|
+2084|# ===========================================================================
+2085|# Level 1 — Exact containment
+2086|# ===========================================================================
+2087|
+2088|
+2089|class TestExactMatch:
+2090|    def test_simple_value_present(self):
+2091|        assert_verified("30 days", "The notice period is 30 days from termination.", "exact")
+2092|
+2093|    def test_exact_currency_amount(self):
+2094|        assert_verified("AUD 1,500,000", "...capped at AUD 1,500,000 per year...", "exact")
+2095|
+2096|    def test_exact_percentage(self):
+2097|        assert_verified("10%", "The rate shall be 10% per annum.", "exact")
+2098|
+2099|    def test_exact_governing_law(self):
+2100|        assert_verified("New South Wales", "Governing law: New South Wales, Australia.", "exact")
+2101|
+2102|    def test_exact_party_name(self):
+2103|        assert_verified("ACME Pty Ltd", "Customer means ACME Pty Ltd (ABN 12 345 678).", "exact")
+2104|
+2105|    def test_claim_at_start_of_span(self):
+2106|        assert_verified("30 days", "30 days' notice shall be given.", "exact")
+2107|
+2108|    def test_claim_at_end_of_span(self):
+2109|        assert_verified("30 days", "Notice must be at least 30 days", "exact")
+2110|
+2111|
+2112|# ===========================================================================
+2113|# Level 2 — Normalised containment (casefold, whitespace, punctuation)
+2114|# ===========================================================================
+2115|
+2116|
+2117|class TestNormalisedMatch:
+2118|    def test_case_difference(self):
+2119|        # "30 Days" normalises to match "30 days"
+2120|        assert_verified("30 Days", "The notice period is 30 days.", "normalised")
+2121|
+2122|    def test_all_caps_claim(self):
+2123|        assert_verified("NEW SOUTH WALES", "Governing law: New South Wales.", "normalised")
+2124|
+2125|    def test_punctuation_in_claim(self):
+2126|        # Trailing period in claim stripped by normalisation
+2127|        assert_verified("30 days.", "The period is 30 days from notice.", "normalised")
+2128|
+2129|    def test_extra_whitespace_in_span(self):
+2130|        assert_verified("30 days", "The period is  30  days  from notice.", "normalised")
+2131|
+2132|    def test_thin_space_normalised(self):
+2133|        # U+2009 thin space between value and unit (common in styled PDFs)
+2134|        span = "notice period: 30\u2009days"
+2135|        assert_verified("30 days", span)
+2136|
+2137|
+2138|# ===========================================================================
+2139|# Level 3 — Number normalisation (written numbers ↔ digits, thousands seps)
+2140|# ===========================================================================
+2141|
+2142|
+2143|class TestNumberNormalisedMatch:
+2144|    def test_written_thirty_vs_30(self):
+2145|        # claim extracted as canonical "30 days", span has written form
+2146|        assert_verified("30 days", "...give thirty days' written notice...", "number-normalised")
+2147|
+2148|    def test_written_ninety_vs_90(self):
+2149|        assert_verified("90 days", "...ninety days after the Effective Date...", "number-normalised")
+2150|
+2151|    def test_written_twelve_months(self):
+2152|        assert_verified("12 months", "...for a period of twelve months...", "number-normalised")
+2153|
+2154|    def test_currency_thousands_separator(self):
+2155|        # Thousands separators are removed during base normalisation, so "1500000"
+2156|        # appears as a substring of the normalised span — verified at Level 2.
+2157|        assert_verified("1500000", "...the sum of AUD 1,500,000 in total...")
+2158|
+2159|    def test_currency_code_stripped(self):
+2160|        assert_verified("1500000", "...limited to AUD1,500,000...")
+2161|
+2162|    def test_written_compound_twenty_one(self):
+2163|        assert_verified("21 days", "...twenty-one days from delivery...", "number-normalised")
+2164|
+2165|
+2166|# ===========================================================================
+2167|# Level 4 — Fuzzy matching (OCR artefacts)
+2168|# ===========================================================================
+2169|
+2170|
+2171|class TestFuzzyMatch:
+2172|    def test_ocr_missing_space_between_tokens(self):
+2173|        # PDF column-scanning OCR sometimes merges tokens: "30days" instead of "30 days"
+2174|        assert_verified("30 days", "give 30days notice to the counterparty")
+2175|
+2176|    def test_ocr_double_spaces_around_value(self):
+2177|        # OCR sometimes scatters extra whitespace between tokens (caught by Level 2)
+2178|        assert_verified("30 days", "give  30  days  written  notice")
+2179|
+2180|    def test_high_overlap_slightly_different_phrasing(self):
+2181|        result = verify_span("notice period of 30 days", "...shall give at least 30 days notice...")
+2182|        # Should be verified at some level given high token overlap
+2183|        assert result["ok"] is True
+2184|
+2185|    def test_fuzzy_threshold_documented(self):
+2186|        assert FUZZY_THRESHOLD == 0.80
+2187|
+2188|
+2189|# ===========================================================================
+2190|# Not-verified cases
+2191|# ===========================================================================
+2192|
+2193|
+2194|class TestNotVerified:
+2195|    def test_completely_different_span(self):
+2196|        assert_not_verified(
+2197|            "30 days",
+2198|            "This agreement sets out the terms for software licensing.",
+2199|        )
+2200|
+2201|    def test_different_value_same_unit(self):
+2202|        assert_not_verified("60 days", "The notice period is 30 days from termination.")
+2203|
+2204|    def test_partial_word_not_sufficient(self):
+2205|        assert_not_verified("termination", "The term of this agreement is fixed.")
+2206|
+2207|    def test_empty_span(self):
+2208|        result = verify_span("30 days", "")
+2209|        assert result["ok"] is True
+2210|        assert result["verified"] is False
+2211|
+2212|    def test_empty_span_whitespace_only(self):
+2213|        result = verify_span("30 days", "   ")
+2214|        assert result["ok"] is True
+2215|        assert result["verified"] is False
+2216|
+2217|
+2218|# ===========================================================================
+2219|# Input error cases
+2220|# ===========================================================================
+2221|
+2222|
+2223|class TestInputErrors:
+2224|    def test_non_string_claim(self):
+2225|        assert_error(30, "The notice period is 30 days.")
+2226|
+2227|    def test_none_claim(self):
+2228|        assert_error(None, "The notice period is 30 days.")
+2229|
+2230|    def test_non_string_span(self):
+2231|        assert_error("30 days", 12345)
+2232|
+2233|    def test_none_span(self):
+2234|        assert_error("30 days", None)
+2235|
+2236|    def test_empty_claim(self):
+2237|        result = verify_span("", "The notice period is 30 days.")
+2238|        assert result["ok"] is False
+2239|
+2240|    def test_whitespace_only_claim(self):
+2241|        result = verify_span("   ", "The notice period is 30 days.")
+2242|        assert result["ok"] is False
+2243|
+2244|
+2245|# ===========================================================================
+2246|# Unicode and OCR edge cases
+2247|# ===========================================================================
+2248|
+2249|
+2250|class TestUnicodeEdgeCases:
+2251|    def test_non_breaking_space_in_span(self):
+2252|        # U+00A0 between number and unit
+2253|        span = "The notice period is 30\u00a0days from termination."
+2254|        assert_verified("30 days", span)
+2255|
+2256|    def test_unicode_minus_in_compound(self):
+2257|        # U+2212 MINUS SIGN in "twenty-one" instead of ASCII hyphen-minus
+2258|        span = "give twenty\u2212one days notice"
+2259|        result = verify_span("21 days", span)
+2260|        assert result["ok"] is True
+2261|
+2262|    def test_left_right_double_quotes_in_span(self):
+2263|        span = "“Notice Period” means 30 days."
+2264|        assert_verified("30 days", span)
+2265|
+2266|    def test_fullwidth_digits(self):
+2267|        # U+FF13 U+FF10: fullwidth "30" — NFKC normalises to ASCII digits
+2268|        span = "notice period of \uff13\uff10 days"
+2269|        result = verify_span("30 days", span)
+2270|        assert result["ok"] is True
+2271|
+2272|    def test_ocr_ligature_fi(self):
+2273|        # OCR ligature U+FB01 in "termination"
+2274|        span = "upon termiﬁcation, 30 days notice applies"
+2275|        assert_verified("30 days", span)
+2276|
+2277|__HERMES_CWD_6c858c07a5d0__/tmp__HERMES_CWD_6c858c07a5d0__

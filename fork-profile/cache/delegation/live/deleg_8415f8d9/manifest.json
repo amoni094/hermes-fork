@@ -1,0 +1,52 @@
+{
+  "delegation_id": "deleg_8415f8d9",
+  "started": "2026-09-19 18:56:33",
+  "task_count": 6,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Fix gate_audit.py (NEW-1): it always exits 0 even when REVIEW verdicts are found. Fix improvement_governance.py (NEW-3): rate-limit resets on every subprocess call because _proposal_timestamps is a module-level list.\n\nSpec for gate_audit.py:\n1. Read ~/.hermes/scripts/gate_audit.py lines 447-520 (main() function).\n2. Find where result['summary']['overall_verdict'] is determined.\n3. Change the final `return 0` at L513 to: `return 1 if result['summary'].get('overall_verdict') == 'REVIEW' else 0`\n4.",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_8415f8d9/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Fix unified-recall.py (NEW-2): invalidated memories are returned at recall time because the SQL queries do not filter on memory_status != 'invalidated'. Wire the invalidation filter at the recall query level.\n\nSpec:\n1. Read ~/.hermes/scripts/unified-recall.py lines 840-910 (the main SQL SELECT for recall).\n2. Read lines 620-680 (seu_filter, to understand status field availability).\n3. Read lines 960-1010 (search_pending_activefacts) for status column reference.\n4. The fix: in the primary recall ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_8415f8d9/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "Fix non-atomic writes (NEW-4) in the highest-priority state files: math-paper-interpreter.py and cs-paper-interpreter.py write spike queues, seen lists, and idea queues non-atomically. Fix these files plus the top alarm-writing monitors.\n\nSpec:\n1. Read ~/.hermes/scripts/math-paper-interpreter.py lines 990-1035. Find all .write_text(json.dumps(...)) calls on SPIKE_QUEUE, OUTPUT_LATEST, seen_path, ideas_queue_path. For each, replace with atomic pattern:\n   _tmp = PATH.with_suffix('.tmp')\n   _tmp.w",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_8415f8d9/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 3,
+      "goal": "Fix monitor scheduling gap (NEW-5): 40+ monitor scripts write alarm JSON but have no cron — alarm-aggregator finds nothing. Fix by wiring monitor-suite-runner.py into cron AND fixing the remaining critical non-atomic alarm writes in monitors.\n\nSpec part A — cron wiring:\n1. Read ~/.hermes/profiles/fork/cron/jobs.json (12 jobs currently).\n2. Add a cron job to run monitor-suite-runner.py every 2 hours:\n   id=monitor-suite-runner-0001, schedule={kind:cron, expr:'0 */2 * * *'}, script=full absolute p",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_8415f8d9/task-3.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 4,
+      "goal": "Wire mcp-privilege-audit.py into cron (NEW-7) and fix gate_audit.py output being dark (NEW-1 partial: the output file is never read). Also fix routing-weight-updater.py hardcoded route list (NEW-12).\n\nSpec A — mcp-privilege-audit cron:\n1. Read ~/.hermes/scripts/mcp-privilege-audit.py lines 1-30 to understand CLI args.\n2. Read /var/home/rainbow/.hermes/profiles/fork/cron/jobs.json (already being modified by sibling — read it fresh, add only this job after sibling writes).\n   IMPORTANT: This subag",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_8415f8d9/task-4.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 5,
+      "goal": "Adversarial cold pass on ALL fixes applied in this session wave (NEW-1 through NEW-7). You are a hostile reviewer. Read the following files and find any new bugs introduced by the patches:\n\nFiles to review (read each fully):\n1. ~/.hermes/scripts/gate_audit.py — check: does main() now correctly return 1 on REVIEW verdict? Any edge cases where result['summary'] key is missing?\n2. ~/.hermes/scripts/improvement_governance.py — check: is the rate-state JSON read/write atomic? Can two concurrent proce",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_8415f8d9/task-5.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 19:01:17"
+}

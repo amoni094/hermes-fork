@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_d49a263f",
+  "started": "2026-09-16 18:20:48",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Cold adversarial review of commit 2c1af5c on /tmp/hello_agent, branch feature/theory-grounded-research.\n\nFOCUS FILES:\n1. src/eval/conformal_abstention.py — conformal_coverage_check tau=-inf short-circuit\n2. src/reasoning/active_learning_engine.py — prioritize_for_labeling hours validation\n\nCHECK 1 — conformal_abstention.py:\na. Read the conformal_coverage_check function (sed -n '104,160p'). Is the tau=-inf short-circuit AFTER the empty-input guard and AFTER calling calibrate_conformal_threshold, ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_d49a263f/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-16 18:21:59"
+}

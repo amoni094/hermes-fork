@@ -1,0 +1,19 @@
+{
+  "schema": "hermes-working-memory/v3",
+  "session_id": "mac-test-session",
+  "goal": "test MAC goal",
+  "groth_context": "session",
+  "progress": [],
+  "next": [],
+  "open_decisions": [],
+  "constraints": [],
+  "active_skills": [],
+  "skill_combos_recorded": [],
+  "failure_localizations": [],
+  "latency_tracker": {},
+  "framework_switches": [],
+  "beliefs": {},
+  "variant_history": [],
+  "updated_at": "2026-09-15T05:46:55Z",
+  "_mac": "42b90db50d9fa08b1e14d1f99edaade6297e6a3eb9726eb875ea72747f5f3b13"
+}

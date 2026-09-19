@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_d40de548",
+  "started": "2026-09-18 21:42:22",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 5, Agent A). You have NO knowledge of any prior review pass. Read every file listed below IN FULL before writing a single finding.\n\nFiles to read IN FULL (page through with offset/limit until you reach the end of each file):\n1. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py  (~1150 lines)\n2. /var/home/rainbow/.hermes/scripts/segment_level_compactor.py\n3. /var/home/rainbow/.hermes/scripts/cot_phase_scorer.py\n4. /var/home/rainbo",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_d40de548/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 5, Agent B). You have NO knowledge of any prior review pass. Read every file listed below IN FULL before writing a single finding.\n\nFiles to read IN FULL:\n1. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py (~1150 lines)\n2. /var/home/rainbow/.hermes/scripts/gate_audit.py\n3. /var/home/rainbow/.hermes/scripts/proper_scoring.py\n4. /var/home/rainbow/.hermes/scripts/causal_ema.py\n5. /var/home/rainbow/.hermes/scripts/kolmogorov_predic",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_d40de548/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "You are a COLD INTEGRATION VERIFIER (Pass 5, Agent C). Run the full test suite, then write targeted regression tests for the Pass 4 fixes, run them, and report gaps.\n\nStep 1: Run ALL existing suites:\n  python3 /tmp/test_jev_final.py\n  python3 /tmp/test_corpus_gaps.py\n  python3 /tmp/test_wave2.py\n  python3 /tmp/test_wave2b.py\n  python3 /tmp/test_gate_gaps.py\n  python3 /tmp/test_deferred_fixes.py\n  python3 /tmp/test_wave3_wiring.py\n  python3 /tmp/test_p4_integration.py\nCapture full output for any ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_d40de548/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-18 21:52:07"
+}

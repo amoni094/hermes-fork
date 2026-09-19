@@ -1,0 +1,31 @@
+{
+  "delegation_id": "deleg_5827feb2",
+  "started": "2026-09-18 23:25:00",
+  "task_count": 3,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 14, Agent A). This is the second consecutive saturation check: we stop when two consecutive passes find no HIGH or MED findings. Read every file IN FULL before writing a single finding.\n\nFiles:\n1. /var/home/rainbow/.hermes/profiles/fork/plugins/jev-compaction/__init__.py\n2. /var/home/rainbow/.hermes/scripts/calibration_loop.py\n3. /var/home/rainbow/.hermes/scripts/confidence_tracker.py\n4. /var/home/rainbow/.hermes/scripts/lyapunov_monitor.py\n\nFocus for Pa",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_5827feb2/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "You are a COLD ADVERSARIAL REVIEWER (Pass 14, Agent B). This is the second consecutive saturation check. Read every file IN FULL.\n\nFiles:\n1. /var/home/rainbow/.hermes/scripts/compaction_utils.py\n2. /var/home/rainbow/.hermes/scripts/segment_level_compactor.py\n3. /var/home/rainbow/.hermes/scripts/crystal_fidelity_tiers.py\n4. /var/home/rainbow/.hermes/scripts/occam_audit.py\n5. /var/home/rainbow/.hermes/scripts/proper_scoring.py\n6. /var/home/rainbow/.hermes/scripts/mdp_retention_policy.py\n7. /var/ho",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_5827feb2/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 2,
+      "goal": "You are an INTEGRATION TESTER (Pass 14, Agent C).\n\nStep 1: Write /tmp/test_p14_regression.py covering:\n- V1: P13A-01 — simulate a session where a message goes through Jev-demote (added to demote_idx AND middle_set). Verify that after _relevance_gated_prune, the FTRL threshold reflects the Jev score (not an RR proxy score). Specifically: set up so that the Jev score = 0.3 (retain=False) and RR proxy norm = 0.0. FTRL should update toward 0.3, not toward 0.0.\n- V2: P13A-02 — simulate a session wher",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_5827feb2/task-2.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-18 23:28:42"
+}

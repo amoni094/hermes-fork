@@ -1,0 +1,17 @@
+{
+  "delegation_id": "deleg_5a464c60",
+  "started": "2026-09-19 22:43:20",
+  "task_count": 1,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Cold adversarial review of wave-14 fixes to hermes-fork scripts. Read the actual on-disk files and verify each claim with line-number evidence. Report PASS/FAIL/PARTIAL per claim. Flag any new issues introduced. Write a markdown report to /tmp/adversarial_wave14.md.\n\nClaims to verify:\n\n1. W14-HIGH-1: jev_verify_fn.py — _CALIB_LOG, _BUDGET_FILE, _HERMES_AGENT_PATH all use os.environ.get('HERMES_HOME', ...) instead of hardcoded ~/.hermes paths. Verify import os is present and correctly placed.\n   ",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_5a464c60/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-19 22:46:30"
+}

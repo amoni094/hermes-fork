@@ -1,0 +1,23 @@
+{
+  "built_at": "2026-09-19T15:00:26.659669+00:00",
+  "total": 1,
+  "skills": [
+    {
+      "name": "autonomous-food-retail-vending",
+      "description": "Use when planning autonomous food vending machines.",
+      "triggers": [],
+      "path": "autonomous-food-retail-vending/SKILL.md",
+      "tokens": [
+        "autonomous",
+        "food",
+        "retail",
+        "vending",
+        "planning",
+        "autonomous",
+        "food",
+        "vending",
+        "machines"
+      ]
+    }
+  ]
+}

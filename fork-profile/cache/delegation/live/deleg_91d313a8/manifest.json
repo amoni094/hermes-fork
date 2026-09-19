@@ -1,0 +1,24 @@
+{
+  "delegation_id": "deleg_91d313a8",
+  "started": "2026-09-16 18:23:52",
+  "task_count": 2,
+  "model": null,
+  "provider": null,
+  "tasks": [
+    {
+      "index": 0,
+      "goal": "Cold adversarial review — SURFACE A (correctness of core algorithms). Read actual code with sed before assessing. Do not trust prior rounds.\n\nFOCUS FILES:\n- src/reasoning/temporal_engine.py (Allen interval algebra, AC-3, COMPOSITION_TABLE)\n- src/reasoning/causal_engine.py (Bayes-Ball d-separation, backdoor criterion)\n- src/reasoning/defeasible_engine.py (Dung preferred extensions)\n\nCHECK 1 — temporal_engine.py COMPOSITION_TABLE:\na. Run: cd /tmp/hello_agent && python3 -c \"\nimport sys; sys.path.in",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_91d313a8/task-0.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    },
+    {
+      "index": 1,
+      "goal": "Cold adversarial review — SURFACE B (pipeline integration, feedback, rules, eval). Read actual code with sed before assessing. Do not trust prior rounds.\n\nFOCUS FILES:\n- src/feedback/analysis.py (Wasserstein-1 distance, cohort leave-one-out)\n- src/pipeline/knowledge_graph.py (BFS traverse, TraversalResult)\n- src/rules/engine.py (check_rule_consistency, contradiction detection)\n- src/eval/conformal_abstention.py (calibrate_conformal_threshold, conformal_coverage_check)\n- src/pipeline/consistency_",
+      "log": "/var/home/rainbow/.hermes/profiles/fork/cache/delegation/live/deleg_91d313a8/task-1.log",
+      "status": "completed",
+      "exit_reason": "completed"
+    }
+  ],
+  "completed": "2026-09-16 18:29:48"
+}
