@@ -213,7 +213,9 @@ def run(from_skill: str | None, to_skill: str | None,
             print(f"\nALARM: no — dead-end count stable (total={len(dead_ends)}, baseline={baseline_dead}, delta={new_dead:+d})")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+        _out_tmp = OUT_FILE.with_suffix(".tmp")
+        _out_tmp.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+        _out_tmp.replace(OUT_FILE)
 
     return alarm_exit
 
