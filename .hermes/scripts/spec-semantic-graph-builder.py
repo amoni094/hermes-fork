@@ -209,9 +209,13 @@ def run(skill_name: str | None, export: Path | None, dry_run: bool) -> int:
 
     if not dry_run:
         payload = {"ts": now, "files": len(results), "issues": all_issues, "by_type": dict(by_type)}
-        OUT_FILE.write_text(json.dumps(payload, indent=2))
+        _out_tmp = OUT_FILE.with_suffix(".tmp")
+        _out_tmp.write_text(json.dumps(payload, indent=2))
+        _out_tmp.replace(OUT_FILE)
         if export:
-            export.write_text(json.dumps({"results": results}, indent=2))
+            _exp_tmp = export.with_suffix(".tmp")
+            _exp_tmp.write_text(json.dumps({"results": results}, indent=2))
+            _exp_tmp.replace(export)
             print(f"Graph exported: {export}")
 
     return alarm_exit
