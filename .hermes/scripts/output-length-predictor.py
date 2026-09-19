@@ -32,6 +32,7 @@ Usage:
 """
 
 from __future__ import annotations
+import os
 
 import argparse
 import json
@@ -42,9 +43,12 @@ from pathlib import Path
 
 import numpy as np
 
+_HH_OLP      = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP_OLP      = os.environ.get("HERMES_PROFILE", "fork")
+_RT_OLP      = (_HH_OLP / "profiles" / _HP_OLP) if _HP_OLP else _HH_OLP
 HOME         = Path.home()
-SESSIONS_DIR = HOME / ".hermes/profiles/fork/sessions"
-CACHE_DIR    = HOME / ".hermes/cache/monitors"
+SESSIONS_DIR = _RT_OLP / "sessions"
+CACHE_DIR    = _HH_OLP / "cache" / "monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 CALIB_FILE   = CACHE_DIR / "output-length-calibration.json"
 OUT_FILE     = CACHE_DIR / "output-length-prediction.json"
@@ -196,10 +200,12 @@ def run(task: str, calibrate: bool, dry_run: bool) -> None:
         print(f"  SPLIT RECOMMENDED: task likely exceeds single-turn budget")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({
+        _tmp_out = OUT_FILE.with_suffix(".tmp")
+        _tmp_out.write_text(json.dumps({
             "ts": now, "task": task, "predicted_tokens": tokens,
             "routing": routing, "features": feats,
         }, indent=2))
+        _tmp_out.replace(OUT_FILE)
         print(f"\nWritten: {OUT_FILE}")
     else:
         print("(dry-run)")
