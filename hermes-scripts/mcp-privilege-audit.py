@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-_os_mca = __import__("os")
+_os_mca = os
 _hermes_base_mca = Path(_os_mca.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _hermes_profile_mca = _os_mca.environ.get("HERMES_PROFILE", "")
 _hermes_root_mca = (_hermes_base_mca / "profiles" / _hermes_profile_mca) if _hermes_profile_mca else _hermes_base_mca
@@ -404,7 +404,7 @@ def audit(config_path: Path, workspace: Path, report_path: Path) -> int:
 
     try:
         import os as _os_m, tempfile as _tf_m, json as _json_m, time as _time_m
-        _base_m = _os_m.environ.get('HERMES_HOME', str(report_path.parent.parent.parent))
+        _base_m = _os_m.environ.get('HERMES_HOME', str(Path.home() / '.hermes'))
         _profile_m = _os_m.environ.get('HERMES_PROFILE', '')
         _root_m = (Path(_base_m) / 'profiles' / _profile_m) if _profile_m else Path(_base_m)
         _alarm_path_m = _root_m / 'cache' / 'mcp-privilege-alarm.json'

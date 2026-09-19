@@ -622,7 +622,7 @@ def main():
 
     # SkillRouter overlap check (Sweep 21 — detects routing-confusing skill pairs)
     import subprocess as _sp
-    _router = Path.home() / ".hermes/scripts/skill-router-index.py"
+    _router = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "skill-router-index.py"
     if _router.exists():
         print(f"\n--- SkillRouter: rebuilding index ---")
         _result = _sp.run(["python3", str(_router), "--build"], capture_output=True)
@@ -633,7 +633,7 @@ def main():
             print(_chk.stdout.strip())
 
     # Pending trace2skill candidates
-    _pending = Path.home() / ".hermes/cache/pending-improvements"
+    _pending = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache" / "pending-improvements"
     _candidates = list(_pending.glob("skill-candidate-*.md")) if _pending.exists() else []
     if _candidates:
         print(f"\n--- Pending trace2skill candidates ({len(_candidates)}) ---")
@@ -643,7 +643,7 @@ def main():
         print(f"  Promote with: skill_manage(action='create', ...)")
 
     # Skill yield audit (SYNAPSE tracker — shows metrics for skills with recorded invocations)
-    _yield_tracker = Path.home() / ".hermes/scripts/skill-yield-tracker.py"
+    _yield_tracker = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "skill-yield-tracker.py"
     if _yield_tracker.exists():
         _yt = _sp.run(["python3", str(_yield_tracker), "--audit"], capture_output=True, text=True)
         if _yt.stdout.strip():

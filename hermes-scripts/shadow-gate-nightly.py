@@ -2,7 +2,7 @@
 """
 shadow-gate-nightly.py — Nightly shadow telemetry gate report.
 
-Reads ~/.hermes/cache/shadow-telemetry/*.jsonl, evaluates each flag found,
+Reads $HERMES_HOME/[profiles/$HERMES_PROFILE/]cache/shadow-telemetry/*.jsonl, evaluates each flag found,
 and prints a markdown summary with promotion/disable recommendations.
 
 Output contract (no_agent=True):
