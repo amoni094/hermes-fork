@@ -164,7 +164,9 @@ def calibrate_from_sessions() -> None:
     # OLS: w = (X'X)^-1 X'y
     try:
         w = np.linalg.lstsq(X, y, rcond=None)[0]
-        CALIB_FILE.write_text(json.dumps({"weights": w.tolist(), "n_sessions": len(xs)}, indent=2))
+        _tmp_olp = CALIB_FILE.with_suffix(".tmp")
+        _tmp_olp.write_text(json.dumps({"weights": w.tolist(), "n_sessions": len(xs)}, indent=2))
+        _tmp_olp.replace(CALIB_FILE)
         print(f"[output-predictor] Calibrated from {len(xs)} sessions. Weights: {w.round(3).tolist()}")
     except Exception as e:
         print(f"[output-predictor] Calibration failed: {e}")
