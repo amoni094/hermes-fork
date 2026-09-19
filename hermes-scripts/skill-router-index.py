@@ -15,15 +15,20 @@ import argparse
 import json
 import math
 import re
+import subprocess
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-SKILLS_ROOT = Path.home() / ".hermes" / "skills"
-INDEX_PATH = Path.home() / ".hermes" / "cache" / "skill-router-index.json"
+import os as _os_sri
+_hermes_base_sri = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hermes_profile_sri = _os_sri.environ.get("HERMES_PROFILE", "")
+_hermes_root_sri = (_hermes_base_sri / "profiles" / _hermes_profile_sri) if _hermes_profile_sri and "profiles" not in str(_hermes_base_sri) else _hermes_base_sri
+SKILLS_ROOT = _hermes_root_sri / "skills"
+INDEX_PATH = _hermes_root_sri / "cache" / "skill-router-index.json"
 OVERLAP_THRESHOLD = 0.65
-BETA_STATE_PATH = Path.home() / ".hermes" / "cache" / "skill-beta-state.json"
+BETA_STATE_PATH = _hermes_root_sri / "cache" / "skill-beta-state.json"
 
 # R4 — Cross-domain skill fingerprints (Sweep 24 / arXiv:2603.22455 §4)
 DOMAIN_LABELS: set[str] = {
@@ -380,7 +385,7 @@ def scan_skills() -> list[dict]:
                 "name": name,
                 "description": description[:200],
                 "triggers": triggers,
-                "path": str(skill_md_path.relative_to(Path.home() / ".hermes" / "skills")),
+                "path": str(skill_md_path.relative_to(SKILLS_ROOT)),
                 "tokens": tokens,
             })
         except Exception as e:
@@ -411,7 +416,9 @@ def cmd_build():
         ],
     }
     INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
-    INDEX_PATH.write_text(json.dumps(index, indent=2))
+    _tmp_i = INDEX_PATH.with_suffix('.tmp')
+    _tmp_i.write_text(json.dumps(index, indent=2))
+    _tmp_i.rename(INDEX_PATH)
     print(f"Index written to {INDEX_PATH}")
     print(f"Total skills indexed: {len(skills)}")
 
@@ -424,6 +431,201 @@ def load_index_with_tfidf():
     skills = index["skills"]
     skills, idf = build_tfidf(skills)
     return skills, idf, index
+
+
+def route(query_text: str, top: int = 5) -> list[dict]:
+    """Return top-N skill matches as a list of dicts (callable API, no side-effects).
+
+    Each dict has: name, description, score (float, 0–1), category.
+    Returns [] when the index is not yet built (fail-silently contract).
+    Reuses cmd_query scoring logic without printing.
+    """
+    if not INDEX_PATH.exists():
+        return []
+    skills, idf, _index = load_index_with_tfidf()
+    q_tokens = tokenize(query_text)
+    BM25_K1_Q = 1.5
+    q_tf = defaultdict(float)
+    for t in q_tokens:
+        q_tf[t] += 1
+    q_vec_raw = {}
+    for t, freq in q_tf.items():
+        tf_bm25 = (freq * (BM25_K1_Q + 1)) / (freq + BM25_K1_Q)
+        q_vec_raw[t] = tf_bm25 * idf.get(t, 0.0)
+    q_norm = math.sqrt(sum(v * v for v in q_vec_raw.values())) or 1.0
+    q_vec = {t: v / q_norm for t, v in q_vec_raw.items()}
+
+    beta_state = load_beta_state()
+    beta_active = bool(beta_state)
+    scored = [
+        (
+            (0.6 * cosine(q_vec, s["tfidf"]) + 0.4 * beta_posterior_mean(s["name"], beta_state))
+            if beta_active else cosine(q_vec, s["tfidf"])
+        ) + cross_domain_boost(query_text, s.get("description", ""))
+        for s in skills
+    ]
+    scored = list(zip(scored, skills))
+    scored.sort(key=lambda x: -x[0])
+
+    # Concept-lattice semantic reranking (same logic as cmd_query)
+    LATTICE_SCRIPT = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
+    AMBIGUITY_GAP = 0.12
+    LATTICE_BOOST = 0.15
+    if len(scored) >= 2:
+        gap = scored[0][0] - scored[1][0]
+        if gap < AMBIGUITY_GAP and LATTICE_SCRIPT.exists():
+            try:
+                _lat = subprocess.run(
+                    [sys.executable, str(LATTICE_SCRIPT), "--query", query_text, "--top-k", "5"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                lattice_hits = json.loads(_lat.stdout) if _lat.returncode == 0 else []
+            except Exception:
+                lattice_hits = []
+            if lattice_hits:
+                lattice_names: set = set()
+                for _hit in lattice_hits:
+                    for _m in _hit.get("members", []):
+                        lattice_names.add(_m.lower())
+                    for _i in _hit.get("intent", []):
+                        lattice_names.add(_i.lower())
+                _boosted = []
+                for _sc, _s in scored:
+                    if any(_s["name"].lower() in _ln or _ln in _s["name"].lower() for _ln in lattice_names):
+                        _sc += LATTICE_BOOST
+                    _boosted.append((_sc, _s))
+                scored = sorted(_boosted, key=lambda x: -x[0])
+
+    results = []
+    for sc, s in scored[:top]:
+        if sc <= 0.0:
+            continue
+        results.append({
+            "name": s["name"],
+            "description": s.get("description", "")[:120],
+            "score": round(float(sc), 4),
+            "category": s.get("category", ""),
+        })
+
+    # --- Ensemble layer (post-hoc, fail-open) ---
+    # When BM25 top score is low-confidence (< 0.4), call specialist routers
+    # and merge their top-1 suggestions under 'ensemble_suggestions'.
+    top_bm25_score = results[0]["score"] if results else 0.0
+    if top_bm25_score < 0.4:
+        _SCRIPTS = Path(__file__).resolve().parent
+        ensemble_suggestions: list[dict] = []
+
+        # 1. soft-bellman-skill-router: --query QUERY --top 3
+        try:
+            _proc = subprocess.run(
+                [sys.executable, str(_SCRIPTS / "soft-bellman-skill-router.py"),
+                 "--query", query_text, "--top", "3"],
+                capture_output=True, text=True, timeout=5,
+            )
+            # Output is human-readable table; parse "  SKILL P Q N" lines
+            _suggestion = None
+            for _line in _proc.stdout.splitlines():
+                _parts = _line.strip().split()
+                # Data lines: skill_name  prob  q_value  count (4 tokens, first is skill name)
+                if len(_parts) == 4:
+                    try:
+                        float(_parts[1]); float(_parts[2]); int(_parts[3])
+                        _suggestion = {"router": "soft-bellman", "skill": _parts[0]}
+                        break
+                    except (ValueError, IndexError):
+                        pass
+            if _suggestion:
+                ensemble_suggestions.append(_suggestion)
+        except Exception:
+            pass
+
+        # 2. kl-skill-prior: --top 3 QUERY_TOKENS (positional tokens after --top)
+        try:
+            _proc = subprocess.run(
+                [sys.executable, str(_SCRIPTS / "kl-skill-prior.py"),
+                 "--top", "3"] + query_text.split(),
+                capture_output=True, text=True, timeout=5,
+            )
+            _kl_data = json.loads(_proc.stdout) if _proc.returncode == 0 and _proc.stdout.strip() else []
+            if _kl_data and isinstance(_kl_data, list) and _kl_data[0].get("name"):
+                ensemble_suggestions.append({
+                    "router": "kl-prior",
+                    "skill": _kl_data[0]["name"],
+                    "kl": _kl_data[0].get("kl"),
+                    "score": _kl_data[0].get("score"),
+                })
+        except Exception:
+            pass
+
+        # 3. pareto-phase-router: --task QUERY --dry-run
+        try:
+            _proc = subprocess.run(
+                [sys.executable, str(_SCRIPTS / "pareto-phase-router.py"),
+                 "--task", query_text, "--dry-run"],
+                capture_output=True, text=True, timeout=5,
+            )
+            # Output: table line "  TASK_PREVIEW  PHASE  SELECTED_ROUTES"
+            # Last non-empty data line after the header contains routes
+            _selected = None
+            _lines = [l.strip() for l in _proc.stdout.splitlines() if l.strip()]
+            for _line in _lines:
+                _cols = _line.split()
+                # Data rows have phase digit (1 or 2) in col -2
+                if len(_cols) >= 3 and _cols[-2] in ("1", "2"):
+                    _selected = _cols[-1]  # route name (last col)
+                    break
+                # Alternatively parse "selected" from route() JSON-style rationale
+            if _selected:
+                ensemble_suggestions.append({"router": "pareto-phase", "route": _selected})
+        except Exception:
+            pass
+
+        # 4. privacy-constrained-skill-router: --task QUERY --skill any --dry-run
+        try:
+            _proc = subprocess.run(
+                [sys.executable, str(_SCRIPTS / "privacy-constrained-skill-router.py"),
+                 "--task", query_text, "--skill", "any", "--dry-run"],
+                capture_output=True, text=True, timeout=5,
+            )
+            # Parse verdict from output: "✓/✗  task_preview  skill  verdict"
+            _verdict = None
+            for _line in _proc.stdout.splitlines():
+                _s = _line.strip()
+                if _s.startswith(("✓", "✗", "ALLOW", "BLOCK")):
+                    _verdict = _s[:80]
+                    break
+            if _verdict:
+                ensemble_suggestions.append({"router": "privacy-constrained", "verdict": _verdict})
+        except Exception:
+            pass
+
+        # 5. online-threshold-skill-router: positional QUERY
+        try:
+            _proc = subprocess.run(
+                [sys.executable, str(_SCRIPTS / "online-threshold-skill-router.py"),
+                 query_text],
+                capture_output=True, text=True, timeout=5,
+            )
+            # Parse "Selected: SKILL_NAME" line from output
+            _selected = None
+            for _line in _proc.stdout.splitlines():
+                if _line.strip().startswith("Selected:"):
+                    _selected = _line.strip().split("Selected:", 1)[-1].strip()
+                    break
+            if _selected:
+                ensemble_suggestions.append({"router": "online-threshold", "skill": _selected})
+        except Exception:
+            pass
+
+        if ensemble_suggestions:
+            # Attach ensemble suggestions to the first result (or as standalone key)
+            if results:
+                results[0]["ensemble_suggestions"] = ensemble_suggestions
+            else:
+                results = [{"ensemble_suggestions": ensemble_suggestions, "score": 0.0,
+                            "name": "", "description": "", "category": ""}]
+
+    return results
 
 
 def cmd_query(query_text: str):
@@ -456,6 +658,47 @@ def cmd_query(query_text: str):
     scored = list(zip([score for score in scored], skills))
     scored.sort(key=lambda x: -x[0])
 
+    # ── Semantic reranking: concept-lattice fallback when BM25 is ambiguous ──
+    LATTICE_SCRIPT = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
+    AMBIGUITY_GAP  = 0.12
+    LATTICE_BOOST  = 0.15
+    semantic_reranked = False
+
+    if len(scored) >= 2:
+        gap = scored[0][0] - scored[1][0]
+        if gap < AMBIGUITY_GAP and LATTICE_SCRIPT.exists():
+            try:
+                _lat_result = subprocess.run(
+                    [sys.executable, str(LATTICE_SCRIPT),
+                     "--query", query_text, "--top-k", "5"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                lattice_hits = (
+                    json.loads(_lat_result.stdout)
+                    if _lat_result.returncode == 0 else []
+                )
+            except Exception:
+                lattice_hits = []
+
+            if lattice_hits:
+                # Collect skill names/intents mentioned in lattice hits
+                lattice_names: set = set()
+                for _hit in lattice_hits:
+                    for _member in _hit.get("members", []):
+                        lattice_names.add(_member.lower())
+                    for _intent in _hit.get("intent", []):
+                        lattice_names.add(_intent.lower())
+
+                # Boost BM25 candidates that appear in lattice hits
+                _boosted = []
+                for _score, _s in scored:
+                    _name_l = _s["name"].lower()
+                    if any(_name_l in _ln or _ln in _name_l for _ln in lattice_names):
+                        _score += LATTICE_BOOST
+                    _boosted.append((_score, _s))
+                scored = sorted(_boosted, key=lambda x: -x[0])
+                semantic_reranked = True
+
     print(f"Top 5 matches for: '{query_text}'\n")
     for rank, (score, s) in enumerate(scored[:5], 1):
         desc = s["description"][:70].replace("\n", " ")
@@ -466,7 +709,8 @@ def cmd_query(query_text: str):
             float(_entry.get("beta", 1.0)),
         )
         _ci_str = f"  reliability={_mean:.2f} [{_lo:.2f},{_hi:.2f}]" if beta_state else ""
-        print(f"  {rank}. {score:.3f}{_ci_str} | {s['name']:<45} | {desc}")
+        _rerank_tag = "  [semantic_reranked]" if semantic_reranked and rank == 1 else ""
+        print(f"  {rank}. {score:.3f}{_ci_str}{_rerank_tag} | {s['name']:<45} | {desc}")
 
 
 def cmd_pattern_check():
@@ -649,12 +893,17 @@ def main():
                        help="SIP-3: Lint skill trigger patterns for over-complexity (>15 words, nested conditions)")
     group.add_argument("--compile-patterns", action="store_true",
                        help="SIP-4: Compile trigger descriptions as regex patterns; report backtracking risks")
+    parser.add_argument("--json", action="store_true", dest="as_json",
+                        help="With --query: print results as JSON array instead of table")
     args = parser.parse_args()
 
     if args.build:
         cmd_build()
     elif args.query:
-        cmd_query(args.query)
+        if args.as_json:
+            print(json.dumps(route(args.query), indent=2))
+        else:
+            cmd_query(args.query)
     elif args.check:
         cmd_check()
     elif args.pattern_check:
