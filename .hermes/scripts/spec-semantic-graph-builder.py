@@ -194,7 +194,9 @@ def run(skill_name: str | None, export: Path | None, dry_run: bool) -> int:
         except Exception:
             pass
     else:
-        BASELINE_FILE.write_text(json.dumps({"issue_count": len(all_issues), "ts": now}, indent=2))
+        _bl_tmp = BASELINE_FILE.with_suffix(".tmp")
+        _bl_tmp.write_text(json.dumps({"issue_count": len(all_issues), "ts": now}, indent=2))
+        _bl_tmp.replace(BASELINE_FILE)
         baseline_count = len(all_issues)
 
     new_issues = len(all_issues) - baseline_count

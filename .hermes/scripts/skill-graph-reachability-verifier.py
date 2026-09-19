@@ -200,7 +200,9 @@ def run(from_skill: str | None, to_skill: str | None,
                 pass
         else:
             # First run: write baseline, don't alarm
-            BASELINE_FILE.write_text(json.dumps({"dead_ends": len(dead_ends), "ts": now}, indent=2))
+            _bl_tmp = BASELINE_FILE.with_suffix(".tmp")
+            _bl_tmp.write_text(json.dumps({"dead_ends": len(dead_ends), "ts": now}, indent=2))
+            _bl_tmp.replace(BASELINE_FILE)
             baseline_dead = len(dead_ends)
 
         new_dead = len(dead_ends) - baseline_dead
