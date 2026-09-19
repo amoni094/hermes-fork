@@ -40,7 +40,7 @@ _RT = _HH / "profiles" / _HP if _HP else _HH
 SESSIONS  = HOME / ".hermes/sessions"
 FORK_SESSIONS = _RT / "sessions"  # fork-profile sessions
 
-CACHE_DIR = HOME / ".hermes/cache/monitors"
+CACHE_DIR = _HH / "cache" / "monitors"
 ALARM_FILE = CACHE_DIR / "regime-transition-alarm.json"
 OUT_FILE   = CACHE_DIR / "regime-transitions.json"
 

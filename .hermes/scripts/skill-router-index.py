@@ -468,7 +468,7 @@ def route(query_text: str, top: int = 5) -> list[dict]:
     scored.sort(key=lambda x: -x[0])
 
     # Concept-lattice semantic reranking (same logic as cmd_query)
-    LATTICE_SCRIPT = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
+    LATTICE_SCRIPT = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
     AMBIGUITY_GAP = 0.12
     LATTICE_BOOST = 0.15
     if len(scored) >= 2:
@@ -659,7 +659,7 @@ def cmd_query(query_text: str):
     scored.sort(key=lambda x: -x[0])
 
     # ── Semantic reranking: concept-lattice fallback when BM25 is ambiguous ──
-    LATTICE_SCRIPT = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
+    LATTICE_SCRIPT = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
     AMBIGUITY_GAP  = 0.12
     LATTICE_BOOST  = 0.15
     semantic_reranked = False

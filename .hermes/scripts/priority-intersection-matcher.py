@@ -37,7 +37,7 @@ import numpy as np
 
 HOME       = Path.home()
 SKILLS_DIR = HOME / ".hermes/skills"
-CACHE_DIR  = HOME / ".hermes/cache/monitors"
+CACHE_DIR  = _HH / "cache" / "monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE   = CACHE_DIR / "priority-intersection-matches.json"
 

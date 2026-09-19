@@ -38,8 +38,8 @@ _HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _HP = os.environ.get("HERMES_PROFILE", "fork")
 _RT = _HH / "profiles" / _HP if _HP else _HH
 SKILLS_DIR = _RT / "skills"
-ALT_SKILLS = HOME / ".hermes/skills"
-CACHE_DIR  = HOME / ".hermes/cache/monitors"
+ALT_SKILLS = _HH / "skills"
+CACHE_DIR  = _HH / "cache" / "monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE   = CACHE_DIR / "magnitude-calibration.json"
 
