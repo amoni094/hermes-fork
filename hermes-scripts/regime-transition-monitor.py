@@ -23,6 +23,7 @@ For Hermes:
 """
 
 from __future__ import annotations
+import os
 
 import argparse
 import json
@@ -33,10 +34,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HOME      = Path.home()
+_HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "fork")
+_RT = _HH / "profiles" / _HP if _HP else _HH
 SESSIONS  = HOME / ".hermes/sessions"
-FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+FORK_SESSIONS = _RT / "sessions"  # fork-profile sessions
 
-CACHE_DIR = HOME / ".hermes/cache/monitors"
+CACHE_DIR = _HH / "cache" / "monitors"
 ALARM_FILE = CACHE_DIR / "regime-transition-alarm.json"
 OUT_FILE   = CACHE_DIR / "regime-transitions.json"
 
@@ -159,10 +163,10 @@ def run(dry_run: bool = False) -> None:
             "fragmented_sessions": fragmented,
             "detail": results,
         }
-        OUT_FILE.write_text(json.dumps(out, indent=2))
+        _tmp = OUT_FILE.with_suffix('.tmp'); _tmp.write_text(json.dumps(out, indent=2)); _tmp.replace(OUT_FILE)
         print(f"\nWritten: {OUT_FILE}")
         if fragmented:
-            ALARM_FILE.write_text(json.dumps({"ts": now, "fragmented": fragmented}, indent=2))
+            _tmp = ALARM_FILE.with_suffix('.tmp'); _tmp.write_text(json.dumps({"ts": now, "fragmented": fragmented}, indent=2)); _tmp.replace(ALARM_FILE)
             print(f"ALARM: yes — {len(fragmented)} fragmented session(s)")
         else:
             print("ALARM: no — no fragmented sessions detected")

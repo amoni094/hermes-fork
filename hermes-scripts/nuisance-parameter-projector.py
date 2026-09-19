@@ -37,7 +37,7 @@ import numpy as np
 HOME      = Path.home()
 SESSIONS  = HOME / ".hermes/sessions"
 SKILLS_DIR = HOME / ".hermes/skills"
-CACHE_DIR  = HOME / ".hermes/cache/monitors"
+CACHE_DIR  = _HH / "cache" / "monitors"
 OUT_FILE   = CACHE_DIR / "nuisance-projector-calibration.json"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 

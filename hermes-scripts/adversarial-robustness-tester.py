@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HOME      = Path.home()
-CACHE_DIR = HOME / ".hermes/cache/monitors"
+CACHE_DIR = _HH / "cache" / "monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE  = CACHE_DIR / "adversarial-robustness-report.json"
 
@@ -167,7 +167,9 @@ def run(response: str | None, query: str | None, dry_run: bool) -> int:
         print("ALARM: no — responses are adversarially robust")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
 
     return 1 if fragile else 0
 

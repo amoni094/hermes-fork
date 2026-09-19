@@ -213,16 +213,20 @@ def main():
 
     if not args.dry_run and not args.report:
         OUTPUT_RISK.parent.mkdir(parents=True, exist_ok=True)
-        OUTPUT_RISK.write_text(json.dumps({
+        _tmp_output_risk = OUTPUT_RISK.with_suffix('.tmp')
+        _tmp_output_risk.write_text(json.dumps({
             "scored_at": now,
             "tools_scored": len(risks),
             "risks": risks[:30],
         }, indent=2))
-        OUTPUT_ALLOC.write_text(json.dumps({
+        _tmp_output_risk.replace(OUTPUT_RISK)
+        _tmp_output_alloc = OUTPUT_ALLOC.with_suffix('.tmp')
+        _tmp_output_alloc.write_text(json.dumps({
             "allocated_at": now,
             "total_budget": args.budget,
             "allocations": allocations[:20],
         }, indent=2))
+        _tmp_output_alloc.replace(OUTPUT_ALLOC)
         print(f"[cascade] Written: {OUTPUT_RISK}, {OUTPUT_ALLOC}", file=sys.stderr)
 
     print(f"\n=== Cascade Error Budget Allocator — {now[:10]} ===")

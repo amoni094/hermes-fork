@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HOME      = Path.home()
-CACHE_DIR = HOME / ".hermes/cache/monitors"
+CACHE_DIR = _HH / "cache" / "monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE  = CACHE_DIR / "privacy-capacity-routing.json"
 
