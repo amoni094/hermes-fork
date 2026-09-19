@@ -24,6 +24,7 @@ tracks the gap trajectory over time.
 """
 
 from __future__ import annotations
+import os
 
 import argparse
 import json
@@ -38,8 +39,11 @@ from pathlib import Path
 import numpy as np
 
 HOME      = Path.home()
+_HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "fork")
+_RT = _HH / "profiles" / _HP if _HP else _HH
 SESSIONS  = HOME / ".hermes/sessions"
-FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+FORK_SESSIONS = _RT / "sessions"  # fork-profile sessions
 
 CACHE_DIR = HOME / ".hermes/cache/monitors"
 STATE_DB  = HOME / ".hermes/memory-facts/stability.db"
@@ -151,11 +155,8 @@ def run(dry_run: bool = False) -> None:
     if alarm:
         print(f"ALARM: yes — recent gap {trend_gap:.3f} > threshold {GAP_ALARM_THRESHOLD}")
         if not dry_run:
-            ALARM_FILE.write_text(json.dumps({
-                "ts": now, "mean_gap": round(mean_gap, 4),
-                "trend_gap": round(trend_gap, 4),
-                "threshold": GAP_ALARM_THRESHOLD,
-            }, indent=2))
+            _alarm_payload = json.dumps({"ts": now, "mean_gap": round(mean_gap, 4), "trend_gap": round(trend_gap, 4), "threshold": GAP_ALARM_THRESHOLD}, indent=2)
+            _tmp = ALARM_FILE.with_suffix('.tmp'); _tmp.write_text(_alarm_payload); _tmp.replace(ALARM_FILE)
     else:
         print("ALARM: no — relaxation gap within bounds")
 
@@ -169,7 +170,7 @@ def run(dry_run: bool = False) -> None:
             "gap_series": [round(g, 4) for g in gaps.tolist()],
             "alarm": alarm,
         }
-        OUT_FILE.write_text(json.dumps(out, indent=2))
+        _tmp = OUT_FILE.with_suffix('.tmp'); _tmp.write_text(json.dumps(out, indent=2)); _tmp.replace(OUT_FILE)
         print(f"Written: {OUT_FILE}")
     else:
         print("(dry-run)")

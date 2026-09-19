@@ -51,6 +51,32 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 
 # --------------------------------------------------------------------------- #
+# FTRL Routing Calibration Log (Shalev-Shwartz & Ben-David Ch 21 / FTRL)
+# --------------------------------------------------------------------------- #
+
+import os as _os
+_hermes_base = Path(_os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hermes_profile = _os.environ.get("HERMES_PROFILE", "")
+_hermes_root_mq = (_hermes_base / "profiles" / _hermes_profile) if _hermes_profile and "profiles" not in str(_hermes_base) else _hermes_base
+_ROUTING_LOG_PATH = _hermes_root_mq / "cache" / "routing-calibration.jsonl"
+
+
+def _log_routing_decision(query_type, query, result_count=-1):
+    # FTRL routing calibration log (Shalev-Shwartz Ch 11)
+    # Records routing decisions so FTRL can adjust route weights over time.
+    try:
+        import hashlib, json, time
+        entry = {'ts': time.time(), 'route': query_type,
+                 'qhash': hashlib.md5(query.encode()).hexdigest()[:8],
+                 'result_count': result_count}
+        _ROUTING_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with _ROUTING_LOG_PATH.open('a') as f:
+            f.write(json.dumps(entry) + '\n')
+    except Exception:
+        pass
+
+
+# --------------------------------------------------------------------------- #
 # Types
 # --------------------------------------------------------------------------- #
 
@@ -244,6 +270,24 @@ def route_query(query: str, allow_llm: bool = True) -> RouteResult:
     Returns:
         RouteResult with type, surfaces, confidence, reason.
     """
+    # FTRL routing-weight feedback (bottleneck #2): load per-route weights from
+    # routing-weight-updater.py output.  Weights > 1.0 = historically reliable
+    # route; weights < 0.5 = historically unreliable (confidence downgraded).
+    # Shadow-wrapped: never raises, defaults to empty dict (weight=1.0 for all).
+    try:
+        import json as _jrw
+        _rw_path = _hermes_root_mq / "cache" / "routing-weights.json"
+        _rw_raw = _jrw.loads(_rw_path.read_text()) if _rw_path.exists() else {}
+        # Weights may be stored as {route: float} or {route: {weight: float, ...}}
+        _route_weights = {}
+        for _rk, _rv in _rw_raw.items():
+            if isinstance(_rv, dict):
+                _route_weights[_rk] = float(_rv.get('weight', 1.0))
+            else:
+                _route_weights[_rk] = float(_rv)
+    except Exception:
+        _route_weights = {}
+
     qtype, confidence, reason = heuristic_classify(query)
 
     if qtype is None:
@@ -254,6 +298,29 @@ def route_query(query: str, allow_llm: bool = True) -> RouteResult:
             qtype = "semantic"
             confidence = "low"
             reason = "heuristic ambiguous, LLM disabled — defaulting to semantic"
+
+    _log_routing_decision(qtype, query, result_count=1)  # route always resolves; 1 = success signal for FTRL
+
+    # FTRL weight adjustment: downgrade confidence when route weight is low.
+    # weight >= 0.7  → no change (route is historically reliable enough)
+    # weight in [0.4, 0.7) → downgrade "high" → "medium" (marginal route)
+    # weight < 0.4  → downgrade "high" → "low", "medium" → "low" (weak route)
+    # Shadow-wrapped: never raises.
+    try:
+        _w = _route_weights.get(qtype, 1.0)
+        if _w < 0.4:
+            if confidence == 'high':
+                confidence = 'low'
+                reason = reason + f' [ftrl_weight={_w:.3f}→low]'
+            elif confidence == 'medium':
+                confidence = 'low'
+                reason = reason + f' [ftrl_weight={_w:.3f}→low]'
+        elif _w < 0.7:
+            if confidence == 'high':
+                confidence = 'medium'
+                reason = reason + f' [ftrl_weight={_w:.3f}→medium]'
+    except Exception:
+        pass
 
     return RouteResult(
         type=qtype,
@@ -326,7 +393,11 @@ def w1_route(query: str, skill_texts: dict[str, str] | None = None) -> list[dict
 
     Returns top-5 skills ordered by ascending W1 distance.
     """
-    import ot_utils
+    # L9 fix: guard ot_utils import — optional dependency; return [] if absent
+    try:
+        import ot_utils
+    except ImportError:
+        return []
 
     if skill_texts is None:
         skill_texts = _W1_SKILL_TEXTS

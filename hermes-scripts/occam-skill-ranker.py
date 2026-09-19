@@ -51,7 +51,12 @@ import re
 import sys
 from pathlib import Path
 import sqlite3
-import numpy as np
+try:
+    import numpy as np
+    _NUMPY_AVAILABLE = True
+except ImportError:
+    np = None  # type: ignore
+    _NUMPY_AVAILABLE = False
 
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
 SKILL_WIKI_DIR = HERMES_HOME / "cache" / "skill-wiki"
@@ -150,8 +155,9 @@ def _sinkhorn(C: "np.ndarray", reg: float = 0.05, max_iter: int = 100) -> "np.nd
 
     Reference: Cuturi 2013; Sinkhorn-Knopp matrix scaling.
     """
+    if np is None:
+        raise ImportError("numpy required for this command; pip install numpy")
     n, m = C.shape
-    # Log-domain Sinkhorn for numerical stability
     # K_ij = exp(-C_ij / reg)
     log_K = -C / reg
     # Uniform marginals
@@ -187,6 +193,8 @@ def sinkhorn_similarity(
     """
     if not a or not b:
         return 0.0
+    if np is None:
+        raise ImportError("numpy required for this command; pip install numpy")
     vocab_a = list(a.keys())
     vocab_b = list(b.keys())
     n, m = len(vocab_a), len(vocab_b)
@@ -623,7 +631,9 @@ def _load_ranker_policy(path: Path) -> dict:
         # non-dict: fall through — do not overwrite
     except FileNotFoundError:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(_DEFAULT_POLICY, indent=2) + "\n", encoding="utf-8")
+        _dp_tmp = path.with_suffix(".tmp")
+        _dp_tmp.write_text(json.dumps(_DEFAULT_POLICY, indent=2) + "\n", encoding="utf-8")
+        _dp_tmp.replace(path)
         return dict(_DEFAULT_POLICY)
     except (json.JSONDecodeError, OSError, UnicodeError):
         pass
@@ -656,7 +666,9 @@ def cmd_routing_nt(argv: list[str]) -> None:
     if args.set_ranker is not None:
         policy.setdefault("policy", {})[task_type] = args.set_ranker
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(policy, indent=2) + "\n", encoding="utf-8")
+        _po_tmp = path.with_suffix(".tmp")
+        _po_tmp.write_text(json.dumps(policy, indent=2) + "\n", encoding="utf-8")
+        _po_tmp.replace(path)
         print(json.dumps({
             "task_type": task_type,
             "ranker": args.set_ranker,
@@ -775,10 +787,10 @@ def cmd_score(argv: list[str]) -> None:
             skills = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError, UnicodeError) as e:
             print(json.dumps({"error": f"Could not read --skills-json: {e}"}))
-            sys.exit(2)
+            raise SystemExit(2)
         if not isinstance(skills, list):
             print(json.dumps({"error": "--skills-json must be a JSON array"}))
-            sys.exit(2)
+            raise SystemExit(2)
     else:
         skills = _load_skill_records()
 
@@ -1052,10 +1064,10 @@ def main() -> None:
             skills = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError, UnicodeError) as e:
             print(json.dumps({"error": f"Could not read --skills-json: {e}"}))
-            sys.exit(2)
+            raise SystemExit(2)
         if not isinstance(skills, list):
             print(json.dumps({"error": "--skills-json must be a JSON array"}))
-            sys.exit(2)
+            raise SystemExit(2)
         for skill in skills:
             if isinstance(skill, dict):
                 if "body_text" not in skill:

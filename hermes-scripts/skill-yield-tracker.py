@@ -44,9 +44,13 @@ if _OT_UTILS_PATH.exists():
 else:
     _ot_utils = None  # type: ignore[assignment]
 
-# Config
-DB_PATH = Path.home() / ".hermes/state.db"
-SKILLS_DIR = Path.home() / ".hermes/skills"
+# Config — profile-aware paths
+import os as _os_syt
+_hermes_home_syt = Path(_os_syt.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hermes_profile_syt = _os_syt.environ.get("HERMES_PROFILE", "")
+_hermes_root_syt = (_hermes_home_syt / "profiles" / _hermes_profile_syt) if _hermes_profile_syt and "profiles" not in str(_hermes_home_syt) else _hermes_home_syt
+DB_PATH = _hermes_root_syt / "state.db"
+SKILLS_DIR = _hermes_root_syt / "skills"
 SKILL_YIELD_TABLE = "skill_yield_metrics"
 SKILL_INVOCATION_TABLE = "skill_invocations"
 
@@ -266,23 +270,33 @@ def add_tombstone(skill_name: str, yield_val: float, invocation_count: int, repl
     skill_path = SKILLS_DIR / skill_name / "SKILL.md"
     if not skill_path.exists():
         return
-    
+
     with open(skill_path, 'r') as f:
         content = f.read()
-    
+
     tombstone = f"\n## Deprecation\n- Date: {time.strftime('%Y-%m-%d')}\n- Reason: Yield < {YIELD_THRESHOLD_PRUNE} ({invocation_count} invocations, yield={yield_val:.3f})\n"
     if replacement_skill:
         tombstone += f"- Replacement: `{replacement_skill}`\n"
-    
+
     if "## Deprecation" in content:
-        # Replace existing deprecation section
+        # Replace existing deprecation section (preserve everything before first marker)
         content = content.split("## Deprecation")[0] + tombstone
     else:
         # Add new deprecation section
         content += tombstone
-    
-    with open(skill_path, 'w') as f:
-        f.write(content)
+
+    # Atomic write: tmp + replace prevents corruption on kill and concurrent access
+    _tmp = skill_path.with_suffix(".md.tmp")
+    try:
+        _tmp.write_text(content)
+        _tmp.replace(skill_path)
+    except Exception as _e:
+        import sys as _sys_at
+        print(f"[skill-yield-tracker] tombstone write failed for {skill_name}: {_e}", file=_sys_at.stderr)
+        try:
+            _tmp.unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 def confidence_intervals(z: float = 1.96) -> list[dict]:

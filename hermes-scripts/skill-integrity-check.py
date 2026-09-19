@@ -26,7 +26,15 @@ import secrets
 import sys
 from pathlib import Path
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+# Profile-aware HERMES_HOME: if HERMES_HOME env is set, use it directly.
+# If not, fall back to ~/.hermes and further sub-select by HERMES_PROFILE if set,
+# so that running without env vars still resolves to the correct fork profile path.
+_hermes_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hermes_profile = os.environ.get("HERMES_PROFILE", "")
+if _hermes_profile and "profiles" not in os.environ.get("HERMES_HOME", ""):
+    HERMES_HOME = _hermes_base / "profiles" / _hermes_profile
+else:
+    HERMES_HOME = _hermes_base
 SKILLS_DIR = HERMES_HOME / "skills"
 KEY_PATH = HERMES_HOME / "cache" / "skill-integrity.key"
 DB_PATH = HERMES_HOME / "cache" / "skill-integrity.json"
@@ -39,8 +47,10 @@ def _load_or_create_key() -> bytes:
         if len(raw) == 32:
             return raw
     key = secrets.token_bytes(32)
-    KEY_PATH.write_bytes(key)
-    KEY_PATH.chmod(0o600)
+    _key_tmp = KEY_PATH.with_suffix(".tmp")
+    _key_tmp.write_bytes(key)
+    _key_tmp.chmod(0o600)
+    _key_tmp.replace(KEY_PATH)
     print(f"[INFO] New master key generated at {KEY_PATH}", file=sys.stderr)
     return key
 
@@ -74,7 +84,9 @@ def _load_db() -> dict:
 
 def _save_db(db: dict) -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    DB_PATH.write_text(json.dumps(db, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _db_tmp = DB_PATH.with_suffix(".tmp")
+    _db_tmp.write_text(json.dumps(db, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _db_tmp.replace(DB_PATH)
 
 
 def _rel(p: Path) -> str:

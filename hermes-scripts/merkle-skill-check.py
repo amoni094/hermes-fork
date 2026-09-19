@@ -3,7 +3,10 @@
 merkle-skill-check.py — Merkle root over all SKILL.md SHA256 hashes.
 
 Builds a binary Merkle tree over sorted SHA256(file_bytes) for all SKILL.md
-files found under ~/.hermes/profiles/fork/skills/.
+files found under the resolved HERMES_HOME/skills/ directory.
+HERMES_HOME is determined by the HERMES_HOME env var; if not set, falls back
+to ~/.hermes, further scoped by HERMES_PROFILE if that env var is also set
+(e.g. HERMES_PROFILE=fork → ~/.hermes/profiles/fork).
 
 Stores result in ~/.hermes/cache/skill-merkle.json.
 
@@ -23,7 +26,15 @@ import os
 import sys
 from pathlib import Path
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+# Profile-aware HERMES_HOME: if HERMES_HOME env is set, use it directly.
+# If not, fall back to ~/.hermes and further sub-select by HERMES_PROFILE if set,
+# so that running without env vars still resolves to the correct fork profile path.
+_hermes_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hermes_profile = os.environ.get("HERMES_PROFILE", "")
+if _hermes_profile and "profiles" not in os.environ.get("HERMES_HOME", ""):
+    HERMES_HOME = _hermes_base / "profiles" / _hermes_profile
+else:
+    HERMES_HOME = _hermes_base
 SKILLS_DIR = HERMES_HOME / "skills"
 MERKLE_PATH = HERMES_HOME / "cache" / "skill-merkle.json"
 
@@ -78,7 +89,9 @@ def cmd_generate(args: argparse.Namespace) -> int:
     root, leaf_map = _compute_state(files)
     MERKLE_PATH.parent.mkdir(parents=True, exist_ok=True)
     record = {"merkle_root": root, "file_count": len(files), "leaves": leaf_map}
-    MERKLE_PATH.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _mk_tmp = MERKLE_PATH.with_suffix(".tmp")
+    _mk_tmp.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _mk_tmp.replace(MERKLE_PATH)
     print(f"MERKLE_ROOT: {root}")
     print(f"Files: {len(files)} → {MERKLE_PATH}")
     return 0

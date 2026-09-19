@@ -28,11 +28,15 @@ from pathlib import Path
 import sys
 
 import numpy as np
+import os
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 HOME = Path.home()
+_HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "fork")
+_RT = _HH / "profiles" / _HP if _HP else _HH
 SESSIONS_DIR = HOME / ".hermes/sessions"
-FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"  # fork-profile sessions
+FORK_SESSIONS = _RT / "sessions"  # fork-profile sessions
 
 CIRCUIT_SCORES = HOME / ".hermes/cache/circuit-scores.json"
 STABILITY_DB = HOME / ".hermes/memory-facts/stability.db"
@@ -203,7 +207,8 @@ def check_alarm(conn: sqlite3.Connection, session_id: str, v_t: float,
 
     if alarm and not dry_run:
         ALARM_PATH.parent.mkdir(parents=True, exist_ok=True)
-        ALARM_PATH.write_text(json.dumps({
+        _tmp = ALARM_PATH.with_suffix('.tmp')
+        _tmp.write_text(json.dumps({
             "alarm": True,
             "session_id": session_id,
             "v_t": round(v_t, 4),
@@ -212,6 +217,7 @@ def check_alarm(conn: sqlite3.Connection, session_id: str, v_t: float,
             "threshold": threshold,
             "ts": datetime.now(timezone.utc).isoformat(),
         }, indent=2))
+        _tmp.replace(ALARM_PATH)
         print(f"[stability] ALARM written to {ALARM_PATH}", file=sys.stderr)
 
     return alarm

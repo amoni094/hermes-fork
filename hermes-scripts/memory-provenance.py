@@ -172,5 +172,51 @@ def main():
         print(json.dumps(items, indent=2))
 
 
+# === Beta-Binomial Trust Posterior (Gelman BDA3 Ch 2) ===
+# Model source reliability as Beta distribution. Update with recall outcomes.
+import json as _json_bda
+from pathlib import Path as _Path_bda
+
+import os as _os_mp
+_hermes_base_mp = _Path_bda(_os_mp.environ.get("HERMES_HOME", str(_Path_bda.home() / ".hermes")))
+_hermes_profile_mp = _os_mp.environ.get("HERMES_PROFILE", "")
+_hermes_root_mp = (_hermes_base_mp / "profiles" / _hermes_profile_mp) if _hermes_profile_mp and "profiles" not in str(_hermes_base_mp) else _hermes_base_mp
+_TRUST_POST_PATH = _hermes_root_mp / "cache" / "trust-posterior.json"
+_TRUST_WEIGHTS_STATIC = {'internal': 1.0, 'cron': 0.85, 'external': 0.70}
+
+def _load_trust_posteriors():
+    try:
+        if _TRUST_POST_PATH.exists():
+            return _json_bda.loads(_TRUST_POST_PATH.read_text())
+    except Exception:
+        pass
+    return {s: {'alpha': 2.0, 'beta': 1.0} for s in _TRUST_WEIGHTS_STATIC}
+
+def update_trust_posterior(source, reward):
+    try:
+        state = _load_trust_posteriors()
+        if source not in state:
+            state[source] = {'alpha': 2.0, 'beta': 1.0}
+        state[source]['alpha'] += float(reward)
+        state[source]['beta'] += float(1.0 - reward)
+        _TRUST_POST_PATH.parent.mkdir(parents=True, exist_ok=True)
+        # L8 fix: atomic write via tmp+rename to prevent Beta posterior corruption
+        _tp_tmp = _TRUST_POST_PATH.with_suffix('.tmp')
+        _tp_tmp.write_text(_json_bda.dumps(state, indent=2))
+        _tp_tmp.rename(_TRUST_POST_PATH)
+    except Exception:
+        pass
+
+def get_trust_weight(source):
+    try:
+        state = _load_trust_posteriors()
+        if source in state:
+            a, b = state[source]['alpha'], state[source]['beta']
+            return a / (a + b)
+    except Exception:
+        pass
+    return _TRUST_WEIGHTS_STATIC.get(source, 0.7)
+
+
 if __name__ == "__main__":
     main()

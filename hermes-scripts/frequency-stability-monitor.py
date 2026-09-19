@@ -175,7 +175,8 @@ def main():
 
         if alarm:
             ALARM_PATH.parent.mkdir(parents=True, exist_ok=True)
-            ALARM_PATH.write_text(json.dumps({
+            _tmp = ALARM_PATH.with_suffix('.tmp')
+            _tmp.write_text(json.dumps({
                 "alarm": True,
                 "alarm_type": alarm_type,
                 "v_t": round(v_t, 4),
@@ -184,6 +185,7 @@ def main():
                 "entropy": round(entropy, 4),
                 "ts": datetime.now(timezone.utc).isoformat(),
             }, indent=2))
+            _tmp.replace(ALARM_PATH)
             print(f"[freq-stability] ALARM ({alarm_type}) written to {ALARM_PATH}", file=sys.stderr)
 
     conn.close()

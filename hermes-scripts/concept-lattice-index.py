@@ -34,13 +34,23 @@ HERMES_HOME    = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
 LATTICE_CACHE  = HERMES_HOME / "cache" / "concept-lattice.json"
 LATTICE_LOG    = HERMES_HOME / "cache" / "concept-lattice.jsonl"
 
+# v1 API prefix (hindsight-api >= 1.0; legacy /recall stub returns 404)
+_H_RECALL_URL = f"{HINDSIGHT_BASE}/v1/default/banks/{HINDSIGHT_BANK}/memories/recall"
+_H_RETAIN_URL = f"{HINDSIGHT_BASE}/v1/default/banks/{HINDSIGHT_BANK}/memories"
+
 
 # ---------------------------------------------------------------------------
 # Hindsight helpers
 # ---------------------------------------------------------------------------
 
 def _h_request(path: str, payload: dict, timeout: int = 15) -> Any:
-    url = f"{HINDSIGHT_BASE}{path}"
+    # Route legacy short paths to v1 endpoints
+    if path == "/recall":
+        url = _H_RECALL_URL
+    elif path == "/retain":
+        url = _H_RETAIN_URL
+    else:
+        url = f"{HINDSIGHT_BASE}{path}"
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
         url, data=data,
@@ -48,15 +58,23 @@ def _h_request(path: str, payload: dict, timeout: int = 15) -> Any:
         method="POST"
     )
     try:
+        import time as _time
+        _t0 = _time.monotonic()
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.loads(r.read())
+            result = json.loads(r.read())
+        elapsed = _time.monotonic() - _t0
+        if elapsed > 5.0:
+            print(f"[lattice] SLOW hindsight {path} ({HINDSIGHT_BANK}): {elapsed:.2f}s "
+                  f"— bank has {result.get('total', '?')} results; "
+                  "consider HINDSIGHT_BANK env override or ANN index audit", flush=True)
+        return result
     except Exception as e:
         return {"error": str(e)}
 
 
 def fetch_facts(limit: int = 500) -> list[dict]:
     """Fetch recent facts from Hindsight."""
-    result = _h_request("/recall", {"query": "*", "bank": HINDSIGHT_BANK, "top_k": limit})
+    result = _h_request("/recall", {"query": "agent memory skill session", "bank": HINDSIGHT_BANK, "top_k": limit})
     if "error" in result:
         print(f"[lattice] Hindsight fetch failed: {result['error']}")
         return []
@@ -71,6 +89,8 @@ def store_bridge_node(content: str, tags: list[str]) -> dict:
         "tags": tags + ["lattice-bridge"],
         "source": "concept-lattice-index",
     })
+    if isinstance(result, dict) and "error" in result:
+        import sys as _s; print(f"[concept-lattice] bridge node retain failed: {result['error']}", file=_s.stderr)
     return result
 
 
@@ -80,14 +100,122 @@ def store_bridge_node(content: str, tags: list[str]) -> dict:
 
 def rq_kmeans_assign(texts: list[str], n_clusters: int) -> list[int]:
     """
-    Simplified RQ-kmeans: assign texts to clusters by hash (no embedding needed
-    for the skeleton; real deployment uses sentence-transformers cosine similarity).
+    TF-IDF cosine k-means clustering (stdlib-only: math, collections, re, hashlib).
     Returns cluster IDs in [0, n_clusters).
+
+    Steps:
+      1. Tokenise with stopword removal
+      2. Build TF-IDF vectors
+      3. k-means with cosine similarity, max 20 iterations
+         - Deterministic seeding via sha256 hash spread
+         - Recompute centroids as mean TF-IDF vectors
+         - Early stop when assignments unchanged
     """
-    assignments = []
-    for text in texts:
-        h = int(hashlib.sha256(text.encode()).hexdigest(), 16)
-        assignments.append(h % n_clusters)
+    import math
+    import re
+    from collections import Counter
+
+    _STOPWORDS = {
+        'the','a','an','is','are','was','were','in','on','at','to','of','and',
+        'or','for','with','by','from','that','this','it','as','be','has','have',
+        'had','do','does','did','not','but','if','so','can','will','would',
+        'could','should','may','might','shall',
+    }
+
+    def _tokenise(text: str) -> list[str]:
+        tokens = re.split(r'[^a-z0-9]+', text.lower())
+        return [t for t in tokens if t and t not in _STOPWORDS]
+
+    def _tfidf(token_lists: list[list[str]]) -> list[dict]:
+        N = len(token_lists)
+        # document frequency
+        df: dict[str, int] = Counter()
+        for toks in token_lists:
+            for t in set(toks):
+                df[t] += 1
+        vectors: list[dict] = []
+        for toks in token_lists:
+            if not toks:
+                vectors.append({})
+                continue
+            tf_map = Counter(toks)
+            doclen = len(toks)
+            vec: dict[str, float] = {}
+            for term, cnt in tf_map.items():
+                tf = cnt / doclen
+                idf = math.log((N + 1) / (df[term] + 1) + 1)
+                vec[term] = tf * idf
+            vectors.append(vec)
+        return vectors
+
+    def _cosine(a: dict, b: dict) -> float:
+        if not a or not b:
+            return 0.0
+        dot = sum(a.get(t, 0.0) * v for t, v in b.items())
+        norm_a = math.sqrt(sum(v * v for v in a.values()))
+        norm_b = math.sqrt(sum(v * v for v in b.values()))
+        if norm_a == 0.0 or norm_b == 0.0:
+            return 0.0
+        return dot / (norm_a * norm_b)
+
+    def _mean_vec(vecs: list[dict]) -> dict:
+        if not vecs:
+            return {}
+        acc: dict[str, float] = {}
+        for v in vecs:
+            for term, val in v.items():
+                acc[term] = acc.get(term, 0.0) + val
+        n = len(vecs)
+        return {term: val / n for term, val in acc.items()}
+
+    # Edge cases
+    if not texts:
+        return []
+    n_clusters = max(1, min(n_clusters, len(texts)))
+
+    token_lists = [_tokenise(t) for t in texts]
+    vectors = _tfidf(token_lists)
+
+    # --- Deterministic seed: pick n_clusters indices whose sha256 hashes
+    #     spread most evenly across the [0, 2^256) range ---
+    target_gap = (2 ** 256) // n_clusters
+    sorted_by_hash = sorted(
+        range(len(texts)),
+        key=lambda i: int(hashlib.sha256(texts[i].encode()).hexdigest(), 16),
+    )
+    # Place seeds at equal intervals across the sorted hash order
+    seed_indices: list[int] = []
+    step = max(1, len(texts) // n_clusters)
+    for k in range(n_clusters):
+        idx = min(k * step, len(texts) - 1)
+        seed_indices.append(sorted_by_hash[idx])
+
+    centroids: list[dict] = [vectors[i] for i in seed_indices]
+
+    assignments: list[int] = [0] * len(texts)
+    for _iter in range(20):
+        new_assignments: list[int] = []
+        for vec in vectors:
+            best_cluster = 0
+            best_sim = -1.0
+            for k, centroid in enumerate(centroids):
+                sim = _cosine(vec, centroid)
+                if sim > best_sim:
+                    best_sim = sim
+                    best_cluster = k
+            new_assignments.append(best_cluster)
+
+        if new_assignments == assignments and _iter > 0:
+            break
+        assignments = new_assignments
+
+        # Recompute centroids
+        for k in range(n_clusters):
+            members = [vectors[i] for i, a in enumerate(assignments) if a == k]
+            if members:
+                centroids[k] = _mean_vec(members)
+            # else: keep old centroid (dead cluster)
+
     return assignments
 
 
@@ -162,7 +290,17 @@ def main():
                         help="Minimum facts per concept to emit bridge node (default: 3)")
     parser.add_argument("--limit", type=int, default=300,
                         help="Max facts to fetch from Hindsight (default: 300)")
+    parser.add_argument("--query", metavar="TEXT", default=None,
+                        help="Query the cached lattice and print JSON hits to stdout")
+    parser.add_argument("--top-k", type=int, default=5,
+                        help="Number of lattice hits to return for --query (default: 5)")
     args = parser.parse_args()
+
+    # ── Query path: semantic fallback called by skill-router-index ──────────
+    if args.query is not None:
+        hits = query_activate(args.query, top_k=args.top_k)
+        print(json.dumps(hits))
+        return 0
 
     verbose = args.dry_run or sys.stdout.isatty()
 
@@ -209,7 +347,9 @@ def main():
     }
     if not args.dry_run:
         LATTICE_CACHE.parent.mkdir(parents=True, exist_ok=True)
-        LATTICE_CACHE.write_text(json.dumps(lattice_data, indent=2))
+        _tmp_l = LATTICE_CACHE.with_suffix('.tmp')
+        _tmp_l.write_text(json.dumps(lattice_data, indent=2))
+        _tmp_l.rename(LATTICE_CACHE)
         if verbose:
             print(f"[lattice] Lattice saved to {LATTICE_CACHE}")
 

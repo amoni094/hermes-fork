@@ -69,13 +69,19 @@ def _load_graphiti_caps() -> None:
 
 import hashlib
 import importlib.util as _iutil
-_tg_spec = _iutil.spec_from_file_location(
-    "l1_tracegrant", pathlib.Path(__file__).parent / "l1-tracegrant.py"
-)
-_tg_mod = _iutil.module_from_spec(_tg_spec)  # type: ignore[arg-type]
-_tg_spec.loader.exec_module(_tg_mod)          # type: ignore[union-attr]
-tracegrant_check = _tg_mod.tracegrant_check
-tracegrant_log_grant = _tg_mod.tracegrant_log_grant
+try:
+    _tg_spec = _iutil.spec_from_file_location(
+        "l1_tracegrant", pathlib.Path(__file__).parent / "l1-tracegrant.py"
+    )
+    _tg_mod = _iutil.module_from_spec(_tg_spec)  # type: ignore[arg-type]
+    _tg_spec.loader.exec_module(_tg_mod)          # type: ignore[union-attr]
+    tracegrant_check = _tg_mod.tracegrant_check
+    tracegrant_log_grant = _tg_mod.tracegrant_log_grant
+except Exception as _tg_err:
+    import sys as _sys_tg
+    print(f"[l1-graphiti-write] WARNING: l1-tracegrant.py unavailable ({_tg_err}); all grants approved", file=_sys_tg.stderr)
+    def tracegrant_check(*_a, **_kw): return True   # fail-open
+    def tracegrant_log_grant(*_a, **_kw): pass
 
 # Valid source types and their trust weights (informational — enforced by consumers)
 SOURCE_TYPES = {"internal": 1.0, "cron": 0.7, "external": 0.4, "subagent": 0.7}

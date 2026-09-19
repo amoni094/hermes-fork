@@ -44,7 +44,11 @@ from pathlib import Path
 from typing import Any
 
 
-SKILLS_ROOT = Path.home() / ".hermes" / "skills"
+import os as _os_sos
+_hermes_home_sos = Path(_os_sos.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hermes_profile_sos = _os_sos.environ.get("HERMES_PROFILE", "")
+_hermes_root_sos = (_hermes_home_sos / "profiles" / _hermes_profile_sos) if _hermes_profile_sos and "profiles" not in str(_hermes_home_sos) else _hermes_home_sos
+SKILLS_ROOT = _hermes_root_sos / "skills"
 
 # Minimum/maximum description lengths for the scoring gate
 MIN_DESC_WORDS = 10

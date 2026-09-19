@@ -73,8 +73,9 @@ def _load_runtime_config() -> None:
         ACTIVATE_THRESHOLD_STEPS = int(sec.get("activate_threshold_steps", ACTIVATE_THRESHOLD_STEPS))
         GC_AFTER_HOURS = int(sec.get("gc_after_hours", GC_AFTER_HOURS))
         return
-    except Exception:
-        pass
+    except Exception as e:
+        import sys as _s
+        print(f"[skill-state] config load failed: {e}", file=_s.stderr)
     for line in text.splitlines():
         s = line.strip()
         if s.startswith("obs_ring_buffer:"):
@@ -122,7 +123,9 @@ def _save(doc: dict[str, Any]) -> Path:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     doc["updated_at"] = _now()
     p = _path(doc["session_id"], doc["skill_name"])
-    p.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+    _p_tmp = p.with_suffix('.tmp')
+    _p_tmp.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+    _p_tmp.replace(p)
     return p
 
 
@@ -277,8 +280,9 @@ def cmd_list(args: argparse.Namespace) -> int:
                 "token_savings": doc.get("token_savings_est", 0),
                 "updated": doc.get("updated_at"),
             })
-        except Exception:
-            pass
+        except Exception as e:
+            import sys as _s
+            print(f"[skill-state] skipping corrupt state file {p}: {e}", file=_s.stderr)
     if not items:
         print("[skill-state] no state files found")
     else:
@@ -303,8 +307,9 @@ def cmd_gc(args: argparse.Namespace) -> int:
                     if dt < cutoff:
                         p.unlink()
                         removed += 1
-        except Exception:
-            pass
+        except Exception as e:
+            import sys as _s
+            print(f"[skill-state] gc: skipping unparseable file {p}: {e}", file=_s.stderr)
     print(f"[skill-state] gc: removed {removed} completed/failed states older than {max_age_h}h")
     return 0
 

@@ -30,15 +30,18 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 HOME         = Path.home()
-SESSIONS_DIR = HOME / ".hermes/profiles/fork/sessions"
-CACHE_DIR    = HOME / ".hermes/cache/monitors"
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
+_hermes_home = Path(os.environ.get("HERMES_HOME", str(HOME / ".hermes")))
+_profile     = os.environ.get("HERMES_PROFILE", "fork")
+SESSIONS_DIR = _hermes_home / "profiles" / _profile / "sessions"
+CACHE_DIR    = _hermes_home / "cache" / "monitors"
+# CACHE_DIR.mkdir deferred to run() to avoid side-effects at import time
 LEDGER_FILE  = CACHE_DIR / "experience-ledger.json"
 OUT_FILE     = CACHE_DIR / "experience-verification-report.json"
 
@@ -114,7 +117,9 @@ def _load_ledger() -> list[dict]:
 
 
 def _save_ledger(entries: list[dict]) -> None:
-    LEDGER_FILE.write_text(json.dumps(entries[-500:], indent=2))  # keep last 500
+    _lf_tmp = LEDGER_FILE.with_suffix('.tmp')
+    _lf_tmp.write_text(json.dumps(entries[-500:], indent=2))  # keep last 500
+    _lf_tmp.replace(LEDGER_FILE)
 
 
 def verify_ledger(ledger: list[dict]) -> list[dict]:
@@ -161,6 +166,7 @@ def verify_ledger(ledger: list[dict]) -> list[dict]:
 
 
 def run(fingerprint_text: str | None, check_file: Path | None, dry_run: bool) -> int:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc).isoformat()
 
     if fingerprint_text is not None:
@@ -211,10 +217,12 @@ def run(fingerprint_text: str | None, check_file: Path | None, dry_run: bool) ->
     if not dry_run:
         _save_ledger(ledger)
         print(f"Ledger written: {LEDGER_FILE}")
-        OUT_FILE.write_text(json.dumps({
+        _out_tmp = OUT_FILE.with_suffix(".tmp")
+        _out_tmp.write_text(json.dumps({
             "ts": now, "new_outcomes": len(new_outcomes),
             "ledger_total": len(ledger), "violations": violations,
         }, indent=2))
+        _out_tmp.replace(OUT_FILE)
 
     return alarm_exit
 

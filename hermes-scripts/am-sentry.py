@@ -539,7 +539,8 @@ def scan_tool_auth_gate(since_days: int, verbose: bool = False) -> list[dict]:
                 continue
             r = _sp.run(
                 ["python3", str(_gate_script), "classify",
-                 "--tool-output", content_text[:2000]],
+                 "--tool-name", "tool_result",
+                 "--output", content_text[:2000]],
                 capture_output=True, text=True, timeout=5
             )
             if r.returncode == 0 and r.stdout.strip():
@@ -1027,7 +1028,9 @@ def main():
         "low": len(low),
         "flags": all_flags,
     }
-    report_path.write_text(json.dumps(report, indent=2))
+    _tmp = report_path.with_suffix(".json.tmp")
+    _tmp.write_text(json.dumps(report, indent=2))
+    _tmp.replace(report_path)
     print(f"Report written to: {report_path}")
 
     sys.exit(1 if high else 0)

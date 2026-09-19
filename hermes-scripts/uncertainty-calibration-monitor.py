@@ -207,12 +207,14 @@ def main():
     if args.alarm or run_all:
         if flagged and not args.dry_run:
             ALARM_PATH.parent.mkdir(parents=True, exist_ok=True)
-            ALARM_PATH.write_text(json.dumps({
+            _tmp = ALARM_PATH.with_suffix('.tmp')
+            _tmp.write_text(json.dumps({
                 "alarm": True,
                 "flagged_skills": flagged,
                 "threshold": args.threshold,
                 "ts": datetime.now(timezone.utc).isoformat(),
             }, indent=2))
+            _tmp.replace(ALARM_PATH)
             print(f"\nALARM: yes — {len(flagged)} overconfident skill(s) — written to {ALARM_PATH}")
         elif not flagged:
             print("\nALARM: no — no overconfident skills detected.")

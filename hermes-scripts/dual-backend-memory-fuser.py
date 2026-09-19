@@ -15,39 +15,58 @@ Math basis: Diversity-weighted fusion (information-theoretic).
 Run on-demand: /usr/bin/python3 dual-backend-memory-fuser.py <query>
 """
 from __future__ import annotations
-import sys, math
+import sys, math, json, subprocess
+from pathlib import Path
 
 ALPHA = 0.60   # relevance weight (1-alpha = novelty weight)
 TOP_K = 5
 
-# Simulated backends — replace with real calls in production
-def _backend_a(query: str) -> list[dict]:
-    """Skill/local memory backend."""
-    keywords = query.lower().split()
-    pool = [
-        {"id": "skill:python-debugpy",    "text": "debug python breakpoint remote",  "score": 0.88},
-        {"id": "skill:systematic-debug",  "text": "root cause analysis bug trace",   "score": 0.82},
-        {"id": "skill:hermes-research",   "text": "research paper sweep math ideas", "score": 0.75},
-        {"id": "skill:coding-conventions","text": "code style lint review format",   "score": 0.65},
-    ]
-    for r in pool:
-        hits = sum(1 for k in keywords if k in r["text"])
-        r["score"] *= (0.7 + 0.3 * hits / max(len(keywords), 1))
-    return pool
+_SCRIPTS_DIR = Path(__file__).resolve().parent
 
+# Backend A: real call to unified-recall.py (positional query arg, --json output)
+def _backend_a(query: str) -> list[dict]:
+    """Skill/local memory backend via unified-recall.py."""
+    try:
+        _proc = subprocess.run(
+            [sys.executable, str(_SCRIPTS_DIR / "unified-recall.py"), query, "--json"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if _proc.returncode not in (0, 1) or not _proc.stdout.strip():
+            return []
+        raw = json.loads(_proc.stdout)
+        results = []
+        for item in raw if isinstance(raw, list) else []:
+            _id = item.get("id") or item.get("_md5") or item.get("memory_id") or ""
+            _text = item.get("text", "")
+            _score = float(item.get("rrf_score") or item.get("enriched_weight") or item.get("score", 0.0))
+            if _text:
+                results.append({"id": str(_id), "text": _text, "score": _score})
+        return results
+    except Exception:
+        return []
+
+# Backend B: real call to skill-router-index.py (--query TEXT --json)
 def _backend_b(query: str) -> list[dict]:
-    """Session-search / episodic memory backend."""
-    keywords = query.lower().split()
-    pool = [
-        {"id": "session:debug-2026-09-10", "text": "python debugpy error fix session",  "score": 0.80},
-        {"id": "session:research-09-15",   "text": "math sweep research ideas wave",    "score": 0.78},
-        {"id": "session:pr-review-09-12",  "text": "pr review github issue fix commit", "score": 0.70},
-        {"id": "session:monitor-09-15",    "text": "monitor suite alarm runner fix",    "score": 0.72},
-    ]
-    for r in pool:
-        hits = sum(1 for k in keywords if k in r["text"])
-        r["score"] *= (0.7 + 0.3 * hits / max(len(keywords), 1))
-    return pool
+    """Skill routing backend via skill-router-index.py."""
+    try:
+        _proc = subprocess.run(
+            [sys.executable, str(_SCRIPTS_DIR / "skill-router-index.py"),
+             "--query", query, "--json"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if _proc.returncode != 0 or not _proc.stdout.strip():
+            return []
+        raw = json.loads(_proc.stdout)
+        results = []
+        for item in raw if isinstance(raw, list) else []:
+            _id = "skill:" + item.get("name", "")
+            _text = (item.get("name", "") + " " + item.get("description", "")).strip()
+            _score = float(item.get("score", 0.0))
+            if _text:
+                results.append({"id": _id, "text": _text, "score": _score})
+        return results
+    except Exception:
+        return []
 
 def _jaccard(a: str, b: str) -> float:
     sa, sb = set(a.split()), set(b.split())

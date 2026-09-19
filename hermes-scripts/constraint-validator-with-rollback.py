@@ -256,12 +256,14 @@ def run(check_path: Path | None, check_output: str | None, dry_run: bool) -> int
         alarm_exit = 0
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({
+        _out_tmp = OUT_FILE.with_suffix(".json.tmp")
+        _out_tmp.write_text(json.dumps({
             "ts": now,
             "script_violations": script_violations,
             "cache_violations": cache_violations,
             "alarms": alarms,
         }, indent=2))
+        _out_tmp.replace(OUT_FILE)
         print(f"\nWritten: {OUT_FILE}")
 
     return alarm_exit
