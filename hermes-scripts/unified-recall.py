@@ -332,7 +332,7 @@ FTRL_STATE_PATH = _hermes_root() / "cache" / "recall-ftrl-state.json"
 
 # --- UCB1 Bandit Source Weighting (Lattimore & Szepesvari, Ch 1) ---
 # Replaces fixed RRF k=60 equal weights with adaptive UCB1-weighted fusion.
-_BANDIT_STATE_PATH = Path('~/.hermes/cache/recall-bandit-state.json').expanduser()
+_BANDIT_STATE_PATH = _hermes_root() / 'cache' / 'recall-bandit-state.json'
 
 def _load_bandit_state():
     try:
@@ -1045,7 +1045,7 @@ def _check_experience_cache(query: str):
     Otherwise returns None so the caller proceeds normally.
     """
     import time as _t
-    cache_path = Path("~/.hermes/cache/recall-experience-cache.json").expanduser()
+    cache_path = _hermes_root() / "cache" / "recall-experience-cache.json"
     if not cache_path.exists():
         return None
     try:
@@ -1085,7 +1085,7 @@ def _write_experience_cache(query: str, fused: list) -> None:
     Keeps only the 100 most-recent entries; writes atomically via .tmp + rename.
     """
     import time as _t
-    cache_path = Path("~/.hermes/cache/recall-experience-cache.json").expanduser()
+    cache_path = _hermes_root() / "cache" / "recall-experience-cache.json"
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         entries = json.loads(cache_path.read_text()) if cache_path.exists() else []

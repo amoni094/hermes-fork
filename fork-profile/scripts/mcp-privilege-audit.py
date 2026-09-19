@@ -402,7 +402,7 @@ def audit(config_path: Path, workspace: Path, report_path: Path) -> int:
         import os as _os_m, tempfile as _tf_m, json as _json_m, time as _time_m
         _base_m = _os_m.environ.get('HERMES_HOME', str(report_path.parent.parent.parent))
         _profile_m = _os_m.environ.get('HERMES_PROFILE', '')
-        _root_m = (pathlib.Path(_base_m) / 'profiles' / _profile_m) if _profile_m else pathlib.Path(_base_m)
+        _root_m = (Path(_base_m) / 'profiles' / _profile_m) if _profile_m else Path(_base_m)
         _alarm_path_m = _root_m / 'cache' / 'mcp-privilege-alarm.json'
         _alarm_path_m.parent.mkdir(parents=True, exist_ok=True)
         _alarm_data_m = {

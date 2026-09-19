@@ -283,7 +283,7 @@ def write_audit_note(exact: list[tuple[str, str]], near: list[tuple[str, str, fl
         '',
     ]
 
-    if not exact and not near and not overgrowth and not stale_refs:
+    if not exact and not near and not overgrowth and not stale_refs and not rule_leakage:
         lines.extend([
             '- No exact overlaps detected between Hermes durable memory and vault MEMORY.md.',
             f'- No near-duplicate durable facts detected above similarity threshold {SIMILARITY_THRESHOLD:.2f}.',
@@ -342,7 +342,7 @@ def main() -> int:
     post_write_overgrowth = evaluate_overgrowth()
     if post_write_overgrowth != overgrowth:
         overgrowth = post_write_overgrowth
-        write_audit_note(exact, near, overgrowth, stale_refs)
+        write_audit_note(exact, near, overgrowth, stale_refs + rule_leakage)
 
     if not exact and not near and not overgrowth and not stale_refs:
         return 0
