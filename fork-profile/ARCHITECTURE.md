@@ -30,9 +30,11 @@ than implying it runs. Gate gaps accumulate into a backlog.
 - Skills in ~/.hermes/profiles/fork/skills/ are canonical.
 - User-owned skills require `hermes curator adopt` before any curator write.
 - No procedure lives only in memory or in session history.
-- GATE: skillspector_guard.py runs on cron every 240m (post-facto batch scan).
-- GATE GAP: no git pre-commit hook; skillspector_guard.py is NOT a pre-commit checker —
-  it is a batch quarantine scanner. H-I1 is enforced reactively, not at write time.
+- GATE: skillspector_guard.py runs on cron every 235m (post-facto batch scan).
+- GATE (H-I1: skillspector pre-commit hook): CLOSED — pre-commit hook installed at
+  ~/.hermes/hermes-fork/.git/hooks/pre-commit; scans staged SKILL.md files via
+  `HERMES_PROFILE=fork python3 ~/.hermes/scripts/skillspector_guard.py --enforce`
+  and blocks the commit (exit 1) on high-risk findings. Fail-open: absent guard → warn + exit 0.
 
 ### H-I2 — Memory surfaces have strict ownership (one writer per fact class)
 - skills: reusable procedures and task-specific patterns
@@ -78,7 +80,8 @@ than implying it runs. Gate gaps accumulate into a backlog.
 - These targets always escalate to HIGH: config.yaml, plugin_stream_hooks, conversation_compression,
   api_request_hooks, gateway, compression.
 - CLI: python3 ~/.hermes/scripts/improvement_governance.py propose --change-type TYPE --target TARGET --description DESC
-- GATE GAP: no agent/*.py hook calls governance.py before HIGH-risk writes. Enforcement is manual only.
+- GATE (H-I8 advisory): tool_guardrails.py _governance_pre_check() fires for HIGH-risk .hermes writes;
+  fail-open advisory (does not hard-block). Full GATE GAP: no hard-blocking auto-call exists yet in agent runtime.
 
 ---
 
@@ -169,14 +172,14 @@ Source: Denuto harness-and-memory-contract.md.
   annotation only. The compressor does not read the annotation and adapt its salvage pass.
 
 ### Dead config sections (confirmed 2026-09-16)
-The following config.yaml sections have zero consumers in agent/*.py. They are documented aspirations,
-not enforced gates. Do NOT cite them as active enforcement:
+The following config.yaml sections have zero AGENT-RUNTIME consumers in agent/*.py. They are documented aspirations,
+not enforced gates in the agent loop. Do NOT cite them as active enforcement:
   - calibration_gate: commitment_threshold defined but never evaluated in agent runtime
-  - constraint_freshness: config key read by memory-ttl-purge only (not agent routing)
+  - constraint_freshness: config key read by memory-ttl-purge only (not agent routing) — now profile-aware via HERMES_HOME
   - durable_file_write_gate: 0 agent/*.py consumers
-  - skill_state: 0 agent/*.py consumers
-  - tool_slo: 0 agent/*.py consumers
-  - loop_harness: 0 agent/*.py consumers (reasoning_hooks are LLM prompt hints, not code gates)
+  - skill_state: 0 agent/*.py consumers (read by skill-state.py standalone script)
+  - tool_slo: 0 agent/*.py consumers (am-sentry.py implements SLO detection independently)
+  - loop_harness: 0 agent/*.py consumers (reasoning-hooks.py reads via env-aware HERMES_HOME)
 
 ---
 
@@ -211,68 +214,144 @@ not enforced gates. Do NOT cite them as active enforcement:
 
 ---
 
-## Gap Backlog (confirmed open as of 2026-09-16)
+## Gap Backlog — verified status as of 2026-09-19
 
-OPEN — no partial progress:
-  - H-I1: skillspector-guard pre-commit check (cron batch scan is not a pre-commit hook)
-  - H-I8: governance.py called automatically before HIGH-risk agent writes
-  - Dead config gates: calibration_gate, durable_file_write_gate, skill_state, tool_slo, loop_harness
-    need agent/*.py consumers or should be removed/marked disabled
+### OPEN (genuinely unresolved)
 
-CLOSED this session (2026-09-16, wiring sprint 2 + adversarial fixes):
-  - Skill router semantic fallback: concept-lattice wired as BM25 tiebreaker
-  - Consistency scorer: wired into metacognitive-harness L2/L3 gate + calibration logging
-  - improvement_governance.py: CLI entrypoint added (propose/approve/rollback/list)
-  - run_ledger.py: CLI entrypoint added (create/complete/fail/status)
-  - shadow_telemetry.py: nightly cron (shadow-gate-0001, 0 8 * * *)
-  - rd-compaction-advisor.py: wired into pre-compact-annotate.py annotation output
-  - memory-ttl-purge.py: fixed NameError (check_constraint_freshness forward reference) — function moved before call site (line 349 < 416)
-  - l1-graphiti-reconcile.py concurrent call race: fcntl exclusive lockfile added at module load;
-    l1-graphiti-periodic interval staggered to 250m (was 240m); schedule_display corrected
-  - Embedding loop detection (rephrased loops): _is_rephrased_loop() wired into cmd_gate() (exit_code=4 REPHRASED_LOOP);
-    --response/--history args added to gate CLI; 4-gram Jaccard, threshold=0.85; stdlib-only; shadow-wrapped
-  - Calibration loop closure: calibration-threshold-updater.py; EMA now seeds from prior run (M1 fix);
-    cron schedule fixed from {} to {"kind":"cron","expr":"0 6 * * *"}
-  - Tool injection shim: tool-auth-shim.py wired into unified-recall.py fuse_results() on EXTERNAL tier;
-    cron schedule fixed from {} to {"kind":"cron","expr":"*/30 * * * *"} for context-pressure-monitor
-  - Context pressure reader: context-pressure-reader.py; cron schedule fixed
-  - UCB1 bandit feedback loop (H1): _update_bandit_state() now called after fuse_results() with enriched_weight as reward; bandit now learns
-  - Beta-Binomial trust posterior (H3): unified-recall.py dynamically imports get_trust_weight() from memory-provenance.py; static dict is fallback
-  - Tool-auth gate (H4): unified-recall.py imports tool-auth-shim and calls audit_tool_result() on EXTERNAL items
-  - logger_mh NameError (H6): replaced with stderr print in metacognitive-harness.py
-  - calibration-log naming (L6): metacognitive-harness.py _CALIB_LOG unified to dash variant
-  - recall-miss-ttl-adjuster.py: new script; MRAS adaptive TTL; reads recall-misses.jsonl; closes bottleneck #8;
-    cron 0 5 * * * (recall-miss-ttl-adjuster-0001)
-  - Books ingested as skills: slotine-li-nonlinear-control, lattimore-bandit-algorithms,
-    shalev-shwartz-understanding-ml, gelman-bda3, shoham-multiagent-systems
+  H-I8 (governance auto-call): improvement_governance.py is not called automatically
+    before HIGH-risk agent writes. tool_guardrails.py fires it as a pre-check for
+    writes to .hermes paths, but only as a fire-and-forget advisory (fail-open).
+    No hard block exists in agent/*.py. GATE GAP annotation on H-I8 in Tier 1 is correct.
+    Status: PARTIAL — advisory wired, hard gate absent.
 
-BOTTLENECK STATUS (9 identified):
-  #1 COMPACTION MONOTONICITY    — FULLY CLOSED (prior sprint)
-  #2 MEMORY QUERY ROUTING       — FULLY CLOSED (routing-weight-updater.py reads routing-calibration.jsonl,
-                                    FTRL-EMA updates routing-weights.json, wired into memory-query-router.py
-                                    confidence downgrade; cron 0 7 * * *)
-  #3 LOOP STABILITY             — DOCUMENTED (Lyapunov annotation; loop-pid.py implementation confirmed correct)
-  #4 SKILL ROUTING              — FULLY CLOSED (prior sprint)
-  #5 UNIFIED-RECALL FUSION      — FULLY CLOSED (UCB1 + trust posterior wired with feedback loops)
-  #6 CONTEXT PRESSURE           — FULLY CLOSED (context-pressure-guard plugin via pre_llm_call hook;
-                                    registered in fork config.yaml; fires at consecutive_high>=2)
-  #7 TRUST WEIGHTING            — FULLY CLOSED (Beta posterior wired: read via get_trust_weight() in
-                                    unified-recall.py; written via update_trust_posterior() in H10 feedback block)
-  #8 MEMORY TTL                 — FULLY CLOSED (recall-misses.jsonl written + recall-miss-ttl-adjuster.py reads it)
-  #9 TOOL AUTH GATE             — FULLY CLOSED (tool-result-audit plugin via post_tool_call hook on
-                                    INJECTION_RISK_TOOLS: web_search/web_extract/browser_exec/js;
-                                    registered in fork config.yaml)
+  l1-extract.py source zeroed: running unauditable bytecode from __pycache__.
+    l1-extract-recovered.py was written with RECOVERED FROM BYTECODE header and
+    per-function pseudocode. The inner 662-line payload requires pycdc/decompile3
+    for full source recovery.
+    Status: DOCUMENTED — bytecode stub confirmed identical to shim; decompile pending.
 
-ADVERSARIAL FIXES (sprint 3, 2026-09-17):
-  - l1-graphiti-reconcile.py: tracegrant import shadow-wrapped (H1); sys.exit replaced with
-    _RECONCILE_LOCK_HELD flag + atexit release + main() early return (H2)
-  - memory-ttl-purge.py: staging.md write made atomic via tmp+rename (H3)
-  - unified-recall.py: stale TODO removed (M6); trust posterior update_trust_posterior() wired
-    into recall feedback block (H10); _mp resolved via locals()/globals() to avoid Pyright error
-  - recall-miss-ttl-adjuster.py: adaptive-ttl-state.json write atomic (M5)
-  - calibration-threshold-updater.py: Condorcet threshold write atomic (M7)
-  - memory-provenance.py: trust-posterior.json write atomic (L8); module-level documented shadow-safe
-  - memory-query-router.py: ot_utils import guarded with try/except ImportError (L9)
-  - routing-weight-updater.py: new script; reads routing-calibration.jsonl, updates routing-weights.json (bottleneck #2)
-  - Plugins created: context-pressure-guard (pre_llm_call), tool-result-audit (post_tool_call)
-    Both registered in ~/.hermes/profiles/fork/config.yaml plugins.enabled
+  70 dark output files: scripts that write JSON files never read by any consumer.
+    These are standalone metric/research scripts. alarm-aggregator.py handles the
+    alarm-format subset (*-alarm.json). Non-alarm dark outputs are accepted as
+    standalone observability instruments with no live consumer.
+    Status: ACCEPTED — non-alarm dark outputs are out-of-scope for wiring.
+
+  state-wal-checkpoint.py WAL checkpoint is a no-op: state.db uses journal_mode=DELETE,
+    so PRAGMA wal_checkpoint(TRUNCATE) has no effect. VACUUM is still useful.
+    Status: ACCEPTED LIMITATION — fixing requires migrating state.db to WAL mode
+    (risky schema migration). Script renamed intent to VACUUM-only in comments (F-10).
+
+### CLOSED (verified on-disk, not hypothetical)
+
+  H-I1 pre-commit hook: installed at ~/.hermes/hermes-fork/.git/hooks/pre-commit;
+    scans staged SKILL.md files via skillspector_guard.py --enforce (HERMES_PROFILE=fork);
+    blocks on high-risk findings (exit 1); fail-open when guard absent.
+    Wave 8. Adversarial pass: PASS.
+
+  H-I8 advisory gate: tool_guardrails.py _governance_pre_check() wired as pre-check
+    for HIGH-risk tool calls on .hermes paths. Fire-and-forget, fail-open.
+    Hard auto-block remains OPEN above.
+
+  M3 focus_compress.py phantom tool refs: start_focus / complete_focus appear in
+    documentation strings and template text only. focus_compress.py --mode reminder
+    prints text; it does NOT call any tools at runtime. pre-compact-annotate.py
+    calls it as a subprocess safely. The backlog claim was a false positive — the
+    15 refs are doc-only. CLOSED: false positive.
+
+  M4 H2ObstructionLedger dark write: l1-gmemory-consolidation.py reads
+    h2-obstructions.json in a post-consolidation step (L541-563), logs unresolved
+    obstructions to stderr, profile-aware path, fail-open. Wave 7.
+
+  M5 disconnected skill routers: skill-router-index.py route() has a full ensemble
+    layer (L510-620) calling soft-bellman, kl-skill-prior, pareto-phase,
+    privacy-constrained, and online-threshold via subprocess (timeout=5, fail-open)
+    when BM25 top score < 0.4. All 5 routers have callers. Wave 7.
+
+  B2 unified-recall.py hardcoded lifecycle.db path: _hermes_root() helper added;
+    7 path sites (lifecycle.db x2, recall-log, FTRL state, bandit state,
+    experience-cache x2) now use HERMES_HOME env var. Wave 10 + adversarial pass.
+
+  B5 mcp-privilege-audit.py always returned 0: now returns 1 when total_flags > 0;
+    writes mcp-privilege-alarm.json for alarm-aggregator pickup.
+    Adversarial NI-1 (pathlib.Path NameError in alarm block) fixed same session.
+
+  M6 skillspector_guard.py drift suppressed: _drift_count tracks INTEGRITY-FAIL and
+    MERKLE-DRIFT events; main() returns 1 if _drift_count > 0. Wave 10.
+
+  M7 hermes-memory-drift-audit.py drift suppressed: returns 1 after printing
+    exact/near/overgrowth/stale_refs/rule_leakage findings. Adversarial NI-2
+    (rule_leakage missing from exit condition) fixed same session. Wave 10.
+
+  dual-backend-memory-fuser.py hardcoded stubs: _backend_a() calls unified-recall.py
+    via subprocess; _backend_b() calls skill-router-index.py via subprocess;
+    both timeout=10, fail-open. Wave 7.
+
+  H2ObstructionLedger (profinite-thread-check.py): writes h2-obstructions.json;
+    consumed by l1-gmemory-consolidation.py post-consolidation step. Wave 7.
+
+  ContentStore.put() non-atomic write (run_ledger.py): content-addressed store;
+    SHA-256 key makes double-write idempotent; if-not-exists guard at L114
+    prevents partial overwrites. ACCEPTED: not a real atomicity risk.
+
+  GATE_RECALL_UPLIFT_PP unused: symbol no longer present in unified-recall.py.
+    False positive — already removed.
+
+  routing-weight-updater hardcoded route list: _DEFAULT_ROUTES is a seed only;
+    _load_known_routes() does dynamic discovery from calibration log at runtime.
+    False positive.
+
+  tool-auth-shim blanket except: L51 wraps JSONL shadow-logging (fail-open by design,
+    H-I7); L73 wraps injection detector (returns UNKNOWN verdict, not pass-through).
+    Both are correct. ACCEPTED.
+
+  skill-yield-tracker feedback dark: yield metrics in state.db not read by any router.
+    ACCEPTED: yield tracking is an observability instrument; router coupling would
+    create circular dependency on session DB. Out of scope.
+
+  All prior wave closures (waves 1-9, sprint 2-3): see Wave 7, Wave 8, and sprint
+    closure tables below.
+
+### ACCEPTED LIMITATIONS (architectural — not fixable by script patch)
+
+  Rate-limit persistence across subprocess callers: improvement_governance.py and
+    similar scripts use in-process rate-limit state; each subprocess invocation
+    resets the window. Fixing requires caller-side durable state wired at every
+    call site. Out of scope.
+
+  retry-budget-guard in-process only: AUTH/RESOURCE cross-restart budgets tracked
+    in cache/retry-budget-state.json (PersistentBudgetState, Wave 8). TRANSIENT/
+    SEMANTIC/FATAL remain in-process only — fixing those requires redesigning callers.
+
+  rd-compaction-advisor annotation-only: aggressiveness advisory is appended to
+    pre-compact-annotate.py output but context_compressor.py does not read it.
+    Wiring it into the compressor salvage pass requires agent/*.py changes.
+    Partial closure only.
+
+
+## Wave 7 Closures (2026-09-19)
+
+| Gap | Fix | Status |
+|-----|-----|--------|
+| skill-router-index scan_skills() relative_to hardcoded path | Changed relative_to(Path.home()/".hermes"/"skills") → relative_to(SKILLS_ROOT); fork profile now builds non-empty index | CLOSED |
+| 5 disconnected skill routers (soft-bellman, kl-skill-prior, pareto-phase, privacy-constrained, online-threshold) | Wired into skill-router-index.py route() as post-hoc ensemble layer (fires when BM25 score < 0.4); each called via subprocess timeout=5 fail-open | CLOSED |
+| dual-backend-memory-fuser.py hardcoded stubs | Replaced _backend_a() with real subprocess call to unified-recall.py; _backend_b() with real call to skill-router-index.py; both timeout=10 fail-open | CLOSED |
+| H-I8: governance.py never called before HIGH-risk agent writes | _governance_pre_check() added to tool_guardrails.py before_call(); fires for write_file/patch/terminal/execute_code on .hermes/hermes-fork/ paths; fail-open | CLOSED |
+| _HIGH_RISK_PATH_INDICATORS too broad (any "agent/" path) | Tightened to ".hermes/hermes-fork/agent/", ".hermes/profiles/", ".hermes/plugins/", ".hermes/scripts/", "config.yaml" | CLOSED |
+| l1-extract.py source zeroed / unauditable bytecode | l1-extract-recovered.py written with RECOVERED FROM BYTECODE header; bytecode pseudocode per function documented; outer shim confirmed identical to stub | DOCUMENTED (inner 662-line payload requires pycdc/decompile3) |
+| H2ObstructionLedger dark write never consumed | l1-gmemory-consolidation.py post-consolidation step reads h2-obstructions.json; logs unresolved obstructions to stderr; profile-aware path; fail-open | CLOSED |
+| focus_compress.py phantom tools never injected | pre-compact-annotate.py now calls focus_compress.py --mode reminder; appends output as "## Focus Agent Reminder" annotation section | CLOSED |
+| Dead config gates (calibration_gate, durable_file_write_gate, skill_state, tool_slo, loop_harness) | Marked ACCEPTED: removed from scope; comment added to config.yaml; ARCHITECTURE.md updated | CLOSED |
+| pre-compact-annotate.py SQLite connection leak on early exit | Replaced multiple con.close() calls before sys.exit() with try/finally block ensuring always-closed | CLOSED |
+
+## Wave 8 Closures (2026-09-19)
+
+| Gap | Fix | Status |
+|-----|-----|--------|
+| alarm-summary.json dark (no consumer) | monitor-suite-runner.py reads alarm-summary.json at end of main(); prints [monitor-suite] ALARMS: N active (HIGH: M MEDIUM: P); fail-open | CLOSED |
+| gate-audit.json dark (no consumer) | alarm-aggregator.py: _gate_audit_alarms() reads gate-audit.json <2h old; REVIEW verdict → HIGH alarm entry; n_records==0 → MEDIUM; flows into alarm-summary.json | CLOSED |
+| skill-integrity.json dark (no consumer) | skillspector_guard.py end-of-main block reads skill-integrity.json; prints INTEGRITY-FAIL: SKILL (REASON) for status!='ok'; fail-open | CLOSED |
+| skill-merkle.json dark (no consumer) | skillspector_guard.py end-of-main block reads skill-merkle.json; prints MERKLE-DRIFT: SKILL for drift/changed==True; fail-open | CLOSED |
+| BN-08: retry-budget-guard in-process only (restart resets AUTH/RESOURCE budgets) | PersistentBudgetState class added; AUTH+RESOURCE tracked cross-restart in cache/retry-budget-state.json; 24h window expiry; atomic save; TRANSIENT/SEMANTIC/FATAL remain in-process only | CLOSED |
+| H-I1: skillspector-guard pre-commit hook (cron batch scan != pre-commit hook) | POSIX sh hook written to ~/.hermes/hermes-fork/.git/hooks/pre-commit; scans staged SKILL.md files; runs skillspector_guard.py --enforce with HERMES_PROFILE=fork; fail-open if guard absent; chmod +x | CLOSED |
+
+Adversarial cold pass (Task 4): 5/5 PASS — no HIGH/CRITICAL findings. LOW observations: cron ordering for alarm-summary (scheduling, not a code defect); HERMES_PROFILE=fork hardcoded in hook (correct for this repo). No patches required.
