@@ -380,3 +380,49 @@ False positives eliminated this wave:
   - memory-redundancy-gate — manual-invocation CLI gate, no cron warranted
   - All cron paths clean (fork/scripts/ prefix confirmed); failure streaks all 0
 
+## Wave 12–15 Closures (2026-09-19)
+
+### Wave 12
+| Finding | Fix |
+|---------|-----|
+| W12-A HIGH: shadow-gate-nightly.py TELEMETRY_DIR hardcoded ~/.hermes/cache/shadow-telemetry | Derive from HERMES_HOME+HERMES_PROFILE env vars |
+| W12-B MED: mcp-privilege-audit.py DEFAULT_CONFIG hardcoded ~/.hermes/config.yaml | Derive from HERMES_HOME/HERMES_PROFILE |
+| W12-C LOW: omni_skill_scan.py eval_script hardcoded ~/.hermes/scripts/gepa_skill_eval.py | Use HERMES_HOME env var |
+| Wave-12 adv NI-1 HIGH: mcp-privilege-audit.py L407 report_path.parent.parent.parent → / for /tmp paths | Replace with Path(os.environ.get("HERMES_HOME", ...)) |
+| Wave-12 adv NI-2: omni_skill_scan.py L625/636/646 missed skill-router-index.py/pending-improvements/skill-yield-tracker.py paths | Use _hermes_home / "..." pattern |
+
+### Wave 13
+| Finding | Fix |
+|---------|-----|
+| W13-A MED: jev_compaction.py _load_session_messages hardcoded profiles/fork/sessions | Derive from HERMES_HOME+HERMES_PROFILE |
+| W13-A2: jev-compaction/__init__.py _SCRIPTS hardcoded ~/.hermes/scripts | Use HERMES_HOME env var |
+| W13-B LOW: output-length-predictor.py CALIB_FILE bare write_text | tmp+replace atomic |
+| Wave-13 adv residual: jev-compaction/__init__.py _CACHE_DIR + _ha hardcoded | Use HERMES_HOME env var |
+| Wave-13 adv residual: output-length-predictor.py SESSIONS_DIR baked fork profile + OUT_FILE bare write | HERMES_HOME+HERMES_PROFILE + atomic |
+
+### Wave 14
+| Finding | Fix |
+|---------|-----|
+| W14-HIGH: jev_verify_fn.py _CALIB_LOG/_BUDGET_FILE/_HERMES_AGENT_PATH hardcoded | HERMES_HOME env var |
+| W14-HIGH: context-pressure-guard/__init__.py _SCRIPT_PATH+cache_dir hardcoded | HERMES_HOME env var |
+| W14-HIGH: tool-result-audit/__init__.py _SHIM_PATH hardcoded | HERMES_HOME env var |
+| W14-MED: unified-recall.py tool-auth-shim+memory-provenance subprocess paths hardcoded | _hermes_root() |
+| W14-MED: skill-router-index.py LATTICE_SCRIPT (×2) hardcoded | HERMES_HOME env var |
+| W14-MED: consistency_scorer.py calibration-log path hardcoded | HERMES_HOME env var |
+| W14-LOW: 54 monitor scripts SESSIONS_DIR/FORK_SESSIONS/SKILLS_DIR/FORK_SKILLS baked fork profile | _HH/_HP/_RT block; _RT/sessions and _RT/skills |
+| Wave-14 adv NI-1 CRITICAL: skill-router-index.py os.environ.get NameError (alias _os_sri) | os.environ.get → _os_sri.environ.get at L471+L662 |
+| Wave-14 adv NI-2: 21 monitor scripts CACHE_DIR/SESSIONS still HOME/.hermes/* | _HH/cache/monitors and _HH/sessions |
+
+### Wave 15
+| Finding | Fix |
+|---------|-----|
+| W15-A: 82 monitor/router scripts bare OUT_FILE.write_text on shared state | tmp+replace atomic (2 batch passes) |
+| W15-B: circuit-trajectory-scorer.py L105 sessions hardcoded fork profile | _RT/sessions |
+| W15-C: spec-graph-extractor.py L206 argparse default hardcoded fork profile | HERMES_HOME+HERMES_PROFILE |
+
+**Post-wave-15 saturation scan results:**
+- Fork-baked profile paths in code: 0
+- Bare shared-state write_text (non-atomic): 0
+- os.environ NameError risks: 0
+- Plugin compile errors: 0
+- Cron scripts missing on disk: 0
