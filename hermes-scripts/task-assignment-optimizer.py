@@ -129,11 +129,13 @@ def run(query: str, dry_run: bool = False) -> None:
         print(f"  {a['dimension'][:29]:<30} → {a['skill'][:34]:<35} {a['overlap']:.3f}")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({
             "ts": now, "query": query,
             "assignments": assignments,
             "total_cost": round(total_cost, 4),
         }, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"\nWritten: {OUT_FILE}")
     else:
         print("(dry-run)")

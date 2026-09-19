@@ -143,12 +143,14 @@ def run(dry_run: bool = False, k: int = 8, show_all: bool = False) -> None:
         print("No sessions long enough to compress (need ≥ k+2 tool calls).")
 
     if not dry_run and results:
-        OUT_FILE.write_text(json.dumps({
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({
             "ts": now, "k": k,
             "sessions": len(results),
             "mean_ratio": round(sum(r["compression_ratio"] for r in results) / len(results), 4),
             "detail": results,
         }, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"\nWritten: {OUT_FILE}")
     elif dry_run:
         print("(dry-run)")

@@ -192,13 +192,15 @@ def run(dry_run: bool = False, budget: int = BUDGET_TOTAL) -> None:
         print("NOTE: budget heavily concentrated — consider diversifying tool usage")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({
             "ts": now,
             "sessions": sessions_processed,
             "budget": budget,
             "allocation": allocation,
             "mean_gain": {t: round(g, 2) for t, g in mean_gain.items()},
         }, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"Written: {OUT_FILE}")
     else:
         print("(dry-run)")

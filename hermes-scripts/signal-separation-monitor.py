@@ -15,6 +15,7 @@ Math basis: Signal separation in ICA / source separation.
   High mean S = slow integration; alarm if mean_S > SEP_THRESHOLD turns.
 """
 from __future__ import annotations
+import os
 
 import json, sys
 from datetime import datetime, timezone
@@ -22,8 +23,11 @@ from pathlib import Path
 from collections import defaultdict
 
 HOME          = Path.home()
+_HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "fork")
+_RT = _HH / "profiles" / _HP if _HP else _HH
 SESSIONS_DIR  = HOME / ".hermes/sessions"
-FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"
+FORK_SESSIONS = _RT / "sessions"
 CACHE_DIR     = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE      = CACHE_DIR / "signal-separation.json"
@@ -121,10 +125,12 @@ def run() -> int:
     else:
         print(f"\nALARM: no — tool integration gap healthy ({mean_sep:.1f} turns)")
 
-    OUT_FILE.write_text(json.dumps({
+    _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+    _tmp_out_file.write_text(json.dumps({
         "ts": now, "tools": len(by_tool), "mean_sep": round(mean_sep, 2),
         "threshold": SEP_THRESHOLD, "alarm": alarm, "separations": separations,
     }, indent=2))
+    _tmp_out_file.replace(OUT_FILE)
     return 1 if alarm else 0
 
 

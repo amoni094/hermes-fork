@@ -124,10 +124,12 @@ def run(steps: list[str] | None, dry_run: bool) -> int:
     print(f"\nTop conclusions: {', '.join(result['top_conclusions'][:8])}")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({
             "ts": now, **{k: v for k, v in result.items() if k != "top_conclusions"},
             "top_conclusions": result["top_conclusions"],
         }, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
 
     return 0
 

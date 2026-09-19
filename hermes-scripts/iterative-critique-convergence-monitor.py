@@ -84,11 +84,13 @@ def run() -> int:
     else:
         print(f"\nALARM: no — critique loop converging normally")
 
-    OUT_FILE.write_text(json.dumps({
+    _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+    _tmp_out_file.write_text(json.dumps({
         "ts": now, "rounds": len(counts), "mean_ratio": round(mean_ratio, 4),
         "last_ratio": round(last_ratio, 4), "converging": converging,
         "counts": counts, "convergence_threshold": CONVERGENCE_RATIO,
     }, indent=2))
+    _tmp_out_file.replace(OUT_FILE)
     return 0 if converging else 1
 
 

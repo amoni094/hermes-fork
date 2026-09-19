@@ -21,6 +21,7 @@ Math basis: Key leakage in adaptive channel coding
 Runs as a monitor in the suite.
 """
 from __future__ import annotations
+import os
 
 import json
 import math
@@ -30,8 +31,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HOME          = Path.home()
+_HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "fork")
+_RT = _HH / "profiles" / _HP if _HP else _HH
 SESSIONS_DIR  = HOME / ".hermes/sessions"
-FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"
+FORK_SESSIONS = _RT / "sessions"
 CACHE_DIR     = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE      = CACHE_DIR / "adaptive-key-leakage.json"
@@ -137,11 +141,13 @@ def run() -> int:
     else:
         print(f"\nALARM: no — routing MI within bounds (avg={avg_mi:.4f} nats)")
 
-    OUT_FILE.write_text(json.dumps({
+    _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+    _tmp_out_file.write_text(json.dumps({
         "ts": now, "sessions": len(results),
         "avg_mi": round(avg_mi, 6), "leaking_count": len(leaking),
         "threshold": LEAKAGE_THRESHOLD, "detail": results,
     }, indent=2))
+    _tmp_out_file.replace(OUT_FILE)
     return 1 if alarm else 0
 
 

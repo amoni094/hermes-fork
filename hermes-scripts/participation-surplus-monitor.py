@@ -16,6 +16,7 @@ Operationally: reads delegate_task call logs from session files.
   Proxy for "useful": subagent returned without error and result len > 200 chars.
 """
 from __future__ import annotations
+import os
 
 import json, math, sys
 from datetime import datetime, timezone
@@ -23,8 +24,11 @@ from pathlib import Path
 from collections import defaultdict
 
 HOME          = Path.home()
+_HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "fork")
+_RT = _HH / "profiles" / _HP if _HP else _HH
 SESSIONS_DIR  = HOME / ".hermes/sessions"
-FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"
+FORK_SESSIONS = _RT / "sessions"
 CACHE_DIR     = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE      = CACHE_DIR / "participation-surplus.json"
@@ -135,11 +139,13 @@ def run() -> int:
     else:
         print(f"\nALARM: no — all agents within participation surplus bounds")
 
-    OUT_FILE.write_text(json.dumps({
+    _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+    _tmp_out_file.write_text(json.dumps({
         "ts": now, "T": T, "n": n, "V_total": V_total,
         "fair_share": round(fair_share, 2), "bound": round(bound, 2),
         "alarm_agents": alarms,
     }, indent=2))
+    _tmp_out_file.replace(OUT_FILE)
     return 1 if alarms else 0
 
 

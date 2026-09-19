@@ -164,12 +164,14 @@ def run(quality_target: float | None, dry_run: bool = False) -> None:
         print(f"  Mean quality: {mean_quality:.2f}")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({
             "ts": now,
             "sessions": len(metrics),
             "frontier_size": int(len(frontier_idx)),
             "frontier": [metrics[i] for i in frontier_idx],
         }, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"Written: {OUT_FILE}")
     else:
         print("(dry-run)")

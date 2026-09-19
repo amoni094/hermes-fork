@@ -108,7 +108,9 @@ def run(actions: list[str], costs: list[float], beta: float, dry_run: bool) -> i
             print(f"    {item['action']:<20} {item['cost']:>6.3f}  {item['prob']:>6.3f}")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"\nWritten: {OUT_FILE}")
 
     return 0

@@ -26,9 +26,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
+import os
 import re
+import secrets
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -36,6 +41,157 @@ HOME      = Path.home()
 CACHE_DIR = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE  = CACHE_DIR / "plan-enforcement-gate-report.json"
+
+# ── Profile-aware root (used by PET helpers) ───────────────────────────────────
+import os as _os_peg
+_b_peg = Path(_os_peg.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_p_peg = _os_peg.environ.get("HERMES_PROFILE", "")
+_root_peg = (_b_peg / "profiles" / _p_peg) if _p_peg and "profiles" not in str(_b_peg) else _b_peg
+_PET_CACHE_DIR = _root_peg / "cache"
+_PET_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# ── Plan Execution Token (PET) helpers ─────────────────────────────────────────
+
+def _pet_session_key() -> bytes:
+    """Read or create a 32-byte session key stored as hex in cache/pet-session-key.
+
+    Fail-open: if the file is unreadable for any reason, generate a fresh
+    ephemeral key so the gate never hard-blocks on a key I/O error.
+    """
+    key_path = _PET_CACHE_DIR / "pet-session-key"
+    try:
+        text = key_path.read_text().strip()
+        return bytes.fromhex(text)
+    except Exception:
+        pass
+    # Create a new key atomically
+    key = secrets.token_bytes(32)
+    try:
+        fd, tmp = tempfile.mkstemp(dir=str(_PET_CACHE_DIR), prefix=".pet-session-key.")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(key.hex())
+            os.replace(tmp, str(key_path))
+        except Exception:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+    except Exception:
+        pass  # fail-open: return ephemeral key
+    return key
+
+
+def _issue_pet(plan_json_str: str, approved: bool) -> dict:
+    """Issue a signed Plan Execution Token for the given plan JSON string.
+
+    Cleans up expired token files (mtime > 10 min) before writing.
+    Returns the token dict that should be merged into the gate result.
+    """
+    now = datetime.now(timezone.utc)
+    now_ts = now.timestamp()
+
+    # Cleanup expired token files (older than 10 minutes)
+    try:
+        for f in _PET_CACHE_DIR.glob("plan-token-*.json"):
+            try:
+                if now_ts - f.stat().st_mtime > 600:
+                    f.unlink(missing_ok=True)
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+    # Compute plan hash from canonical JSON
+    try:
+        canonical = json.dumps(json.loads(plan_json_str), sort_keys=True, separators=(",", ":"))
+    except (json.JSONDecodeError, TypeError):
+        canonical = plan_json_str
+    plan_hash = hashlib.sha256(canonical.encode()).hexdigest()
+
+    # Compute HMAC token
+    session_key = _pet_session_key()
+    token_hex = hmac.new(session_key, plan_hash.encode(), hashlib.sha256).hexdigest()
+
+    issued_at = now.isoformat()
+    expires_at = datetime.fromtimestamp(now_ts + 300, tz=timezone.utc).isoformat()
+
+    token_dict = {
+        "token": token_hex,
+        "plan_hash": plan_hash,
+        "issued_at": issued_at,
+        "expires_at": expires_at,
+        "approved": approved,
+    }
+
+    # Write token file atomically
+    token_file = _PET_CACHE_DIR / f"plan-token-{plan_hash[:8]}.json"
+    try:
+        fd, tmp = tempfile.mkstemp(dir=str(_PET_CACHE_DIR), prefix=".plan-token.")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(token_dict, f, indent=2)
+            os.replace(tmp, str(token_file))
+        except Exception:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+    except Exception:
+        pass  # fail-open: token dict still returned even if write fails
+
+    return token_dict
+
+
+def _verify_pet(token_hex: str, plan_json_str: str) -> dict:
+    """Verify a Plan Execution Token.
+
+    Returns {valid: bool, reason: str}.
+    """
+    # Recompute plan hash
+    try:
+        canonical = json.dumps(json.loads(plan_json_str), sort_keys=True, separators=(",", ":"))
+    except (json.JSONDecodeError, TypeError):
+        canonical = plan_json_str
+    plan_hash = hashlib.sha256(canonical.encode()).hexdigest()
+
+    token_file = _PET_CACHE_DIR / f"plan-token-{plan_hash[:8]}.json"
+    try:
+        stored = json.loads(token_file.read_text())
+    except FileNotFoundError:
+        return {"valid": False, "reason": "token file not found"}
+    except Exception as exc:
+        return {"valid": False, "reason": f"token file unreadable: {exc}"}
+
+    # Verify stored hash matches
+    if stored.get("plan_hash") != plan_hash:
+        return {"valid": False, "reason": "plan hash mismatch"}
+
+    # Verify HMAC
+    session_key = _pet_session_key()
+    expected = hmac.new(session_key, plan_hash.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, stored.get("token", "")):
+        return {"valid": False, "reason": "token HMAC mismatch"}
+
+    # Check expiry
+    try:
+        expires_at = datetime.fromisoformat(stored["expires_at"])
+        if datetime.now(timezone.utc) > expires_at:
+            return {"valid": False, "reason": "token expired"}
+    except (KeyError, ValueError):
+        return {"valid": False, "reason": "invalid expires_at in token"}
+
+    # Check approved
+    if not stored.get("approved"):
+        return {"valid": False, "reason": "plan was not approved by gate"}
+
+    # Check supplied token matches stored
+    if not hmac.compare_digest(token_hex, stored.get("token", "")):
+        return {"valid": False, "reason": "supplied token does not match stored token"}
+
+    return {"valid": True, "reason": "ok"}
 
 # ── Invariant definitions ──────────────────────────────────────────────────────
 
@@ -212,22 +368,42 @@ def run(plan_json: Path | None, plan_text: str | None, dry_run: bool) -> int:
             print("\nALARM: no — all plans passed enforcement gate")
 
         if not dry_run:
-            OUT_FILE.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+            _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+            _tmp_out_file.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+            _tmp_out_file.replace(OUT_FILE)
         return 0
 
     result = enforce(plan)
+    # Issue a Plan Execution Token bound to this plan and gate result
+    plan_json_str = json.dumps(plan) if not isinstance(plan, str) else plan
+    approved = result["verdict"] != "BLOCK"
+    result["execution_token"] = _issue_pet(plan_json_str, approved)
     print(json.dumps(result, indent=2))
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({"ts": now, "result": result}, indent=2))
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({"ts": now, "result": result}, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
     return 1 if result["verdict"] == "BLOCK" else 0
 
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--plan",      type=Path, default=None)
-    p.add_argument("--plan-text", default=None)
-    p.add_argument("--dry-run",   action="store_true")
+    p.add_argument("--plan",         type=Path, default=None)
+    p.add_argument("--plan-text",    default=None)
+    p.add_argument("--dry-run",      action="store_true")
+
+    sub = p.add_subparsers(dest="subcommand")
+    vt = sub.add_parser("verify-token", help="Verify a Plan Execution Token")
+    vt.add_argument("--token",     required=True, help="HMAC hex token from execution_token.token")
+    vt.add_argument("--plan-json", required=True, help="Plan JSON string that was checked")
+
     args = p.parse_args()
+
+    if args.subcommand == "verify-token":
+        result = _verify_pet(args.token, args.plan_json)
+        print(json.dumps(result))
+        sys.exit(0 if result["valid"] else 1)
+
     sys.exit(run(args.plan, args.plan_text, args.dry_run))
 
 

@@ -19,6 +19,7 @@ Math basis: KL divergence rate between consecutive tool-distribution windows.
   full windows) — this tracks consecutive-pair KL rate trend.
 """
 from __future__ import annotations
+import os
 
 import json, math, sys
 from datetime import datetime, timezone
@@ -26,8 +27,11 @@ from pathlib import Path
 from collections import Counter
 
 HOME          = Path.home()
+_HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "fork")
+_RT = _HH / "profiles" / _HP if _HP else _HH
 SESSIONS_DIR  = HOME / ".hermes/sessions"
-FORK_SESSIONS = HOME / ".hermes/profiles/fork/sessions"
+FORK_SESSIONS = _RT / "sessions"
 CACHE_DIR     = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE      = CACHE_DIR / "action-divergence.json"
@@ -112,11 +116,13 @@ def run() -> int:
     else:
         print(f"\nALARM: no — action distribution stable (mean KL={mean_kl:.4f})")
 
-    OUT_FILE.write_text(json.dumps({
+    _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+    _tmp_out_file.write_text(json.dumps({
         "ts": now, "pairs": n, "mean_kl": round(mean_kl, 6),
         "slope": round(slope, 6), "threshold": KL_THRESHOLD,
         "alarm": alarm, "kl_series": [round(k, 4) for k in kls],
     }, indent=2))
+    _tmp_out_file.replace(OUT_FILE)
     return 1 if alarm else 0
 
 

@@ -34,6 +34,10 @@ import sys
 # ── Paths ──────────────────────────────────────────────────────────────────────
 
 HOME = Path.home()
+import os
+_HH = Path(os.environ.get("HERMES_HOME", str(HOME / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "fork")
+_RT = _HH / "profiles" / _HP if _HP else _HH
 LIFECYCLE_DB = HOME / ".hermes/memory-facts/lifecycle.db"
 SESSION_LOGS_DIR = HOME / ".hermes/sessions"
 OUTPUT_PATH = HOME / ".hermes/cache/circuit-scores.json"
@@ -102,7 +106,7 @@ def load_from_session_logs() -> list[dict]:
     """Load tool-call sequences from session JSONL logs."""
     records = []
     for logs_dir in [SESSION_LOGS_DIR,
-                     HOME / ".hermes/profiles/fork/sessions",
+                     _RT / "sessions",
                      HOME / ".hermes/logs"]:
         if not logs_dir.exists():
             continue
@@ -259,7 +263,9 @@ def main():
 
     if not args.dry_run:
         OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        OUTPUT_PATH.write_text(json.dumps(output, indent=2))
+        _tmp_output_path = OUTPUT_PATH.with_suffix('.tmp')
+        _tmp_output_path.write_text(json.dumps(output, indent=2))
+        _tmp_output_path.replace(OUTPUT_PATH)
         print(f"[circuit-scorer] Written: {OUTPUT_PATH}", file=sys.stderr)
 
         # Routing hints: top-5 circuits as skill-routing suggestions
@@ -268,7 +274,9 @@ def main():
             "hint": "These tool-call sequences have the highest historical success rate. Prefer them when routing similar tasks.",
             "top_circuits": top_circuits[:5],
         }
-        SKILL_HINT_PATH.write_text(json.dumps(hints, indent=2))
+        _tmp_skill_hint_path = SKILL_HINT_PATH.with_suffix('.tmp')
+        _tmp_skill_hint_path.write_text(json.dumps(hints, indent=2))
+        _tmp_skill_hint_path.replace(SKILL_HINT_PATH)
         print(f"[circuit-scorer] Routing hints: {SKILL_HINT_PATH}", file=sys.stderr)
 
     print(f"\n=== Circuit Trajectory Scores — {output['scored_at'][:10]} ===")

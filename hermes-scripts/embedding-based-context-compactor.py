@@ -18,6 +18,7 @@ Usage:
   python3 embedding-based-context-compactor.py --dry-run
 """
 from __future__ import annotations
+import os
 
 import argparse
 import json
@@ -28,7 +29,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HOME         = Path.home()
-SESSIONS_DIR = HOME / ".hermes/profiles/fork/sessions"
+_HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "fork")
+_RT = _HH / "profiles" / _HP if _HP else _HH
+SESSIONS_DIR = _RT / "sessions"
 CACHE_DIR    = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE     = CACHE_DIR / "context-compaction-report.json"
@@ -124,7 +128,9 @@ def run(task: str, budget: int, dry_run: bool) -> int:
                 print(f"    [{b['role']} rel={b['relevance']:.3f}] {b['preview']}")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({"ts": now, "task": task, "results": results}, indent=2))
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({"ts": now, "task": task, "results": results}, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"\nWritten: {OUT_FILE}")
 
     return 0

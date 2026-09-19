@@ -182,7 +182,9 @@ def write_dag(edges: list[dict[str, str]], stats: dict[str, Any], output: Path, 
         "stats": stats,
         "edges": edges,
     }
-    output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    _tmp_output = output.with_suffix('.tmp')
+    _tmp_output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    _tmp_output.replace(output)
 
 
 def main() -> int:

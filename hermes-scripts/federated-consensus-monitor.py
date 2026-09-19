@@ -19,6 +19,7 @@ Usage:
   python3 federated-consensus-monitor.py --dry-run
 """
 from __future__ import annotations
+import os
 
 import argparse
 import json
@@ -32,7 +33,10 @@ from pathlib import Path
 import numpy as np
 
 HOME         = Path.home()
-SESSIONS_DIR = HOME / ".hermes/profiles/fork/sessions"
+_HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "fork")
+_RT = _HH / "profiles" / _HP if _HP else _HH
+SESSIONS_DIR = _RT / "sessions"
 CACHE_DIR    = HOME / ".hermes/cache/monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE     = CACHE_DIR / "federated-consensus-report.json"
@@ -158,7 +162,9 @@ def run(outputs: list[str] | None, dry_run: bool) -> int:
         alarm_exit = 0
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
 
     return alarm_exit
 

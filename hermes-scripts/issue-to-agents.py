@@ -132,7 +132,9 @@ def main():
     # Write task manifest for the skill to consume
     manifest_path = Path.home() / ".hermes" / "state" / f"issue-tasks-{datetime.now().strftime('%Y%m%dT%H%M%S')}.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_text(json.dumps(tasks, indent=2))
+    _tmp_manifest_path = manifest_path.with_suffix('.tmp')
+    _tmp_manifest_path.write_text(json.dumps(tasks, indent=2))
+    _tmp_manifest_path.replace(manifest_path)
     print(f"\nTask manifest written to: {manifest_path}")
     print("Load the github-issue-agent skill and call dispatch_issue_tasks() to execute.")
 
