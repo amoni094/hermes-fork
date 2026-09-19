@@ -28,6 +28,7 @@ Usage:
 """
 
 from __future__ import annotations
+import os
 
 import argparse
 import json
@@ -184,10 +185,12 @@ def run(spec_root: Path, query: str | None, dry_run: bool) -> None:
             print(f"Query not parsed. Try: 'what depends on <name>' / 'what does <name> depend on' / 'topological order'")
 
     if not dry_run:
-        GRAPH_OUT.write_text(json.dumps({
+        _tmp_graph_out = GRAPH_OUT.with_suffix('.tmp')
+        _tmp_graph_out.write_text(json.dumps({
             "ts": now, "spec_files": len(spec_files),
             "entities": sorted(entities), "edges": edge_summary,
         }, indent=2))
+        _tmp_graph_out.replace(GRAPH_OUT)
         print(f"\n[spec-graph] Graph written: {GRAPH_OUT}")
         print(f"[spec-graph] Top edges by src:")
         from collections import Counter
@@ -201,7 +204,7 @@ def run(spec_root: Path, query: str | None, dry_run: bool) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("spec_root", nargs="?",
-                        default=str(Path.home() / ".hermes/profiles/fork/skills"),
+                        default=str(Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "profiles" / os.environ.get("HERMES_PROFILE", "fork") / "skills"),
                         type=Path)
     parser.add_argument("--query", "-q", default=None, help="Graph query")
     parser.add_argument("--dry-run", action="store_true")

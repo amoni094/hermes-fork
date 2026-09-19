@@ -846,7 +846,9 @@ def main():
                         except Exception: pass
                     _ea = {x.get("hermes_artifact", "") for x in _ei}
                     _ni = [x for x in generated_ideas if x.get("hermes_artifact", "") not in _ea]
-                    _iqp.write_text(json.dumps({"last_updated": datetime.now(timezone.utc).isoformat(), "total_ideas": len(_ei)+len(_ni), "ideas": _ei+_ni}, indent=2))
+                    _tmp__iqp = _iqp.with_suffix('.tmp')
+                    _tmp__iqp.write_text(json.dumps({"last_updated": datetime.now(timezone.utc).isoformat(), "total_ideas": len(_ei)+len(_ni), "ideas": _ei+_ni}, indent=2))
+                    _tmp__iqp.replace(_iqp)
                     print(f"[math-interpreter] Budget-guard ideas flush: {len(_ni)} new ideas written", file=sys.stderr)
                 break
 

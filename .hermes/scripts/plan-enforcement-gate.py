@@ -368,7 +368,9 @@ def run(plan_json: Path | None, plan_text: str | None, dry_run: bool) -> int:
             print("\nALARM: no — all plans passed enforcement gate")
 
         if not dry_run:
-            OUT_FILE.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+            _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+            _tmp_out_file.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+            _tmp_out_file.replace(OUT_FILE)
         return 0
 
     result = enforce(plan)
@@ -378,7 +380,9 @@ def run(plan_json: Path | None, plan_text: str | None, dry_run: bool) -> int:
     result["execution_token"] = _issue_pet(plan_json_str, approved)
     print(json.dumps(result, indent=2))
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({"ts": now, "result": result}, indent=2))
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({"ts": now, "result": result}, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
     return 1 if result["verdict"] == "BLOCK" else 0
 
 

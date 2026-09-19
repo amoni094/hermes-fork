@@ -116,11 +116,13 @@ def run() -> int:
     else:
         print(f"\nALARM: no — action distribution stable (mean KL={mean_kl:.4f})")
 
-    OUT_FILE.write_text(json.dumps({
+    _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+    _tmp_out_file.write_text(json.dumps({
         "ts": now, "pairs": n, "mean_kl": round(mean_kl, 6),
         "slope": round(slope, 6), "threshold": KL_THRESHOLD,
         "alarm": alarm, "kl_series": [round(k, 4) for k in kls],
     }, indent=2))
+    _tmp_out_file.replace(OUT_FILE)
     return 1 if alarm else 0
 
 

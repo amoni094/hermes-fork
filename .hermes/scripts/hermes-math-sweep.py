@@ -106,12 +106,14 @@ def main():
 
     # Save a math-specific sweep output
     math_sweep_out = CACHE / 'hermes-math-sweep-latest.json'
-    math_sweep_out.write_text(json.dumps({
+    _tmp_math_sweep_out = math_sweep_out.with_suffix('.tmp')
+    _tmp_math_sweep_out.write_text(json.dumps({
         'sweep_date': datetime.now(timezone.utc).isoformat(),
         'new_paper_count': len(new_papers),
         'new_papers_flat': new_papers,
         'all_papers': all_papers,
     }, indent=2, default=str))
+    _tmp_math_sweep_out.replace(math_sweep_out)
     print(f"[hermes-math-sweep] Math sweep saved: {math_sweep_out}")
 
     # ── Step 2: Fetch abstracts + interpret with primers ──────────────────────

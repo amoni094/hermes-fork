@@ -178,12 +178,14 @@ def run(top_n: int = 10) -> int:
     else:
         print(f"ALARM: no — mean curvature {mean_curv:.6f} above floor")
 
-    OUT_FILE.write_text(json.dumps({
+    _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+    _tmp_out_file.write_text(json.dumps({
         "ts": now, "skills": len(skills), "pairs": len(pairs),
         "mean_curvature": round(mean_curv, 8),
         "low_pairs": len(low_pairs),
         "worst5": [(a, b, round(c, 8)) for a, b, c in pairs_sorted[:5]],
     }, indent=2))
+    _tmp_out_file.replace(OUT_FILE)
 
     return 1 if alarm else 0
 

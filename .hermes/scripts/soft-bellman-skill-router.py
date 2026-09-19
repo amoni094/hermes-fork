@@ -260,7 +260,9 @@ def run(
                 "mean_routing_entropy": round(mean_H, 4),
                 "temperature": temperature,
             }
-            OUT_FILE.write_text(json.dumps(out, indent=2))
+            _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+            _tmp_out_file.write_text(json.dumps(out, indent=2))
+            _tmp_out_file.replace(OUT_FILE)
             print(f"Written: {OUT_FILE}")
     if dry_run:
         print("(dry-run)")

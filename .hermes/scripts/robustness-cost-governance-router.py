@@ -177,7 +177,9 @@ def run(task: str, weights: np.ndarray, dry_run: bool) -> int:
     print(f"Weights:     {result['weights']}")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({"ts": now, "result": result}, indent=2))
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({"ts": now, "result": result}, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"Written: {OUT_FILE}")
 
     return 0

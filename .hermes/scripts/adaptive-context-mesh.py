@@ -208,7 +208,8 @@ def run(session_id: str | None, all_sessions: bool, dry_run: bool) -> int:
         alarm_exit = 0
 
     if not dry_run and all_results:
-        OUT_FILE.write_text(json.dumps({
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({
             "ts": now,
             "sessions": [{
                 "session": r["session"],
@@ -217,6 +218,7 @@ def run(session_id: str | None, all_sessions: bool, dry_run: bool) -> int:
             } for r in all_results],
             "alarms": alarms,
         }, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"\nWritten: {OUT_FILE}")
 
     return alarm_exit

@@ -185,7 +185,9 @@ def run(query: str, dry_run: bool) -> int:
         print("ALARM: no — routing decisions are well-supported")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({"ts": now, "results": all_results}, indent=2))
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({"ts": now, "results": all_results}, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
 
     return 1 if uncertain else 0
 

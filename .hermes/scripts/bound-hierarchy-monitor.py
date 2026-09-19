@@ -169,11 +169,13 @@ def run() -> int:
     else:
         print("ALARM: no — all bound hierarchy checks pass")
 
-    OUT_FILE.write_text(json.dumps({
+    _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+    _tmp_out_file.write_text(json.dumps({
         "ts": now, "skills": len(skills),
         "r_pack": round(r_pack, 6), "r_cover": round(r_cover, 6),
         "H_avg": round(H_avg, 4), "violations": violations,
     }, indent=2))
+    _tmp_out_file.replace(OUT_FILE)
 
     return 1 if alarm else 0
 

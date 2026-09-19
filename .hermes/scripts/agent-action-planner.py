@@ -184,10 +184,12 @@ def run(task: str, budget: int, dry_run: bool, list_tools: bool) -> None:
     print(f"\n  Final coverage: {final_cov:.1%}  ({len(plan)}/{budget} budget used)")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({
             "ts": now, "task": task, "budget": budget, "plan": plan,
             "final_coverage": final_cov,
         }, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"\nWritten: {OUT_FILE}")
     else:
         print("(dry-run)")

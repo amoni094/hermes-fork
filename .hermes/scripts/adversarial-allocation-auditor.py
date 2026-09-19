@@ -117,11 +117,13 @@ def run() -> int:
     else:
         print(f"\nALARM: no — all agents satisfy PROP1 allocation guarantee")
 
-    OUT_FILE.write_text(json.dumps({
+    _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+    _tmp_out_file.write_text(json.dumps({
         "ts": now, "tasks": len(all_tasks), "agents": n,
         "total_value": round(total_value, 4), "prop1_floor": round(prop1_floor, 4),
         "violations": violations,
     }, indent=2))
+    _tmp_out_file.replace(OUT_FILE)
     return 1 if violations else 0
 
 

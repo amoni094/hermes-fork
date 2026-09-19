@@ -146,13 +146,15 @@ def run() -> int:
     else:
         print(f"\nALARM: no — productivity healthy (avg={avg_prod:.3f})")
 
-    OUT_FILE.write_text(json.dumps({
+    _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+    _tmp_out_file.write_text(json.dumps({
         "ts": now, "sessions": len(results),
         "avg_productivity": round(avg_prod, 4),
         "low_productivity_count": low_prod,
         "threshold": PRODUCTIVITY_FLOOR,
         "detail": results,
     }, indent=2))
+    _tmp_out_file.replace(OUT_FILE)
     return 1 if alarm else 0
 
 

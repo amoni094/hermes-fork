@@ -143,7 +143,9 @@ def run(skill_a: str | None, skill_b: str | None, query: str, dry_run: bool) -> 
     print(f"\nFUSE: {fuse_recs}  SEPARATE: {sep_recs}  NEUTRAL: {len(results)-fuse_recs-sep_recs}")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"Written: {OUT_FILE}")
 
     return 0

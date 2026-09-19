@@ -128,7 +128,9 @@ def run() -> int:
     else:
         print(f"\nALARM: no — prediction tradeoff balanced (C={t['C']:.3f}, R={t['R']:.3f})")
 
-    OUT_FILE.write_text(json.dumps({"ts": now, **t}, indent=2))
+    _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+    _tmp_out_file.write_text(json.dumps({"ts": now, **t}, indent=2))
+    _tmp_out_file.replace(OUT_FILE)
     return 1 if alarm else 0
 
 

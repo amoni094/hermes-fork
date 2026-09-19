@@ -213,7 +213,9 @@ def run(task: str, emit_json: bool, dry_run: bool) -> None:
 
     if not dry_run:
         out_data = plan if emit_json else {**plan, "dsl_text": dsl}
-        OUT_FILE.write_text(json.dumps(out_data, indent=2))
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps(out_data, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"\nWritten: {OUT_FILE}")
     else:
         print("(dry-run)")

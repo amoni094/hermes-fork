@@ -131,7 +131,9 @@ def run(predictions: list[str] | None, input_file: Path | None, dry_run: bool) -
         alarm_exit = 0
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({"ts": now, "result": result}, indent=2))
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({"ts": now, "result": result}, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"Written: {OUT_FILE}")
 
     return alarm_exit

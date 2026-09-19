@@ -234,7 +234,9 @@ def run(query: str | None, dry_run: bool = False) -> None:
             print(f"  {r['skill']:<40} {r['raw']:>6.4f} {r['projected']:>10.4f}{tag}")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({"ts": now, **calib}, indent=2))
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({"ts": now, **calib}, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"\nCalibration written: {OUT_FILE}")
     else:
         print("(dry-run)")

@@ -167,7 +167,9 @@ def run(response: str | None, query: str | None, dry_run: bool) -> int:
         print("ALARM: no — responses are adversarially robust")
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({"ts": now, "results": results}, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
 
     return 1 if fragile else 0
 

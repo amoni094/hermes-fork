@@ -196,9 +196,11 @@ def run(tasks: list[str], dry_run: bool) -> int:
         alarm_exit = 0
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({
             "ts": now, "classifications": results,
         }, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"\nWritten: {OUT_FILE}")
 
     return alarm_exit

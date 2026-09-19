@@ -141,11 +141,13 @@ def run() -> int:
     else:
         print(f"\nALARM: no — routing MI within bounds (avg={avg_mi:.4f} nats)")
 
-    OUT_FILE.write_text(json.dumps({
+    _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+    _tmp_out_file.write_text(json.dumps({
         "ts": now, "sessions": len(results),
         "avg_mi": round(avg_mi, 6), "leaking_count": len(leaking),
         "threshold": LEAKAGE_THRESHOLD, "detail": results,
     }, indent=2))
+    _tmp_out_file.replace(OUT_FILE)
     return 1 if alarm else 0
 
 

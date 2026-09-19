@@ -399,7 +399,9 @@ def audit(config_path: Path, workspace: Path, report_path: Path) -> int:
                  "Do not disable required local MCP servers from this report alone.")
 
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text("\n".join(lines) + "\n")
+    _tmp_report_path = report_path.with_suffix('.tmp')
+    _tmp_report_path.write_text("\n".join(lines) + "\n")
+    _tmp_report_path.replace(report_path)
     print(f"Wrote {report_path} ({total_tools} tools, {total_flags} findings)")
 
     try:

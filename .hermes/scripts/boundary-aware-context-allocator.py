@@ -164,10 +164,12 @@ def run(budget: int, session_path: Path | None, dry_run: bool) -> int:
 
     print(f"\nALARM: no — allocation complete")
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({
             "ts": now, "budget": budget, "kept": result["kept"],
             "total": result["total_chars"],
         }, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
     return 0
 
 

@@ -318,7 +318,9 @@ def write_audit_note(exact: list[tuple[str, str]], near: list[tuple[str, str, fl
         '',
     ])
 
-    AUDIT_NOTE.write_text('\n'.join(lines) + '\n')
+    _tmp_audit_note = AUDIT_NOTE.with_suffix('.tmp')
+    _tmp_audit_note.write_text('\n'.join(lines) + '\n')
+    _tmp_audit_note.replace(AUDIT_NOTE)
 
 
 def main() -> int:

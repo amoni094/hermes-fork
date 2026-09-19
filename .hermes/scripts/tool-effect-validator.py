@@ -233,11 +233,13 @@ def run(session_filter: str | None, check_file: Path | None, dry_run: bool) -> i
         alarm_exit = 0
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({
             "ts": now, "total_calls": total_calls,
             "total_failures": total_failures,
             "sessions": results, "alarms": alarms,
         }, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"\nWritten: {OUT_FILE}")
 
     return alarm_exit

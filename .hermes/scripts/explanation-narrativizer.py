@@ -179,9 +179,11 @@ def run(session_id: str | None, audience: str, all_audiences: bool, dry_run: boo
         print()
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({
             "ts": now, "session": path.stem, "narratives": narratives,
         }, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"Written: {OUT_FILE}")
 
     return 0

@@ -121,13 +121,15 @@ def run(dry_run: bool) -> int:
         rc = 0
 
     if not dry_run:
-        OUT_FILE.write_text(json.dumps({
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({
             "ts": now, "n_skills": n,
             "r_pack": round(r_pack, 4), "max_dist": round(max_dist, 4),
             "ratio": round(ratio, 4), "alarm": alarm,
             "top_isolated": [{"name": n, "nn_dist": round(d, 4)}
                              for d, n in top_isolated],
         }, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
 
     return rc
 

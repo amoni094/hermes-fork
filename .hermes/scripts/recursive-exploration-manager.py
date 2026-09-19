@@ -152,10 +152,12 @@ def run(top_n: int, dry_run: bool) -> int:
             "total_actionable": total,
             "todo": todo_items,
         }, indent=2))
-        OUT_FILE.write_text(json.dumps({
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({
             "ts": now.isoformat(), "scanned": len(ideas),
             "actionable": total, "top": todo_items,
         }, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"\nTODO written: {TODO_FILE}")
 
     return 0

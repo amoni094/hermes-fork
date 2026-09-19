@@ -185,11 +185,15 @@ def run(query_cause: str | None, query_effect: str | None,
               f"(vs baseline {top_edge['p_b']:.2f})")
 
     if not dry_run:
-        GRAPH_FILE.write_text(json.dumps(graph, indent=2))
-        OUT_FILE.write_text(json.dumps({"ts": now, "graph_summary": {
+        _tmp_graph_file = GRAPH_FILE.with_suffix('.tmp')
+        _tmp_graph_file.write_text(json.dumps(graph, indent=2))
+        _tmp_graph_file.replace(GRAPH_FILE)
+        _tmp_out_file = OUT_FILE.with_suffix('.tmp')
+        _tmp_out_file.write_text(json.dumps({"ts": now, "graph_summary": {
             "nodes": len(graph["nodes"]), "edges": len(graph["edges"]),
             "top_edges": graph["edges"][:5],
         }}, indent=2))
+        _tmp_out_file.replace(OUT_FILE)
         print(f"\nGraph saved: {GRAPH_FILE}")
 
     return 0

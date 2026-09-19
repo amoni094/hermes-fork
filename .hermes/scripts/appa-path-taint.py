@@ -489,7 +489,9 @@ def main(argv: list[str] | None = None) -> int:
         },
     }
     try:
-        RESULTS_PATH.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        _tmp_results_path = RESULTS_PATH.with_suffix('.tmp')
+        _tmp_results_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        _tmp_results_path.replace(RESULTS_PATH)
     except OSError as exc:
         print(f"warn: could not write {RESULTS_PATH}: {exc}", file=sys.stderr)
     return 0
@@ -502,7 +504,9 @@ def _write_empty_results() -> None:
         "stats": {"n_nodes": 0, "n_edges": 0, "baseline_edges": 0},
     }
     try:
-        RESULTS_PATH.write_text(json.dumps(payload), encoding="utf-8")
+        _tmp_results_path = RESULTS_PATH.with_suffix('.tmp')
+        _tmp_results_path.write_text(json.dumps(payload), encoding="utf-8")
+        _tmp_results_path.replace(RESULTS_PATH)
     except OSError:
         pass
     print("Nodes: 0 | Edges: 0 | Max depth: 0 | Root nodes: []")
