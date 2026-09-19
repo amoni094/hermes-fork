@@ -95,6 +95,83 @@ IRREVERSIBLE_ACTIONS = [
     # disk/storage format is already covered by "erase" and "wipe"
 ]
 
+# ── Rephrased-loop detector (4-gram Jaccard, stdlib-only) ─────────────────────
+def _is_rephrased_loop(response, history, threshold=0.85):
+    """Detect rephrased-but-equivalent loops via 4-gram Jaccard similarity (stdlib only).
+    Complement to MD5-hash exact loop detection. ARCHITECTURE.md gap closed."""
+    try:
+        def _ngrams(text, n=4):
+            t = text.lower().strip()
+            return set(t[i:i+n] for i in range(len(t)-n+1)) if len(t) >= n else set()
+        resp = _ngrams(response)
+        if not resp:
+            return False
+        for item in list(history)[-5:]:
+            hist = _ngrams(str(item))
+            if hist:
+                inter = len(resp & hist)
+                union = len(resp | hist)
+                if union and inter/union > threshold:
+                    return True
+        return False
+    except Exception:
+        return False  # shadow: never raise
+
+# ── Consistency scorer (lazy import, stdlib-only) ─────────────────────────────
+def _get_consistency_score(finding: str, n_samples: int = 3) -> float:
+    """
+    Import and call consistency_score() from consistency_scorer.py.
+    Returns calibrated Condorcet confidence in {0.05, 0.20, 0.50, 1.00}.
+    Falls back to 1.0 (passthrough) if the module is unavailable.
+    Feature-flagged: only active when MH_CONSISTENCY=1.
+    """
+    if os.environ.get("MH_CONSISTENCY", "0") not in ("1", "true", "yes"):
+        return 1.0  # feature off by default
+    try:
+        import sys as _sys
+        _scripts_dir = str(Path(__file__).resolve().parent)
+        if _scripts_dir not in _sys.path:
+            _sys.path.insert(0, _scripts_dir)
+        from consistency_scorer import consistency_score, ConsistencyConfig  # type: ignore
+        config = ConsistencyConfig(enabled=True, n=n_samples, timeout=10.0)
+
+        def _null_verify(text: str) -> bool:
+            """Trivial verify_fn: always agrees (safe no-op placeholder).
+            Replace with a real cheap LLM call for live calibration.
+            """
+            return True
+
+        return consistency_score(finding, _null_verify, config)
+    except Exception as _exc:
+        print(f'[metacognitive-harness] consistency_scorer unavailable: {_exc}', file=__import__('sys').stderr)
+        return 1.0  # safe fallback
+
+
+# ── Calibration log for consistency-augmented confidence ─────────────────────
+_CONSISTENCY_CALIB_LOG = HERMES_HOME / "cache" / "calibration-log.jsonl"
+
+def _write_consistency_calib_row(predicted_confidence: float, query_hash: str,
+                                  scope: str = "", condorcet: float = 1.0) -> None:
+    """Append a JSON line to calibration-log.jsonl for consistency-scorer results.
+
+    Schema: {ts, predicted_confidence, query_hash, scope, condorcet_score}
+    No-op on OSError to never break the harness.
+    """
+    try:
+        _CONSISTENCY_CALIB_LOG.parent.mkdir(parents=True, exist_ok=True)
+        row = {
+            "ts": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+            "predicted_confidence": round(predicted_confidence, 4),
+            "query_hash": query_hash,
+            "scope": scope,
+            "condorcet_score": round(condorcet, 4),
+        }
+        with open(_CONSISTENCY_CALIB_LOG, "a") as _f:
+            _f.write(json.dumps(row) + "\n")
+    except OSError:
+        pass
+
+
 CAUSAL_TEMPORAL_PATTERNS = [
     r"\bafter\b", r"\bthen\b", r"\bcoincid", r"\baround the same time\b",
     r"\bshortly after\b", r"\bfollowing\b", r"\bsubsequently\b",
@@ -296,7 +373,7 @@ def chernoff_n_star(p_hat, p_thresh=0.5, delta=0.05):
     return math.ceil(math.log(1.0 / delta) / D)
 
 
-_CALIB_LOG = Path.home() / ".hermes" / "cache" / "calibration_log.jsonl"
+_CALIB_LOG = _CONSISTENCY_CALIB_LOG  # DRY: same path as _CONSISTENCY_CALIB_LOG above (C-H4 fix)
 
 def _write_calibration_row(session_id: str | None, task_class: str | None,
                             fok: float, jol: float, decision: str) -> None:
@@ -322,6 +399,25 @@ def _write_calibration_row(session_id: str | None, task_class: str | None,
             "decision": decision,
             "outcome": None,  # filled by outcome-labeling pass; never auto-set here
         }
+        # Fix B: inject confidence_drift from confidence_tracker.py output if fresh (<2h).
+        # confidence_tracker writes ~/.hermes/cache/confidence-trajectory.json with per-tool
+        # drift_delta fields.  We take the max absolute drift across all tools as a scalar
+        # signal so the calibration log carries a lightweight confidence health indicator.
+        _conf_traj_path = HERMES_HOME / "cache" / "confidence-trajectory.json"
+        try:
+            import time as _time
+            if _conf_traj_path.exists() and (_time.time() - _conf_traj_path.stat().st_mtime) < 7200:
+                with open(_conf_traj_path, encoding="utf-8") as _cf:
+                    _traj = __import__("json").load(_cf)
+                _deltas = [
+                    abs(_tool.get("drift_delta", 0.0) or 0.0)
+                    for _tool in _traj.get("tools", {}).values()
+                ]
+                row["confidence_drift"] = round(max(_deltas), 4) if _deltas else 0.0
+            else:
+                row["confidence_drift"] = 0.0
+        except Exception:
+            row["confidence_drift"] = 0.0  # never let tracker failure crash the harness
         with open(_CALIB_LOG, "a") as f:
             f.write(json.dumps(row) + "\n")
     except OSError:
@@ -424,8 +520,53 @@ def cmd_gate(args):
                            "reason": "Verbal confidence without grounding (arXiv:2604.19809)",
                            "exit_code": 3}))
         return 3
-    print(json.dumps({"decision": "PASS", "confidence": confidence,
-                       "tool_called": tool_called, "exit_code": 0}))
+    # ── Consistency-scorer augmentation for L2/L3 factual claims ────────────
+    # When scope is L2 or L3, run consistency_score() to get a Condorcet-sampled
+    # calibrated confidence.  The raw verbal confidence is blended conservatively
+    # (min) with the Condorcet result so uncertainty can only go down, not up.
+    # Calibration row is always appended (even when feature is off, condorcet=1.0).
+    query_hash = __import__("hashlib").md5(
+        f"{level}:{confidence}:{tool_called}".encode()
+    ).hexdigest()[:12]
+    # ── Rephrased-loop detection (H2 fix: wire _is_rephrased_loop into live path) ──
+    try:
+        _response = getattr(args, 'response', '') or ''
+        _history = __import__('json').loads(getattr(args, 'history', '[]') or '[]')
+        if _response and _is_rephrased_loop(_response, _history):
+            print(__import__('json').dumps({"decision": "REPHRASED_LOOP", "exit_code": 4,
+                                            "reason": "4-gram Jaccard >=0.85 with recent history"}))
+            return 4
+    except Exception:
+        pass  # shadow: never block gate on loop detection failure
+
+    if level in ("L2", "L3"):
+        condorcet = _get_consistency_score(
+            finding=f"confidence={confidence} level={level} tool_called={tool_called}",
+            n_samples=3,
+        )
+        # Conservative blend: take the min (Condorcet can only reduce confidence).
+        augmented_confidence = round(min(confidence, condorcet), 4)
+        _write_consistency_calib_row(
+            predicted_confidence=augmented_confidence,
+            query_hash=query_hash,
+            scope=level,
+            condorcet=condorcet,
+        )
+        print(json.dumps({"decision": "PASS", "confidence": augmented_confidence,
+                           "condorcet_score": condorcet,
+                           "original_confidence": confidence,
+                           "tool_called": tool_called,
+                           "consistency_augmented": True,
+                           "exit_code": 0}))
+    else:
+        _write_consistency_calib_row(
+            predicted_confidence=confidence,
+            query_hash=query_hash,
+            scope=level,
+            condorcet=1.0,
+        )
+        print(json.dumps({"decision": "PASS", "confidence": confidence,
+                           "tool_called": tool_called, "exit_code": 0}))
     return 0
 
 
@@ -1667,6 +1808,8 @@ def main() -> int:
     ev.set_defaults(func=cmd_evaluate)
 
     gt = sub.add_parser("gate"); gt.add_argument("--confidence", type=float, required=True)
+    gt.add_argument("--response", type=str, default="", help="Current response text for rephrased-loop detection")
+    gt.add_argument("--history", type=str, default="[]", help="JSON list of recent response strings for rephrased-loop detection")
     gt.add_argument("--tool-called", type=str, required=True, metavar="{true,false,TRUE,FALSE,1,0,yes,no}")
     gt.add_argument("--level", type=str, default=""); gt.set_defaults(func=cmd_gate)
 
