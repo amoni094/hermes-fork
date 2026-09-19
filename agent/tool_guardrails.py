@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
+import sys
 from collections import deque
 from dataclasses import asdict, dataclass, field, fields
 from typing import Any, Mapping
@@ -79,6 +82,81 @@ _THRESHOLD_SOURCES: dict[str, tuple[str, str]] = {
 # Per-turn caps on runaway-prone tools (counters reset in reset_for_turn).
 _DEFAULT_MAX_WEB_SEARCHES_PER_TURN = 50
 _DEFAULT_MAX_SUBAGENTS_PER_TURN = 50
+
+# Paths that indicate HIGH-risk writes to critical Hermes internals.
+_HIGH_RISK_PATH_INDICATORS = (".hermes/hermes-fork/agent/", ".hermes/profiles/", ".hermes/plugins/", ".hermes/scripts/", "config.yaml")
+_HIGH_RISK_TOOL_NAMES = frozenset({"write_file", "patch", "terminal", "execute_code"})
+
+
+def _governance_pre_check(tool_name: str, args: "Mapping[str, Any]") -> None:
+    """Fire-and-forget improvement governance pre-check for HIGH-risk tool calls.
+
+    Fail-open: any error (missing script, subprocess failure, rate-limit, etc.)
+    is logged to stderr and the tool call proceeds unimpeded.
+
+    Only triggers when *tool_name* is in ``_HIGH_RISK_TOOL_NAMES`` AND at least
+    one argument value string contains a critical-path indicator.
+    """
+    if tool_name not in _HIGH_RISK_TOOL_NAMES:
+        return
+
+    # Build a flat string of all arg values for path inspection.
+    arg_text = " ".join(str(v) for v in args.values())
+    if not any(ind in arg_text for ind in _HIGH_RISK_PATH_INDICATORS):
+        return
+
+    # Locate improvement_governance.py: prefer HERMES_HOME/scripts, fall back to
+    # the scripts sibling of the agent dir relative to this file.
+    hermes_home = os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))
+    scripts_dir = os.path.join(hermes_home, "scripts")
+    gov_script = os.path.join(scripts_dir, "improvement_governance.py")
+
+    if not os.path.isfile(gov_script):
+        # Also try relative to this file's own directory (dev layouts).
+        _here = os.path.dirname(os.path.abspath(__file__))
+        gov_script_alt = os.path.join(_here, "..", "..", "scripts", "improvement_governance.py")
+        gov_script_alt = os.path.normpath(gov_script_alt)
+        if os.path.isfile(gov_script_alt):
+            gov_script = gov_script_alt
+        else:
+            print(
+                f"[governance] WARNING: improvement_governance.py not found at {gov_script!r};"
+                " skipping governance pre-check (fail-open).",
+                file=sys.stderr,
+            )
+            return
+
+    session_id = os.environ.get("HERMES_SESSION_ID", f"agent_guardrail_{os.getpid()}")
+    cmd = [
+        sys.executable,
+        gov_script,
+        "propose",
+        "--change-type", "CODE",
+        "--target", tool_name,
+        "--description", "agent runtime HIGH-risk tool call",
+        "--session-id", session_id,
+        "--evidence", f"tool={tool_name}", f"path_hint={arg_text[:200]}",
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            print(
+                f"[governance] WARNING: governance propose returned {result.returncode} for"
+                f" tool={tool_name!r}: {result.stderr.strip()[:300]} (fail-open, proceeding).",
+                file=sys.stderr,
+            )
+    except Exception as exc:  # noqa: BLE001
+        print(
+            f"[governance] WARNING: governance pre-check raised {type(exc).__name__}: {exc}"
+            " (fail-open, proceeding).",
+            file=sys.stderr,
+        )
+
 
 # Interactive surfaces plus bounded supervised task loops (subagent stopped by its parent;
 # api_server has a live client) doing real edit -> re-run work keep the warn-only default.
@@ -361,6 +439,7 @@ class ToolCallGuardrailController:
         record = self._no_progress.get(signature) if self._is_idempotent(tool_name) else None
         if record is not None and record[1] >= self.config.no_progress_block_after:
             return self._decide("block", "idempotent_no_progress_block", tool_name, record[1], signature)
+        _governance_pre_check(tool_name, args)
         return allow
 
     def after_call(
