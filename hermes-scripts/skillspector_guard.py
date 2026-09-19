@@ -224,7 +224,9 @@ def scan_skill(path: Path, bundled_names: set[str]) -> SkillResult:
     else:
         data = {"stderr_prefix": proc.stderr[:2000]}
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    _tmp_out = out_path.with_suffix(".tmp")
+    _tmp_out.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    _tmp_out.replace(out_path)
     risk_raw = data.get("risk_assessment", {})
     risk = risk_raw if isinstance(risk_raw, dict) else {}
     findings_raw = data.get("findings", [])

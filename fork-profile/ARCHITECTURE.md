@@ -230,7 +230,7 @@ not enforced gates in the agent loop. Do NOT cite them as active enforcement:
     for full source recovery.
     Status: DOCUMENTED — bytecode stub confirmed identical to shim; decompile pending.
 
-  70 dark output files: scripts that write JSON files never read by any consumer.
+  82 dark output files: scripts that write JSON files never read by any consumer.
     These are standalone metric/research scripts. alarm-aggregator.py handles the
     alarm-format subset (*-alarm.json). Non-alarm dark outputs are accepted as
     standalone observability instruments with no live consumer.
@@ -355,3 +355,28 @@ not enforced gates in the agent loop. Do NOT cite them as active enforcement:
 | H-I1: skillspector-guard pre-commit hook (cron batch scan != pre-commit hook) | POSIX sh hook written to ~/.hermes/hermes-fork/.git/hooks/pre-commit; scans staged SKILL.md files; runs skillspector_guard.py --enforce with HERMES_PROFILE=fork; fail-open if guard absent; chmod +x | CLOSED |
 
 Adversarial cold pass (Task 4): 5/5 PASS — no HIGH/CRITICAL findings. LOW observations: cron ordering for alarm-summary (scheduling, not a code defect); HERMES_PROFILE=fork hardcoded in hook (correct for this repo). No patches required.
+
+## Wave 11 Closures (2026-09-19)
+
+| Finding | Fix |
+|---------|-----|
+| G1 HIGH: skillspector_guard.py non-atomic write (skill-integrity.json, skill-merkle.json) | tmp+replace pattern; crash-safe baseline |
+| G2 MED: skill-graph-reachability-verifier.py non-atomic baseline write | tmp+replace pattern |
+| G3 MED: spec-semantic-graph-builder.py non-atomic baseline write | tmp+replace pattern |
+| G4 MED: hermes-gateway-prestart.py never called | cron entry added (hermes-gateway-prestart-0001, daily 0 4 * * *) |
+| G6 LOW: dark output count stale (70 → 82) | ARCHITECTURE.md updated |
+
+Accepted (architectural / no single wiring point):
+  G5 MED: real-options-deployment-gate.py — always returns 0, no callers.
+    Caller-invoked on-demand gate for subagent fan-out commitment decisions.
+    No single insertion point in the agent runtime. Accepted as manual-invocation tool.
+
+False positives eliminated this wave:
+  - 6 alarm files (*-alarm.json) already caught by alarm-aggregator glob — not dark
+  - fuse_results, _update_bandit_state, check_grant, _issue_pet, rq_kmeans_assign — all have internal call sites
+  - browser_act_guard, routing-convergence-guard, retry-budget-guard — CLI multi-subcommand tools, return-0-only is correct
+  - cobra-skip-guard — uses sys.exit(0/1) correctly; PASS 3 regex missed it
+  - skill_prune_audit — caller-only audit library; return values are data, not gate verdicts
+  - memory-redundancy-gate — manual-invocation CLI gate, no cron warranted
+  - All cron paths clean (fork/scripts/ prefix confirmed); failure streaks all 0
+

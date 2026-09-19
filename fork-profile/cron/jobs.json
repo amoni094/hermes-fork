@@ -1,110 +1,271 @@
 {
   "jobs": [
     {
-      "id": "c7e4d8aa60d5",
-      "name": "hermes-monitor-suite",
-      "prompt": "",
-      "skills": [],
-      "skill": null,
-      "model": null,
-      "provider": null,
-      "provider_snapshot": null,
-      "model_snapshot": null,
-      "base_url": null,
-      "script": "monitor-suite-runner.py",
-      "no_agent": true,
-      "monitor_script": null,
-      "monitor_url": null,
-      "monitor_state": null,
-      "context_from": null,
+      "id": "shadow-gate-0001",
       "schedule": {
         "kind": "cron",
-        "expr": "0 7 * * *",
-        "display": "every day at 7am"
+        "expr": "0 8 * * *"
       },
-      "schedule_display": "every day at 7am",
-      "repeat": {
-        "times": null,
-        "completed": 2
-      },
-      "enabled": true,
-      "state": "scheduled",
-      "paused_at": null,
-      "paused_reason": null,
-      "created_at": "2026-09-15T16:55:48.858974+10:00",
-      "next_run_at": "2026-09-18T07:00:00+10:00",
-      "last_run_at": "2026-09-17T07:00:12.781845+10:00",
-      "last_status": "error",
-      "last_error": "Script not found: /var/home/rainbow/.hermes/profiles/fork/scripts/monitor-suite-runner.py",
-      "last_delivery_error": null,
-      "last_delivery_unverified": null,
-      "failure_streak": 2,
-      "deliver": "local",
-      "origin": null,
-      "enabled_toolsets": null,
-      "workdir": null,
-      "last_dispatch": {
-        "scheduled_at": "2026-09-17T07:00:00+10:00",
-        "dispatched_at": "2026-09-17T07:00:12.222274+10:00",
-        "lateness_seconds": 12.2,
-        "kind": "on_time"
-      },
-      "fire_claim": null
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/shadow-gate-nightly.py",
+      "no_agent": true,
+      "description": "Nightly shadow flag evaluation",
+      "next_run_at": "2026-09-20T08:00:00+10:00",
+      "env": {
+        "HERMES_PROFILE": "fork"
+      }
     },
     {
-      "id": "5916dbe125a4",
-      "name": "pr2030-comment-monitor",
-      "prompt": "You are an autonomous PR monitor for jesterG1979/hello_agent PR #2030 (branch: refactor/code-review-improvements).\n\nYour job each run:\n1. Fetch all unresolved review threads on PR #2030 using GraphQL:\n   Run this exact command:\n   gh api graphql -f query='query{repository(owner:\"jesterG1979\",name:\"hello_agent\"){pullRequest(number:2030){reviewThreads(first:50){nodes{isResolved id comments(first:1){nodes{body}}}}}}}'  | python3 -c \"\nimport sys, json\nd = json.load(sys.stdin)\nts = d['data']['repository']['pullRequest']['reviewThreads']['nodes']\nopen_t = [t for t in ts if not t['isResolved']]\nprint(len(open_t), 'unresolved')\nfor t in open_t:\n    print(' ', t['id'], t['comments']['nodes'][0]['body'][:200])\n\"\n\n2. Also check for regular PR comments (not review threads):\n   gh pr view 2030 --repo jesterG1979/hello_agent --json comments --jq '.comments[].body' | head -40\n\n3. Read the counter file:\n   python3 -c \"import pathlib; f=pathlib.Path('/tmp/pr2030_clean_counter.txt'); print(int(f.read_text().strip()) if f.exists() else 0)\"\n\n4. TERMINATION CHECK: If there are 0 unresolved review threads AND 0 unresolved PR comments, increment the counter. If counter reaches 2, write '/tmp/pr2030_loop_done.txt' and output 'PR IS CLEAN x2 — STOPPING CRON.' Then the parent session will delete this cron job. Write the new counter value to /tmp/pr2030_clean_counter.txt.\n\n5. If there ARE unresolved comments/threads:\n   a. Reset clean counter to 0: echo 0 > /tmp/pr2030_clean_counter.txt\n   b. Clone the repo locally if not present: cd /tmp && gh repo clone jesterG1979/hello_agent pr2030_work 2>/dev/null || (cd /tmp/pr2030_work && git fetch origin && git checkout refactor/code-review-improvements && git pull)\n   c. Read the relevant files in /tmp/pr2030_work/src/ that the comments refer to\n   d. Fix the issues identified by the comments\n   e. Run: cd /tmp/pr2030_work && ENVIRONMENT=ci python -m pytest tests/test_circuit_breaker.py tests/test_provider_failure_classifier.py -x -q 2>&1 | tail -5\n   f. If tests pass, commit and push:\n      cd /tmp/pr2030_work && git add -A && git commit -m 'fix: address PR review comments' && git push origin refactor/code-review-improvements\n   g. Resolve the review threads using GraphQL mutations for each thread ID found in step 1:\n      gh api graphql -f query=\"mutation { resolveReviewThread(input: {threadId: \\\"THREAD_ID\\\"}) { thread { isResolved } } }\"\n\n6. Output a summary of what you found and what you did.\n\nIMPORTANT:\n- Always re-fetch thread IDs fresh each run — never reuse IDs from previous runs\n- The counter file is /tmp/pr2030_clean_counter.txt\n- If /tmp/pr2030_loop_done.txt exists, output 'LOOP ALREADY DONE — skipping.' and exit immediately\n- The gh CLI is authenticated and works with the jesterG1979 account\n- Work directory for fixes: /tmp/pr2030_work (clone jesterG1979/hello_agent there if absent)",
-      "skills": [],
-      "skill": null,
-      "model": null,
-      "provider": null,
-      "provider_snapshot": "anthropic",
-      "model_snapshot": "claude-sonnet-4-6",
-      "base_url": null,
-      "script": null,
-      "no_agent": false,
-      "monitor_script": null,
-      "monitor_url": null,
-      "monitor_state": null,
-      "context_from": null,
+      "id": "calibration-threshold-updater-0001",
       "schedule": {
-        "kind": "interval",
-        "minutes": 10,
-        "display": "every 10m"
+        "kind": "cron",
+        "expr": "0 6 * * *"
       },
-      "schedule_display": "every 10m",
-      "repeat": {
-        "times": null,
-        "completed": 79
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/calibration-threshold-updater.py",
+      "no_agent": true,
+      "description": "Daily Condorcet threshold EMA update",
+      "next_run_at": "2026-09-20T06:00:00+10:00",
+      "env": {
+        "HERMES_PROFILE": "fork"
+      }
+    },
+    {
+      "id": "recall-miss-ttl-adjuster-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 5 * * *"
       },
-      "enabled": true,
-      "state": "scheduled",
-      "paused_at": null,
-      "paused_reason": null,
-      "created_at": "2026-09-16T21:47:36.316755+10:00",
-      "next_run_at": "2026-09-17T15:36:10.120930+10:00",
-      "last_run_at": "2026-09-17T15:15:24.463819+10:00",
-      "last_status": "ok",
-      "last_error": null,
-      "last_delivery_error": null,
-      "last_delivery_unverified": null,
-      "failure_streak": 0,
-      "deliver": "local",
-      "origin": null,
-      "enabled_toolsets": null,
-      "workdir": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/recall-miss-ttl-adjuster.py",
+      "no_agent": true,
+      "description": "Daily MRAS adaptive TTL adjustment (bottleneck #8)",
+      "next_run_at": "2026-09-20T05:00:00+10:00",
+      "env": {
+        "HERMES_PROFILE": "fork"
+      }
+    },
+    {
+      "id": "routing-weight-updater-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 7 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-weight-updater.py",
+      "no_agent": true,
+      "description": "Daily FTRL routing weight update (bottleneck #2)",
+      "next_run_at": "2026-09-20T07:00:00+10:00",
+      "env": {
+        "HERMES_PROFILE": "fork"
+      },
+      "display": "daily at 09:00"
+    },
+    {
+      "id": "pre-compact-annotate-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/15 * * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/pre-compact-annotate.py",
+      "no_agent": true,
+      "description": "Every 15m R-D compaction advisory",
+      "next_run_at": "2026-09-19T20:45:00+10:00",
+      "env": {
+        "HERMES_PROFILE": "fork"
+      },
       "last_dispatch": {
-        "scheduled_at": "2026-09-17T15:25:24.463819+10:00",
-        "dispatched_at": "2026-09-17T15:26:10.064371+10:00",
-        "lateness_seconds": 45.6,
+        "scheduled_at": "2026-09-19T20:30:00+10:00",
+        "dispatched_at": "2026-09-19T20:30:09.244667+10:00",
+        "lateness_seconds": 9.2,
         "kind": "on_time"
       },
-      "fire_claim": {
-        "at": "2026-09-17T15:26:10.523087+10:00",
-        "by": "localhost:35396:a0ed0874d73c42e3a2b8f0c49597424a"
+      "fire_claim": null,
+      "last_run_at": "2026-09-19T20:30:09.989542+10:00",
+      "last_status": "ok",
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled",
+      "last_error": null
+    },
+    {
+      "id": "skillspector-guard-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 */4 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skillspector_guard.py",
+      "no_agent": true,
+      "description": "Every 4h skill integrity scan (H-I1 reactive gate)",
+      "next_run_at": "2026-09-20T00:00:00+10:00",
+      "env": {
+        "HERMES_PROFILE": "fork"
+      },
+      "last_dispatch": {
+        "scheduled_at": "2026-09-19T20:00:00+10:00",
+        "dispatched_at": "2026-09-19T20:00:06.256629+10:00",
+        "lateness_seconds": 6.3,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-09-19T20:00:09.827982+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "fork-state-vacuum-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 3 * * 0"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/fork-state-vacuum.py",
+      "no_agent": true,
+      "description": "Weekly SQLite VACUUM on fork state.db",
+      "next_run_at": "2026-09-20T03:00:00+10:00",
+      "env": {
+        "HERMES_PROFILE": "fork"
       }
+    },
+    {
+      "id": "memory-ttl-purge-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 4 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-ttl-purge.py",
+      "no_agent": true,
+      "description": "Daily TTL purge of staged memories",
+      "next_run_at": "2026-09-20T04:00:00+10:00",
+      "env": {
+        "HERMES_PROFILE": "fork"
+      }
+    },
+    {
+      "id": "concept-lattice-rebuild-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 2 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/concept-lattice-index.py",
+      "no_agent": true,
+      "description": "Nightly concept lattice rebuild (skill router semantic fallback)",
+      "next_run_at": "2026-09-20T02:00:00+10:00",
+      "env": {
+        "HERMES_PROFILE": "fork"
+      }
+    },
+    {
+      "id": "omni-skill-scan-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 1 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/omni_skill_scan.py",
+      "no_agent": true,
+      "description": "Nightly skill scan and variance tracking",
+      "next_run_at": "2026-09-20T01:00:00+10:00",
+      "env": {
+        "HERMES_PROFILE": "fork"
+      }
+    },
+    {
+      "id": "spike-queue-actuator-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 10 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/spike-queue-actuator.py",
+      "no_agent": true,
+      "description": "Daily SPIKE queue actuator — dispatch research spikes as improvement proposals",
+      "env": {
+        "HERMES_PROFILE": "fork"
+      },
+      "display": "daily at 10:00",
+      "next_run_at": "2026-09-20T10:00:00+10:00"
+    },
+    {
+      "id": "cross-calibration-monitor-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 11 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cross-calibration-monitor.py",
+      "no_agent": true,
+      "description": "Daily cross-calibration drift monitor (DRIFT_ALARM + TREND_DIVERGENCE)",
+      "next_run_at": "2026-09-20T11:00:00+10:00",
+      "env": {
+        "HERMES_PROFILE": "fork"
+      }
+    },
+    {
+      "id": "monitor-suite-runner-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 */2 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/monitor-suite-runner.py",
+      "no_agent": true,
+      "description": "Every 2h monitor suite run — collects alarm JSON for alarm-aggregator",
+      "env": {
+        "HERMES_PROFILE": "fork"
+      },
+      "next_run_at": "2026-09-19T22:00:00+10:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-09-19T20:00:00+10:00",
+        "dispatched_at": "2026-09-19T20:00:06.256629+10:00",
+        "lateness_seconds": 6.3,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-09-19T20:00:12.276829+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "mcp-privilege-audit-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 3 * * 1"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/mcp-privilege-audit.py",
+      "no_agent": true,
+      "description": "Weekly MCP least-privilege audit (cs-mcp-overpriv / arXiv:2603.21641)",
+      "env": {
+        "HERMES_PROFILE": "fork"
+      },
+      "next_run_at": "2026-09-21T03:00:00+10:00"
+    },
+    {
+      "id": "gate-audit-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 6 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/gate_audit.py",
+      "no_agent": true,
+      "description": "Daily gate audit output capture",
+      "env": {
+        "HERMES_PROFILE": "fork"
+      },
+      "next_run_at": "2026-09-20T06:30:00+10:00"
+    },
+    {
+      "id": "hermes-gateway-prestart-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 4 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-gateway-prestart.py",
+      "no_agent": true,
+      "env": {
+        "HERMES_PROFILE": "fork"
+      },
+      "failure_streak": 0,
+      "description": "Pre-gateway: WAL checkpoint + retired-wal cleanup before state.db opens",
+      "next_run_at": "2026-09-20T04:00:00+10:00"
     }
   ],
-  "updated_at": "2026-09-17T15:26:10.523952+10:00"
+  "updated_at": "2026-09-19T20:38:10.078429+10:00"
 }
