@@ -365,7 +365,7 @@ def main() -> int:
         for finding in stale_refs:
             print(f'  - {finding}')
     print(f'- Audit note updated: {AUDIT_NOTE}')
-    return 0
+    return 1
 
 
 def run_memory_staleness() -> None:

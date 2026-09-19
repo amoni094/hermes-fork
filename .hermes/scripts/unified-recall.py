@@ -40,6 +40,7 @@ This script is callable standalone or imported as a module.
 """
 
 import argparse
+import fcntl
 import hashlib
 import json
 import math
@@ -58,6 +59,15 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 HINDSIGHT_BASE = os.environ.get("HINDSIGHT_BASE", "http://127.0.0.1:9177")
 HINDSIGHT_BANK = os.environ.get("HINDSIGHT_BANK", "hermes-default")
+
+import os as _os_env
+
+def _hermes_root() -> 'Path':
+    """Profile-aware Hermes root: HERMES_HOME env var or ~/.hermes fallback."""
+    _h = _os_env.environ.get('HERMES_HOME', '').strip()
+    return Path(_h) if _h else Path.home() / '.hermes'
+
+
 GRAPHITI_BASE = os.environ.get("GRAPHITI_BASE", "http://127.0.0.1:8765/mcp")
 GRAPHITI_GROUP_IDS = ["hermes", "hermes-reasoning"]
 RRF_K = 60
@@ -317,7 +327,48 @@ def _md5(text: str) -> str:
     return hashlib.md5(_normalize(text).encode()).hexdigest()
 
 
-FTRL_STATE_PATH = Path.home() / ".hermes" / "cache" / "recall-ftrl-state.json"
+FTRL_STATE_PATH = _hermes_root() / "cache" / "recall-ftrl-state.json"
+
+
+# --- UCB1 Bandit Source Weighting (Lattimore & Szepesvari, Ch 1) ---
+# Replaces fixed RRF k=60 equal weights with adaptive UCB1-weighted fusion.
+_BANDIT_STATE_PATH = Path('~/.hermes/cache/recall-bandit-state.json').expanduser()
+
+def _load_bandit_state():
+    try:
+        if _BANDIT_STATE_PATH.exists():
+            import json as _json
+            return _json.loads(_BANDIT_STATE_PATH.read_text())
+    except Exception:
+        pass
+    return {'hindsight': {'n': 0, 'reward': 0.0}, 'graphiti': {'n': 0, 'reward': 0.0}, 'l1': {'n': 0, 'reward': 0.0}}
+
+def _ucb1_weight(source, state, t):
+    try:
+        import math
+        s = state.get(source, {'n': 0, 'reward': 0.0})
+        if s['n'] == 0 or t == 0:
+            return 1.5  # explore with bonus
+        mu = s['reward'] / s['n']
+        return mu + math.sqrt(2 * math.log(max(t, 1)) / s['n'])
+    except Exception:
+        return 1.0
+
+def _update_bandit_state(source, reward):
+    try:
+        import json as _json
+        state = _load_bandit_state()
+        if source not in state:
+            state[source] = {'n': 0, 'reward': 0.0}
+        state[source]['n'] += 1
+        state[source]['reward'] += float(reward)
+        _BANDIT_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _bandit_tmp = _BANDIT_STATE_PATH.with_suffix(".tmp")
+        _bandit_tmp.write_text(_json.dumps(state, indent=2))
+        _bandit_tmp.replace(_BANDIT_STATE_PATH)
+    except Exception as _bandit_exc:
+        import sys as _sys_b
+        print(f"[unified-recall] bandit state write failed: {_bandit_exc!r}", file=_sys_b.stderr)
 
 
 def load_ftrl_weights(query_type):
@@ -344,7 +395,7 @@ def load_ftrl_weights(query_type):
 def log_recall_query(query, sources_used, query_type):
     """Append recall event for FTRL weight learning by nightly cron."""
     import time as _t
-    log_path = Path.home() / ".hermes" / "cache" / "recall-query-log.jsonl"
+    log_path = _hermes_root() / "cache" / "recall-query-log.jsonl"
     try:
         entry = {
             "ts": _t.time(),
@@ -353,10 +404,25 @@ def log_recall_query(query, sources_used, query_type):
             "query_len": len(query.split()),
         }
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        with log_path.open("a") as f:
-            f.write(json.dumps(entry) + "\n")
+        _log_lock = log_path.with_suffix(".lock")
+        with open(_log_lock, "w") as _lf:
+            fcntl.flock(_lf, fcntl.LOCK_EX)
+            with open(log_path, "a") as f:
+                f.write(json.dumps(entry) + "\n")
     except Exception:
         pass
+
+
+# H4 fix: import tool-auth-shim for EXTERNAL result auditing (module-level, once at startup)
+try:
+    import importlib.util as _ilu2
+    _ta_spec = _ilu2.spec_from_file_location('tool_auth_shim',
+                   str(Path('~/.hermes/scripts/tool-auth-shim.py').expanduser()))
+    assert _ta_spec is not None
+    _ta2 = _ilu2.module_from_spec(_ta_spec)
+    _ta_spec.loader.exec_module(_ta2)  # type: ignore[union-attr]
+except Exception:
+    _ta2 = None
 
 
 def fuse_results(
@@ -448,8 +514,16 @@ def fuse_results(
                 "rrf": round(rrf_contrib, 5),
             })
 
-    add_results(hindsight_results, hindsight_weight)
-    add_results(graphiti_results, graphiti_weight)
+    # UCB1 bandit source weighting (Lattimore & Szepesvari, Ch 1):
+    # Multiply existing specificity/FTRL weights by UCB1 confidence index.
+    # _bandit_state tracks {source: {n, reward}} across queries.
+    # Feedback loop: _update_bandit_state() called after fuse_results() (H1 fix, ~line 600).
+    _bandit_state = _load_bandit_state()
+    _t_bandit = sum(s.get('n', 0) for s in _bandit_state.values())
+    _ucb_h = _ucb1_weight('hindsight', _bandit_state, _t_bandit)
+    _ucb_g = _ucb1_weight('graphiti', _bandit_state, _t_bandit)
+    add_results(hindsight_results, (hindsight_weight or 1.0) * _ucb_h)
+    add_results(graphiti_results, (graphiti_weight or 1.0) * _ucb_g)
 
     # Normalize to [0, 1] range
     if scores:
@@ -483,6 +557,20 @@ def fuse_results(
     #   external: p=0.70 — ~30% adversarial mass; trust-region radius = 0.70/0.30 = 2.3 — weight capped at 0.70
     # Robust Trust clipping (arXiv:2602.09490): weight = p/(1+(1-p)) ≈ p for small (1-p)
     _TRUST_WEIGHTS = {"internal": 1.0, "cron": 0.85, "external": 0.70}
+    # H3 fix: try to pull live Beta-posterior trust weights from memory-provenance.py
+    try:
+        import importlib.util as _ilu
+        _mp_spec = _ilu.spec_from_file_location('memory_provenance',
+                       str(Path('~/.hermes/scripts/memory-provenance.py').expanduser()))
+        assert _mp_spec is not None
+        _mp = _ilu.module_from_spec(_mp_spec)
+        _mp_spec.loader.exec_module(_mp)  # type: ignore[union-attr]
+        for _st in ('internal', 'cron', 'external'):
+            _TRUST_WEIGHTS[_st] = _mp.get_trust_weight(_st)
+    except Exception as _mp_exc:
+        import sys as _sys_mp
+        print(f"[unified-recall] memory-provenance load failed: {_mp_exc!r} — using static trust weights", file=_sys_mp.stderr)
+    # H4 fix: _ta2 is now imported at module level (see above fuse_results definition)
 
     # EnrichedHom scoring (category theory Tier 1b — arXiv:1102.1889 / memory-monad.py)
     # Enrich over [0,1] × [0,∞]: weight = rrf_score × exp(-decay_rate × age_days)
@@ -508,6 +596,12 @@ def fuse_results(
         _source_type = _meta.get("source_type") if isinstance(_meta, dict) else None
         _trust_weight = _TRUST_WEIGHTS.get(_source_type or "", 1.0)
         item["trust_weight"] = _trust_weight
+        # H4: run tool-auth-shim audit on EXTERNAL results (shadow, never raises)
+        if _source_type == "external" and _ta2 and hasattr(_ta2, "audit_tool_result"):
+            try:
+                _ta2.audit_tool_result(_source_type or "unknown", "EXTERNAL", item.get("text", "")[:2000])
+            except Exception:
+                pass
         # Trust-region clip: weight bounded by p-alignment probability (arXiv:2602.09490)
         item["enriched_weight"] = round(item["rrf_score"] * _decay * _trust_weight, 4)
         item["enriched_distance"] = round(1.0 - item["enriched_weight"], 4)
@@ -515,6 +609,33 @@ def fuse_results(
 
     _src_used = list({s for k in list(scores.keys())[:top] for s in sources.get(k, [])})
     log_recall_query(query, _src_used, _q_type)
+    # H1 fix: UCB1 feedback — update bandit state so weights actually learn
+    try:
+        _bandit_state_w = _load_bandit_state()
+        for _item in fused[:top]:
+            for _src in _item.get("sources", []):
+                # reward = enriched_weight (quality proxy); clipped to [0,1]
+                _reward = min(1.0, max(0.0, _item.get("enriched_weight", 0.0)))
+                _src_key = "hindsight" if "hindsight" in _src else (
+                            "graphiti" if "graphiti" in _src else "l1")
+                _update_bandit_state(_src_key, _reward)
+    except Exception:
+        pass  # shadow: never block recall on bandit update failure
+    # H10 fix: update Beta-Binomial trust posterior with recall outcomes (closes bottleneck #7 write path)
+    try:
+        _mp_ref = locals().get('_mp') or globals().get('_mp')
+        if _mp_ref is None:
+            import sys as _sys
+            print("[unified-recall] trust posterior skipped: memory-provenance import unavailable", file=_sys.stderr)
+        elif _mp_ref and hasattr(_mp_ref, 'update_trust_posterior'):
+            for _item in fused[:top]:
+                _i_meta = _item.get("metadata") or {}
+                _src_type = _i_meta.get("source_type") if isinstance(_i_meta, dict) else None
+                if _src_type in ("internal", "cron", "external"):
+                    _tp_reward = min(1.0, max(0.0, _item.get("enriched_weight", 0.0)))
+                    _mp_ref.update_trust_posterior(_src_type, _tp_reward)
+    except Exception:
+        pass  # shadow: never block recall on trust posterior update
 
     return sorted(fused, key=lambda x: x.get("enriched_weight", x.get("rrf_score", 0)), reverse=True)[:top]
 
@@ -644,6 +765,14 @@ def recall(
 
     fused = fuse_results(h_results + pending, g_results, query, top=top, min_score=min_score)
 
+    # F-57 invalidation guard: remove any item whose memory_status == 'invalidated'.
+    # Fail-open: wrapped in try/except so recall is never blocked by this filter.
+    try:
+        fused = [item for item in fused if item.get("memory_status") != "invalidated"]
+    except Exception as _inv_exc:
+        import sys as _sys_inv
+        print(f"[unified-recall] invalidation filter skipped: {_inv_exc}", file=_sys_inv.stderr)
+
     # ContextRAG lattice expansion (arXiv:2605.19735): activate concept bridge nodes
     # query_activate() returns [] when cache absent — safe to call unconditionally
     try:
@@ -690,6 +819,41 @@ def recall(
         item["tier"] = tier
 
     record_query_access(fused)
+
+    # ── Skill suggestions (SkillRouter, arXiv:2603.22455) ──────────────────────
+    # Activate when query looks like a skill/procedure lookup. Fail-open: any
+    # error (index not yet built, import failure) is silently suppressed so
+    # recall is never blocked by the skill routing sidecar.
+    _SKILL_TRIGGERS = ("how to", "skill", "procedure", "workflow", "steps to")
+    _q_lower_sr = query.lower()
+    _is_skill_query = (
+        any(tok in _q_lower_sr for tok in _SKILL_TRIGGERS)
+    )
+    if _is_skill_query:
+        try:
+            import importlib.util as _ilu_sr, sys as _sys_sr
+            _sri_key = "skill-router-index"
+            if _sri_key not in _sys_sr.modules:
+                _sri_path = str(Path(__file__).parent / "skill-router-index.py")
+                _sri_spec = _ilu_sr.spec_from_file_location(_sri_key, _sri_path)
+                if _sri_spec is None or _sri_spec.loader is None:
+                    raise ImportError("skill-router-index spec unavailable")
+                _sri_mod = _ilu_sr.module_from_spec(_sri_spec)
+                _sys_sr.modules[_sri_key] = _sri_mod
+                _sri_spec.loader.exec_module(_sri_mod)  # type: ignore[union-attr]
+            else:
+                _sri_mod = _sys_sr.modules[_sri_key]
+            _skill_hits = _sri_mod.route(query, top=5)
+            if _skill_hits:
+                # Attach as a list on each top-ranked result item (only on [0])
+                # so callers can read fused[0]["skill_suggestions"] without iterating.
+                # Also stored on a sentinel item so JSON callers find it easily.
+                for _item in fused:
+                    _item["skill_suggestions"] = _skill_hits
+                    break  # only annotate the first result
+        except Exception:
+            pass  # index not yet built or import failed — never block recall
+
     return fused
 
 
@@ -699,7 +863,7 @@ def record_query_access(fused: list[dict]) -> None:
     Query demand is the ActiveFact promotion signal. Fail-open: any DB error
     is logged and ignored so recall never fails because of sidecar writes.
     """
-    db = Path.home() / ".hermes" / "memory-facts" / "lifecycle.db"
+    db = _hermes_root() / "memory-facts" / "lifecycle.db"
     if not db.exists() or not fused:
         return
     now = datetime.now(timezone.utc).isoformat()
@@ -717,7 +881,8 @@ def record_query_access(fused: list[dict]) -> None:
                        SET access_count = COALESCE(access_count, 0) + 1,
                            last_accessed = ?,
                            updated_at = ?
-                       WHERE fact_text LIKE ?""",
+                       WHERE fact_text LIKE ?
+                         AND COALESCE(memory_status, 'active') != 'invalidated'""",
                     (now, now, key + "%"),
                 )
                 if cur.rowcount == 0:
@@ -836,7 +1001,7 @@ def search_pending_activefacts(query: str, limit: int = 5) -> list[dict]:
 
     Token overlap only (no embeddings). Fail-open.
     """
-    db = Path.home() / ".hermes" / "memory-facts" / "lifecycle.db"
+    db = _hermes_root() / "memory-facts" / "lifecycle.db"
     if not db.exists() or not (query or "").strip():
         return []
     terms = sorted({t for t in re.findall(r"[a-zA-Z0-9_]{4,}", query.lower())}, key=len, reverse=True)[:3]

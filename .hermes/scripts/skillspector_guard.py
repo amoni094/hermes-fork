@@ -12,7 +12,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SKILLS_ROOT = Path(os.environ.get("HERMES_SKILLS_ROOT", os.path.expanduser("~/.hermes/skills")))
+_hermes_profile = os.environ.get("HERMES_PROFILE", "")
+_hermes_home = Path(os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes")))
+_hermes_root = (_hermes_home / "profiles" / _hermes_profile) if _hermes_profile and "profiles" not in str(_hermes_home) else _hermes_home
+SKILLS_ROOT = Path(os.environ.get("HERMES_SKILLS_ROOT", str(_hermes_root / "skills")))
 SECURITY_ROOT = Path(os.environ.get("HERMES_SKILLS_SECURITY_ROOT", os.path.expanduser("~/.hermes/skills-security")))
 REPORTS_ROOT = SECURITY_ROOT / "reports"
 STATE_PATH = SECURITY_ROOT / "state.json"
@@ -130,7 +133,9 @@ def load_state() -> dict[str, Any]:
 
 def save_state(state: dict[str, Any]) -> None:
     SECURITY_ROOT.mkdir(parents=True, exist_ok=True)
-    STATE_PATH.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+    _tmp = STATE_PATH.with_suffix(".tmp")
+    _tmp.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+    _tmp.rename(STATE_PATH)
 
 
 def load_allowlist() -> dict[str, Any]:
@@ -147,7 +152,9 @@ def load_allowlist() -> dict[str, Any]:
 
 def save_allowlist(allowlist: dict[str, Any]) -> None:
     allowlist["updated_at"] = now_iso()
-    ALLOWLIST_PATH.write_text(json.dumps(allowlist, indent=2, sort_keys=True) + "\n")
+    _tmp = ALLOWLIST_PATH.with_suffix(".tmp")
+    _tmp.write_text(json.dumps(allowlist, indent=2, sort_keys=True) + "\n")
+    _tmp.rename(ALLOWLIST_PATH)
 
 
 def load_pending() -> dict[str, Any]:
@@ -160,7 +167,9 @@ def load_pending() -> dict[str, Any]:
 
 def save_pending(pending: dict[str, Any]) -> None:
     pending["updated_at"] = now_iso()
-    PENDING_PATH.write_text(json.dumps(pending, indent=2, sort_keys=True) + "\n")
+    _tmp = PENDING_PATH.with_suffix(".tmp")
+    _tmp.write_text(json.dumps(pending, indent=2, sort_keys=True) + "\n")
+    _tmp.rename(PENDING_PATH)
 
 
 def is_allowlisted(result: SkillResult, allowlist: dict[str, Any]) -> bool:
@@ -486,7 +495,9 @@ def main() -> int:
 
     summary = summarize(results, args.threshold)
     summary_path = SECURITY_ROOT / "last-summary.json"
-    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    _summary_tmp = summary_path.with_suffix(".tmp")
+    _summary_tmp.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    _summary_tmp.rename(summary_path)
 
     lines = [
         f"skills={summary['skills']} bundled={summary['bundled']} non_bundled={summary['non_bundled']}",
@@ -538,7 +549,61 @@ def main() -> int:
                 lines = []
     if lines:
         print("\n".join(lines))
-    return 0
+
+    # Fix C: consume skill-integrity.json and skill-merkle.json
+    _base_c = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+    _profile_c = os.environ.get("HERMES_PROFILE", "")
+    _cache_root = (
+        (_base_c / "profiles" / _profile_c)
+        if _profile_c and "profiles" not in str(_base_c)
+        else _base_c
+    ) / "cache"
+    _drift_count = 0
+    try:
+        _integrity_path = _cache_root / "skill-integrity.json"
+        if _integrity_path.exists():
+            _integrity_data = json.loads(_integrity_path.read_text())
+            # Support both a list of entries or a dict keyed by skill
+            if isinstance(_integrity_data, list):
+                _integrity_items = _integrity_data
+            elif isinstance(_integrity_data, dict):
+                _integrity_items = [
+                    dict(skill=k, **v) if isinstance(v, dict) else {"skill": k, "status": v}
+                    for k, v in _integrity_data.items()
+                ]
+            else:
+                _integrity_items = []
+            for _item in _integrity_items:
+                if _item.get("status", "ok") != "ok":
+                    _skill = _item.get("skill", _item.get("name", "unknown"))
+                    _reason = _item.get("reason", _item.get("status", "unknown"))
+                    print(f"INTEGRITY-FAIL: {_skill} ({_reason})")
+                    _drift_count += 1
+    except Exception:
+        pass
+
+    try:
+        _merkle_path = _cache_root / "skill-merkle.json"
+        if _merkle_path.exists():
+            _merkle_data = json.loads(_merkle_path.read_text())
+            if isinstance(_merkle_data, list):
+                _merkle_items = _merkle_data
+            elif isinstance(_merkle_data, dict):
+                _merkle_items = [
+                    dict(skill=k, **v) if isinstance(v, dict) else {"skill": k}
+                    for k, v in _merkle_data.items()
+                ]
+            else:
+                _merkle_items = []
+            for _item in _merkle_items:
+                if _item.get("drift") or _item.get("changed"):
+                    _skill = _item.get("skill", _item.get("name", "unknown"))
+                    print(f"MERKLE-DRIFT: {_skill}")
+                    _drift_count += 1
+    except Exception:
+        pass
+
+    return 1 if _drift_count > 0 else 0
 
 
 if __name__ == "__main__":
