@@ -27,10 +27,13 @@ _hermes_base_sri = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".h
 _hermes_profile_sri = _os_sri.environ.get("HERMES_PROFILE", "")
 _hermes_root_sri = (_hermes_base_sri / "profiles" / _hermes_profile_sri) if _hermes_profile_sri and "profiles" not in str(_hermes_base_sri) else _hermes_base_sri
 SKILLS_ROOT = _hermes_root_sri / "skills"
-# Also scan the base Hermes skills directory (main install, not profile-specific).
-# Fork profile skills take priority — same-named skill from fork overrides main.
-# This ensures the semantic index covers the full skill corpus, not just fork-local skills.
-_HERMES_MAIN_SKILLS = Path(__file__).resolve().parent / "skills"  # ~/.hermes/scripts/../skills = ~/.hermes/skills
+# Global (non-profile) skill library. Fork-local SKILLS_ROOT is scanned first so
+# same-named skills keep fork priority. Do NOT derive this from __file__ — when
+# this script lives in ~/.hermes/scripts or profiles/fork/scripts that would
+# resolve to a non-existent scripts/skills directory.
+_HERMES_MAIN_SKILLS = _hermes_base_sri / "skills"
+if "profiles" in str(_hermes_base_sri):
+    _HERMES_MAIN_SKILLS = Path.home() / ".hermes" / "skills"
 
 INDEX_PATH = _hermes_root_sri / "cache" / "skill-router-index.json"
 OVERLAP_THRESHOLD = 0.65
@@ -147,9 +150,14 @@ def beta_posterior_mean(skill_name, state):
     on noise. Return neutral 0.5 so routing falls back to pure TF-IDF cosine.
     """
     entry = state.get(skill_name, {})
-    alpha = entry.get("alpha", 1.0)
-    beta_val = entry.get("beta", 1.0)
-    if alpha + beta_val < _MIN_SAMPLES:
+    try:
+        alpha = float(entry.get("alpha", 1.0) or 1.0)
+        beta_val = float(entry.get("beta", 1.0) or 1.0)
+    except (TypeError, ValueError):
+        return 0.5
+    # Uniform prior is Beta(1,1); Chernoff n is observation count, not α+β.
+    n_obs = alpha + beta_val - 2.0
+    if n_obs < _MIN_SAMPLES or (alpha + beta_val) <= 0:
         return 0.5  # insufficient evidence — neutral weight
     return alpha / (alpha + beta_val)
 
@@ -473,10 +481,19 @@ def scan_skills() -> list[dict]:
     import os as _os_scan
     seen_names: dict[str, dict] = {}
 
-    for skills_dir in [SKILLS_ROOT]:  # single-root scan; symlinks followed
+    scan_roots = [SKILLS_ROOT]
+    try:
+        if _HERMES_MAIN_SKILLS.is_dir() and _HERMES_MAIN_SKILLS.resolve() != SKILLS_ROOT.resolve():
+            scan_roots.append(_HERMES_MAIN_SKILLS)
+    except OSError:
+        if _HERMES_MAIN_SKILLS.is_dir() and str(_HERMES_MAIN_SKILLS) != str(SKILLS_ROOT):
+            scan_roots.append(_HERMES_MAIN_SKILLS)
+
+    for skills_dir in scan_roots:  # fork first, then main; first-seen wins
         if not skills_dir.is_dir():
             continue
-        for root, _dirs, files in _os_scan.walk(str(skills_dir), followlinks=True):
+        for root, dirs, files in _os_scan.walk(str(skills_dir), followlinks=True):
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
             if "SKILL.md" not in files:
                 continue
             skill_md_path = Path(root) / "SKILL.md"
@@ -507,13 +524,16 @@ def scan_skills() -> list[dict]:
                 # warn and keep first-seen (fork skills take priority via walk order).
                 if name in seen_names:
                     existing_path = seen_names[name].get("skill_path", "unknown")
-                    if existing_path != str(skill_md_path):
-                        import sys as _sys_r2
+                    try:
+                        same_file = Path(existing_path).resolve() == skill_md_path.resolve()
+                    except OSError:
+                        same_file = existing_path == str(skill_md_path)
+                    if not same_file:
                         print(
                             f"[skill-router WARN] name collision: '{name}' in both "
                             f"{existing_path!r} and {str(skill_md_path)!r} — "
                             f"keeping first-seen (fork priority).",
-                            file=_sys_r2.stderr,
+                            file=sys.stderr,
                         )
                     # Do NOT overwrite — first-seen wins
                 else:
@@ -559,8 +579,9 @@ def cmd_build(incremental: bool = False):
                         unchanged_entries.append(existing_skills[s["name"]])
                 if changed:
                     print(f"[incremental] {len(changed)} changed, {len(unchanged_entries)} unchanged")
-                    changed, _ = build_tfidf(changed)
-                    # Merge: changed entries replace existing
+                    # Do NOT build_tfidf() on the changed subset — IDF would be
+                    # computed on a partial corpus. Tokens are stored; TF-IDF is
+                    # rebuilt from the full token set at query time.
                     merged = {e["name"]: e for e in unchanged_entries}
                     for s in changed:
                         merged[s["name"]] = s
@@ -1084,6 +1105,8 @@ def main():
                        help="SIP-4: Compile trigger descriptions as regex patterns; report backtracking risks")
     parser.add_argument("--json", action="store_true", dest="as_json",
                         help="With --query: print results as JSON array instead of table")
+    parser.add_argument("--incremental", action="store_true",
+                        help="With --build: re-index only skills whose SKILL.md mtime is newer than the index")
     args = parser.parse_args()
 
     # Cron compatibility: scheduler doesn't pass CLI args to scripts (scheduler_script.py §326)
@@ -1094,7 +1117,7 @@ def main():
             args.build = True
 
     if args.build:
-        cmd_build()
+        cmd_build(incremental=bool(args.incremental))
     elif args.query:
         if args.as_json:
             print(json.dumps(route(args.query), indent=2))

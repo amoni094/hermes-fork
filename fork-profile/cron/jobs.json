@@ -138,18 +138,18 @@
       "script": "pre-compact-annotate.py",
       "no_agent": true,
       "description": "Every 15m R-D compaction advisory",
-      "next_run_at": "2026-09-22T16:00:00+10:00",
+      "next_run_at": "2026-09-22T16:15:00+10:00",
       "env": {
         "HERMES_PROFILE": "fork"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-09-22T15:30:00+10:00",
-        "dispatched_at": "2026-09-22T15:30:20.057803+10:00",
-        "lateness_seconds": 20.1,
+        "scheduled_at": "2026-09-22T16:00:00+10:00",
+        "dispatched_at": "2026-09-22T16:00:23.959908+10:00",
+        "lateness_seconds": 24.0,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-09-22T15:30:20.954647+10:00",
+      "last_run_at": "2026-09-22T16:00:25.371455+10:00",
       "last_status": "ok",
       "failure_streak": 0,
       "last_delivery_error": null,
@@ -170,18 +170,18 @@
       "script": "skillspector_guard.py",
       "no_agent": true,
       "description": "Every 4h skill integrity scan (H-I1 reactive gate)",
-      "next_run_at": "2026-09-22T16:00:00+10:00",
+      "next_run_at": "2026-09-22T20:00:00+10:00",
       "env": {
         "HERMES_PROFILE": "fork"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-09-21T20:00:00+10:00",
-        "dispatched_at": "2026-09-22T13:39:17.009005+10:00",
-        "lateness_seconds": 63557.0,
-        "kind": "catch_up"
+        "scheduled_at": "2026-09-22T16:00:00+10:00",
+        "dispatched_at": "2026-09-22T16:00:23.959908+10:00",
+        "lateness_seconds": 24.0,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-09-22T13:39:19.840567+10:00",
+      "last_run_at": "2026-09-22T16:00:32.883295+10:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -398,15 +398,15 @@
       "env": {
         "HERMES_PROFILE": "fork"
       },
-      "next_run_at": "2026-09-22T16:00:00+10:00",
+      "next_run_at": "2026-09-22T18:00:00+10:00",
       "last_dispatch": {
-        "scheduled_at": "2026-09-22T14:00:00+10:00",
-        "dispatched_at": "2026-09-22T14:00:21.270958+10:00",
-        "lateness_seconds": 21.3,
+        "scheduled_at": "2026-09-22T16:00:00+10:00",
+        "dispatched_at": "2026-09-22T16:00:23.959908+10:00",
+        "lateness_seconds": 24.0,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-09-22T14:00:22.181829+10:00",
+      "last_run_at": "2026-09-22T16:00:25.172079+10:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -2109,5 +2109,5 @@
       "next_run_at": "2026-09-27T03:00:00+10:00"
     }
   ],
-  "updated_at": "2026-09-22T15:59:23.842673+10:00"
+  "updated_at": "2026-09-22T16:00:32.908615+10:00"
 }

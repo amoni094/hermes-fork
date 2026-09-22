@@ -43,7 +43,7 @@ MAX_ADJUST = 0.10   # C1: gain cap reduced to ±10%/run (Strogatz §8.2: limit c
                     # Previously 0.30 — overshooting was possible at high miss-rate error
 MIN_TTL_DAYS = 3    # hard floor
 MAX_TTL_DAYS = 180  # hard ceiling
-GAIN_HISTORY_PATH = None  # set dynamically below after _hermes_root is available
+GAIN_HISTORY_PATH = _hermes_root / "cache" / "ttl-gain-history.jsonl"
 
 LOOKBACK_HOURS = 48  # only consider misses in last 48h for miss rate computation
 
@@ -141,12 +141,20 @@ def main():
     state, change_log = adjust_ttls(state, miss_rates)
     save_ttl_state(state)
 
-    print(json.dumps({
+    payload = {
         'ts': time.time(),
         'adjusted_ttls': state,
         'miss_rates': miss_rates,
         'changes': change_log,
-    }, indent=2))
+    }
+    try:
+        GAIN_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(GAIN_HISTORY_PATH, "a") as fh:
+            fh.write(json.dumps(payload) + "\n")
+    except Exception:
+        pass
+
+    print(json.dumps(payload, indent=2))
 
 
 if __name__ == '__main__':

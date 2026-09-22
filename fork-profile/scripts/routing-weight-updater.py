@@ -16,6 +16,7 @@ Mirrors the pattern in calibration-threshold-updater.py (Shalev-Shwartz Ch 11).
 Source: Memory in LLM Era v3 (arXiv:2604.01707) — bottleneck #2 closure.
 """
 import json
+import math
 import time
 from pathlib import Path
 from collections import defaultdict
@@ -190,13 +191,23 @@ def main():
         if n >= MIN_SAMPLES:
             w = float(existing_weights.get(route, {}).get('weight', 1.0)
                       if isinstance(existing_weights.get(route), dict)
-                      else existing_weights.get(route, 1.0))
-            ftrl_weighted_success += w * stats.get('successes', 0)
+                      else existing_weights.get(route, 1.0) or 0.0)
+            if not math.isfinite(w) or w < 0:
+                w = 1.0
+            succ = stats.get('successes', 0) or 0
+            ftrl_weighted_success += w * succ
             ftrl_weight_sum += w * n
 
     ftrl_success_rate = (ftrl_weighted_success / ftrl_weight_sum) if ftrl_weight_sum > 0 else uniform_success_rate
+    if not math.isfinite(uniform_success_rate):
+        uniform_success_rate = 0.5
+    if not math.isfinite(ftrl_success_rate):
+        ftrl_success_rate = uniform_success_rate
     # regret > 0: FTRL worse than uniform (alarm); regret < 0: FTRL better (good)
+    # total_n==0 → 0 (no samples). Guard NaN/Inf from hand-edited weights.
     regret_this_run = (uniform_success_rate - ftrl_success_rate) * total_n
+    if not math.isfinite(regret_this_run):
+        regret_this_run = 0.0
     regret_entry = {
         'ts': now,
         'total_n': total_n,

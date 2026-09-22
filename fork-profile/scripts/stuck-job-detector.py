@@ -94,6 +94,9 @@ def _append_alarms(alarms: list[dict]) -> None:
 def run() -> None:
     jobs_by_id = _load_jobs()
     rows = _running_rows()
+    if rows is None:
+        print("No executions.db (or unreadable) — skip")
+        return
     if not rows:
         print("No stuck jobs")
         return

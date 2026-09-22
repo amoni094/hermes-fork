@@ -2,7 +2,7 @@
 """skill-beta-feedback.py -- Skill beta-bandit feedback writer.
 
 Reads recent session logs, extracts skill_view invocations,
-and records success signals to skill-router-index beta posteriors.
+and records success/failure signals to skill-router-index beta posteriors.
 
 Theory: Beta(alpha, beta) bandit (Lattimore & Szepesvari Ch 3).
 Source: arXiv:2604.01707 -- skill routing feedback loop closure.
@@ -15,7 +15,9 @@ This approximates P(success|do(invoke_skill)) not P(success|invoke_skill).
 from __future__ import annotations
 
 import json, os, subprocess, sys, time
+from collections import Counter
 from pathlib import Path
+from typing import Optional
 
 _hermes_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _hermes_profile = os.environ.get("HERMES_PROFILE", "")
@@ -40,6 +42,63 @@ def _recent_sessions(since_ts: float) -> list[Path]:
     )
 
 
+def _add_skill_name(hits: set, raw) -> None:
+    if isinstance(raw, str):
+        name = raw.strip().strip("'\"")
+        if name:
+            hits.add(name)
+
+
+def _hits_from_tool_calls(tool_calls, hits: set) -> None:
+    if not isinstance(tool_calls, list):
+        return
+    for call in tool_calls:
+        if not isinstance(call, dict):
+            continue
+        fn = call.get("function")
+        if not isinstance(fn, dict):
+            fn = {}
+        name = fn.get("name") or call.get("name") or call.get("tool_name")
+        if name != "skill_view":
+            continue
+        args = fn.get("arguments")
+        if args is None:
+            args = call.get("arguments", call.get("input"))
+        parsed = {}
+        if isinstance(args, dict):
+            parsed = args
+        elif isinstance(args, str) and args.strip():
+            try:
+                loaded = json.loads(args)
+            except json.JSONDecodeError:
+                loaded = {}
+            if isinstance(loaded, dict):
+                parsed = loaded
+        _add_skill_name(hits, parsed.get("name"))
+
+
+def _hits_from_content(content, hits: set) -> None:
+    if isinstance(content, list):
+        content = " ".join(
+            c.get("text", "") for c in content if isinstance(c, dict)
+        )
+    if not isinstance(content, str) or "skill_view" not in content:
+        return
+    idx = 0
+    needle = "skill_view(name="
+    while True:
+        pos = content.find(needle, idx)
+        if pos < 0:
+            break
+        start = pos + len(needle)
+        if start < len(content) and content[start] in ("'", '"'):
+            start += 1
+        end = content.find(")", start)
+        if end > start:
+            _add_skill_name(hits, content[start:end])
+        idx = max(start, end + 1)
+
+
 def _extract_skill_hits(session_path: Path) -> set:
     hits: set = set()
     try:
@@ -50,36 +109,29 @@ def _extract_skill_hits(session_path: Path) -> set:
                 msg = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            content = msg.get("content", "") or ""
-            if isinstance(content, list):
-                content = " ".join(c.get("text", "") for c in content if isinstance(c, dict))
-            # Extract skill names from skill_view(name=...) calls
-            idx = 0
-            while True:
-                pos = content.find("skill_view(name=", idx)
-                if pos < 0:
-                    break
-                start = pos + len("skill_view(name=")
-                if start < len(content) and content[start] in (chr(39), chr(34)):
-                    start += 1
-                end = content.find(")", start)
-                if end > start:
-                    skill = content[start:end].strip(chr(39) + chr(34))
-                    if skill:
-                        hits.add(skill)
-                idx = max(start, end + 1)
+            if not isinstance(msg, dict):
+                continue
+            _hits_from_tool_calls(msg.get("tool_calls"), hits)
+            if msg.get("tool_name") == "skill_view" or msg.get("name") == "skill_view":
+                args = msg.get("arguments") or msg.get("input") or {}
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except json.JSONDecodeError:
+                        args = {}
+                if isinstance(args, dict):
+                    _add_skill_name(hits, args.get("name"))
+            _hits_from_content(msg.get("content", ""), hits)
     except Exception:
         pass
     return hits
 
 
-def _session_ended_successfully(session_path: Path) -> bool:
-    """B1: Return True if session's last substantive message is from the assistant.
+def _session_ended_successfully(session_path: Path) -> Optional[bool]:
+    """B1: True if last user/assistant role is assistant, False if user, None if unknown.
 
-    Pearl, Causality §3: we want P(success|do(invoke_skill)), not the
-    confounded P(success|skill_invoked). A session ending on an assistant
-    turn is the observable proxy for 'the session reached completion'.
-    Sessions ending on a user turn (last msg role='user') are aborted/unanswered.
+    Tool-only transcripts (no user/assistant roles) must not be scored as failures.
+    Unreadable files are unknown (skip), not fail-open success.
     """
     last_role = None
     try:
@@ -90,12 +142,18 @@ def _session_ended_successfully(session_path: Path) -> bool:
                 msg = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            if not isinstance(msg, dict):
+                continue
             role = msg.get("role", "")
             if role in ("assistant", "user"):
                 last_role = role
     except Exception:
-        return True  # fail-open: assume success if unreadable
-    return last_role == "assistant"
+        return None
+    if last_role == "assistant":
+        return True
+    if last_role == "user":
+        return False
+    return None
 
 
 def main() -> None:
@@ -105,29 +163,44 @@ def main() -> None:
         print(f"[skill-beta-feedback] No recent sessions in last {LOOKBACK_HOURS}h")
         return
 
-    # B1: per-session causal outcome (Pearl §3): credit skill only if session succeeded
-    success_hits: set = set()
-    failure_hits: set = set()
+    success_counts: Counter = Counter()
+    failure_counts: Counter = Counter()
+    skipped = 0
     for sf in sessions:
         hits = _extract_skill_hits(sf)
         if not hits:
             continue
-        if _session_ended_successfully(sf):
-            success_hits.update(hits)
+        ended = _session_ended_successfully(sf)
+        if ended is True:
+            success_counts.update(hits)
+        elif ended is False:
+            failure_counts.update(hits)
         else:
-            # session aborted without assistant reply → penalise skills invoked
-            failure_hits.update(hits)
-    # Skills in both sets (invoked in multiple sessions): net into success if >50% success
-    net_success = success_hits - failure_hits
-    net_failure = failure_hits - success_hits
+            skipped += 1
 
-    all_hits = success_hits | failure_hits
-    if not all_hits:
+    all_skills = set(success_counts) | set(failure_counts)
+    if not all_skills:
         print("[skill-beta-feedback] No skill invocations found in recent sessions")
         return
 
-    print(f"[skill-beta-feedback] {len(net_success)} success / {len(net_failure)} failure signals")
-    for skill_name in sorted(net_success):
+    net_success = []
+    net_failure = []
+    ties = 0
+    for skill_name in sorted(all_skills):
+        s = success_counts[skill_name]
+        f = failure_counts[skill_name]
+        if s > f:
+            net_success.append(skill_name)
+        elif f > s:
+            net_failure.append(skill_name)
+        else:
+            ties += 1
+
+    print(
+        f"[skill-beta-feedback] {len(net_success)} success / {len(net_failure)} failure"
+        f" / {ties} tie / {skipped} unknown-end sessions"
+    )
+    for skill_name in net_success:
         r = subprocess.run(
             [_PYTHON, str(SKILL_ROUTER), "--feedback", skill_name + ":success"],
             capture_output=True, text=True, timeout=10,
@@ -136,7 +209,7 @@ def main() -> None:
             print(f"  OK+: {skill_name}")
         else:
             print(f"  ERR: {skill_name} -> {r.stderr.strip()[:60]}", file=sys.stderr)
-    for skill_name in sorted(net_failure):
+    for skill_name in net_failure:
         r = subprocess.run(
             [_PYTHON, str(SKILL_ROUTER), "--feedback", skill_name + ":failure"],
             capture_output=True, text=True, timeout=10,
