@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # ── Profile-aware root ────────────────────────────────────────────────────────
-_base = Path(os.environ.get("HERMES_HOME", str(Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))))))
+_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _profile = os.environ.get("HERMES_PROFILE", "")
 _root = (
     (_base / "profiles" / _profile)
@@ -137,6 +137,8 @@ def aggregate() -> dict:
 
     # Fix B: also surface gate-audit.json findings
     active_alarms.extend(_gate_audit_alarms(CACHE_DIR, now_epoch))
+    # M6: surface callgraph-audit risk paths and HERMES_HOME gaps
+    active_alarms.extend(_callgraph_audit_alarms(CACHE_DIR))
 
     return {
         "active_alarms": active_alarms,
@@ -178,6 +180,37 @@ def _gate_audit_alarms(cache_dir: Path, now_epoch: float) -> list[dict]:
                 "severity": "MEDIUM",
                 "alarm": True,
                 "msg": "gate-audit: no gate records found",
+            })
+    except Exception:
+        pass
+    return entries
+
+
+def _callgraph_audit_alarms(cache_dir: Path) -> list[dict]:
+    """M6: surface callgraph-audit-report.json risk_paths as alarms."""
+    report_path = cache_dir / "callgraph-audit-report.json"
+    entries: list[dict] = []
+    try:
+        if not report_path.exists():
+            return entries
+        data = json.loads(report_path.read_text())
+        risk_paths = data.get("risk_paths", [])
+        if risk_paths:
+            entries.append({
+                "source": "callgraph_audit",
+                "severity": "MEDIUM",
+                "alarm": True,
+                "msg": f"callgraph-audit: {len(risk_paths)} unguarded error-propagator call chain(s)",
+                "detail": risk_paths[:5],
+            })
+        unvalidated = data.get("hermes_home_unvalidated", [])
+        if unvalidated:
+            entries.append({
+                "source": "callgraph_audit",
+                "severity": "LOW",
+                "alarm": True,
+                "msg": f"callgraph-audit: {len(unvalidated)} script(s) missing HERMES_HOME validation",
+                "detail": unvalidated[:10],
             })
     except Exception:
         pass

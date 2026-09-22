@@ -589,7 +589,10 @@ def main() -> int:
     propagate_labels(infos)
     report = build_report(infos)
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_PATH.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    # Atomic write: write to .tmp then rename (M5 non-atomic fix; Lynch §10 atomicity)
+    _tmp = REPORT_PATH.with_suffix(".tmp")
+    _tmp.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    _tmp.replace(REPORT_PATH)
     print_summary(report, len(infos_list))
     return 0
 
