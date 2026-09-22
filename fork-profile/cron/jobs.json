@@ -29,7 +29,8 @@
       "failure_streak": 0,
       "last_delivery_error": null,
       "timeout_seconds": 1800,
-      "priority": 3
+      "priority": 3,
+      "name": "shadow-gate"
     },
     {
       "id": "calibration-threshold-updater-0001",
@@ -60,7 +61,8 @@
       "failure_streak": 0,
       "last_delivery_error": null,
       "timeout_seconds": 1800,
-      "priority": 2
+      "priority": 2,
+      "name": "calibration-threshold-updater"
     },
     {
       "id": "recall-miss-ttl-adjuster-0001",
@@ -91,7 +93,8 @@
       "failure_streak": 0,
       "last_delivery_error": null,
       "timeout_seconds": 1800,
-      "priority": 3
+      "priority": 3,
+      "name": "recall-miss-ttl-adjuster"
     },
     {
       "id": "routing-weight-updater-0001",
@@ -123,7 +126,8 @@
       "failure_streak": 0,
       "last_delivery_error": null,
       "timeout_seconds": 1800,
-      "priority": 3
+      "priority": 3,
+      "name": "routing-weight-updater"
     },
     {
       "id": "pre-compact-annotate-0001",
@@ -154,7 +158,8 @@
       "profile": "fork",
       "enabled": true,
       "timeout_seconds": 1800,
-      "priority": 3
+      "priority": 3,
+      "name": "pre-compact-annotate"
     },
     {
       "id": "skillspector-guard-0001",
@@ -185,7 +190,8 @@
       "profile": "fork",
       "enabled": true,
       "timeout_seconds": 1800,
-      "priority": 3
+      "priority": 3,
+      "name": "skillspector-guard"
     },
     {
       "id": "fork-state-vacuum-0001",
@@ -216,7 +222,8 @@
       "failure_streak": 0,
       "last_delivery_error": null,
       "timeout_seconds": 1800,
-      "priority": 3
+      "priority": 3,
+      "name": "fork-state-vacuum"
     },
     {
       "id": "memory-ttl-purge-0001",
@@ -247,7 +254,8 @@
       "failure_streak": 0,
       "last_delivery_error": null,
       "timeout_seconds": 1800,
-      "priority": 2
+      "priority": 2,
+      "name": "memory-ttl-purge"
     },
     {
       "id": "concept-lattice-rebuild-0001",
@@ -278,7 +286,8 @@
       "failure_streak": 0,
       "last_delivery_error": null,
       "timeout_seconds": 1800,
-      "priority": 3
+      "priority": 3,
+      "name": "concept-lattice-rebuild"
     },
     {
       "id": "omni-skill-scan-0001",
@@ -309,7 +318,8 @@
       "failure_streak": 0,
       "last_delivery_error": null,
       "timeout_seconds": 1800,
-      "priority": 3
+      "priority": 3,
+      "name": "omni-skill-scan"
     },
     {
       "id": "spike-queue-actuator-0001",
@@ -341,7 +351,8 @@
       "failure_streak": 0,
       "last_delivery_error": null,
       "timeout_seconds": 1800,
-      "priority": 4
+      "priority": 4,
+      "name": "spike-queue-actuator"
     },
     {
       "id": "cross-calibration-monitor-0001",
@@ -372,7 +383,8 @@
       "failure_streak": 0,
       "last_delivery_error": null,
       "timeout_seconds": 1800,
-      "priority": 1
+      "priority": 1,
+      "name": "cross-calibration-monitor"
     },
     {
       "id": "monitor-suite-runner-0001",
@@ -403,7 +415,8 @@
       "profile": "fork",
       "enabled": true,
       "timeout_seconds": 1800,
-      "priority": 1
+      "priority": 1,
+      "name": "monitor-suite-runner"
     },
     {
       "id": "mcp-privilege-audit-0001",
@@ -434,7 +447,8 @@
       "failure_streak": 0,
       "last_delivery_error": null,
       "timeout_seconds": 1800,
-      "priority": 3
+      "priority": 3,
+      "name": "mcp-privilege-audit"
     },
     {
       "id": "gate-audit-0001",
@@ -465,7 +479,8 @@
       "failure_streak": 0,
       "last_delivery_error": null,
       "timeout_seconds": 1800,
-      "priority": 3
+      "priority": 3,
+      "name": "gate-audit"
     },
     {
       "id": "hermes-gateway-prestart-0001",
@@ -496,7 +511,8 @@
       "last_error": null,
       "last_delivery_error": null,
       "timeout_seconds": 1800,
-      "priority": 3
+      "priority": 3,
+      "name": "hermes-gateway-prestart"
     },
     {
       "id": "b053e57fd10b",
@@ -2075,7 +2091,23 @@
       "timeout_seconds": 120,
       "enabled": true,
       "deliver": "local"
+    },
+    {
+      "id": "skill-index-weekly-rebuild-4fffb154",
+      "name": "skill-index-weekly-rebuild",
+      "description": "Unconditional weekly skill index rebuild — AF(skill_index_built) liveness (Clarke et al. LTL)",
+      "script": "skill-router-index.py",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 3 * * 0"
+      },
+      "priority": 3,
+      "startup_jitter_seconds": 30,
+      "timeout_seconds": 300,
+      "enabled": true,
+      "deliver": "local",
+      "next_run_at": "2026-09-27T03:00:00+10:00"
     }
   ],
-  "updated_at": "2026-09-22T15:53:23.100146+10:00"
+  "updated_at": "2026-09-22T15:59:23.842673+10:00"
 }
