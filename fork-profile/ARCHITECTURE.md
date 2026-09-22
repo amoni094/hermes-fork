@@ -4,7 +4,7 @@ Patterns ported from Denuto (jesterG1979/hello_agent) + Hermes-native patterns.
 This is the authoritative single source of truth for how Hermes is structured,
 what rules are enforced, and what the invariants are.
 
-Last updated: 2026-09-16 (wiring sprint 2 + book-to-skill ingestion)
+Last updated: 2026-09-22 (deployed plugin catalog: cobra-guard, orca-status, tool-auth-gate)
 
 ---
 
@@ -202,6 +202,19 @@ not enforced gates in the agent loop. Do NOT cite them as active enforcement:
   calibration-threshold-updater.py - Reads calibration-log.jsonl; updates Condorcet thresholds; EMA now seeds from prior run (wiring sprint 2)
   context-pressure-reader.py - Reads context token pressure; advisory annotation (wiring sprint 2)
   recall-miss-ttl-adjuster.py - MRAS adaptive TTL adjuster; reads recall-misses.jsonl; closes bottleneck #8 (wiring sprint 2)
+
+---
+
+## Deployed Plugins (fork profile)
+
+Live plugins under ~/.hermes/profiles/fork/plugins/, enabled in config.yaml plugins.enabled:
+
+  context-pressure-guard - pre_llm_call + pre_compress: injects [CONTEXT PRESSURE HIGH] at consecutive_high >= 2; nudges compressor lambda +0.05 per turn at cap
+  tool-result-audit      - post_tool_call: tool-auth-shim.py injection-risk audit on EXTERNAL-tier tool results (shadow; never blocks)
+  jev-compaction         - pre_compress + on_session_end: per-message RR/Jev relevance scoring; prunes low-RR tool results before compression
+  cobra-guard            - pre_tool_call / post_tool_call / on_session_start: wraps cobra-skip-guard.py probe-cache logic; WARN-only, fail-open (HERMES_COBRA_GUARD=0 disables)
+  orca-status            - posts agent lifecycle events to ORCA_AGENT_HOOK_ENDPOINT; silent no-op when unset
+  tool-auth-gate         - pre_tool_call Agentao-style proposal/authorize split (arXiv:2608.13574); DENY_ALWAYS / DENY_IN_CONTEXT / ALLOW against escalate_tools and deny_tools
 
 ---
 

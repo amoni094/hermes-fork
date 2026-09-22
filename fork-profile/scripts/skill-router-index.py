@@ -26,6 +26,11 @@ _hermes_base_sri = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".h
 _hermes_profile_sri = _os_sri.environ.get("HERMES_PROFILE", "")
 _hermes_root_sri = (_hermes_base_sri / "profiles" / _hermes_profile_sri) if _hermes_profile_sri and "profiles" not in str(_hermes_base_sri) else _hermes_base_sri
 SKILLS_ROOT = _hermes_root_sri / "skills"
+# Also scan the base Hermes skills directory (main install, not profile-specific).
+# Fork profile skills take priority — same-named skill from fork overrides main.
+# This ensures the semantic index covers the full skill corpus, not just fork-local skills.
+_HERMES_MAIN_SKILLS = Path(__file__).resolve().parent / "skills"  # ~/.hermes/scripts/../skills = ~/.hermes/skills
+
 INDEX_PATH = _hermes_root_sri / "cache" / "skill-router-index.json"
 OVERLAP_THRESHOLD = 0.65
 BETA_STATE_PATH = _hermes_root_sri / "cache" / "skill-beta-state.json"
@@ -36,6 +41,43 @@ DOMAIN_LABELS: set[str] = {
     "python", "bash", "terminal", "hermes", "skill", "agent",
     "web", "file", "tool",
 }
+
+
+def _load_routing_weights() -> dict[str, float]:
+    """Load FTRL/EMA domain weights written by routing-weight-updater.py.
+
+    Path: {_hermes_root}/cache/routing-weights.json, where _hermes_root is
+    HERMES_HOME + HERMES_PROFILE (same construction as other scripts).
+    Missing/unreadable file → {} (cold-start safe; callers treat missing
+    keys as weight 1.0). Nested {weight: float, ...} records are flattened.
+
+    PAC-Bayes motivation: McAllester (2003) / Seeger (2002) PAC-Bayes-kl
+    says a posterior Q over hypotheses should reweight empirical risk by
+    the complexity term KL(Q||P)/m. Domain FTRL-EMA weights are that
+    posterior mean (clamped to [0.1, 2.0]); multiplying skill scores by
+    the matching domain weight closes the feedback loop.
+    Source: McAllester 2003; Shalev-Shwartz *Understanding ML* Ch 11 (FTRL);
+    Memory in LLM Era v3 (arXiv:2604.01707); routing-weight-updater.py.
+    """
+    weights_path = _hermes_root_sri / "cache" / "routing-weights.json"
+    if not weights_path.exists():
+        return {}
+    try:
+        raw = json.loads(weights_path.read_text())
+    except Exception:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, float] = {}
+    for key, val in raw.items():
+        try:
+            if isinstance(val, dict):
+                out[str(key)] = float(val.get("weight", 1.0))
+            else:
+                out[str(key)] = float(val)
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def load_beta_state():
@@ -49,6 +91,46 @@ def load_beta_state():
         except Exception:
             return {}
     return {}
+
+def save_beta_state(state: dict) -> None:
+    """Persist skill Beta(alpha, beta) posteriors to disk atomically.
+
+    Call after recording a success or failure signal for a skill.
+    Uses tmp+replace to avoid torn writes on crash/SIGTERM.
+    """
+    _tmp = BETA_STATE_PATH.with_suffix('.tmp')
+    _tmp.write_text(json.dumps(state, indent=2))
+    _tmp.replace(BETA_STATE_PATH)
+
+
+def record_skill_outcome(skill_name: str, success: bool, decay: float = 0.99) -> None:
+    """Update Beta posterior for skill_name and persist.
+
+    success=True  → alpha += 1  (skill was useful / loaded successfully)
+    success=False → beta  += 1  (skill was not useful / wrong match)
+
+    Decay: apply geometric decay to both alpha and beta before updating.
+    This prevents alpha blow-up when only success signals exist (no failure path).
+    With decay=0.99 and rate 6h: half-life ≈ 17 days. Keeps posteriors fresh.
+
+    Posterior mean = alpha / (alpha + beta).
+    Minimum alpha/beta = 1.0 (uniform prior floor) to prevent degenerate distributions.
+
+    Theory: Lattimore & Szepesvári *Bandit Algorithms* (2020) Ch 3; McAllester 2003.
+    Decay approach: discounted Thompson sampling (Raj & Kalyani, 2017 arXiv:1707.09727).
+    """
+    state = load_beta_state()
+    entry = state.setdefault(skill_name, {"alpha": 1.0, "beta": 1.0})
+    # Apply geometric decay to both parameters (keeps relative confidence, shrinks mass)
+    entry["alpha"] = max(1.0, entry.get("alpha", 1.0) * decay)
+    entry["beta"] = max(1.0, entry.get("beta", 1.0) * decay)
+    if success:
+        entry["alpha"] = entry["alpha"] + 1.0
+    else:
+        entry["beta"] = entry["beta"] + 1.0
+    BETA_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    save_beta_state(state)
+
 
 
 def beta_posterior_mean(skill_name, state):
@@ -369,28 +451,47 @@ def cosine(vec1: dict, vec2: dict) -> float:
 
 
 def scan_skills() -> list[dict]:
-    skills = []
-    for skill_md_path in sorted(SKILLS_ROOT.rglob("SKILL.md")):
-        try:
-            text = skill_md_path.read_text(errors="replace")
-            fm = parse_frontmatter(text)
-            if not fm.get("name"):
+    """Scan all SKILL.md files in SKILLS_ROOT, following symlinks.
+
+    Category dirs in skills/ are symlinks to ~/.hermes/skills/<category>/; pathlib.rglob
+    does NOT follow symlinks, so we use os.walk(followlinks=True) instead.
+    W2-C fix (2026-09-22): symlink follow + dual-dir scan with fork priority.
+    """
+    import os as _os_scan
+    seen_names: dict[str, dict] = {}
+
+    for skills_dir in [SKILLS_ROOT]:  # single-root scan; symlinks followed
+        if not skills_dir.is_dir():
+            continue
+        for root, _dirs, files in _os_scan.walk(str(skills_dir), followlinks=True):
+            if "SKILL.md" not in files:
                 continue
-            name = fm["name"]
-            description = fm.get("description", "")
-            triggers = fm.get("triggers", [])
-            combined = " ".join([name, description] + triggers)
-            tokens = tokenize(combined)
-            skills.append({
-                "name": name,
-                "description": description[:200],
-                "triggers": triggers,
-                "path": str(skill_md_path.relative_to(SKILLS_ROOT)),
-                "tokens": tokens,
-            })
-        except Exception as e:
-            print(f"WARN: skipping {skill_md_path}: {e}", file=sys.stderr)
-    return skills
+            skill_md_path = Path(root) / "SKILL.md"
+            try:
+                text = skill_md_path.read_text(errors="replace")
+                fm = parse_frontmatter(text)
+                if not fm.get("name"):
+                    continue
+                name = fm["name"]
+                description = fm.get("description", "")
+                triggers = fm.get("triggers", [])
+                combined = " ".join([name, description] + triggers)
+                tokens = tokenize(combined)
+                try:
+                    rel_path = str(skill_md_path.relative_to(skills_dir))
+                except ValueError:
+                    rel_path = str(skill_md_path)
+                entry = {
+                    "name": name,
+                    "description": description[:200],
+                    "triggers": triggers,
+                    "path": rel_path,
+                    "tokens": tokens,
+                }
+                seen_names[name] = entry
+            except Exception as e:
+                print(f"WARN: skipping {skill_md_path}: {e}", file=sys.stderr)
+    return list(seen_names.values())
 
 
 def cmd_build():
@@ -457,11 +558,19 @@ def route(query_text: str, top: int = 5) -> list[dict]:
 
     beta_state = load_beta_state()
     beta_active = bool(beta_state)
+    # PAC-Bayes / FTRL loop: one load; multiply score by domain weight
+    # (first path component). Missing domain → 1.0. McAllester 2003.
+    routing_weights = _load_routing_weights()
     scored = [
         (
-            (0.6 * cosine(q_vec, s["tfidf"]) + 0.4 * beta_posterior_mean(s["name"], beta_state))
-            if beta_active else cosine(q_vec, s["tfidf"])
-        ) + cross_domain_boost(query_text, s.get("description", ""))
+            (
+                (0.6 * cosine(q_vec, s["tfidf"]) + 0.4 * beta_posterior_mean(s["name"], beta_state))
+                if beta_active else cosine(q_vec, s["tfidf"])
+            ) + cross_domain_boost(query_text, s.get("description", ""))
+        ) * float(routing_weights.get(
+            (s.get("path") or "").split("/")[0] or (s.get("category") or ""),
+            1.0,
+        ))
         for s in skills
     ]
     scored = list(zip(scored, skills))
@@ -891,6 +1000,8 @@ def main():
     group.add_argument("--check", action="store_true", help="Flag high-overlap pairs")
     group.add_argument("--pattern-check", action="store_true",
                        help="SIP-3: Lint skill trigger patterns for over-complexity (>15 words, nested conditions)")
+    group.add_argument("--feedback", metavar="SKILL:OUTCOME",
+                       help="Record skill outcome (e.g. 'my-skill:success' or 'my-skill:failure'); updates Beta posterior")
     group.add_argument("--compile-patterns", action="store_true",
                        help="SIP-4: Compile trigger descriptions as regex patterns; report backtracking risks")
     parser.add_argument("--json", action="store_true", dest="as_json",
@@ -910,6 +1021,14 @@ def main():
         cmd_pattern_check()
     elif args.compile_patterns:
         cmd_compile_patterns()
+    elif args.feedback:
+        skill_name, _, outcome = args.feedback.partition(":")
+        if skill_name and outcome in ("success", "failure"):
+            record_skill_outcome(skill_name.strip(), outcome == "success")
+            print(json.dumps({"ok": True, "skill": skill_name.strip(), "outcome": outcome}))
+        else:
+            print(json.dumps({"error": "format must be 'skill-name:success' or 'skill-name:failure'"}))
+            import sys; sys.exit(1)
     else:
         _print_worked_example()
 

@@ -79,21 +79,23 @@ def _load_lifecycle_data() -> dict[str, dict]:
         return data
     try:
         con = sqlite3.connect(str(LIFECYCLE_DB))
-        cur = con.cursor()
-        cur.execute(
-            "SELECT fact_text, valid_from, access_count "
-            "FROM fact_lifecycle "
-            "WHERE valid_to IS NULL OR valid_to = '' "
-            "LIMIT 10000"
-        )
-        for fact_text, valid_from, access_count in cur.fetchall():
-            if fact_text:
-                key = fact_text[:120].strip()
-                data[key] = {
-                    "valid_from":    valid_from or "",
-                    "access_count":  int(access_count or 0),
-                }
-        con.close()
+        try:
+            cur = con.cursor()
+            cur.execute(
+                "SELECT fact_text, valid_from, access_count "
+                "FROM fact_lifecycle "
+                "WHERE valid_to IS NULL OR valid_to = '' "
+                "LIMIT 10000"
+            )
+            for fact_text, valid_from, access_count in cur.fetchall():
+                if fact_text:
+                    key = fact_text[:120].strip()
+                    data[key] = {
+                        "valid_from":    valid_from or "",
+                        "access_count":  int(access_count or 0),
+                    }
+        finally:
+            con.close()
     except Exception:
         # Silently swallow all SQLite errors — missing/corrupt DB is best-effort;
         # facts without lifecycle data get default scores (recency=0.5, access=0).

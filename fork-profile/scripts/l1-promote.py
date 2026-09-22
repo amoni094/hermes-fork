@@ -29,11 +29,21 @@ METACOG_DB = Path(
 )
 _HERE = Path(__file__).resolve().parent
 _PYC_CANDIDATES = [
-    _HERE / "references" / "l1-promote.cpython-314.pyc.bak",
+    # cpython-314 first: payload compiled for 3.14, re-exec fires if running 3.11
     _HERE / "__pycache__" / "l1-promote.cpython-314.pyc",
+    _HERE.parent.parent.parent / "scripts" / "references" / "l1-promote.cpython-314.pyc.bak",
+    _HERE.parent.parent.parent / "scripts" / "__pycache__" / "l1-promote.cpython-314.pyc",
+    # cpython-311 last: wrapper fallback (for inspection only, not payload)
+    _HERE / "__pycache__" / "l1-promote.cpython-311.pyc",
 ]
 
-_SYS_PYTHON = "/usr/bin/python3"
+# Resolve python3.14 with fallback to lower versions (fragile if hardcoded; Silverblue
+# updates via rpm-ostree can remove 3.14 between rebases). ADV-FIX-2 (2026-09-22).
+_SYS_PYTHON = next(
+    (_v for _v in ["/usr/bin/python3.14", "/usr/bin/python3.13", "/usr/bin/python3.12"]
+     if __import__("os").path.exists(_v)),
+    "/usr/bin/python3",  # last resort: system default (may be 3.11)
+)
 
 
 def _pyc_magic(path: Path) -> bytes:
