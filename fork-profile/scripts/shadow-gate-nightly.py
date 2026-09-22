@@ -1,9 +1,8 @@
-import os
 #!/usr/bin/env python3
 """
 shadow-gate-nightly.py — Nightly shadow telemetry gate report.
 
-Reads ~/.hermes/cache/shadow-telemetry/*.jsonl, evaluates each flag found,
+Reads $HERMES_HOME/[profiles/$HERMES_PROFILE/]cache/shadow-telemetry/*.jsonl, evaluates each flag found,
 and prints a markdown summary with promotion/disable recommendations.
 
 Output contract (no_agent=True):
@@ -14,6 +13,7 @@ from __future__ import annotations
 
 import json
 import sys
+import pathlib
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).parent
@@ -21,7 +21,15 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 from shadow_telemetry import evaluate_flag  # noqa: E402
 
-TELEMETRY_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache" / "shadow-telemetry"
+import os as _os_sgn
+_hermes_base_sgn = pathlib.Path(_os_sgn.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+if not pathlib.Path(_hermes_base_sgn).is_dir():
+    print(f'ERROR: HERMES_HOME={_hermes_base_sgn} does not exist or is not a directory',
+          file=sys.stderr)
+    sys.exit(2)
+_hermes_profile_sgn = _os_sgn.environ.get("HERMES_PROFILE", "")
+_hermes_root_sgn = (_hermes_base_sgn / "profiles" / _hermes_profile_sgn) if _hermes_profile_sgn else _hermes_base_sgn
+TELEMETRY_DIR = _hermes_root_sgn / "cache" / "shadow-telemetry"
 
 # Recommendation thresholds (task spec)
 PROMOTE_PASS_RATE   = 0.9

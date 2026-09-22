@@ -27,6 +27,10 @@ from typing import Any
 GRAPHITI_BASE  = os.environ.get("GRAPHITI_BASE",  "http://127.0.0.1:8765/mcp")
 GRAPHITI_GROUP = os.environ.get("GRAPHITI_GROUP_IDS", "hermes").split(",")
 HERMES_HOME    = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+if not pathlib.Path(HERMES_HOME).is_dir():
+    print(f'ERROR: HERMES_HOME={HERMES_HOME} does not exist or is not a directory',
+          file=sys.stderr)
+    sys.exit(2)
 HYPERMEM_LOG   = HERMES_HOME / "cache" / "hypermem-promote.jsonl"
 
 
