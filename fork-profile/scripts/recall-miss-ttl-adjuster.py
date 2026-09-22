@@ -38,9 +38,12 @@ BASE_TTL_DAYS = {
 
 # MRAS gain parameters
 ALPHA = 0.85        # EMA smoothing (0.85 = ~7-run half-life)
-MAX_ADJUST = 0.30   # max ±30% adjustment per run (prevents runaway)
+MAX_ADJUST = 0.10   # C1: gain cap reduced to ±10%/run (Strogatz §8.2: limit cycle if gain > 2/ω₀;
+                    # at ω₀≈0.15/run, safe gain < 13%/run; 10% gives margin of ~3x)
+                    # Previously 0.30 — overshooting was possible at high miss-rate error
 MIN_TTL_DAYS = 3    # hard floor
 MAX_TTL_DAYS = 180  # hard ceiling
+GAIN_HISTORY_PATH = None  # set dynamically below after _hermes_root is available
 
 LOOKBACK_HOURS = 48  # only consider misses in last 48h for miss rate computation
 
@@ -95,7 +98,13 @@ def compute_miss_rates():
 
 
 def adjust_ttls(state, miss_rates):
-    """Apply MRAS-inspired TTL adjustment and return updated state with change log."""
+    """Apply MRAS-inspired TTL adjustment and return updated state with change log.
+
+    C1 stability (Strogatz, Nonlinear Dynamics §8.2): gain cap at MAX_ADJUST=0.10
+    prevents limit-cycle oscillation. At high miss-rate error, the uncapped system
+    overshoots TTL in both directions with period ~7 runs (ALPHA half-life).
+    Reduced gain ensures error decays monotonically to zero.
+    """
     log = []
     for ft, base in BASE_TTL_DAYS.items():
         old_ttl = state.get(ft, float(base))
@@ -109,6 +118,7 @@ def adjust_ttls(state, miss_rates):
             # if miss_rate < 0.1, TTL too short → increase
             error = miss_rate - 0.3  # target miss rate 30%
             # Positive error → TTL too long → reduce TTL
+            # C1: gain capped; adjustment in [1-MAX_ADJUST, 1+MAX_ADJUST]
             adjustment = 1.0 - (error * MAX_ADJUST / 0.7)  # scale: max error=0.7 → max adjust
             adjustment = max(1 - MAX_ADJUST, min(1 + MAX_ADJUST, adjustment))
             reference_ttl = base * adjustment

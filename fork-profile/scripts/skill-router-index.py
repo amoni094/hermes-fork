@@ -14,6 +14,7 @@ At 80k skills, name+description routing degrades 31-44pp. TF-IDF is fine at curr
 import argparse
 import json
 import math
+import pathlib
 import re
 import subprocess
 import sys
@@ -133,11 +134,23 @@ def record_skill_outcome(skill_name: str, success: bool, decay: float = 0.99) ->
 
 
 
+_MIN_SAMPLES = 30  # Chernoff bound: posterior unreliable until alpha+beta >= 30
+                   # P(|X̄-μ| > ε) ≤ 2·exp(-2nε²); at n=30, ε=0.1 → error ≤ 0.36
+                   # (Motwani & Raghavan, Randomized Algorithms, §4.1)
+
+
 def beta_posterior_mean(skill_name, state):
-    """Return E[p] = alpha/(alpha+beta). Defaults to uniform prior mean 0.5."""
+    """Return E[p] = alpha/(alpha+beta). Returns 0.5 (neutral) until MIN_SAMPLES reached.
+
+    Chernoff guard: with fewer than _MIN_SAMPLES observations, the posterior
+    mean is indistinguishable from the prior — applying it would bias routing
+    on noise. Return neutral 0.5 so routing falls back to pure TF-IDF cosine.
+    """
     entry = state.get(skill_name, {})
     alpha = entry.get("alpha", 1.0)
     beta_val = entry.get("beta", 1.0)
+    if alpha + beta_val < _MIN_SAMPLES:
+        return 0.5  # insufficient evidence — neutral weight
     return alpha / (alpha + beta_val)
 
 
@@ -486,20 +499,85 @@ def scan_skills() -> list[dict]:
                     "description": description[:200],
                     "triggers": triggers,
                     "path": rel_path,
+                    "skill_path": str(skill_md_path),  # R2: full path for collision detection
                     "tokens": tokens,
                 }
-                seen_names[name] = entry
+                # R2: Collision detection (Motwani&Raghavan universal hashing §5.2)
+                # Two skills with the same frontmatter name would silently overwrite;
+                # warn and keep first-seen (fork skills take priority via walk order).
+                if name in seen_names:
+                    existing_path = seen_names[name].get("skill_path", "unknown")
+                    if existing_path != str(skill_md_path):
+                        import sys as _sys_r2
+                        print(
+                            f"[skill-router WARN] name collision: '{name}' in both "
+                            f"{existing_path!r} and {str(skill_md_path)!r} — "
+                            f"keeping first-seen (fork priority).",
+                            file=_sys_r2.stderr,
+                        )
+                    # Do NOT overwrite — first-seen wins
+                else:
+                    seen_names[name] = entry
             except Exception as e:
                 print(f"WARN: skipping {skill_md_path}: {e}", file=sys.stderr)
     return list(seen_names.values())
 
 
-def cmd_build():
-    print(f"Scanning {SKILLS_ROOT} ...")
-    skills = scan_skills()
-    print(f"Found {len(skills)} skills with valid frontmatter.")
+def cmd_build(incremental: bool = False):
+    """Build or incrementally update the skill router index.
 
-    skills, idf = build_tfidf(skills)
+    O2 incremental mode (Borodin & El-Yaniv, ski rental §1.2):
+    Full rebuild cost = O(N·|tokens|). Incremental: only re-index skills
+    whose SKILL.md mtime is newer than the existing index built_at timestamp.
+    Amortises rebuild cost from O(N) to O(changed) per run.
+    Forced full rebuild when: index absent, total count changes, --build (explicit).
+    """
+    print(f"Scanning {SKILLS_ROOT} ...")
+    skills_all = scan_skills()
+    print(f"Found {len(skills_all)} skills with valid frontmatter.")
+
+    if incremental and INDEX_PATH.exists():
+        try:
+            existing_index = json.loads(INDEX_PATH.read_text())
+            built_at_str = existing_index.get("built_at", "")
+            existing_skills = {s["name"]: s for s in existing_index.get("skills", [])}
+            if len(existing_skills) == len(skills_all):
+                # Determine which skills changed since last build
+                import datetime as _dt
+                built_ts = _dt.datetime.fromisoformat(built_at_str).timestamp() if built_at_str else 0.0
+                changed = []
+                unchanged_entries = []
+                for s in skills_all:
+                    sp = s.get("skill_path", "")
+                    try:
+                        mtime = pathlib.Path(sp).stat().st_mtime if sp else 0.0
+                    except OSError:
+                        mtime = 0.0
+                    if mtime > built_ts or s["name"] not in existing_skills:
+                        changed.append(s)
+                    else:
+                        unchanged_entries.append(existing_skills[s["name"]])
+                if changed:
+                    print(f"[incremental] {len(changed)} changed, {len(unchanged_entries)} unchanged")
+                    changed, _ = build_tfidf(changed)
+                    # Merge: changed entries replace existing
+                    merged = {e["name"]: e for e in unchanged_entries}
+                    for s in changed:
+                        merged[s["name"]] = s
+                    skills = list(merged.values())
+                else:
+                    print("[incremental] No changes detected — index up to date.")
+                    return
+            else:
+                print(f"[incremental] Skill count changed ({len(existing_skills)} → {len(skills_all)}) — full rebuild")
+                skills = skills_all
+                skills, _ = build_tfidf(skills)
+        except Exception as _e:
+            print(f"[incremental] Fallback to full rebuild: {_e}")
+            skills = skills_all
+            skills, _ = build_tfidf(skills)
+    else:
+        skills, _ = build_tfidf(skills_all)  # full build: enrich skills_all in-place
 
     # Strip tfidf from the JSON (rebuild at query time from tokens)
     index = {

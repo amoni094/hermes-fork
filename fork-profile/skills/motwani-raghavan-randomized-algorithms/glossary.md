@@ -1,0 +1,39 @@
+# Glossary — Motwani & Raghavan
+
+- **2-universal hash family** — `P[h(x)=h(y)] ≤ 1/m` for `x≠y`. Construction `h_{a,b}(x)=((ax+b) mod p) mod m`.
+- **Abundance of witnesses** — many certificates exist; a random sample is likely one (primality, matching).
+- **Adaptive adversary** — sees the algorithm’s coins (online or offline OPT).
+- **Amplification** — independent (or expander-walk) repeats drive Monte Carlo failure `p → p^k` (or exp(−k)).
+- **Azuma’s inequality** — concentration for martingales with bounded differences.
+- **BPP / RP / ZPP** — two-sided Monte Carlo P / one-sided Monte Carlo P / expected-P Las Vegas.
+- **Chernoff bound** — exponential tail on sums of independent Poisson trials (Thm 4.1–4.3).
+- **Chebyshev inequality** — `P(|X−μ|≥t) ≤ Var(X)/t²`. Pairwise independence suffices for the variance of a sum.
+- **Competitive ratio** — online cost / OPT (plus additive constant).
+- **Coupon collector** — time to hit all `n` types; `E = n H_n`; threshold `n ln n + c n`.
+- **Cover time** — expected time for a walk to visit every vertex; `≤ 2m(n−1)` undirected.
+- **Deferred decisions** — reveal random choices only as the algorithm needs them.
+- **Derandomisation** — conditional expectations, pairwise-independent seeds, or expander walks → deterministic / fewer bits.
+- **Expander** — graph with `h(G)` bounded below; rapid mixing; amplification with few bits.
+- **Fingerprinting** — short random image of a long object; collisions bounded by Schwartz–Zippel / Freivalds.
+- **FPRAS** — fully polynomial randomised approximation scheme: `(1±ε)` with prob `≥1−δ` in `poly(|x|,1/ε,log(1/δ))`.
+- **Freivalds** — verify `AB=C` by a random vector in `O(n²)`.
+- **Isolating lemma** — random weights in `{1,…,2m}` make the min-weight set unique with prob `≥1/2`.
+- **Johnson–Lindenstrauss** — random projection `k=O(ε⁻² log n)` preserves distances `(1±ε)` w.h.p. (not a Motwani theorem; Chernoff descendant).
+- **Las Vegas** — always correct; random runtime.
+- **Linearity of expectation** — `E[∑ X_i] = ∑ E[X_i]` with no independence. Engine of RandQS and the probabilistic method.
+- **Lovász local lemma** — `e p (D+1) ≤ 1` ⇒ positive probability of avoiding all locally dependent bad events.
+- **Markov inequality** — `X≥0 ⇒ P(X≥t)≤E[X]/t`.
+- **Martingale** — `E[X_{i+1}| past] = X_i`. Doob: `X_i = E[X|F_i]`.
+- **Monte Carlo** — may err; bound `P[error]`. One-sided vs two-sided.
+- **Oblivious adversary** — request sequence fixed before coins.
+- **Pairwise independence** — every pair is independent; `O(log n)` bits; enough for Chebyshev.
+- **Perfect hash** — injective on a static `S`; FKS two-level `O(1)` lookup, `O(n)` expected space.
+- **Pessimistic estimator** — efficiently computed upper bound on conditional failure, used in derandomisation.
+- **Poisson trials** — independent Bernoulli r.v.s, possibly inhomogeneous `p_i`.
+- **Probabilistic method** — existence via `P[good]>0` or via `E[X]`.
+- **Randomised rounding** — interpret an LP solution as probabilities; round independently; analyse with Chernoff / expectation.
+- **Schwartz–Zippel** — nonzero degree-`d` polynomial vanishes on a random point in `S^n` with prob `≤ d/|S|`.
+- **Ski rental** — rent-vs-buy; deterministic 2-competitive; randomised `e/(e−1)`.
+- **Strongly 2-universal** — `P[h(x)=α, h(y)=β]=1/m²`; pairwise-independent hashes.
+- **Two-point sampling** — pairwise-independent sample from two field elements `(a,b)`.
+- **Valiant routing** — random intermediate destination; `O(log N)` w.h.p. on the hypercube.

@@ -202,6 +202,23 @@ not enforced gates in the agent loop. Do NOT cite them as active enforcement:
   calibration-threshold-updater.py - Reads calibration-log.jsonl; updates Condorcet thresholds; EMA now seeds from prior run (wiring sprint 2)
   context-pressure-reader.py - Reads context token pressure; advisory annotation (wiring sprint 2)
   recall-miss-ttl-adjuster.py - MRAS adaptive TTL adjuster; reads recall-misses.jsonl; closes bottleneck #8 (wiring sprint 2)
+  routing-weight-updater.py  - FTRL-EMA memory route weight updater; O1: cumulative regret tracking vs uniform baseline (Borodin & El-Yaniv §2.1); writes routing-regret-log.jsonl; alarm on >5% relative regret
+  skill-beta-feedback.py     - Beta-bandit feedback writer; B1: causal fix — only credits success signals from successfully-completed sessions; emits failure signals for aborted sessions
+  staleness-monitor.py       - D2 liveness monitor; checks freshness of routing-calibration.jsonl, calibration-log.jsonl, skill-beta-state.json, routing-regret-log.jsonl; alarms to stdout + exits 0 (cron-safe)
+  stuck-job-detector.py      - CTL/LTL safety: AG(running → EF(complete|failed)); queries executions.db for jobs stuck in 'running' > 2×timeout; writes stuck-job-alarms.jsonl
+  callgraph-audit.py         - P1 interprocedural call-graph analysis (Nielson et al. §1-2); propagates exit-code lattice {ok,intentional_nonzero,error_propagator} across subprocess call chains; reports HERMES_HOME unvalidated paths (P2); writes callgraph-audit-report.json
+  skill-router-index.py      - R1 Chernoff MIN_SAMPLES=30 guard in beta_posterior_mean(); R2 collision detection (fork priority); O2 incremental build (skip unchanged skills by mtime); BM25 TF-IDF + concept-lattice semantic fallback
+
+## Knowledge Corpus (theory-grounded skills — wave 3, 2026-09-22)
+
+Six books ingested as fork skills to formally ground bottleneck reasoning:
+
+  harchol-balter-performance-modeling - M/G/1 queues, SRPT, heavy tails; cron timeout + jitter design (Q1/Q2)
+  lynch-distributed-algorithms        - I/O automata, atomicity, consensus; WAL + atomic write analysis (D1)
+  motwani-raghavan-randomized-algorithms - Chernoff bounds, Las Vegas/Monte Carlo; skill index approximation guarantees (R1)
+  borodin-elyaniv-online-computation  - Adversary model, ski rental, competitive ratio; FTRL regret tracking (O1/O2)
+  nielson-program-analysis            - Abstract interpretation, lattice theory; call-graph audit (P1/P2)
+  clarke-model-checking               - CTL/LTL, Kripke structures; stuck-job detector + atomic write invariants (M1)
 
 ---
 

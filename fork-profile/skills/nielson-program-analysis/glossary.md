@@ -1,0 +1,48 @@
+# Glossary — Principles of Program Analysis (Nielson, Nielson, Hankin 1999)
+
+- **abstract interpretation** — Cousot & Cousot method: Galois connection `(α,γ)` between collecting semantics and an abstract domain; sound `f^#` satisfies `α∘f ⊑ f^#∘α`.
+- **abstract closure** — pair `(λx.e, ρ̂)` (or just the λ in 0-CFA); element of CFA’s abstract values.
+- **ACC** — ascending chain condition; finite-height lattices satisfy it; needed for Kleene without widening.
+- **alias (may/must)** — two names may/must denote the same location; shape analysis approximates the heap to decide this.
+- **available expressions (AE)** — forward must-analysis; expressions computed on all paths and not killed.
+- **bitvector analysis** — property space `P(D)` with gen/kill transfer; distributive monotone framework.
+- **call string** — sequence of k most recent call sites used as interprocedural context.
+- **CFA / 0-CFA / k-CFA** — control-flow analysis for higher-order programs; 0 = context-insensitive; k = last k calls.
+- **chaotic iteration** — recompute any equation until the MFP; specification of the solver.
+- **collecting semantics** — map from labels to *sets* of stores/traces; the concrete domain C.
+- **complete lattice** — poset where every subset has join and meet; has ⊥ and ⊤.
+- **constraint-based analysis** — generate inclusions from syntax; least solution is the analysis (Ch 3).
+- **distributive framework** — each `f_ℓ` preserves ⊔; then MFP = MOP.
+- **effect system** — type system with judgements `Γ ⊢ e : τ & φ`; `φ` summarises extra-computational events.
+- **elementary block** — labelled assignment, skip, or test.
+- **extremal labels E** — `init` (forward) or `final` (backward); seeded with ι.
+- **extremal value ι** — analysis seed at E (∅ for AE/VB/LV; unknown defs for RD).
+- **flow / flow^R** — CFG edges, or their reverse for backward analyses.
+- **Fun** — higher-order language used for CFA in Ch 3.
+- **functional approach** — interprocedural: summarise a procedure as a monotone map `L→L`.
+- **Galois connection** — `α(c) ⊑ a ⇔ c ⊑ γ(a)`; α left adjoint, γ right adjoint.
+- **gen / kill** — sets added/removed by `f_ℓ(S) = (S \ kill) ∪ gen`.
+- **induced transformer** — `α ∘ f ∘ γ`; best abstract transformer.
+- **interprocedural** — analysis across call/return; needs context policy.
+- **Knaster–Tarski** — monotone f on a complete lattice has lfp and gfp.
+- **Kleene iteration** — `⊔_n f^n(⊥) = lfp` when f continuous / height finite.
+- **latent effect** — effect of a function body, stored on `τ1 --φ--> τ2`, discharged at call.
+- **live variables (LV)** — backward may-analysis; variables used before redefinition.
+- **may vs must** — ∃ path vs ∀ paths; ⊔ is ∪ vs ∩; lattice order ⊆ vs ⊇.
+- **monotone framework** — 6-tuple `(L, ℱ, F, E, ι, f)` unifying the classical analyses.
+- **Moore family** — concrete sets closed under ⊓; equivalent to a Galois insertion.
+- **MFP** — maximal/minimal fixed point of the equation system (the computed solution).
+- **MOP** — meet over all paths; may be strictly above MFP if not distributive.
+- **narrowing ∆** — precision-recovery operator after widening; decreasing sequence stabilises.
+- **natural semantics (NS)** — big-step `⟨S,s⟩ → s'`.
+- **Park induction** — `f(x) ⊑ x ⇒ lfp(f) ⊑ x`.
+- **points-to** — abstract locations a pointer/name may denote; alias is derived.
+- **reaching definitions (RD)** — forward may-analysis; definitions that may still hold.
+- **shape analysis** — abstract heap (summary nodes + selectors) for pointer programs.
+- **SOS** — small-step semantics; steps align with `flow`.
+- **subeffecting** — `φ ⊑ φ'` allowing subsumption of effect annotations.
+- **transfer function** — monotone `f_ℓ: L → L` for block `ℓ`.
+- **very busy expressions (VB)** — backward must-analysis; expressions used on all paths before kill.
+- **While** — labelled while-language of Ch 1 / App A.
+- **widening ∇** — join-like operator forcing stabilisation on infinite-height domains.
+- **worklist algorithm** — dirty-edge fixed-point solver (Ch 6).

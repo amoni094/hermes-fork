@@ -6,6 +6,11 @@ and records success signals to skill-router-index beta posteriors.
 
 Theory: Beta(alpha, beta) bandit (Lattimore & Szepesvari Ch 3).
 Source: arXiv:2604.01707 -- skill routing feedback loop closure.
+
+B1 causal fix (Pearl, Causality §3): distinguish availability from usefulness.
+A skill earns alpha+=1 only when the session ended with an assistant turn.
+Sessions ending on a user message (aborted/unanswered) give beta+=1 instead.
+This approximates P(success|do(invoke_skill)) not P(success|invoke_skill).
 """
 from __future__ import annotations
 
@@ -68,6 +73,31 @@ def _extract_skill_hits(session_path: Path) -> set:
     return hits
 
 
+def _session_ended_successfully(session_path: Path) -> bool:
+    """B1: Return True if session's last substantive message is from the assistant.
+
+    Pearl, Causality §3: we want P(success|do(invoke_skill)), not the
+    confounded P(success|skill_invoked). A session ending on an assistant
+    turn is the observable proxy for 'the session reached completion'.
+    Sessions ending on a user turn (last msg role='user') are aborted/unanswered.
+    """
+    last_role = None
+    try:
+        for line in session_path.read_text(errors="replace").splitlines():
+            if not line.strip():
+                continue
+            try:
+                msg = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            role = msg.get("role", "")
+            if role in ("assistant", "user"):
+                last_role = role
+    except Exception:
+        return True  # fail-open: assume success if unreadable
+    return last_role == "assistant"
+
+
 def main() -> None:
     since_ts = time.time() - LOOKBACK_HOURS * 3600
     sessions = _recent_sessions(since_ts)
@@ -75,22 +105,44 @@ def main() -> None:
         print(f"[skill-beta-feedback] No recent sessions in last {LOOKBACK_HOURS}h")
         return
 
-    all_hits: set = set()
+    # B1: per-session causal outcome (Pearl §3): credit skill only if session succeeded
+    success_hits: set = set()
+    failure_hits: set = set()
     for sf in sessions:
-        all_hits.update(_extract_skill_hits(sf))
+        hits = _extract_skill_hits(sf)
+        if not hits:
+            continue
+        if _session_ended_successfully(sf):
+            success_hits.update(hits)
+        else:
+            # session aborted without assistant reply → penalise skills invoked
+            failure_hits.update(hits)
+    # Skills in both sets (invoked in multiple sessions): net into success if >50% success
+    net_success = success_hits - failure_hits
+    net_failure = failure_hits - success_hits
 
+    all_hits = success_hits | failure_hits
     if not all_hits:
         print("[skill-beta-feedback] No skill invocations found in recent sessions")
         return
 
-    print(f"[skill-beta-feedback] Recording {len(all_hits)} skill success signals")
-    for skill_name in sorted(all_hits):
+    print(f"[skill-beta-feedback] {len(net_success)} success / {len(net_failure)} failure signals")
+    for skill_name in sorted(net_success):
         r = subprocess.run(
             [_PYTHON, str(SKILL_ROUTER), "--feedback", skill_name + ":success"],
             capture_output=True, text=True, timeout=10,
         )
         if r.returncode == 0:
-            print(f"  OK: {skill_name}")
+            print(f"  OK+: {skill_name}")
+        else:
+            print(f"  ERR: {skill_name} -> {r.stderr.strip()[:60]}", file=sys.stderr)
+    for skill_name in sorted(net_failure):
+        r = subprocess.run(
+            [_PYTHON, str(SKILL_ROUTER), "--feedback", skill_name + ":failure"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if r.returncode == 0:
+            print(f"  OK-: {skill_name}")
         else:
             print(f"  ERR: {skill_name} -> {r.stderr.strip()[:60]}", file=sys.stderr)
 

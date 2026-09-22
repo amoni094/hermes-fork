@@ -34,6 +34,12 @@ EMA_DECAY = 0.9    # weight on prior run
 EMA_NEW = 0.1     # weight on new observation
 MIN_SAMPLES = 5   # minimum entries before updating (avoid noise from tiny samples)
 
+# O1: Regret tracking (Borodin & El-Yaniv, Online Computation §2.1)
+# Cumulative regret vs uniform baseline: R_T = sum_t [loss(ALG,t) - loss(UNI,t)]
+# Positive regret = ALG worse than uniform; negative = ALG better.
+# Stored in regret-log.jsonl for daily alarm inspection.
+REGRET_LOG_PATH = _hermes_root / "cache" / "routing-regret-log.jsonl"
+
 _DEFAULT_ROUTES = ['semantic', 'temporal', 'relational', 'exact']
 
 
@@ -165,6 +171,50 @@ def main():
             'n': n,
             'success_rate': round(success_rate, 3) if success_rate is not None else None,
         })
+
+    # ------------------------------------------------------------------ #
+    # O1: Compute cumulative regret vs uniform baseline                   #
+    # (Borodin & El-Yaniv, Online Computation §2.1)                       #
+    # ------------------------------------------------------------------ #
+    # Uniform baseline: assign equal weight to all routes → success rate
+    # is the average across all routes. FTRL "loss" per step = 1 - success.
+    # Regret = sum(FTRL loss) - sum(uniform loss) over the window.
+    total_n = sum(s.get('total', 0) for s in route_stats.values())
+    total_successes = sum(s.get('successes', 0) for s in route_stats.values())
+    uniform_success_rate = (total_successes / total_n) if total_n > 0 else 0.5
+    ftrl_weighted_success = 0.0
+    ftrl_weight_sum = 0.0
+    for route in KNOWN_ROUTES:
+        stats = route_stats.get(route, {})
+        n = stats.get('total', 0)
+        if n >= MIN_SAMPLES:
+            w = float(existing_weights.get(route, {}).get('weight', 1.0)
+                      if isinstance(existing_weights.get(route), dict)
+                      else existing_weights.get(route, 1.0))
+            ftrl_weighted_success += w * stats.get('successes', 0)
+            ftrl_weight_sum += w * n
+
+    ftrl_success_rate = (ftrl_weighted_success / ftrl_weight_sum) if ftrl_weight_sum > 0 else uniform_success_rate
+    # regret > 0: FTRL worse than uniform (alarm); regret < 0: FTRL better (good)
+    regret_this_run = (uniform_success_rate - ftrl_success_rate) * total_n
+    regret_entry = {
+        'ts': now,
+        'total_n': total_n,
+        'uniform_success_rate': round(uniform_success_rate, 4),
+        'ftrl_success_rate': round(ftrl_success_rate, 4),
+        'regret': round(regret_this_run, 3),
+        'alarm': regret_this_run > 0.05 * total_n,  # >5% relative regret triggers alarm
+    }
+    try:
+        REGRET_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(REGRET_LOG_PATH, 'a') as _rlog:
+            _rlog.write(json.dumps(regret_entry) + '\n')
+        if regret_entry['alarm']:
+            print(f"[ALARM] FTRL regret={regret_this_run:.1f} > 5% threshold — FTRL underperforming uniform baseline")
+        else:
+            print(f"[OK] FTRL regret={regret_this_run:.3f} (FTRL success={ftrl_success_rate:.3f} vs uniform={uniform_success_rate:.3f})")
+    except Exception as _re:
+        print(f"WARN: regret log write failed: {_re}")
 
     # ------------------------------------------------------------------ #
     # Write weights
