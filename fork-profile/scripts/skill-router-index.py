@@ -1086,6 +1086,13 @@ def main():
                         help="With --query: print results as JSON array instead of table")
     args = parser.parse_args()
 
+    # Cron compatibility: scheduler doesn't pass CLI args to scripts (scheduler_script.py §326)
+    # When HERMES_CRON_BUILD=1 is set in job env, default to --build behavior.
+    import os as _os_main
+    if not any([args.build, args.query, args.check, args.pattern_check, args.feedback, args.compile_patterns]):
+        if _os_main.environ.get("HERMES_CRON_BUILD", "") == "1":
+            args.build = True
+
     if args.build:
         cmd_build()
     elif args.query:

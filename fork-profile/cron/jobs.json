@@ -2000,14 +2000,14 @@
       "last_error": null,
       "last_delivery_error": null,
       "fire_claim": null,
-      "next_run_at": "2026-09-22T15:40:18.342178+10:00",
+      "next_run_at": "2026-09-22T16:10:22.054173+10:00",
       "last_dispatch": {
-        "scheduled_at": "2026-09-22T15:10:14.313358+10:00",
-        "dispatched_at": "2026-09-22T15:10:17.512101+10:00",
-        "lateness_seconds": 3.2,
+        "scheduled_at": "2026-09-22T15:40:18.342178+10:00",
+        "dispatched_at": "2026-09-22T15:40:21.362690+10:00",
+        "lateness_seconds": 3.0,
         "kind": "on_time"
       },
-      "last_run_at": "2026-09-22T15:10:18.342178+10:00",
+      "last_run_at": "2026-09-22T15:40:22.054173+10:00",
       "timeout_seconds": 1440,
       "startup_jitter_seconds": 55,
       "priority": 1
@@ -2062,39 +2062,6 @@
       "failure_streak": 0
     },
     {
-      "id": "skill-index-weekly-rebuild-b5f8420f",
-      "name": "skill-index-weekly-rebuild",
-      "description": "Unconditional weekly skill index rebuild ensuring AF(skill_index_built) liveness (Clarke et al. LTL)",
-      "script": "skill-router-index.py",
-      "args": [
-        "--build"
-      ],
-      "no_agent": true,
-      "schedule": {
-        "kind": "cron",
-        "expr": "0 3 * * 0",
-        "display": "0 3 * * 0",
-        "type": "cron",
-        "cron_expr": "0 3 * * 0"
-      },
-      "schedule_display": "0 3 * * 0",
-      "priority": 3,
-      "startup_jitter_seconds": 30,
-      "timeout_seconds": 300,
-      "enabled": true,
-      "deliver": "local",
-      "profile": "fork",
-      "env": {
-        "HERMES_PROFILE": "fork"
-      },
-      "state": "scheduled",
-      "created_at": "2026-09-22T15:29:09.530109+10:00",
-      "next_run_at": "2026-09-27T03:00:00+10:00",
-      "last_run_at": null,
-      "last_status": null,
-      "failure_streak": 0
-    },
-    {
       "id": "staleness-monitor-24f8e4a1",
       "name": "staleness-monitor",
       "description": "Monitor freshness of critical Hermes log files (D2 liveness: Lynch Distributed Algorithms \u00a78 AF(log_written))",
@@ -2110,5 +2077,5 @@
       "deliver": "local"
     }
   ],
-  "updated_at": "2026-09-22T15:31:20.905700+10:00"
+  "updated_at": "2026-09-22T15:40:22.054820+10:00"
 }
