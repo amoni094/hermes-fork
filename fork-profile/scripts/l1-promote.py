@@ -20,11 +20,28 @@ import sqlite3
 import sys
 from pathlib import Path
 
-LOCK = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / ".l1-extract-running"
+
+def _bind_profile_home() -> Path:
+    """Bind HERMES_HOME to the active profile data root before loading bytecode.
+
+    Inner payload and METACOG_DB use HERMES_HOME as the data root with no
+    HERMES_PROFILE join. Cron sets HERMES_HOME=~/.hermes and HERMES_PROFILE=fork.
+    """
+    base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+    profile = os.environ.get("HERMES_PROFILE", "")
+    if profile and "profiles" not in str(base):
+        bound = base / "profiles" / profile
+        os.environ["HERMES_HOME"] = str(bound)
+        return bound
+    return base
+
+
+_HERMES_HOME = _bind_profile_home()
+LOCK = _HERMES_HOME / ".l1-extract-running"
 METACOG_DB = Path(
     os.environ.get(
         "MH_DB",
-        str(Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "memory-facts" / "metacognitive.db"),
+        str(_HERMES_HOME / "memory-facts" / "metacognitive.db"),
     )
 )
 _HERE = Path(__file__).resolve().parent
@@ -65,15 +82,33 @@ def _reexec_if_wrong_python() -> None:
 
 
 def _load():
+    # The fork wrapper's pyc is a compiled copy of the main-scripts wrapper.
+    # When exec'd via SourcelessFileLoader, __file__ resolves to the .pyc path,
+    # causing the inner wrapper's _HERE to point at __pycache__/ instead of scripts/.
+    # Fix: delegate directly to the main scripts l1-promote.py via runpy, which
+    # sets __file__ correctly so the inner _HERE resolves to scripts/.
+    main_promote = _HERE.parent.parent.parent / "scripts" / "l1-promote.py"
+    if main_promote.exists():
+        import runpy, types
+        # Patch sys.path first so inner imports resolve
+        main_scripts = str(main_promote.parent)
+        refs_dir = str(main_promote.parent / "references")
+        for d in [main_scripts, refs_dir, str(_HERE)]:
+            if d not in sys.path:
+                sys.path.insert(0, d)
+        globs = runpy.run_path(str(main_promote), run_name="__main__imported__")
+        mod = types.ModuleType("l1_promote_restored")
+        mod.__dict__.update(globs)
+        return mod
+    # Fallback: bytecode exec (may fail if inner _HERE resolves wrong)
     pyc = next((p for p in _PYC_CANDIDATES if p.exists() and p.stat().st_size > 0), None)
     if pyc is None:
         print("l1-promote bytecode missing — cannot run", file=sys.stderr)
         sys.exit(1)
-    # Ensure scripts/ dir is on sys.path so the restored bytecode can import
-    # siblings (l1-tracegrant, l1-graphiti-write, etc.) without FileNotFoundError.
-    scripts_dir = str(_HERE)
-    if scripts_dir not in sys.path:
-        sys.path.insert(0, scripts_dir)
+    for d in [str(_HERE), str(_HERE.parent.parent.parent / "scripts"),
+              str(_HERE.parent.parent.parent / "scripts" / "references")]:
+        if d not in sys.path:
+            sys.path.insert(0, d)
     loader = importlib.machinery.SourcelessFileLoader("l1_promote_restored", str(pyc))
     spec = importlib.util.spec_from_file_location("l1_promote_restored", str(pyc), loader=loader)
     mod = importlib.util.module_from_spec(spec)

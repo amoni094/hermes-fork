@@ -551,7 +551,11 @@ def optimize_queued(budget_per_skill: float, max_skills: int):
 
         if delta > 0.02:
             out_path = candidates_dir / f"{item['name']}_candidate.md"
-            out_path.write_text(result.best_candidate)
+            __out_tmp = out_path.parent / ("." + out_path.name + ".tmp")
+
+            __out_tmp.write_text(result.best_candidate)
+
+            import os as _os; _os.replace(str(__out_tmp), str(out_path))
             print(f"  Candidate written: {out_path}")
             print(f"  Review and copy to {item['path']} if satisfied.")
         else:

@@ -395,9 +395,13 @@ def audit(config_path: Path, workspace: Path, report_path: Path) -> int:
                  "Do not disable required local MCP servers from this report alone.")
 
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text("\n".join(lines) + "\n")
+    __rep_tmp = report_path.parent / ("." + report_path.name + ".tmp")
+    __rep_tmp.write_text("\n".join(lines) + "\n")
+    import os as _os; _os.replace(str(__rep_tmp), str(report_path))
     print(f"Wrote {report_path} ({total_tools} tools, {total_flags} findings)")
-    return 1 if total_flags > 0 else 0
+    # Print full report to stdout for no_agent=True cron delivery
+    print(open(str(report_path)).read())
+    return 0  # exit 0 always; exit 1 is reserved for script-level errors
 
 
 def main(argv: list[str]) -> int:

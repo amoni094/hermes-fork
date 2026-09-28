@@ -37,7 +37,9 @@ import re
 
 import os
 
-_HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_profile = os.environ.get("HERMES_PROFILE", "")
+_HERMES_HOME = (_base / "profiles" / _profile) if _profile and "profiles" not in str(_base) else _base
 FACTS_DIR = _HERMES_HOME / "memory-facts"
 LIFECYCLE_DB = FACTS_DIR / "lifecycle.db"
 STAGING_PATH = FACTS_DIR / "staging.md"

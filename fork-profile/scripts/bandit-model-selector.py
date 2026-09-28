@@ -26,6 +26,7 @@ Only stdlib + numpy. Shebang is /usr/bin/python3 (not the hermes-fork venv).
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import sys
 from collections import defaultdict
@@ -33,7 +34,7 @@ from pathlib import Path
 
 import numpy as np
 
-LOG_PATH = Path.home() / ".hermes" / "logs" / "routing-quality.jsonl"
+LOG_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "logs" / "routing-quality.jsonl"
 MIN_ENTRIES = 5
 SUCCESS_OUTCOMES = frozenset({"completed", "ok", "pass"})
 ALARM_INSUFFICIENT = "ALARM: no -- insufficient data"

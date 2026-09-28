@@ -62,7 +62,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 WM_DIR = HERMES_HOME / "cache" / "working-memory"
 skill_sequence_log = HERMES_HOME / "cache" / "skill-sequences.jsonl"
 VALID_BINDINGS = ("must", "should", "info")
@@ -1646,7 +1646,7 @@ def cmd_risk_floor(args: argparse.Namespace) -> int:
             import re as _re
             from pathlib import Path as _Path
             # Try HERMES_HOME first, fall back to ~/.hermes (canonical)
-            for _cfg_path in [HERMES_HOME / "config.yaml", _Path.home() / ".hermes" / "config.yaml"]:
+            for _cfg_path in [HERMES_HOME / "config.yaml", _Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "config.yaml"]:
                 if _cfg_path.exists():
                     txt = _cfg_path.read_text(encoding="utf-8")
                     if "loop_risk_floor:" in txt:

@@ -19,11 +19,32 @@ import struct
 import sys
 from pathlib import Path
 
-LOCK = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / ".l1-extract-running"
+
+def _bind_profile_home() -> Path:
+    """Bind HERMES_HOME to the active profile data root before loading bytecode.
+
+    Inner payload uses HERMES_HOME/memory-facts and HERMES_HOME/state.db with no
+    HERMES_PROFILE join. Cron sets HERMES_HOME=~/.hermes and HERMES_PROFILE=fork;
+    without this, fork jobs read/write the default profile.
+    """
+    base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+    profile = os.environ.get("HERMES_PROFILE", "")
+    if profile and "profiles" not in str(base):
+        bound = base / "profiles" / profile
+        os.environ["HERMES_HOME"] = str(bound)
+        return bound
+    return base
+
+
+_HERMES_HOME = _bind_profile_home()
+LOCK = _HERMES_HOME / ".l1-extract-running"
 _HERE = Path(__file__).resolve().parent
 _PYC_CANDIDATES = [
-    # cpython-314 first: payload compiled for 3.14, re-exec fires if running 3.11
-    _HERE / "__pycache__" / "l1-extract.cpython-314.pyc",
+    # Direct references/ in same scripts dir (works for both default and fork profile paths)
+    _HERE / "references" / "l1-extract.cpython-314.pyc.bak",
+    # Default profile scripts/references (absolute fallback)
+    Path.home() / ".hermes" / "scripts" / "references" / "l1-extract.cpython-314.pyc.bak",
+    # Legacy: 3 parents up (correct for default profile, wrong for fork)
     _HERE.parent.parent.parent / "scripts" / "references" / "l1-extract.cpython-314.pyc.bak",
     _HERE.parent.parent.parent / "scripts" / "__pycache__" / "l1-extract.cpython-314.pyc",
     # cpython-311 last: wrapper fallback (for inspection only, not payload)

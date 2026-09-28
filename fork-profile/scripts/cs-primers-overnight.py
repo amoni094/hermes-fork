@@ -462,7 +462,9 @@ def generate_primer(key: str, force: bool = False) -> bool:
     header = (f"# CS Primer: {label}\n"
               f"# Key: {key} | Tier: {tier}\n"
               f"# Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n\n")
-    primer_path.write_text(header + text, encoding="utf-8")
+    __primer_tmp = primer_path.parent / ("." + primer_path.name + ".tmp")
+    __primer_tmp.write_text(header + text, encoding="utf-8")
+    import os as _os; _os.replace(str(__primer_tmp), str(primer_path))
     print(f"  [{key}] Written: {primer_path.name} ({len(text)} chars)")
     return True
 
@@ -479,7 +481,9 @@ def update_index():
         else:
             status = "MISSING"
         lines.append(f"  {status}  [{tier:4}]  {key:<30}  {label}")
-    INDEX_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    __idx_tmp = INDEX_FILE.parent / ("." + INDEX_FILE.name + ".tmp")
+    __idx_tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    import os as _os2; _os2.replace(str(__idx_tmp), str(INDEX_FILE))
     print(f"\nIndex updated: {INDEX_FILE}")
 
 

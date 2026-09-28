@@ -14,6 +14,7 @@ This approximates P(success|do(invoke_skill)) not P(success|invoke_skill).
 """
 from __future__ import annotations
 
+import os
 import json, os, subprocess, sys, time
 from collections import Counter
 from pathlib import Path

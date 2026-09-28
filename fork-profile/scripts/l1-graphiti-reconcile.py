@@ -40,7 +40,10 @@ import urllib.request
 import urllib.error
 import importlib.util
 
-FACTS_DIR = pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "memory-facts"
+_base = pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes")))
+_profile = os.environ.get("HERMES_PROFILE", "")
+_root = (_base / "profiles" / _profile) if _profile and "profiles" not in str(_base) else _base
+FACTS_DIR = _root / "memory-facts"
 DB_PATH = FACTS_DIR / "graphiti-state.db"
 STAGING_PATH = FACTS_DIR / "staging.md"
 GRAPHITI_BASE = "http://127.0.0.1:8765/mcp"

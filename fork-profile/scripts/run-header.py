@@ -37,7 +37,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-HERMES_DIR = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 SKILLS_DIR = HERMES_DIR / "skills"
 CONFIG_PATH = HERMES_DIR / "config.yaml"
 LOG_PATH = HERMES_DIR / "logs" / "run-headers.jsonl"

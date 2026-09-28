@@ -541,7 +541,7 @@ def main() -> int:
     # Post-consolidation: surface unresolved H2 obstructions from profinite-thread-check.
     # Fail-open: any I/O or parse error is silently skipped.
     try:
-        _hermes_home = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+        _hermes_home = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
         _profile = os.environ.get("HERMES_PROFILE", "")
         # Profile-aware cache path: prefer <profile>/cache/ when HERMES_PROFILE is set,
         # otherwise fall back to the default <HERMES_HOME>/cache/ location.

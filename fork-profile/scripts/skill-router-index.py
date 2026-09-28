@@ -33,10 +33,14 @@ SKILLS_ROOT = _hermes_root_sri / "skills"
 # resolve to a non-existent scripts/skills directory.
 _HERMES_MAIN_SKILLS = _hermes_base_sri / "skills"
 if "profiles" in str(_hermes_base_sri):
-    _HERMES_MAIN_SKILLS = Path.home() / ".hermes" / "skills"
+    _HERMES_MAIN_SKILLS = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "skills"
 
 INDEX_PATH = _hermes_root_sri / "cache" / "skill-router-index.json"
 OVERLAP_THRESHOLD = 0.65
+# arXiv:2609.14486 — Degree-Parameterized Analysis of Sampling-Based Online Algorithms:
+# when task degree/complexity is high (ambiguous routing), wider sampling beats greedy top-1.
+AMBIGUITY_THRESHOLD = 0.05  # difference below which routing is considered ambiguous
+MIN_SCORE_THRESHOLD = 0.3  # minimum BM25 score to accept a result
 BETA_STATE_PATH = _hermes_root_sri / "cache" / "skill-beta-state.json"
 
 # R4 — Cross-domain skill fingerprints (Sweep 24 / arXiv:2603.22455 §4)
@@ -529,13 +533,32 @@ def scan_skills() -> list[dict]:
                     except OSError:
                         same_file = existing_path == str(skill_md_path)
                     if not same_file:
-                        print(
-                            f"[skill-router WARN] name collision: '{name}' in both "
-                            f"{existing_path!r} and {str(skill_md_path)!r} — "
-                            f"keeping first-seen (fork priority).",
-                            file=sys.stderr,
-                        )
-                    # Do NOT overwrite — first-seen wins
+                        # True fork-local files (not via category symlink into the
+                        # default library) beat first-seen walk order.
+                        def _under_main(p: Path) -> bool:
+                            try:
+                                resolved = p.resolve()
+                                main = _HERMES_MAIN_SKILLS.resolve()
+                                return resolved == main or str(resolved).startswith(str(main) + _os_scan.sep)
+                            except OSError:
+                                return False
+                        existing_main = _under_main(Path(existing_path))
+                        new_main = _under_main(skill_md_path)
+                        if existing_main and not new_main:
+                            print(
+                                f"[skill-router WARN] name collision: '{name}' in both "
+                                f"{existing_path!r} and {str(skill_md_path)!r} — "
+                                f"keeping fork-local overlay.",
+                                file=sys.stderr,
+                            )
+                            seen_names[name] = entry
+                        else:
+                            print(
+                                f"[skill-router WARN] name collision: '{name}' in both "
+                                f"{existing_path!r} and {str(skill_md_path)!r} — "
+                                f"keeping first-seen (fork priority).",
+                                file=sys.stderr,
+                            )
                 else:
                     seen_names[name] = entry
             except Exception as e:
@@ -633,6 +656,27 @@ def load_index_with_tfidf():
     return skills, idf, index
 
 
+def _adaptive_bm25_threshold(scored: list, top: int) -> tuple[float, int]:
+    """Widen sampling when BM25 routing is low-confidence or ambiguous.
+
+    arXiv:2609.14486: high-degree/ambiguous tasks — wider sampling beats greedy top-1.
+    """
+    score_threshold = MIN_SCORE_THRESHOLD
+    result_top = top
+    if not scored:
+        return score_threshold, result_top
+    s1 = float(scored[0][0])
+    s2 = float(scored[1][0]) if len(scored) > 1 else 0.0
+    if s1 < MIN_SCORE_THRESHOLD or (len(scored) > 1 and (s1 - s2) < AMBIGUITY_THRESHOLD):
+        score_threshold = 0.0  # reduce threshold to admit more candidates
+        result_top = max(top, 2)
+        print(
+            f"[skill-router] AMBIGUOUS: top scores {s1:.3f}/{s2:.3f}, returning top-2",
+            file=sys.stderr,
+        )
+    return score_threshold, result_top
+
+
 def route(query_text: str, top: int = 5) -> list[dict]:
     """Return top-N skill matches as a list of dicts (callable API, no side-effects).
 
@@ -674,9 +718,10 @@ def route(query_text: str, top: int = 5) -> list[dict]:
     ]
     scored = list(zip(scored, skills))
     scored.sort(key=lambda x: -x[0])
+    score_threshold, result_top = _adaptive_bm25_threshold(scored, top)
 
     # Concept-lattice semantic reranking (same logic as cmd_query)
-    LATTICE_SCRIPT = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
+    LATTICE_SCRIPT = Path(_os_sri.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
     AMBIGUITY_GAP = 0.12
     LATTICE_BOOST = 0.15
     if len(scored) >= 2:
@@ -705,8 +750,8 @@ def route(query_text: str, top: int = 5) -> list[dict]:
                 scored = sorted(_boosted, key=lambda x: -x[0])
 
     results = []
-    for sc, s in scored[:top]:
-        if sc <= 0.0:
+    for sc, s in scored[:result_top]:
+        if sc < score_threshold:
             continue
         results.append({
             "name": s["name"],
@@ -865,9 +910,10 @@ def cmd_query(query_text: str):
     ]
     scored = list(zip([score for score in scored], skills))
     scored.sort(key=lambda x: -x[0])
+    _score_threshold, _result_top = _adaptive_bm25_threshold(scored, 5)
 
     # ── Semantic reranking: concept-lattice fallback when BM25 is ambiguous ──
-    LATTICE_SCRIPT = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
+    LATTICE_SCRIPT = Path(_os_sri.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
     AMBIGUITY_GAP  = 0.12
     LATTICE_BOOST  = 0.15
     semantic_reranked = False
@@ -908,7 +954,9 @@ def cmd_query(query_text: str):
                 semantic_reranked = True
 
     print(f"Top 5 matches for: '{query_text}'\n")
-    for rank, (score, s) in enumerate(scored[:5], 1):
+    for rank, (score, s) in enumerate(scored[:_result_top], 1):
+        if score < _score_threshold:
+            continue
         desc = s["description"][:70].replace("\n", " ")
         # PAC-Bayes-kl interval is display-only; ranking still uses posterior mean.
         _entry = beta_state.get(s["name"], {})

@@ -58,7 +58,7 @@ except ImportError:
     np = None  # type: ignore
     _NUMPY_AVAILABLE = False
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 SKILL_WIKI_DIR = HERMES_HOME / "cache" / "skill-wiki"
 SKILLS_DIR = HERMES_HOME / "skills"
 _SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -470,7 +470,7 @@ def _load_skill_records() -> list[dict]:
     # Fallback: if SKILLS_DIR (derived from HERMES_HOME env) yields no skills,
     # also try the canonical ~/.hermes/skills to survive fork-profile overlayfs issues.
     candidate_dirs = [SKILLS_DIR]
-    canonical = Path.home() / ".hermes" / "skills"
+    canonical = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "skills"
     if canonical != SKILLS_DIR and canonical.is_dir():
         candidate_dirs.append(canonical)
     seen: set[str] = set()
@@ -502,7 +502,7 @@ def _load_skill_records() -> list[dict]:
 def _load_named_token_sets() -> dict[str, set[str]]:
     named: dict[str, set[str]] = {}
     candidate_dirs = [SKILLS_DIR]
-    canonical = Path.home() / ".hermes" / "skills"
+    canonical = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "skills"
     if canonical != SKILLS_DIR and canonical.is_dir():
         candidate_dirs.append(canonical)
     for skills_dir in candidate_dirs:

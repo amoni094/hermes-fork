@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Cron wrapper: rebuild skill-router-index unconditionally.
+import pathlib
 Called by hermes cron scheduler (no args supported) — drives --build logic directly.
 """
 import importlib.util, pathlib, sys

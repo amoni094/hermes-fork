@@ -4,7 +4,7 @@ Patterns ported from Denuto (jesterG1979/hello_agent) + Hermes-native patterns.
 This is the authoritative single source of truth for how Hermes is structured,
 what rules are enforced, and what the invariants are.
 
-Last updated: 2026-09-22 (deployed plugin catalog: cobra-guard, orca-status, tool-auth-gate)
+Last updated: 2026-09-28 (deployed plugin catalog: cobra-guard, orca-status, tool-auth-gate; Wave 11: import-alias mass fix, cron env wiring, skill index dedup, l1-extract pyc cleanup)
 
 ---
 
@@ -340,6 +340,29 @@ Live plugins under ~/.hermes/profiles/fork/plugins/, enabled in config.yaml plug
 
   All prior wave closures (waves 1-9, sprint 2-3): see Wave 7, Wave 8, and sprint
     closure tables below.
+
+  [Wave 11] Import alias bug mass fix: all 317 scripts now use `import os` (not `import os as _os`
+    + bare `os.environ.get`). Nested os.environ.get(HERMES_HOME, str(Path(os.environ.get(...)))) 
+    patterns collapsed to single-level calls. 0 compile failures after fix.
+    Adversarial: subagent cold pass PASS.
+
+  [Wave 11] Cron env wiring: all 52 cron jobs in fork/cron/jobs.json now carry HERMES_PROFILE=fork
+    and HERMES_HOME=/var/home/rainbow/.hermes in their env block. Previously 34/52 missing profile.
+    Adversarial: verified via direct JSON inspection.
+
+  [Wave 11] Skill index deduplication: 5 collisions resolved (dispatching-parallel-agents,
+    hermes-cron-and-agents, hermes-observability-and-task-ledger, blocked-page-recovery,
+    + duplicate skill dirs in wrong category). Indexer now clean (warnings are expected
+    fork-vs-default priority warnings only). 317 skills indexed.
+
+  [Wave 11] l1-extract.py stale pyc cleanup: fork scripts/__pycache__ had 3 stale
+    bytecode files (cpython-314, cpython-311, .py.cpython-311 variants). Removed.
+    Fork l1-extract.py and main l1-extract.py confirmed NOT hardlinked; both run
+    correctly (--help exit 0).
+
+  [Wave 11] skill-index-week cron: added HERMES_CRON_BUILD=1 to env; without it,
+    the script printed PAC-Bayes example text instead of building the index.
+
 
 ### ACCEPTED LIMITATIONS (architectural — not fixable by script patch)
 

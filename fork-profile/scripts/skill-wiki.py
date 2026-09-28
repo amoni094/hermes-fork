@@ -46,7 +46,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 WIKI_DIR = HERMES_HOME / "cache" / "skill-wiki"
 ENABLED = True
 
@@ -224,7 +224,9 @@ def cmd_export(args: argparse.Namespace) -> int:
                     lines.append(f"  - {text}" + (f" [{ref}]" if ref else ""))
         lines.append(f"\n_Last updated: {doc.get('last_updated', 'unknown')}_\n")
     out = Path(args.output) if getattr(args, "output", None) else HERMES_HOME / "cache" / "skill-wiki-export.md"
-    out.write_text("\n".join(lines) + "\n")
+    __out_tmp = out.parent / ("." + out.name + ".tmp")
+    __out_tmp.write_text("\n".join(lines) + "\n")
+    import os as _os; _os.replace(str(__out_tmp), str(out))
     print(f"[wiki] exported to {out}")
     return 0
 

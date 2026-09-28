@@ -26,8 +26,8 @@ from pathlib import Path
 MAX_TRIGGER_PHRASE_CHARS = 120
 
 DEFAULT_SKILL_ROOTS = (
-    Path.home() / ".hermes" / "skills",
-    Path.home() / ".hermes" / "profiles" / "fork" / "skills",
+    Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "skills",
+    Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "profiles" / "fork" / "skills",
 )
 
 REASON_EMPTY_NFKD = "empty after NFKD normalization"

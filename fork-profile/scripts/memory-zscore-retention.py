@@ -40,8 +40,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-FACTS_DIR    = Path.home() / ".hermes" / "memory-facts"
-STAGING_PATH = FACTS_DIR / "staging.md"
+FACTS_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "staging.md"
 LIFECYCLE_DB = FACTS_DIR / "lifecycle.db"
 PURGE_LOG    = FACTS_DIR / "purge_log.jsonl"
 
@@ -79,23 +78,21 @@ def _load_lifecycle_data() -> dict[str, dict]:
         return data
     try:
         con = sqlite3.connect(str(LIFECYCLE_DB))
-        try:
-            cur = con.cursor()
-            cur.execute(
-                "SELECT fact_text, valid_from, access_count "
-                "FROM fact_lifecycle "
-                "WHERE valid_to IS NULL OR valid_to = '' "
-                "LIMIT 10000"
-            )
-            for fact_text, valid_from, access_count in cur.fetchall():
-                if fact_text:
-                    key = fact_text[:120].strip()
-                    data[key] = {
-                        "valid_from":    valid_from or "",
-                        "access_count":  int(access_count or 0),
-                    }
-        finally:
-            con.close()
+        cur = con.cursor()
+        cur.execute(
+            "SELECT fact_text, valid_from, access_count "
+            "FROM fact_lifecycle "
+            "WHERE valid_to IS NULL OR valid_to = '' "
+            "LIMIT 10000"
+        )
+        for fact_text, valid_from, access_count in cur.fetchall():
+            if fact_text:
+                key = fact_text[:120].strip()
+                data[key] = {
+                    "valid_from":    valid_from or "",
+                    "access_count":  int(access_count or 0),
+                }
+        con.close()
     except Exception:
         # Silently swallow all SQLite errors — missing/corrupt DB is best-effort;
         # facts without lifecycle data get default scores (recency=0.5, access=0).

@@ -62,7 +62,7 @@ DELEGATE_THRESHOLD    = float(os.environ.get("MH_DELEGATE",     "0.6"))
 BLEND_WEIGHT          = float(os.environ.get("MH_BLEND",        "0.5"))
 MIN_SAMPLES           = int(os.environ.get("MH_MIN_SAMPLES",    "5"))
 HERMES_HOME           = Path(os.environ.get("HERMES_HOME",
-                              str(Path.home() / ".hermes")))
+                              str(Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))))))
 DB_PATH               = Path(os.environ.get(
     "MH_DB", str(HERMES_HOME / "memory-facts" / "metacognitive.db")))
 

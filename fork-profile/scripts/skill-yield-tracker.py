@@ -307,7 +307,7 @@ def confidence_intervals(z: float = 1.96) -> list[dict]:
                half_w = z * sqrt(n_s*(n-n_s)/n + z^2/4) / (n + z^2)
     where z=1.96 for 95% CI.
     """
-    hermes_home = Path.home() / ".hermes"
+    hermes_home = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
     meta_db_candidates = [
         Path(os.environ["MH_DB"]) if "MH_DB" in os.environ else None,
         Path(os.environ.get("HERMES_HOME", str(hermes_home))) / "memory-facts" / "metacognitive.db",
