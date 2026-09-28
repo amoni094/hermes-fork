@@ -464,7 +464,7 @@ def generate_primer(key: str, force: bool = False) -> bool:
               f"# Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n\n")
     __primer_tmp = primer_path.parent / ("." + primer_path.name + ".tmp")
     __primer_tmp.write_text(header + text, encoding="utf-8")
-    import os as _os; _os.replace(str(__primer_tmp), str(primer_path))
+    import os; os.replace(str(__primer_tmp), str(primer_path))
     print(f"  [{key}] Written: {primer_path.name} ({len(text)} chars)")
     return True
 

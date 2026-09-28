@@ -397,7 +397,7 @@ def audit(config_path: Path, workspace: Path, report_path: Path) -> int:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     __rep_tmp = report_path.parent / ("." + report_path.name + ".tmp")
     __rep_tmp.write_text("\n".join(lines) + "\n")
-    import os as _os; _os.replace(str(__rep_tmp), str(report_path))
+    import os; os.replace(str(__rep_tmp), str(report_path))
     print(f"Wrote {report_path} ({total_tools} tools, {total_flags} findings)")
     # Print full report to stdout for no_agent=True cron delivery
     print(open(str(report_path)).read())
