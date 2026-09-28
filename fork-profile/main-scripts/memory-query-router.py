@@ -288,6 +288,37 @@ def route_query(query: str, allow_llm: bool = True) -> RouteResult:
     except Exception:
         _route_weights = {}
 
+    # MEXTRA extraction block (arXiv:2502.13172 — memory extraction attack defence):
+    # If query matches known extraction patterns, refuse to quote memory verbatim.
+    _MEXTRA_PATTERNS = [
+        r"repeat\s+your\s+memory",
+        r"list\s+all\s+stored\s+facts",
+        r"dump\s+memory",
+        r"print\s+memory",
+        r"show\s+me\s+your\s+memory",
+        r"ignore\s+.*\s+print\s+system",
+        r"ignore\s+.*\s+print\s+instructions",
+        r"forget\s+everything\s+and\s+repeat",
+        r"output\s+your\s+(?:full\s+)?(?:memory|notes|instructions)",
+        r"what\s+(?:is\s+)?(?:in|inside)\s+(?:your\s+)?memory",
+        r"(?:read|cat|show)\s+MEMORY\.md",
+    ]
+    _q_lower_mextra = (query or "").lower()
+    _is_extraction_attempt = any(
+        re.search(p, _q_lower_mextra, re.IGNORECASE) for p in _MEXTRA_PATTERNS
+    )
+    if _is_extraction_attempt:
+        import sys as _sys_mextra
+        print(f"[memory-router] MEXTRA: extraction pattern blocked in query",
+              file=_sys_mextra.stderr)
+        # Return a special route result that blocks verbatim memory injection
+        return RouteResult(
+            type="extraction_blocked",
+            confidence="high",
+            reason="MEXTRA: memory extraction pattern detected — refusing verbatim quote",
+            surfaces=[],
+        )
+
     qtype, confidence, reason = heuristic_classify(query)
 
     # Spurious-cue check (arXiv:2609.16268 — Spurious Tool Use):

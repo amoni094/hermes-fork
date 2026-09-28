@@ -86,6 +86,30 @@ Stale .pyc files can shadow corrected scripts. After edits:
 find ~/.hermes/profiles/fork/scripts/__pycache__ -name '*.pyc' -delete
 ```
 
+### Audit Scope: Always scan BOTH script dirs
+When checking for missing/broken scripts:
+- Main scripts: `~/.hermes/scripts/` (258 .py files)
+- Fork scripts: `~/.hermes/profiles/fork/scripts/` (58 .py files)
+Scanning only the main dir misses fork-specific scripts.
+
+### Dead function detection: sys.exit(1) counts too
+scripts can signal failure via `sys.exit(1)` not just `return 1`. Both patterns must
+be checked when verifying that a gate function actually raises an error on failure.
+
+### Skip *-alarm.json false positives
+Alarm JSON filenames written by alarm-aggregator.py are never imported by name in
+Python source. The glob `alarm-aggregator` writes matches `*-alarm.json`. Treating
+unmatched alarm filenames as dead output is a confirmed false-positive class.
+
+### Skill routing audit: check BOTH fork and default indexes
+Fork index: `~/.hermes/profiles/fork/cache/skill-router-index.json`
+Default index: `~/.hermes/cache/skill-router-index.json` (separate, may be stale)
+The audit must diff indexed names against on-disk SKILL.md count for BOTH.
+
+### related_skills must include hermes-fork-audit-pitfalls
+Always load hermes-fork-audit-pitfalls alongside this skill to avoid re-discovering
+alarm-file and fork/scripts false positives.
+
 ## Severity Classification
 
 - CRITICAL: script import errors (NameError/ImportError) → immediate fix

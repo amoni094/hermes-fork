@@ -838,6 +838,77 @@ def recall(
 
     record_query_access(fused)
 
+    # ── Infini Memory BM25 heading-partition fallback (arXiv:2606.10677) ──────
+    # Algorithm 3: if fused results are thin (< 800 chars total), fall back to
+    # BM25 over heading-partitioned memory files + recent write buffer.
+    _fused_chars = sum(len(item.get("text", "")) for item in fused)
+    _BM25_FALLBACK_THRESHOLD = 800
+    if _fused_chars < _BM25_FALLBACK_THRESHOLD:
+        try:
+            import math as _math_bm25
+            from collections import defaultdict as _dd_bm25
+            _memory_dir = _hermes_root() / "memory"
+            _buf_path = _memory_dir / "buffer.md"
+            _topics_dir = _memory_dir / "topics"
+            _partitions: list[str] = []
+            # Split MEMORY.md and topic files on heading lines
+            for _mp in ([_hermes_root() / "memories" / "MEMORY.md"]
+                        + list(_topics_dir.glob("*.md") if _topics_dir.is_dir() else [])):
+                if _mp.exists():
+                    _raw = _mp.read_text(errors="replace")
+                    _secs = re.split(r"(?m)^#{1,3} ", _raw)
+                    _partitions.extend(s.strip() for s in _secs if len(s.strip()) > 40)
+            # Always concatenate recent buffer lines (write-buffer union)
+            _buf_extra: list[str] = []
+            if _buf_path.exists():
+                _buf_lines = _buf_path.read_text(errors="replace").splitlines()
+                _buf_extra = _buf_lines[-50:]  # last 50 lines (recent writes)
+            if _buf_extra:
+                _partitions.append("\n".join(_buf_extra))
+            if _partitions:
+                # BM25 over partitions (stdlib only)
+                _q_toks = re.findall(r"[a-zA-Z0-9_]{3,}", query.lower())
+                _df: dict = _dd_bm25(int)
+                _doc_toks_all = []
+                for _p in _partitions:
+                    _dt = re.findall(r"[a-zA-Z0-9_]{3,}", _p.lower())
+                    _doc_toks_all.append(_dt)
+                    for _t in set(_dt):
+                        _df[_t] += 1
+                _N = len(_partitions)
+                _idf = {_t: _math_bm25.log((_N - _df[_t] + 0.5) / (_df[_t] + 0.5) + 1)
+                        for _t in _df}
+                _avgdl = sum(len(d) for d in _doc_toks_all) / max(_N, 1)
+                _k1, _b = 1.5, 0.75
+                _bm25_scored = []
+                for _i, _p in enumerate(_partitions):
+                    _tf: dict = _dd_bm25(int)
+                    for _t in _doc_toks_all[_i]:
+                        _tf[_t] += 1
+                    _dl = len(_doc_toks_all[_i])
+                    _score = sum(
+                        _idf.get(_t, 0.0) * (_tf[_t] * (_k1 + 1))
+                        / (_tf[_t] + _k1 * (1 - _b + _b * _dl / max(_avgdl, 1)))
+                        for _t in _q_toks if _t in _tf
+                    )
+                    if _score > 0:
+                        _bm25_scored.append((_score, _p))
+                _bm25_scored.sort(key=lambda x: -x[0])
+                for _score, _text in _bm25_scored[:8]:  # fallback_topk=8
+                    fused.append({
+                        "text": apply_tier(_text[:600], tier),
+                        "_full_text": _text[:600],
+                        "rrf_score": round(_score * 0.1, 4),  # scale to RRF range
+                        "enriched_weight": 0.1,
+                        "enriched_distance": 0.9,
+                        "_age_days": 0.0,
+                        "sources": ["bm25_heading_fallback"],
+                        "path": [],
+                        "tier": tier,
+                    })
+        except Exception:
+            pass  # BM25 fallback is best-effort; never block recall
+
     # ── Skill suggestions (SkillRouter, arXiv:2603.22455) ──────────────────────
     # Activate when query looks like a skill/procedure lookup. Fail-open: any
     # error (index not yet built, import failure) is silently suppressed so
