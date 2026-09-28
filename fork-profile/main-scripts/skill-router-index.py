@@ -41,7 +41,7 @@ SKILLS_ROOT = _hermes_root_sri / "skills"
 # resolve to a non-existent scripts/skills directory.
 _HERMES_MAIN_SKILLS = _hermes_base_sri / "skills"
 if "profiles" in str(_hermes_base_sri):
-    _HERMES_MAIN_SKILLS = pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "skills"
+    _HERMES_MAIN_SKILLS = pathlib.Path(_os_sri.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "skills"
 
 INDEX_PATH = _hermes_root_sri / "cache" / "skill-router-index.json"
 OVERLAP_THRESHOLD = 0.65
