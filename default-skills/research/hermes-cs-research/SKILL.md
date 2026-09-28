@@ -363,6 +363,36 @@ Chain' section above). Do not route to findings banks without first running the 
 - Core agent findings (cs.AI/cs.CL/cs.MA) -> arxiv-sweep-findings
 - Math/theory findings -> hermes-math-sweep-findings
 
+
+## Multilingual Query Expansion
+
+Always run research queries in 3+ languages for broader coverage.
+
+Template: for each English query, generate variants by appending the domain term in the target language.
+
+Example expansions:
+- 'agent memory'         -> 代理记忆 (zh), память агента (ru), エージェントメモリ (ja)
+- 'multi-agent coordination' -> 多智能体协调 (zh), многоагентная координация (ru)
+- 'context compression'  -> 上下文压缩 (zh), сжатие контекста (ru)
+- 'skill routing'        -> 技能路由 (zh), スキルルーティング (ja)
+- 'reinforcement learning optimization' -> 强化学习优化 (zh), оптимизация обучения с подкреплением (ru)
+
+Rationale:
+- Chinese ML community produces 30-40% of top-tier AI papers; Zhihu + Chinese arXiv mirrors
+  often index 2-4 weeks before English-only feeds
+- Russian community: strong in optimization theory and formal methods
+- Japanese: robotics, planning, HCI
+- Non-English queries surface papers that English-only sweeps miss entirely
+
+Minimum: English + Chinese + Russian for any Hermes-relevant topic.
+Optional: Japanese (robotics/planning), French (ML theory), German (formal methods).
+
+Search targets:
+- arXiv (multilingual title/abstract search via Semantic Scholar API)
+- Google Scholar with lang: param
+- Baidu Scholar for Chinese-primary papers
+- CyberLeninka for Russian-primary papers
+
 ## Skill Write Ownership (Class H safety)
 
   hermes-cs-research -> read/routing only, no skill_manage writes

@@ -38,8 +38,20 @@ Source: arXiv:2609.26779 — CliffCompaction.
 - Short sessions (under about 6 turns): filter tool schemas first (arXiv:2609.22114).
 - The agent still needs exact bytes for an edit — recall the original segment, do not summarize it.
 
+## SPEC Selective Propagation (arXiv:2609.23877)
+
+On each compaction pass, tag each block as one of:
+- KEEP: decision node, error trace, file path/hash, parameter value used in a later call
+- TRIM: intermediate reasoning that reached a conclusion (keep only the conclusion)
+- DROP: tool output fully superseded by a later tool call on the same resource
+
+Propagation budget: KEEP ≤ 40% of pre-compaction tokens. Trim before dropping.
+Never TRIM a KEEP block. Never DROP a block whose output is still unresolved.
+
 ## Verification
 
 - [ ] Compaction dropped or shortened originals; no LLM rewrite of history
 - [ ] Previous compacted summary was discarded, not nested
 - [ ] Tool signatures remain so dropped outputs are recoverable
+- [ ] SPEC tags applied: KEEP ≤ 40% budget, TRIM before DROP
+- [ ] No KEEP block was trimmed; no unresolved output was dropped
