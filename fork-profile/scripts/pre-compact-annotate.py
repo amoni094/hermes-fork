@@ -112,11 +112,20 @@ def _tag_tool_anchors(messages: list[tuple]) -> dict[int, str]:
 
     tags: dict[int, str] = {}
     for idx, tcontent in tool_indices:
-        # Collect candidate tokens from tool output: file paths, identifiers, numbers
+        # Collect candidate tokens: full paths, stems (no ext), and basenames
         candidates = set()
         for tok in _re.findall(r'[/\w.-]{6,}', tcontent):
-            if len(tok) >= 6:
-                candidates.add(tok)
+            if len(tok) < 6:
+                continue
+            candidates.add(tok)
+            # Basename so "/long/path/foo.py" -> "foo.py"
+            base = tok.rsplit('/', 1)[-1]
+            if len(base) >= 4:
+                candidates.add(base)
+            # Stem so "foo.py" -> "foo"
+            stem = base.rsplit('.', 1)[0]
+            if len(stem) >= 4:
+                candidates.add(stem)
         cited = any(c in combined_assistant for c in candidates)
         tags[idx] = "ANCHOR" if cited else "FLOATSAM"
     return tags
