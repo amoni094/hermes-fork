@@ -1,0 +1,134 @@
+{
+  "_version": "1",
+  "_source": "arXiv:2609.18128 ContrAgent - assume-guarantee LTLf contracts",
+  "contracts": [
+    {
+      "id": "C001",
+      "name": "confirm-before-terminal-delete",
+      "description": "Any terminal command containing rm -rf must be preceded by a read_file or browser_snapshot call",
+      "dfa": {
+        "states": [
+          "idle",
+          "confirmed",
+          "reject"
+        ],
+        "initial": "idle",
+        "transitions": {
+          "idle": {
+            "safe_tool": "idle",
+            "confirm_tool": "confirmed",
+            "danger_tool": "reject"
+          },
+          "confirmed": {
+            "safe_tool": "confirmed",
+            "confirm_tool": "confirmed",
+            "danger_tool": "idle"
+          },
+          "reject": {}
+        },
+        "accept": [
+          "idle",
+          "confirmed"
+        ],
+        "reject": [
+          "reject"
+        ]
+      },
+      "tool_symbols": {
+        "confirm_tool": [
+          "read_file",
+          "browser_snapshot",
+          "browser_vision"
+        ],
+        "danger_tool": [
+          "__terminal_destructive__"
+        ]
+      }
+    },
+    {
+      "id": "C002",
+      "name": "no-write-after-untrusted-web",
+      "description": "After web_extract/web_search, do not immediately write_file or patch without reasoning",
+      "dfa": {
+        "states": [
+          "clean",
+          "tainted",
+          "reject"
+        ],
+        "initial": "clean",
+        "transitions": {
+          "clean": {
+            "safe_tool": "clean",
+            "web_tool": "tainted",
+            "write_tool": "clean"
+          },
+          "tainted": {
+            "safe_tool": "clean",
+            "web_tool": "tainted",
+            "write_tool": "reject"
+          },
+          "reject": {}
+        },
+        "accept": [
+          "clean",
+          "tainted"
+        ],
+        "reject": [
+          "reject"
+        ]
+      },
+      "tool_symbols": {
+        "web_tool": [
+          "web_extract",
+          "web_search"
+        ],
+        "write_tool": [
+          "write_file",
+          "patch"
+        ]
+      }
+    },
+    {
+      "id": "C003",
+      "name": "git-push-after-verify",
+      "description": "git push must be preceded by a compile/test step in the same session",
+      "dfa": {
+        "states": [
+          "unverified",
+          "verified",
+          "reject"
+        ],
+        "initial": "unverified",
+        "transitions": {
+          "unverified": {
+            "verify_tool": "verified",
+            "push_tool": "reject",
+            "other": "unverified"
+          },
+          "verified": {
+            "verify_tool": "verified",
+            "push_tool": "verified",
+            "other": "verified"
+          },
+          "reject": {}
+        },
+        "accept": [
+          "unverified",
+          "verified"
+        ],
+        "reject": [
+          "reject"
+        ]
+      },
+      "tool_symbols": {
+        "verify_tool": [
+          "execute_code",
+          "terminal"
+        ],
+        "push_tool": [
+          "terminal"
+        ]
+      }
+    }
+  ]
+}
