@@ -26,14 +26,20 @@ import os as _os_sri
 _hermes_base_sri = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _hermes_profile_sri = _os_sri.environ.get("HERMES_PROFILE", "")
 _hermes_root_sri = (_hermes_base_sri / "profiles" / _hermes_profile_sri) if _hermes_profile_sri and "profiles" not in str(_hermes_base_sri) else _hermes_base_sri
+# When HERMES_HOME itself points at a profile dir (.../profiles/<name>), derive the true
+# hermes root (2 levels up) so _HERMES_MAIN_SKILLS resolves to the real skills library.
+_parts = _hermes_base_sri.parts
+if len(_parts) >= 3 and "profiles" in _parts:
+    _prof_idx = len(_parts) - 1 - list(reversed(_parts)).index("profiles")
+    _true_hermes_base_sri = Path(*_parts[:_prof_idx])
+else:
+    _true_hermes_base_sri = _hermes_base_sri
 SKILLS_ROOT = _hermes_root_sri / "skills"
 # Global (non-profile) skill library. Fork-local SKILLS_ROOT is scanned first so
 # same-named skills keep fork priority. Do NOT derive this from __file__ — when
 # this script lives in ~/.hermes/scripts or profiles/fork/scripts that would
 # resolve to a non-existent scripts/skills directory.
-_HERMES_MAIN_SKILLS = _hermes_base_sri / "skills"
-if "profiles" in str(_hermes_base_sri):
-    _HERMES_MAIN_SKILLS = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "skills"
+_HERMES_MAIN_SKILLS = _true_hermes_base_sri / "skills"
 
 INDEX_PATH = _hermes_root_sri / "cache" / "skill-router-index.json"
 OVERLAP_THRESHOLD = 0.65
