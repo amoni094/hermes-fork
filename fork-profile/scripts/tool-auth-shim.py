@@ -4,6 +4,7 @@ Shadow-mode only: logs suspicious results but never blocks live path.
 Implements randomized inspection game optimal strategy (Shoham & Leyton-Brown Ch6).
 Inspection probabilities are the optimal mixed strategy where p* = c_audit/v_catch.
 """
+import os
 import random
 import json
 import time
@@ -11,7 +12,9 @@ from pathlib import Path
 
 # Inspection probabilities by tier (Shoham inspection game optimal mixed strategy)
 _AUDIT_PROBS = {'EXTERNAL': 0.3, 'cron': 0.1, 'internal': 0.02}
-_LOG_PATH = Path('~/.hermes/cache/tool-auth-log.jsonl').expanduser()
+# Respect HERMES_HOME so fork profile writes to its own cache, not the default profile
+_HERMES_HOME = Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser()
+_LOG_PATH = _HERMES_HOME / "cache" / "tool-auth-log.jsonl"
 
 _INJECTION_PATTERNS = [
     'ignore previous instructions',
