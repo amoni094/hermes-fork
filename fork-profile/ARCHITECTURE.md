@@ -479,3 +479,52 @@ False positives eliminated this wave:
 - os.environ NameError risks: 0
 - Plugin compile errors: 0
 - Cron scripts missing on disk: 0
+
+## Wave 16 Closures (2026-10-05)
+
+Research source: arXiv papers published 2026-09-01 to 2026-10-05.
+All Wave 15 saturation checks still clean (0 hardcoded paths, 0 non-atomic writes,
+0 os.environ NameError risks, 0 plugin compile errors).
+
+### New Scripts (hermes-scripts/)
+
+| Script | Paper | Purpose |
+|--------|-------|---------|
+| statecomp-compression-router.py | arXiv:2609.27298 StateComp | Predicts which interaction spans are safe to compress; gated by score, span-length, token count, ready_ratio |
+| ripple-mem-expander.py | arXiv:2607.18844 RippleMem | Anchor graph expansion for skill recall; 2-hop BFS + recency-weighted ranking |
+| bps-skill-selector.py | arXiv:2608.19993 BPS | Submodular skill selection under token budget; bicriteria (1-1/e,1) guarantee |
+| progress-mirage-gate.py | arXiv:2604.28831 Progress Mirage | Grounded evidence gate; enforces H-I3 with file/hash/compile/exit-0 checks |
+| evograph-skill-editor.py | arXiv:2606.04917 EvoGraph-Mem | Failure-aware skill health graph; flags yield < 0.35 skills for review |
+| cmtf-tool-frontier.py | arXiv:2606.06284 ToolChoiceConfusion | Causal minimal tool filtering; precondition-effect contracts |
+
+### New Skills
+
+statecomp-compression-timing, ripple-mem-recall, bps-skill-budget,
+progress-mirage-verification, evograph-skill-health, cmtf-tool-filtering
+
+### New Cron Jobs (5 added, total: 57)
+
+wave16-statecomp-compression-router (every 4h)
+wave16-ripple-mem-graph-build (daily 3am)
+wave16-evograph-skill-health (daily 2am)
+wave16-progress-mirage-audit (daily 6:30am)
+wave16-cmtf-tool-frontier-audit (daily 7am)
+
+### Bugs Fixed This Wave
+
+- BUG (adversarial pass, pre-wave): evals/compaction/policies.py missing closing `}` on
+  fork_research_telegraphic entry (brace mismatch); fixed by adding missing `},` line.
+- BUG: from __future__ import annotations not first in stuck-job-detector.py; fixed.
+- BUG (from wave-11 alias fix regression): `import os as _os_sri` incorrectly replaced
+  with `import os_sri` (non-existent module) in 10 scripts. Fixed: changed back to
+  `import os` and updated all `_os_X.` references to `os.`. All 352 scripts now
+  compile clean; skill-router-index.py --build OK (38 skills indexed).
+
+### Accepted (Wave 16)
+
+- delegate_task subagent spawn blocked in this session by `No module named 'agent.ssl_guard'`
+  error in parent runtime's subagent dispatch path. Source traced to config.yaml
+  validator_script reference (~/.hermes/scripts/validate-skill-ssl.py); the module
+  ssl_guard does not exist in hermes-agent 2026-10-05 codebase. All Wave 16 work
+  executed in-process as a result. GATE GAP: ssl_guard bootstrap needs investigation
+  in a fresh session.

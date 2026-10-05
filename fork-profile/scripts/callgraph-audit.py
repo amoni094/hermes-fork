@@ -19,11 +19,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
+_HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HP = os.environ.get("HERMES_PROFILE", "")
+_RT = (_HH / "profiles" / _HP) if _HP else _HH
+
 SCAN_DIRS = [
-    Path("/var/home/rainbow/.hermes/scripts"),
-    Path("/var/home/rainbow/.hermes/profiles/fork/scripts"),
+    _HH / "scripts",
+    _RT / "scripts",
 ]
-REPORT_PATH = Path("/var/home/rainbow/.hermes/scripts/callgraph-audit-report.json")
+REPORT_PATH = _HH / "scripts" / "callgraph-audit-report.json"
 
 SUBPROCESS_FUNCS = {
     "subprocess.run",

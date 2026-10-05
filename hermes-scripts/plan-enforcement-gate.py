@@ -43,9 +43,8 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE  = CACHE_DIR / "plan-enforcement-gate-report.json"
 
 # ── Profile-aware root (used by PET helpers) ───────────────────────────────────
-import os_peg
-_b_peg = Path(_os_peg.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
-_p_peg = _os_peg.environ.get("HERMES_PROFILE", "")
+_b_peg = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_p_peg = os.environ.get("HERMES_PROFILE", "")
 _root_peg = (_b_peg / "profiles" / _p_peg) if _p_peg and "profiles" not in str(_b_peg) else _b_peg
 _PET_CACHE_DIR = _root_peg / "cache"
 _PET_CACHE_DIR.mkdir(parents=True, exist_ok=True)

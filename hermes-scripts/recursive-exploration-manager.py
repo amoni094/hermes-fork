@@ -147,11 +147,13 @@ def run(top_n: int, dry_run: bool) -> int:
         })
 
     if not dry_run:
-        TODO_FILE.write_text(json.dumps({
+        _tmp_TODO_FIL = TODO_FILE.with_suffix('.tmp')
+        _tmp_TODO_FIL.write_text(json.dumps({
             "generated_at": now.isoformat(),
             "total_actionable": total,
             "todo": todo_items,
         }, indent=2))
+        _tmp_TODO_FIL.replace(TODO_FILE)
         _tmp_out_file = OUT_FILE.with_suffix('.tmp')
         _tmp_out_file.write_text(json.dumps({
             "ts": now.isoformat(), "scanned": len(ideas),

@@ -146,7 +146,9 @@ def load_index(session_id: str) -> dict:
 
 
 def save_index(session_id: str, idx: dict):
-    index_path(session_id).write_text(json.dumps(idx, indent=2))
+    _tmp_index_pa = index_path(session_id).with_suffix('.tmp')
+    _tmp_index_pa.write_text(session_id)
+    _tmp_index_pa.replace(index_path(session_id))
 
 
 # ---------------------------------------------------------------------------

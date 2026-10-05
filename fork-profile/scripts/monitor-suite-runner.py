@@ -9,8 +9,8 @@ import subprocess, sys, json, os
 from pathlib import Path
 from datetime import datetime, timezone
 
-import os_env
-_HERMES_ROOT = Path(_os_env.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+import os
+_HERMES_ROOT = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 SCRIPTS = _HERMES_ROOT / "scripts"
 CACHE   = _HERMES_ROOT / "cache/monitors"
 

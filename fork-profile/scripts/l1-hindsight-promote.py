@@ -28,7 +28,9 @@ def main():
     print(f"[l1-hindsight-promote] {len(lines)} facts staged — promotion requires gateway session.")
     LOG.parent.mkdir(parents=True, exist_ok=True)
     import time
-    LOG.write_text(json.dumps({"ts": time.time(), "staged": len(lines), "status": "pending_gateway"}) + "\n")
+    _tmp_LOG = LOG.with_suffix('.tmp')
+    _tmp_LOG.write_text(json.dumps({"ts": time.time(), "staged": len(lines), "status": "pending_gateway"}) + "\n")
+    _tmp_LOG.replace(LOG)
     sys.exit(0)
 
 if __name__ == "__main__":

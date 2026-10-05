@@ -70,7 +70,9 @@ def _make_debug_run_dir(url: str) -> Path:
 
 def _write_json(path: Path, payload: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n')
+    _tmp_path = path.with_suffix('.tmp')
+    _tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n')
+    _tmp_path.replace(path)
 
 
 BLOCK_INDICATORS = [

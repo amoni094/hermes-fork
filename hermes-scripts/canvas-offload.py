@@ -78,7 +78,9 @@ def load_canvas(session_id: str) -> dict:
 def save_canvas(session_id: str, canvas: dict):
     sdir = session_dir(session_id)
     meta_path = sdir / "canvas.json"
-    meta_path.write_text(json.dumps(canvas, indent=2), encoding="utf-8")
+    _tmp_meta_path = meta_path.with_suffix('.tmp')
+    _tmp_meta_path.write_text(json.dumps(canvas, indent=2), encoding="utf-8")
+    _tmp_meta_path.replace(meta_path)
     # Render Mermaid
     mmd = render_mermaid(canvas)
     (sdir / "canvas.md").write_text(mmd, encoding="utf-8")

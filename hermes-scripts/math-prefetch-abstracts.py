@@ -179,7 +179,9 @@ def main() -> int:
     sweep["prefetch_date"] = __import__("datetime").datetime.now(
         __import__("datetime").timezone.utc
     ).isoformat()
-    input_path.write_text(json.dumps(sweep, indent=2, default=str))
+    _tmp_input_pa = input_path.with_suffix('.tmp')
+    _tmp_input_pa.write_text(json.dumps(sweep, indent=2, default=str))
+    _tmp_input_pa.replace(input_path)
     print(f"[prefetch] Written: {input_path}", file=sys.stderr)
 
     # Summary

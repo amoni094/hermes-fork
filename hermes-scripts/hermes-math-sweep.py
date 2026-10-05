@@ -191,7 +191,9 @@ def main():
     }
 
     out_path = CACHE / 'math-interpretation-latest.json'
-    out_path.write_text(json.dumps(output, indent=2, default=str))
+    _tmp_out_path = out_path.with_suffix('.tmp')
+    _tmp_out_path.write_text(json.dumps(output, indent=2, default=str))
+    _tmp_out_path.replace(out_path)
 
     # ── Step 4: Summary ───────────────────────────────────────────────────────
     print(f"[hermes-math-sweep] Done.")

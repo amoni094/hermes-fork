@@ -63,7 +63,9 @@ def cmd_commit(args: argparse.Namespace) -> int:
         "nonce": nonce.hex(),
         "ts": ts,
     }
-    out_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    _tmp_out_path = out_path.with_suffix('.tmp')
+    _tmp_out_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    _tmp_out_path.replace(out_path)
     print(json.dumps({
         "ok": True,
         "commitment": commitment,

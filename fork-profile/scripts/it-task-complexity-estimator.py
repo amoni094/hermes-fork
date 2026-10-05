@@ -187,7 +187,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.dry_run:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        OUT_FILE.write_text(payload + "\n", encoding="utf-8")
+        _tmp_OUT_FILE = OUT_FILE.with_suffix('.tmp')
+        _tmp_OUT_FILE.write_text(payload + "\n", encoding="utf-8")
+        _tmp_OUT_FILE.replace(OUT_FILE)
 
     print(f"ALARM: no -- {len(report)} session(s) classified")
     return 0

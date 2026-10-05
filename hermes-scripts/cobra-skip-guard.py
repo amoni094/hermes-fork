@@ -247,7 +247,9 @@ def main():
             "n_synthetic": 2000,
         }
         probe_path.parent.mkdir(parents=True, exist_ok=True)
-        probe_path.write_text(json.dumps(probe_data, indent=2))
+        _tmp_probe_path = probe_path.with_suffix('.tmp')
+        _tmp_probe_path.write_text(json.dumps(probe_data, indent=2))
+        _tmp_probe_path.replace(probe_path)
         print(json.dumps({"status": "trained", "path": str(probe_path)}))
         sys.exit(0)
 

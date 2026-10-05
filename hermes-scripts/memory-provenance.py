@@ -177,9 +177,9 @@ def main():
 import json as _json_bda
 from pathlib import Path as _Path_bda
 
-import os_mp
-_hermes_base_mp = _Path_bda(_os_mp.environ.get("HERMES_HOME", str(_Path_bda.home() / ".hermes")))
-_hermes_profile_mp = _os_mp.environ.get("HERMES_PROFILE", "")
+import os
+_hermes_base_mp = _Path_bda(os.environ.get("HERMES_HOME", str(_Path_bda.home() / ".hermes")))
+_hermes_profile_mp = os.environ.get("HERMES_PROFILE", "")
 _hermes_root_mp = (_hermes_base_mp / "profiles" / _hermes_profile_mp) if _hermes_profile_mp and "profiles" not in str(_hermes_base_mp) else _hermes_base_mp
 _TRUST_POST_PATH = _hermes_root_mp / "cache" / "trust-posterior.json"
 _TRUST_WEIGHTS_STATIC = {'internal': 1.0, 'cron': 0.85, 'external': 0.70}

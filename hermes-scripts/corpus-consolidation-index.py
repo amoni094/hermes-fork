@@ -268,7 +268,9 @@ def consolidate(out_path: Path = DEFAULT_OUT) -> dict[str, Any]:
         "sources": sources_used,
         "findings": findings,
     }
-    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+    _tmp_out_path = out_path.with_suffix('.tmp')
+    _tmp_out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+    _tmp_out_path.replace(out_path)
     return payload
 
 
