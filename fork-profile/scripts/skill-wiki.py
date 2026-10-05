@@ -226,7 +226,7 @@ def cmd_export(args: argparse.Namespace) -> int:
     out = Path(args.output) if getattr(args, "output", None) else HERMES_HOME / "cache" / "skill-wiki-export.md"
     __out_tmp = out.parent / ("." + out.name + ".tmp")
     __out_tmp.write_text("\n".join(lines) + "\n")
-    import os as _os; _os.replace(str(__out_tmp), str(out))
+    import os; os.replace(str(__out_tmp), str(out))
     print(f"[wiki] exported to {out}")
     return 0
 

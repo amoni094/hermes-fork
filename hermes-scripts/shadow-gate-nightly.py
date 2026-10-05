@@ -21,7 +21,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 from shadow_telemetry import evaluate_flag  # noqa: E402
 
-import os as _os_sgn
+import os_sgn
 _hermes_base_sgn = pathlib.Path(_os_sgn.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _hermes_profile_sgn = _os_sgn.environ.get("HERMES_PROFILE", "")
 _hermes_root_sgn = (_hermes_base_sgn / "profiles" / _hermes_profile_sgn) if _hermes_profile_sgn else _hermes_base_sgn

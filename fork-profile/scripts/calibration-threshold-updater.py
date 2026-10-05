@@ -7,9 +7,9 @@ import time
 from pathlib import Path
 from collections import defaultdict
 
-import os as _os
-_hermes_base = Path(_os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
-_hermes_profile = _os.environ.get("HERMES_PROFILE", "")
+import os
+_hermes_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hermes_profile = os.environ.get("HERMES_PROFILE", "")
 _hermes_root = (_hermes_base / "profiles" / _hermes_profile) if _hermes_profile and "profiles" not in str(_hermes_base) else _hermes_base
 LOG_PATH = _hermes_root / "cache" / "calibration-log.jsonl"
 THRESH_PATH = _hermes_root / "cache" / "condorcet-thresholds.json"

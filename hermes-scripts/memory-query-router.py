@@ -54,9 +54,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 # FTRL Routing Calibration Log (Shalev-Shwartz & Ben-David Ch 21 / FTRL)
 # --------------------------------------------------------------------------- #
 
-import os as _os
-_hermes_base = Path(_os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
-_hermes_profile = _os.environ.get("HERMES_PROFILE", "")
+import os
+_hermes_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hermes_profile = os.environ.get("HERMES_PROFILE", "")
 _hermes_root_mq = (_hermes_base / "profiles" / _hermes_profile) if _hermes_profile and "profiles" not in str(_hermes_base) else _hermes_base
 _ROUTING_LOG_PATH = _hermes_root_mq / "cache" / "routing-calibration.jsonl"
 

@@ -45,7 +45,7 @@ else:
     _ot_utils = None  # type: ignore[assignment]
 
 # Config — profile-aware paths
-import os as _os_syt
+import os_syt
 _hermes_home_syt = Path(_os_syt.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _hermes_profile_syt = _os_syt.environ.get("HERMES_PROFILE", "")
 _hermes_root_syt = (_hermes_home_syt / "profiles" / _hermes_profile_syt) if _hermes_profile_syt and "profiles" not in str(_hermes_home_syt) else _hermes_home_syt

@@ -555,7 +555,7 @@ def optimize_queued(budget_per_skill: float, max_skills: int):
 
             __out_tmp.write_text(result.best_candidate)
 
-            import os as _os; _os.replace(str(__out_tmp), str(out_path))
+            import os; os.replace(str(__out_tmp), str(out_path))
             print(f"  Candidate written: {out_path}")
             print(f"  Review and copy to {item['path']} if satisfied.")
         else:

@@ -5,6 +5,7 @@ Clarke et al. CTL/LTL safety property: AG(running -> EF(complete|failed)).
 Exit 0 always — this detector must never crash the cron scheduler.
 """
 from __future__ import annotations
+import os
 
 import json
 import sqlite3
@@ -12,9 +13,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-JOBS_PATH = Path("/var/home/rainbow/.hermes/profiles/fork/cron/jobs.json")
-DB_PATH = Path("/var/home/rainbow/.hermes/profiles/fork/cron/executions.db")
-ALARM_PATH = Path("/var/home/rainbow/.hermes/profiles/fork/cron/stuck-job-alarms.jsonl")
+JOBS_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home()/".hermes"))) / "profiles" / os.environ.get("HERMES_PROFILE","fork") / "cron/jobs.json"
+DB_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home()/".hermes"))) / "profiles" / os.environ.get("HERMES_PROFILE","fork") / "cron/executions.db"
+ALARM_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home()/".hermes"))) / "profiles" / os.environ.get("HERMES_PROFILE","fork") / "cron/stuck-job-alarms.jsonl"
 
 
 def _now() -> datetime:

@@ -22,7 +22,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-import os as _os_sri
+import os_sri
 _hermes_base_sri = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _hermes_profile_sri = _os_sri.environ.get("HERMES_PROFILE", "")
 _hermes_root_sri = (_hermes_base_sri / "profiles" / _hermes_profile_sri) if _hermes_profile_sri and "profiles" not in str(_hermes_base_sri) else _hermes_base_sri

@@ -128,6 +128,7 @@ POLICIES: Dict[str, Dict[str, Any]] = {
             "importance_biased_prune_enabled": True,
         },
         "pre_telegraphic": True,
+    },
     # fast-jev-compaction (evals/compaction/jev_arm.py): no summary at all —
     # Jev scores every tool call/result and stale ones are dropped or
     # truncated; user/assistant text stays verbatim. Plugin defaults.

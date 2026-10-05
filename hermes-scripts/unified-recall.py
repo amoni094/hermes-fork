@@ -60,7 +60,7 @@ from typing import Optional
 HINDSIGHT_BASE = os.environ.get("HINDSIGHT_BASE", "http://127.0.0.1:9177")
 HINDSIGHT_BANK = os.environ.get("HINDSIGHT_BANK", "hermes-default")
 
-import os as _os_env
+import os_env
 
 def _hermes_root() -> 'Path':
     """Profile-aware Hermes root: HERMES_HOME env var or ~/.hermes fallback."""

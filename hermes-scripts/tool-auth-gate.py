@@ -186,7 +186,7 @@ def _load_active_grant() -> "CapabilityGrant | None":
     Maps JSON keys (allowed_tools / denied_tools) onto CapabilityGrant.tools_allowed,
     treating denied_tools as a negative filter applied before construction.
     """
-    import os as _os_tag
+    import os_tag
     _b = Path(_os_tag.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
     _p = _os_tag.environ.get("HERMES_PROFILE", "")
     _root_tag = (_b / "profiles" / _p) if _p and "profiles" not in str(_b) else _b

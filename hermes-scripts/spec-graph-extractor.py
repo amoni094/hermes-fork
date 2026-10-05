@@ -204,7 +204,7 @@ def run(spec_root: Path, query: str | None, dry_run: bool) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("spec_root", nargs="?",
-                        default=str(Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "profiles" / os.environ.get("HERMES_PROFILE", "fork") / "skills"),
+                        default=str(Path(os.environ.get("HERMES_HOME", str(Path.home()/".hermes"))) / "profiles" / os.environ.get("HERMES_PROFILE","fork") / "skills"),
                         type=Path)
     parser.add_argument("--query", "-q", default=None, help="Graph query")
     parser.add_argument("--dry-run", action="store_true")
