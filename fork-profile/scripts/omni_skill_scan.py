@@ -28,8 +28,16 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-SKILLS_ROOT = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "skills"
-OMNI_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "omni"
+HERMES_PROFILE = os.environ.get("HERMES_PROFILE", "")
+_hermes_home = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+# Scan both the default skills tree and the active profile's skills tree
+_skills_roots = [_hermes_home / "skills"]
+if HERMES_PROFILE:
+    _profile_skills = _hermes_home / "profiles" / HERMES_PROFILE / "skills"
+    if _profile_skills.is_dir():
+        _skills_roots.append(_profile_skills)
+SKILLS_ROOT = _skills_roots[0]  # kept for legacy references; scanner uses _skills_roots
+OMNI_DIR = _hermes_home / "omni"
 QUEUE_PATH = OMNI_DIR / "patch-queue.json"
 THRESHOLD = 0.65   # skills scoring below this are queued for optimization
 MAX_OPTIMIZE = 3   # max skills to optimize per cron run (cost control)
@@ -212,11 +220,12 @@ def scan_all_skills() -> list[dict]:
     # quality dimensions as full workflow skills produces false negatives.
     SKIP_CATEGORIES = {"ouroboros"}
 
-    for skill_md_path in sorted(SKILLS_ROOT.glob("**/SKILL.md")):
+    for _sroot in _skills_roots:
+      for skill_md_path in sorted(_sroot.glob("**/SKILL.md")):
         try:
             content = skill_md_path.read_text()
             name = skill_md_path.parent.name
-            category = skill_md_path.parent.parent.name if skill_md_path.parent.parent != SKILLS_ROOT else "root"
+            category = skill_md_path.parent.parent.name if skill_md_path.parent.parent != _sroot else "root"
             if category in SKIP_CATEGORIES:
                 continue
             score, checks = score_skill(content)
