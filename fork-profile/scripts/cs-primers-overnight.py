@@ -483,7 +483,7 @@ def update_index():
         lines.append(f"  {status}  [{tier:4}]  {key:<30}  {label}")
     __idx_tmp = INDEX_FILE.parent / ("." + INDEX_FILE.name + ".tmp")
     __idx_tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    import os2; _os2.replace(str(__idx_tmp), str(INDEX_FILE))
+    import os as _os2; _os2.replace(str(__idx_tmp), str(INDEX_FILE))
     print(f"\nIndex updated: {INDEX_FILE}")
 
 

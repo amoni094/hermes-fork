@@ -62,8 +62,20 @@ def load_yaml(path: Path) -> dict:
     try:
         import yaml  # type: ignore
     except ImportError:
-        print("PyYAML required: python3 -m pip install pyyaml", file=sys.stderr)
-        sys.exit(2)
+        try:
+            from ruamel.yaml import YAML as _RYAML  # type: ignore
+            _ry = _RYAML()
+            _ry.preserve_quotes = True
+
+            class _YamlCompat:
+                @staticmethod
+                def safe_load(s: str):
+                    import io
+                    return _ry.load(io.StringIO(s))
+            yaml = _YamlCompat()  # type: ignore
+        except ImportError:
+            print("PyYAML or ruamel.yaml required: python3 -m pip install pyyaml", file=sys.stderr)
+            sys.exit(2)
     if not path.exists():
         return {}
     data = yaml.safe_load(path.read_text()) or {}
