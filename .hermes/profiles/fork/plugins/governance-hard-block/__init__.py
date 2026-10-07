@@ -161,7 +161,15 @@ def has_approved_proposal(target_path: str, proposals: Optional[Dict[str, dict]]
         if len(t) < 4:
             continue
         t_norm = _norm_path(t)
-        # Exact match: proposal target == write target
+        # ADV-W12-007: reject relative proposal targets. A proposal with target='config.yaml'
+        # (no leading /) resolves via CWD to e.g. ~/config.yaml — whichever directory the
+        # process runs in. This is a ledger-pollution risk: the proposal was created with CWD
+        # set to a safe directory, but evaluate_write resolves 'config.yaml' from whatever CWD
+        # the tool hook runs in, approving ANY write to the CWD's config.yaml.
+        # Fix: only accept proposals whose STORED target is an absolute path (starts with /).
+        # Relative targets in the ledger are ignored; they must be re-proposed with full paths.
+        if not t.startswith("/") and not t.startswith("~"):
+            continue
         if t_norm == norm:
             return True
         # Directory coverage: proposal target is the DIRECT parent of the write target.
@@ -275,7 +283,16 @@ def extract_candidate_paths(args: Any) -> List[str]:
     return uniq
 
 
-_SHELL_RENAME = re.compile(r"(?:^|[;|&\n])\s*(?:mv|cp|install|rsync|tee)\b")
+# ADV-W12-001: allow optional prefix words (sudo, nice, time, busybox, /bin/…) before verb.
+# ADV-W12-002: add 'ln' (symlink creation = write into target dir).
+_SHELL_RENAME = re.compile(
+    r"(?:^|[;|&\n])"                                   # start of command or after operator
+    r"(?:\s*(?!mv\b|cp\b|ln\b|install\b|rsync\b|tee\b)[^\s/][^\s]*\s+)*"  # prefix words (no leading-slash path)
+    r"(?:/\S+/)?"                                       # optional absolute-path prefix (/bin/, /usr/bin/)
+    r"\s*(?:mv|cp|ln|install|rsync|tee)\b"
+)
+# Redirect to any path (absolute or relative) — for terminal HR-token fallback (ADV-W12-006).
+_SHELL_REDIRECT = re.compile(r">>?\s*\S")
 
 
 def looks_like_rename_or_copy(args: Any) -> bool:
@@ -367,12 +384,18 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
         code_blob = chr(10).join(_string_values(args))
         _HR_TOKENS = (
             "config.yaml", "config.yml",          # config files (ADV-W11-005)
-            "/plugins/", "plugins/",               # absolute and relative (ADV-W11-001..004)
-            "/agent/", "agent/",                   # absolute and relative
+            "/plugins/",                           # absolute only — bare 'plugins/' too broad (ADV-W12-004)
+            "/agent/",                             # absolute only — bare 'agent/' too broad (ADV-W12-004)
             "plugin.yaml",
         )
         hr_tokens_present = [tok for tok in _HR_TOKENS if tok in code_blob]
-        if hr_tokens_present and (looks_like_rename_or_copy({"code": code_blob}) or _RENAME_PRIMITIVES.search(code_blob)):
+        # ADV-W12-005: kwargs/var-mode open('plugins/evil.py', **mode) remains a documented
+        # miss — we cannot safely distinguish write vs read from an arbitrary open() call without
+        # parsing. has_open was removed because it caused FP on open('/plugins/x','r') reads.
+        if hr_tokens_present and (
+            looks_like_rename_or_copy({"code": code_blob})
+            or _RENAME_PRIMITIVES.search(code_blob)
+        ):
             # ADV-W10-002: do NOT call has_approved_proposal here. Obfuscated writes
             # (encode primitive + write primitive + HR token) cannot be approved via a
             # proposal — the proposal system covers known concrete paths, not dynamic
@@ -388,8 +411,11 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
         # regex was too narrow (missed os.system shells, split/concat, unquoted paths).
         # The extended token scan + _RENAME_PRIMITIVES gate is the correct approach.
         # Also catch quoted bare 'plugins' or 'agent' as os.path.join arguments (no trailing /).
+        # ADV-W12-003 fix: only fire when a HR token is ALSO present OR a join/Path context
+        # is present — prevents FP on open('/tmp/x','w') with 'agent' as an unrelated variable.
         _QUOTED_REL_HR = re.compile(r"""['"](plugins|agent)['"]\s*[,)]""")
-        if _QUOTED_REL_HR.search(code_blob) and _RENAME_PRIMITIVES.search(code_blob):
+        _join_context = bool(re.search(r"(?:os\.path\.join|joinpath|Path\s*\()", code_blob))
+        if _QUOTED_REL_HR.search(code_blob) and _RENAME_PRIMITIVES.search(code_blob) and (hr_tokens_present or _join_context):
             return _deny(
                 "[governance-hard-block] DENY: execute_code contains quoted relative "
                 "plugin/agent directory token combined with a write primitive. "
@@ -406,15 +432,27 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
             blob = "\n".join(_string_values(args))
             if is_high_risk_target(blob) or any(
                 x in blob for x in (
-                    "config.yaml", "config.yml",   # ADV-W11-005
-                    "/plugins/", "plugins/",        # absolute and relative (ADV-W11-001..004)
-                    "/agent/", "agent/",
+                    "config.yaml", "config.yml",
+                    "/plugins/",                  # absolute only (ADV-W12-004: revert bare 'plugins/')
+                    "/agent/",
                 )
             ):
                 # treat whole blob as potential target
                 high = [p for p in extract_candidate_paths({"command": blob}) if is_high_risk_target(p)]
                 if not high:
                     high = ["<rename-primitive + high-risk token>"]
+        # ADV-W12-006: shell redirect to relative HR path (echo x > plugins/foo.py).
+        # _SHELL_RENAME only matches verbs; redirect operators (> >>) evade it.
+        # If a redirect appears AND a HR token (including relative forms) is in the blob, deny.
+        elif _SHELL_REDIRECT.search("\n".join(_string_values(args))):
+            blob = "\n".join(_string_values(args))
+            if any(
+                x in blob for x in (
+                    "config.yaml", "config.yml", "/plugins/", "/agent/", "plugin.yaml",
+                    "plugins/", "agent/",   # relative forms safe here: redirect confirms write intent
+                )
+            ):
+                high = ["<shell-redirect + high-risk token>"]
 
     if not high:
         return None
