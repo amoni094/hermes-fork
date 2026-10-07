@@ -51,8 +51,8 @@ _READ_SAFE = frozenset({
 })
 
 _HIGH_BASENAME = re.compile(r"(?i)(^|/)config\.ya?ml(\.tmp)?$")  # tmp-rename bypass guard (ADV fix)
-_HIGH_PLUGIN_PY = re.compile(r"(?i)/plugins/[^/]+/.*\.py$")
-_HIGH_AGENT_PY = re.compile(r"(?i)/(hermes-fork/)?agent/.*\.py$")
+_HIGH_PLUGIN_PY = re.compile(r"(?i)/plugins/[^/]+/.*\.py(?:\.tmp)?$")  # ADV-W14-008
+_HIGH_AGENT_PY = re.compile(r"(?i)/(hermes-fork/)?agent/.*\.py(?:\.tmp)?$")  # ADV-W14-008
 _HIGH_HERMES_PLUGIN_PY = re.compile(r"(?i)\.hermes/(profiles/[^/]+/)?plugins/.*\.py$")
 
 # Rename / copy primitives that can bypass write_file by temp+replace.
@@ -89,11 +89,12 @@ _RENAME_PRIMITIVES = re.compile(
     # Path(nested).write_text/write_bytes: two-level nested parens in Path() arg (ADV-W9-003)
     r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch)"
     # getattr obfuscation bypass (ADV-W9-003): getattr(obj,'write_text'/'open'/'write_bytes')
-    r"|getattr\s*\([^,)]{0,80},\s*['\"](?:write_text|write_bytes|open|replace|rename)['\"]"
+    r"|getattr\s*\([\s\S]{0,100}?,\s*['\"](?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink)['\"]"
     r"|json\.dump\b"
     r"|os\.(open|popen|system)\s*\("
     r"|os\.(symlink|symlinkat)\s*\("
     r"|subprocess\.(run|call|check_call|check_output|Popen)\s*\("
+    r"|(?<![\w.])(?:system|execv|execl|execle|execlp|execvp|execvpe)\s*\("  # ADV-W14-005
 )
 
 _BOOTSTRAP_DIR: Optional[Path] = None  # resolved lazily (ADV-004)
@@ -293,9 +294,13 @@ _SHELL_RENAME = re.compile(
     r"(?:/\S+/)?"              # optional absolute-path prefix (/bin/, /usr/bin/)
     r"\s*(?:mv|cp|ln|rsync|tee)\b"
 )
-# ADV-W13-003: terminal-only redirect gate. Require space/operator before >.
-# NOT applied to non-terminal tools to avoid matching Python >> or HTML >.
-_SHELL_REDIRECT = re.compile(r"(?:^|[\s;|&])>>?\s+\S")
+# ADV-W14-001: tightened redirect reverted — space was over-restrictive.
+# fd digits accepted (1>file, 2>>file); terminal-only gate prevents non-shell FPs.
+_SHELL_REDIRECT = re.compile(r"(?:\d+)?>>?\s*\S")  # ADV-W14-001: accept nospace/fd redirects; terminal-only gate ensures context
+
+# ADV-W14-002+006+009: terminal copy-verb scan — catches prefix chains (sudo -n cp),
+# wrappers (sh -c 'cp ...'), dd of=, install, and any verb depth not anchored to line start.
+_COPY_VERB = re.compile(r"\b(?:mv|cp|ln|rsync|tee|install|dd)\b")
 
 
 def looks_like_rename_or_copy(args: Any) -> bool:
@@ -422,7 +427,12 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
         # is present — prevents FP on open('/tmp/x','w') with 'agent' as an unrelated variable.
         _QUOTED_REL_HR = re.compile(r"""['"](plugins|agent)['"]\s*[,)]""")
         # ADV-W13-004: removed bare Path( — too broad (print("agent") + Path("x").write_text fires FP).
-        _join_context = bool(re.search(r"(?:os\.path\.join|joinpath)", code_blob))
+        # ADV-W14-003: also catch Path("plugins")/"..." and aliased join
+        _join_context = bool(
+            re.search(r"(?:os\.path\.join|joinpath)", code_blob)
+            or re.search(r"Path\s*\([^)]*['\"](?:plugins|agent)['\"]", code_blob)
+            or "from os.path import join" in code_blob
+        )
         if _QUOTED_REL_HR.search(code_blob) and _RENAME_PRIMITIVES.search(code_blob) and (hr_tokens_present or _join_context):
             return _deny(
                 "[governance-hard-block] DENY: execute_code contains quoted relative "
@@ -461,6 +471,15 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
                 or _HR_REL_FALLBACK.search(blob)
             ):
                 high = ["<shell-redirect + high-risk token>"]
+        # ADV-W14-002+006+009: terminal copy-verb blob scan.
+        # Catches prefix chains (sudo -n cp), dd of=, install, and other non-anchored patterns.
+        if not high and tool_name == "terminal":
+            blob = "\n".join(_string_values(args))
+            if _COPY_VERB.search(blob) and (
+                any(t in blob for t in ("config.yaml", "config.yml", "/plugins/", "/agent/", "plugin.yaml"))
+                or bool(re.search(r"(?<!\\w)(?:plugins|agent)/", blob))
+            ):
+                high = ["<copy-verb + high-risk token>"]
 
     if not high:
         return None
