@@ -62,8 +62,10 @@ _RENAME_PRIMITIVES = re.compile(
     r"|shutil\.(move|copy|copy2|copyfile|copytree)"
     r"|Path\([^\)]*\)\.(write_text|write_bytes|replace|rename|touch)"
     # open() write-mode: require comma+mode, cap at 200 chars (avoids PATH-PREFIX FP and MULTILINE bypass)
-    r"|open\s*\([\s\S]{0,200}?,\s*['\"][awxrbt+]{1,4}['\"]"       # positional mode arg (post-comma)
-    r"|open\s*\([\s\S]{0,200}?mode\s*=\s*['\"][awxrbt+]{1,4}['\"]"  # keyword mode arg
+    r"|open\s*\([\s\S]{0,200}?,\s*['\"][awx][bt+]*['\"]"           # w/a/x modes (+ optional b/t/+)
+    r"|open\s*\([\s\S]{0,200}?,\s*['\"]r\+[bt]*['\"]"             # r+ update mode only (not plain 'r')
+    r"|open\s*\([\s\S]{0,200}?mode\s*=\s*['\"][awx][bt+]*['\"]"   # keyword mode: w/a/x
+    r"|open\s*\([\s\S]{0,200}?mode\s*=\s*['\"]r\+[bt]*['\"]"      # keyword mode: r+
     r"|\.open\s*\(['\"][awx]"                                       # Path.open('a') etc.
     # Dynamic mode: open(p, chr(119)) or open(p, mode=chr(119)) — fail-closed (ADV-025-OPEN-DYNAMIC-MODE)
     r"|open\s*\([^\n]*\bchr\s*\("
@@ -301,7 +303,8 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
     # Redirect: >\s*[path-starting char] — avoids arithmetic 'x > 1' or '>> count'.
     _SHELL_WRITE = re.compile(
         r"(?:^|[;|&\n])\s*(mv|cp|install|rsync|tee)\b"   # shell command verbs (after shell operator)
-        r"|(?:^|[\s;|&])(?:>>?)[\s]*[/'\"~\w]"            # shell redirect > /path or >> "file"
+        r"|(?:^|[\s;|&])(?:>>?)[\s]*[/'\"~.]"             # shell redirect to path (/, ~, ., ', ")
+        # Not \w — avoids 'x > 1', 'x >> count' arithmetic false positives
     )
     _encode_blob = ""
     if tool_name in ("execute_code", "terminal"):
