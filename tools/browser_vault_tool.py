@@ -63,8 +63,9 @@ def _eval_js(task_id: str, expression: str) -> Dict[str, Any]:
     """
     try:
         from tools.browser_supervisor import SUPERVISOR_REGISTRY
+        from tools.browser_tool import _last_session_key
 
-        supervisor = SUPERVISOR_REGISTRY.get(task_id)
+        supervisor = SUPERVISOR_REGISTRY.get(_last_session_key(task_id))
         if supervisor is not None:
             sup = supervisor.evaluate_runtime(expression)
             if sup.get("ok"):
@@ -95,11 +96,11 @@ def _ensure_supervisor(task_id: str):
     for the packaged Chromium's endpoint (``get cdp-url``: same daemon, same reaper) and attach.
     Returns None when no endpoint is reachable; the fill then refuses rather than touching argv."""
     from tools.browser_supervisor import SUPERVISOR_REGISTRY
+    from tools.browser_tool import _last_session_key
 
-    supervisor = SUPERVISOR_REGISTRY.get(task_id)
+    supervisor = SUPERVISOR_REGISTRY.get(_last_session_key(task_id))
     if supervisor is not None:
         return supervisor
-    from tools.browser_tool import _last_session_key
     from tools.browser_tool_cdp import _get_dialog_policy_config, _resolve_cdp_override
     from tools.browser_tool_session import _run_browser_command
 
