@@ -144,16 +144,13 @@ def has_approved_proposal(target_path: str, proposals: Optional[Dict[str, dict]]
                 return True
         # Suffix coverage: proposal target path is a suffix of the write target,
         # with a path-separator boundary before the match.
-        # e.g. t_norm='/profiles/fork/config.yaml' is a suffix of norm='/var/home/rainbow/...fork/config.yaml' ✓
-        # e.g. t_norm='/profiles/default/config.yaml' is NOT a suffix of '.../fork/config.yaml' ✓
-        if t_norm.startswith("/") and norm.endswith(t_norm):
-            # Verify boundary: the char before the match must be a separator (or exact match)
+        # e.g. t_norm='/profiles/fork/config.yaml' matches norm='/var/home/...fork/config.yaml'
+        # but t_norm='/profiles/default/config.yaml' does NOT match the fork path.
+        # Note: _norm_path always returns an absolute path; relative proposals resolve via
+        # realpath(abspath(t)) so they match only if they resolve to the correct absolute path.
+        if norm.endswith(t_norm):
             boundary_pos = len(norm) - len(t_norm)
             if boundary_pos == 0 or norm[boundary_pos - 1] == "/":
-                return True
-        elif not t_norm.startswith("/") and len(t_norm) >= 8:
-            # Relative proposal target: match as path suffix with separator boundary
-            if norm.endswith("/" + t_norm):
                 return True
     return False
 
@@ -215,8 +212,8 @@ def _string_values(args: Any) -> List[str]:
 
 
 _PATHISH = re.compile(
-    r"(?P<p>(?:~|/var|/home|\\.hermes)[\\w./\\-]*"
-    r"(?:config\\.ya?ml|plugins/[^\\s'\"]+\\.py|agent/[^\\s'\"]+\\.py))",
+    r"(?P<p>(?:~|/var|/home|\.hermes)[\w./\-]*"
+    r"(?:config\.ya?ml|plugins/[^\s'\"]+\.py|agent/[^\s'\"]+\.py))",
     re.IGNORECASE,
 )
 
@@ -272,13 +269,17 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
     # is invisible to path extraction.  Fail-closed: if the code blob contains any
     # rename/copy primitive AND any high-risk token, treat the entire code as a
     # high-risk rename even when no concrete path is extractable.
-    # ADV-025/ADV-025-EXT/ADV-025-TERMINAL: obfuscated-path bypass via encoding primitives.
-    # Attack vectors: chr(c), chr(0x63), ''.join(chr(c) for c in [...]), bytes.fromhex(...).decode(),
-    # base64.b64decode(...), codecs.decode(...), bytes([99,...]).decode(), exec/eval with encoded string.
-    # Deny ANY tool that combines an encoding primitive with a write/rename primitive.
-    # Applies to execute_code AND terminal (python -c '...' can carry the same attack).
+    # ADV-025/ADV-025-EXT/ADV-025-TERMINAL/ADV-025-OSSYSTEM/ADV-025-OBFUSCATION:
+    # Encoding + write primitive bypass detection. Fires on execute_code AND terminal.
+    # ENCODE: chr(x), %c format string, fromhex, b64decode, codecs.decode, bytes([...]),
+    #         eval(), exec(). (\x escapes and string concat out-of-scope — resolved at parse time.)
+    # WRITE: file-open-for-write, path write methods, rename/copy, os.system, subprocess, json.dump.
+    # NOTE: _WRITE_RENAME uses precise anchoring to avoid str.replace false positives:
+    #   - \bos\.replace\b  (not the bare .replace which matches str.replace)
+    #   - \bPath\.replace\b / \btmp\.replace\b (explicit prefix)
     _ENCODE_PATTERN = re.compile(
         r"\bchr\s*\("                                   # chr(99) / chr(c) / chr(0x63)
+        r"|['\"]%c['\"]"                                # '%c' string literal used as format-char
         r"|\.fromhex\s*\("                              # bytes.fromhex(...)
         r"|\bb64decode\s*\("                            # base64.b64decode(...)
         r"|codecs\.decode\s*\("                         # codecs.decode(...)
@@ -287,21 +288,26 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
         r"|\bexec\s*\("                                 # exec(compiled/encoded)
     )
     _WRITE_RENAME = re.compile(
-        r"\b(open\s*\(|write_text|write_bytes|os\.replace|os\.rename|shutil\.copy"
-        r"|shutil\.move|shutil\.copyfile|Path\.write|os\.write\s*\(|os\.open\s*\("
-        r"|\.replace\s*\(|tmp\.replace|json\.dump\s*\()"
+        r"\bopen\s*\([^)]*['\"]w"                       # open(..., 'w') — write mode only
+        r"|\.write_text\b|\.write_bytes\b"              # Path.write_text / write_bytes
+        r"|\bos\.replace\b|\bos\.rename\b"              # os.replace / os.rename
+        r"|\bshutil\.copy\b|\bshutil\.move\b|\bshutil\.copyfile\b|\bshutil\.copyfileobj\b"
+        r"|\bPath\b[^)]*\.(replace|rename)\b"          # Path(...).replace / .rename
+        r"|\btmp\.replace\b"                             # common atomic write pattern
+        r"|\bos\.write\s*\(|\bos\.open\s*\("           # low-level file writes
+        r"|\bjson\.dump\s*\("                           # json.dump to file handle
+        r"|\bos\.system\s*\("                           # ADV-025-OSSYSTEM: shell redirect
+        r"|\bsubprocess\.(run|call|check_call|check_output|Popen)\s*\("  # subprocess shell
     )
     _encode_blob = ""
-    if tool_name == "execute_code":
-        _encode_blob = chr(10).join(_string_values(args))
-    elif tool_name == "terminal":
+    if tool_name in ("execute_code", "terminal"):
         _encode_blob = chr(10).join(_string_values(args))
     if _encode_blob and _ENCODE_PATTERN.search(_encode_blob) and _WRITE_RENAME.search(_encode_blob):
         return _deny(
             "[governance-hard-block] DENY: code contains an encoding primitive "
-            "(chr(), fromhex(), b64decode(), codecs.decode(), bytes([...]), eval(), exec()) "
-            "combined with a write/rename primitive (ADV-025/ADV-025-EXT/ADV-025-TERMINAL). "
-            "Dynamic paths built via encoding can bypass static token detection. "
+            "(chr(), %c%, fromhex(), b64decode(), codecs.decode(), bytes([...]), eval(), exec()) "
+            "combined with a write/rename primitive (ADV-025/ADV-025-EXT/ADV-025-TERMINAL/"
+            "ADV-025-OSSYSTEM). Dynamic paths built via encoding bypass static token detection. "
             "No proposal can approve obfuscated writes — rewrite without encoding."
         )
     if tool_name == "execute_code":

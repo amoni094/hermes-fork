@@ -204,8 +204,10 @@ def _load_jev() -> types.ModuleType | None:
         if not _JEV_PATH.exists():
             logger.debug("jev-compaction: %s not found; Jev pass skipped", _JEV_PATH)
             return None
-        # Ensure hermes-agent is on sys.path (same pattern as jev_verify_fn itself)
-        _ha = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "hermes-agent"
+        # Ensure hermes-agent is on sys.path (same pattern as jev_verify_fn itself).
+        # Use _hermes_root() to strip profiles/<name> from HERMES_HOME so the path
+        # resolves to ~/.hermes/hermes-agent, not .../profiles/fork/hermes-agent.
+        _ha = _hermes_root() / "hermes-agent"
         # N08 fix: detect the actual Python version instead of hardcoding 3.11.
         # On Python 3.12+ (Fedora F39+) the venv uses python3.12/, not python3.11/.
         import sys as _sys

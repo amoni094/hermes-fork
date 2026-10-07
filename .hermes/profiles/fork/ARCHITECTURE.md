@@ -245,7 +245,7 @@ Live plugins under ~/.hermes/profiles/fork/plugins/, enabled in config.yaml plug
   tool-auth-gate         - pre_tool_call Agentao-style proposal/authorize split (arXiv:2608.13574); DENY_ALWAYS / DENY_IN_CONTEXT / ALLOW against escalate_tools and deny_tools
   hindsight              - long-term memory plugin (enabled)
   governance-hard-block  - H-I8 fail-closed pre_tool_call; LIVE in plugins.enabled (deployed Wave 18 via CLI; proposal prop_d16153f3 deployed)
-  jev-turn-evaluator     - NOT in plugins.enabled (shadow, Wave 17 GATE GAP unchanged)
+  jev-turn-evaluator     - in plugins.enabled (shadow gate, shadow_jev_evaluator=true; Wave 19 GATE CLOSED)
 
 ---
 
@@ -608,10 +608,8 @@ type-safety or calibration guarantees from jev_verify_fn primitives.
 
 ### Gate Gaps (new this wave)
 
-  GATE GAP: jev-turn-evaluator NOT in plugins.enabled (disabled). Promotion path:
-    set shadow_jev_evaluator: true in plugin config → collect N session scores →
-    shadow-gate-nightly.py promotes when mean_score > 3.5 and error_rate < 0.1 →
-    add to plugins.enabled via config_change (HIGH governance, 2 senior, 24h cooldown).
+  GATE CLOSED (Wave 19): jev-turn-evaluator now in plugins.enabled (shadow_jev_evaluator=true).
+    shadow-gate-nightly.py promotes when mean_score > 3.5 and error_rate < 0.1.
 
   GATE GAP: ssl_guard (Wave 16) — CLOSED Wave 18 as agent/ssl_guard.py re-exporting
     ssl_verify (TLS not weakened). Residual: no hermes_fork package; PYTHONPATH
@@ -646,9 +644,7 @@ Recursive 3-pass + cold adversarial on H-I8 bypass (temp+rename) and ssl_guard s
 
   Plugin: `~/.hermes/profiles/fork/plugins/governance-hard-block/`
   Proposal: prop_d16153f3 HIGH pending_review.
-  **NOT in plugins.enabled** — host refuses agent writes to config.yaml
-  (`Refusing to write to Hermes config file`). Operator must add the name after
-  H-I8 hard gate is LIVE (governance-hard-block in plugins.enabled, proposals deployed Wave 18).
+  **LIVE in plugins.enabled** — governance-hard-block enforcing (Wave 18). Proposals deployed.
   Bootstrap exception: `plugins/governance-hard-block/**` only.
   Adversarial: `mv /tmp/x config.yaml` and `os.replace` are matched via rename primitives
   + path regex. Residual: execute_code that builds the dest path at runtime with no
@@ -723,7 +719,7 @@ Recursive 3-pass + cold adversarial on H-I8 bypass (temp+rename) and ssl_guard s
   CLOSED rd-compaction-advisor wired (pre_compress + rd-lambda-target.json consumer added in
          context-pressure-guard WIRE-050; DPI tautology fixed ADV-009).
   CLOSED  fork-profile templates updated to journal_mode: wal. Active config already WAL. [Wave 19 2026-10-07]
-  CLOSED  jev-turn-evaluator added to plugins.enabled; plugin.yaml written; shadow_jev_evaluator=false gate. [Wave 19 2026-10-07]
+  CLOSED  jev-turn-evaluator added to plugins.enabled; plugin.yaml written; shadow_jev_evaluator=true gate. [Wave 19 2026-10-07]
 ### Adversarial + Wiring Audit pass results (2026-10-07)
 
 18 ADV findings (cold adversarial agent), 18 WIRE findings (cold wiring agent).
@@ -779,7 +775,7 @@ ACCEPTED (documented):
 ### Fixes applied:
 - GAP-1 CLOSED: memory.db + hindsight.db schemas initialised (memory_entries, hindsight_events, WAL)
 - GAP-2 CLOSED: fork-profile templates updated to journal_mode: wal; active config confirmed WAL
-- GAP-3 CLOSED: jev-turn-evaluator added to plugins.enabled (shadow gate: shadow_jev_evaluator=false); plugin.yaml written
+- GAP-3 CLOSED: jev-turn-evaluator added to plugins.enabled (shadow gate: shadow_jev_evaluator=true); plugin.yaml written
 - GAP-4 CLOSED: real-options-fanout-gate.py + cron job real-options-fanout-gate-0001 wired
 - GAP-5 CLOSED: _DPI_TOKEN_BOUND=512 + query_token_count enforcing in fork skill-router-index.py
 - GAP-6/ADV-007 CLOSED: memory-doob-strata-consumer.py written + cron job doob-strata-consumer-0001 (12h)
@@ -795,5 +791,5 @@ ACCEPTED (documented):
 - Pass 3: 0 new findings — SATURATED
 
 ### Wiring audit clean:
-- 67 cron jobs: 0 missing scripts, 0 compile errors, null-script jobs wired
+- 68 cron jobs: 0 missing scripts, 0 compile errors, null-script jobs wired; doob-strata-decompose-0001 added Wave 21
 - 10 plugins: all compile, H-I7 enforced, no invalid hooks, no LLM calls in pre-hooks
