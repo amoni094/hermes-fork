@@ -89,16 +89,16 @@ _RENAME_PRIMITIVES = re.compile(
     # Path(nested).write_text/write_bytes: two-level nested parens in Path() arg (ADV-W9-003)
     r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch)"
     # getattr obfuscation bypass (ADV-W9-003): getattr(obj,'write_text'/'open'/'write_bytes')
-    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]{0,100}\)|\([a-zA-Z_][\w.]*\)|[a-zA-Z_][\w.]*\[[^\]]{0,80}\]),\s*['\"](?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch)['\"]"
+    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*(?:\([^)]{0,80}\))?|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]{0,100}\)|\([a-zA-Z_][\w.]*\)|[a-zA-Z_][\w.]*\[[^\]]{0,80}\])\s*,\s*['\"](?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch|extractall|unpack_archive)['\"]"
     r"|io\.FileIO\s*\([^)]{0,150},\s*['\"][^'\"]*[wax+]"  # ADV-W16-007 io.FileIO write-mode only (W17-004)
     r"|io\.open\s*\([^)]{0,200},\s*['\"][awx]"  # ADV-W16-007 io.open write-mode only (W17-004)
     r"|operator\.(?:attrgetter|methodcaller)\s*\("  # ADV-W16-009 operator bypass
-    r"|(?:extractall|unpack_archive)\s*\("  # ADV-W17SAT-006 archive extract
-    r"|fileinput\.input\s*\("  # ADV-W17SAT-008 fileinput inplace
-    r"|partial\s*\(\s*open\b"  # ADV-W17SAT-010 partial(open,...)
-    r"|\.(?:rename|touch|replace)\s*\("  # ADV-W16-002+W17-007 instance Path.rename/touch
+    r"|(?:\.extract(?:all)?|extractall|unpack_archive)\s*\("  # ADV-W17SAT-006 archive extract
+    r"|fileinput\.(?:input|FileInput)\s*\("  # ADV-W17SAT-008 fileinput inplace
+    r"|partial\s*\(\s*(?:open|io\.open|io\.FileIO|builtins\.open)\b"  # ADV-W17SAT-010 partial(open,...)
+    r"|\.(?:rename|touch)\s*\("  # ADV-W16-002+W17-007 instance Path.rename/touch
     r"|json\.dump\b"
-    r"|os\.(open|popen|system)\s*\("
+    r"|os\.(open|popen|system|replace)\s*\("
     r"|os\.(symlink|symlinkat)\s*\("
     r"|subprocess\.(run|call|check_call|check_output|Popen)\s*\("
     r"|(?<![\w.])(?:system|execv|execve|execl|execle|execlp|execvp|execvpe)\s*\("  # ADV-W14-005
@@ -490,7 +490,7 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
                 or bool(re.search(r"(?<!\w)(?:plugins|agent)/", blob))
             ):
                 high = ["<copy-verb + high-risk token>"]
-            if _INPLACE_EDITOR.search(blob) and re.search(r"(?:--in-place|-[a-z]*i\b)", blob) and (
+            if _INPLACE_EDITOR.search(blob) and re.search(r"(?:--in-place|-[a-zA-Z]*i[a-zA-Z]*\b)", blob) and (
                 any(t in blob for t in ("config.yaml", "config.yml", "/plugins/", "/agent/", "plugin.yaml"))
                 or bool(re.search(r"(?<!\w)(?:plugins|agent)/", blob))
                 ):
