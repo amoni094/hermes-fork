@@ -61,20 +61,23 @@ _RENAME_PRIMITIVES = re.compile(
     r"os\.(replace|rename|link)"
     r"|shutil\.(move|copy|copy2|copyfile|copytree)"
     r"|Path\([^\)]*\)\.(write_text|write_bytes|replace|rename|touch)"
-    # open() write-mode: require comma+mode, cap at 200 chars (avoids PATH-PREFIX FP and MULTILINE bypass)
-    r"|open\s*\([\s\S]{0,200}?,\s*['\"][awx][bt+]*['\"]"           # w/a/x modes (+ optional b/t/+)
-    r"|open\s*\([\s\S]{0,200}?,\s*['\"]r[bt]*\+[bt]*['\"]"         # r+/rb+/r+b update mode (not plain 'r')
-    r"|open\s*\([\s\S]{0,200}?mode\s*=\s*['\"][awx][bt+]*['\"]"   # keyword mode: w/a/x
-    r"|open\s*\([\s\S]{0,200}?mode\s*=\s*['\"]r[bt]*\+[bt]*['\"]" # keyword mode: r+/rb+/r+b
+    # open() write-mode: [^)\n]{0,150} — stops at first ) (no padding bypass via newlines/spaces),
+    # no \n (blocks multi-line padding, ADV-W7-002). Tradeoff: open(nested_call(), 'w') with nested
+    # parens in path won't match here; caught downstream by looks_like_rename + HR_TOKEN check.
+    r"|open\s*\([^)\n]{0,150},\s*['\"][awx][bt+]*['\"]"
+    r"|open\s*\([^)\n]{0,150},\s*['\"]r[bt]*\+[bt]*['\"]"
+    r"|open\s*\([^)\n]{0,150}mode\s*=\s*['\"][awx][bt+]*['\"]"
+    r"|open\s*\([^)\n]{0,150}mode\s*=\s*['\"]r[bt]*\+[bt]*['\"]"
     r"|\.open\s*\(['\"][awx]"                                       # Path.open('a') etc.
     r"|\.open\s*\(['\"]r[bt]*\+[bt]*['\"]"                         # Path.open('r+') update mode
-    # Dynamic mode: open(p, chr(119)) — require comma before chr() (ADV-025-OPEN-DYNAMIC-MODE)
-    # [\\s\\S]{0,200}? allows multiline (ADV-W6-002); ,\\s*chr ensures chr is mode not preceding code
-    r"|open\s*\([\s\S]{0,200}?,\s*chr\s*\("
-    r"|open\s*\([\s\S]{0,200}?mode\s*=\s*chr\s*\("
+    r"|\.open\s*\(\s*chr\s*\("                                      # Path.open(chr(119)) — ADV-W7-001
+    # Dynamic mode: open(p, chr(119)) — [^)\n] stops FP exec(open(f).read()), chr() ADV-W7-004
+    r"|open\s*\([^)\n]{0,150},\s*chr\s*\("
+    r"|open\s*\([^)\n]{0,150}mode\s*=\s*chr\s*\("
     r"|json\.dump"
     r"|os\.(popen|system)\s*\("
-    r"|os\.symlink\s*\("
+    r"|os\.(symlink|symlinkat)\s*\("
+    r"|\.(?:symlink_to|hardlink_to)\s*\("
     r"|subprocess\.(run|call|check_call|check_output|Popen)\s*\("
 )
 
