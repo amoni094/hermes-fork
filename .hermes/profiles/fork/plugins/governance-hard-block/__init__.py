@@ -57,18 +57,20 @@ _HIGH_HERMES_PLUGIN_PY = re.compile(r"(?i)\.hermes/(profiles/[^/]+/)?plugins/.*\
 
 # Rename / copy primitives that can bypass write_file by temp+replace.
 _RENAME_PRIMITIVES = re.compile(
-    r"(?i)\b(mv|cp|install|rsync|ln|tee|install\s+-m)\b"
-    r"|os\.(replace|rename|link)"
+    # Python file-write primitives (execute_code context)
+    r"os\.(replace|rename|link)"
     r"|shutil\.(move|copy|copy2|copyfile|copytree)"
     r"|Path\([^\)]*\)\.(write_text|write_bytes|replace|rename|touch)"
-    r"|open\s*\(.*?['\"][awx]"            # write/append/exclusive modes (.*? crosses nested parens)
-    r"|open\s*\(.*?['\"]r\+"             # read-update mode also writes
-    r"|open\s*\(.*?mode\s*=\s*['\"][awx]"   # keyword-form mode arg
-    r"|\.open\s*\(['\"][awx]"             # Path.open('a'), Path.open('w') etc.
+    # open() write-mode: require comma+mode, cap at 200 chars (avoids PATH-PREFIX FP and MULTILINE bypass)
+    r"|open\s*\([\s\S]{0,200}?,\s*['\"][awxrbt+]{1,4}['\"]"       # positional mode arg (post-comma)
+    r"|open\s*\([\s\S]{0,200}?mode\s*=\s*['\"][awxrbt+]{1,4}['\"]"  # keyword mode arg
+    r"|\.open\s*\(['\"][awx]"                                       # Path.open('a') etc.
+    # Dynamic mode: open(p, chr(119)) or open(p, mode=chr(119)) — fail-closed (ADV-025-OPEN-DYNAMIC-MODE)
+    r"|open\s*\([^\n]*\bchr\s*\("
+    r"|open\s*\([^\n]*mode\s*=\s*chr\s*\("
     r"|json\.dump"
-    r"|>\s*\S"                            # shell redirect > file or >>
     r"|os\.popen"
-    r"|subprocess\.(run|call|check_call|check_output|Popen)\s*\("  # subprocess shell
+    r"|subprocess\.(run|call|check_call|check_output|Popen)\s*\("
 )
 
 _BOOTSTRAP_DIR: Optional[Path] = None  # resolved lazily (ADV-004)
@@ -279,31 +281,48 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
     # Encoding + write primitive bypass detection. Fires on execute_code AND terminal.
     # ENCODE: chr(x), '%c' quoted literal, fromhex, b64decode, codecs.decode, bytes([...]),
     #         eval(), exec(). (\x hex escapes and string concat are out-of-scope.)
-    # WRITE: reuse _RENAME_PRIMITIVES which already covers mv/cp/tee/open(a/w/x/r+)/
-    #         shutil.copy2/copytree/os.popen/shell redirects/json.dump.
-    # NOTE: exec(open('file').read()) does NOT fire — open(...) with read-mode ('r' or
-    #         no 'w'/'a'/'x') does not match _RENAME_PRIMITIVES. Only write-mode opens fire.
+    # WRITE (Python): reuse _RENAME_PRIMITIVES — shutil, os.replace/rename, json.dump,
+    #         open(p,'w'/'a'/'x'), open(p,mode=chr(119)), subprocess, os.popen.
+    # WRITE (shell, terminal only): mv/cp/install/rsync/ln/tee command verbs (anchored to shell
+    #         context), shell redirects (> path or >> path, not arithmetic >1).
+    # NOTE: exec(open('file').read()) does NOT fire — open(path,'r') won't match _RENAME_PRIMITIVES.
     _ENCODE_PATTERN = re.compile(
         r"\bchr\s*\("                                   # chr(99) / chr(c) / chr(0x63)
         r"|['\"]%c['\"]"                                # '%c' string literal used as format-char
-        r"|\.fromhex\s*\("                              # bytes.fromhex(...)
+        r"|[b\w]\.fromhex\s*\("                              # bytes.fromhex(...) / b.fromhex(...)
         r"|\bb64decode\s*\("                            # base64.b64decode(...)
         r"|codecs\.decode\s*\("                         # codecs.decode(...)
         r"|bytes\s*\(\s*\["                             # bytes([99, 111, ...]).decode()
         r"|\beval\s*\("                                 # eval(encoded_string)
         r"|\bexec\s*\("                                 # exec(compiled/encoded)
     )
+    # Shell-specific write primitives for terminal blobs (command verbs + redirect).
+    # Anchored to shell context: preceded by start-of-line, whitespace, ;, |, &.
+    # Redirect: >\s*[path-starting char] — avoids arithmetic 'x > 1' or '>> count'.
+    _SHELL_WRITE = re.compile(
+        r"(?:^|[;|&\n])\s*(mv|cp|install|rsync|tee)\b"   # shell command verbs (after shell operator)
+        r"|(?:^|[\s;|&])(?:>>?)[\s]*[/'\"~\w]"            # shell redirect > /path or >> "file"
+    )
     _encode_blob = ""
     if tool_name in ("execute_code", "terminal"):
         _encode_blob = chr(10).join(_string_values(args))
-    if _encode_blob and _ENCODE_PATTERN.search(_encode_blob) and _RENAME_PRIMITIVES.search(_encode_blob):
-        return _deny(
-            "[governance-hard-block] DENY: code contains an encoding primitive "
-            "(chr(), '%c', fromhex(), b64decode(), codecs.decode(), bytes([...]), eval(), exec()) "
-            "combined with a write/rename primitive (ADV-025/ADV-025-EXT/ADV-025-TERMINAL/"
-            "ADV-025-OSSYSTEM/ADV-025-TEE). Dynamic paths built via encoding bypass static "
-            "token detection. No proposal can approve obfuscated writes — rewrite without encoding."
-        )
+    if _encode_blob and _ENCODE_PATTERN.search(_encode_blob):
+        # Python write primitive (both tool types) OR shell write primitive (terminal only)
+        if _RENAME_PRIMITIVES.search(_encode_blob):
+            return _deny(
+                "[governance-hard-block] DENY: code contains an encoding primitive "
+                "(chr(), '%c', fromhex(), b64decode(), codecs.decode(), bytes([...]), eval(), exec()) "
+                "combined with a write/rename primitive (ADV-025/ADV-025-EXT/ADV-025-TERMINAL/"
+                "ADV-025-OSSYSTEM/ADV-025-TEE). Dynamic paths built via encoding bypass static "
+                "token detection. No proposal can approve obfuscated writes — rewrite without encoding."
+            )
+        if tool_name == "terminal" and _SHELL_WRITE.search(_encode_blob):
+            return _deny(
+                "[governance-hard-block] DENY: terminal command contains an encoding primitive "
+                "combined with a shell write primitive (mv/cp/install/tee/redirect) "
+                "(ADV-025-TEE-REDIRECT/ADV-025-CMD). Dynamic shell paths built via encoding "
+                "bypass static token detection. No proposal can approve obfuscated writes."
+            )
     if tool_name == "execute_code":
         code_blob = chr(10).join(_string_values(args))
         if looks_like_rename_or_copy({"code": code_blob}):
