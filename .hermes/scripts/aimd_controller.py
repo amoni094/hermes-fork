@@ -26,6 +26,7 @@ Design notes:
 
 from __future__ import annotations
 
+import math
 import random
 import threading
 import time
@@ -215,6 +216,65 @@ class AIMDController:
         return self._rng.uniform(0, slot)
 
 
+# --- Safe UCB (Lattimore) with failure envelope P(fail) <= 0.1 ---
+# Recency window is required: all-time averages are stale and unsafe.
+
+FAIL_BOUND = 0.1
+UCB_MIN_SAMPLES = 10
+UCB_RECENCY_SECONDS = 24 * 3600
+
+
+def laplace_p_fail(failures: int, n: int) -> float:
+    """Laplace-smoothed P(failure). Always in (0,1)."""
+    n = max(int(n), 0)
+    failures = max(int(failures), 0)
+    return (failures + 1.0) / (n + 2.0)
+
+
+def ucb_index(mean: float, n: int, t: int, c: float = 1.41421356237) -> float:
+    if n <= 0:
+        return float("inf")
+    t = max(int(t), 1)
+    return float(mean) + c * (math.log(t) / n) ** 0.5
+
+
+def arm_is_safe(failures: int, n: int, last_ts: float | None, now: float,
+                recency: float = UCB_RECENCY_SECONDS) -> bool:
+    """Safety envelope. Stale (no observation in recency window) is unsafe to run
+    except n==0 (no evidence yet — exploration allowed)."""
+    if n <= 0:
+        return True  # undefined P(fail); not > 0.1
+    try:
+        last = float(last_ts) if last_ts is not None else None
+    except (TypeError, ValueError):
+        last = None
+    if last is None:
+        return False
+    if last > now + 1.0:
+        return False  # future timestamp — do not certify
+    if (now - last) > recency:
+        return False  # missing/stale timestamp — do not certify from old successes
+    # Hard core: Laplace P(fail) <= 0.1 for any n>0 (n=1, f=0 → 1/3 > 0.1, rejected)
+    return laplace_p_fail(failures, n) <= FAIL_BOUND
+
+
+def select_ucb_arm(arms: dict, t: int, now: float) -> str | None:
+    """Pick argmax UCB among safe arms. Returns None if none are safe."""
+    best_id, best = None, float("-inf")
+    for arm_id, stats in arms.items():
+        n = int(stats.get("n", 0) or 0)
+        failures = int(stats.get("failures", 0) or 0)
+        last_ts = stats.get("last_ts")
+        if not arm_is_safe(failures, n, last_ts, now):
+            continue
+        successes = max(0, n - failures)
+        mean = (successes / n) if n else 1.0
+        idx = ucb_index(mean, n if n else 1, t)
+        if idx > best:
+            best_id, best = str(arm_id), idx
+    return best_id
+
+
 # --- Registry ---
 
 _registry: dict[tuple[str, str], AIMDController] = {}
@@ -250,16 +310,29 @@ def reset_registry() -> None:
 
 if __name__ == "__main__":
     # Quick smoke test
-    import sys
     rng = random.Random(42)
     ctrl = get_controller("anthropic", "extractor", rng=rng)
     print(f"Initial limit: {ctrl.limit}")
-    # Simulate throttle events
     for _ in range(10):
         ctrl.record_outcome("throttle")
     print(f"After throttles: {ctrl.limit}")
-    # Simulate recovery
     for _ in range(40):
         ctrl.record_outcome("ok")
     print(f"After recovery: {ctrl.limit}")
+
+    now = 1_000_000.0
+    # Hard core: selected arm with n>=10 has P(fail) <= 0.1
+    safe = {"ok": {"n": 20, "failures": 1, "last_ts": now}}
+    unsafe = {"bad": {"n": 20, "failures": 8, "last_ts": now}}  # 9/22 > 0.1
+    stale = {"old": {"n": 20, "failures": 0, "last_ts": now - 48 * 3600}}
+    assert select_ucb_arm(safe, t=20, now=now) == "ok"
+    assert select_ucb_arm(unsafe, t=20, now=now) is None
+    assert select_ucb_arm(stale, t=20, now=now) is None  # stale successes
+    nostamp = {"ghost": {"n": 20, "failures": 0, "last_ts": None}}
+    assert select_ucb_arm(nostamp, t=20, now=now) is None  # missing ts is stale
+    picked = select_ucb_arm({**safe, **unsafe, **stale}, t=20, now=now)
+    assert picked == "ok"
+    n, f = 20, 1
+    assert laplace_p_fail(f, n) <= FAIL_BOUND
     print("AIMD controller smoke test PASSED")
+    print("UCB safety envelope self-test PASSED")

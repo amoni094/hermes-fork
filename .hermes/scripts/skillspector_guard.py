@@ -24,6 +24,54 @@ PENDING_PATH = SECURITY_ROOT / "pending_quarantine.json"
 QUARANTINE_ROOT = Path(os.environ.get("HERMES_SKILLS_QUARANTINE_ROOT", os.path.expanduser("~/.hermes/skills-quarantine")))
 SKILLSPECTOR_BIN = os.environ.get("SKILLSPECTOR_BIN", os.path.expanduser("~/.local/bin/skillspector"))
 DEFAULT_THRESHOLD = int(os.environ.get("HERMES_SKILLS_QUARANTINE_SCORE", "60"))
+TRIGGER_EDIT_MIN = 5  # Lin coding analog: near-duplicate triggers are a routing failure
+
+
+def _trigger_tokens(text: str) -> list[str]:
+    import re
+    return re.findall(r"[a-z][a-z0-9]{2,}", (text or "").lower())[:24]
+
+
+def _token_edit_distance(a: list[str], b: list[str]) -> int:
+    la, lb = len(a), len(b)
+    if la == 0:
+        return lb
+    if lb == 0:
+        return la
+    prev = list(range(lb + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i] + [0] * lb
+        for j, cb in enumerate(b, 1):
+            cur[j] = min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + (ca != cb))
+        prev = cur
+    return prev[lb]
+
+
+def flag_near_duplicate_triggers(skill_dirs: list[Path], min_dist: int = TRIGGER_EDIT_MIN) -> list[tuple]:
+    """Hard core: no two skill descriptions have token edit distance < 5."""
+    phrases = []
+    for path in skill_dirs:
+        skill_md = path / "SKILL.md"
+        if not skill_md.exists():
+            continue
+        try:
+            text = skill_md.read_text(encoding="utf-8", errors="replace")[:1500]
+        except OSError:
+            continue
+        desc = text
+        for line in text.splitlines():
+            if line.lower().startswith("description:") or "use when" in line.lower():
+                desc = line
+                break
+        phrases.append((path.name, _trigger_tokens(desc)))
+    flags = []
+    for i in range(len(phrases)):
+        for j in range(i + 1, len(phrases)):
+            d = _token_edit_distance(phrases[i][1], phrases[j][1])
+            if d < min_dist:
+                flags.append((d, phrases[i][0], phrases[j][0]))
+    flags.sort()
+    return flags
 
 
 @dataclass
@@ -602,6 +650,16 @@ def main() -> int:
                     _skill = _item.get("skill", _item.get("name", "unknown"))
                     print(f"MERKLE-DRIFT: {_skill}")
                     _drift_count += 1
+    except Exception:
+        pass
+
+    try:
+        _dups = flag_near_duplicate_triggers(skill_dirs, min_dist=TRIGGER_EDIT_MIN)
+        if _dups:
+            print(f"TRIGGER-NEAR-DUP: {len(_dups)} skill pairs with token edit distance < {TRIGGER_EDIT_MIN}")
+            for d, a, b in _dups[:15]:
+                print(f"TRIGGER-NEAR-DUP: dist={d} {a} <-> {b}")
+            # Advisory only — do not fail the cron job on description collisions.
     except Exception:
         pass
 

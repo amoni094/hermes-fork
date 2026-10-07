@@ -44,6 +44,115 @@ REGRET_LOG_PATH = _hermes_root / "cache" / "routing-regret-log.jsonl"
 
 _DEFAULT_ROUTES = ['semantic', 'temporal', 'relational', 'exact']
 
+# TD(lambda) (Sutton-Barto): e_{t+1} = (gamma * lambda) * e_t + 1_{observed}
+GAMMA_TD = 0.95
+LAMBDA_TD = 0.8
+TRACE_DECAY = GAMMA_TD * LAMBDA_TD  # 0.76
+EPS_RATIO = 1e-9
+NAT_GRAD_ETA = 0.1  # Dirichlet-Multinomial natural-gradient mix
+
+
+def natural_gradient_dirichlet(
+    weights: dict,
+    empirical_counts: dict,
+    eta: float = NAT_GRAD_ETA,
+) -> dict:
+    """e-flat natural gradient for Dirichlet-Multinomial (Amari).
+
+    Fisher I is diagonal; nat-grad in mean coordinates is p_emp - p_model
+    (score/count). Hard core: coordinate-free — scaling all empirical counts
+    by c does not change the update direction.
+    """
+    keys = list(weights)
+    wsum = sum(max(1e-12, float(weights[k])) for k in keys) or 1.0
+    esum = sum(max(0.0, float(empirical_counts.get(k, 0.0))) for k in keys)
+    out = {}
+    for k in keys:
+        p_model = max(1e-12, float(weights[k])) / wsum
+        p_emp = (float(empirical_counts.get(k, 0.0)) / esum) if esum > 0 else p_model
+        stepped = float(weights[k]) + eta * (p_emp - p_model)
+        out[k] = max(WEIGHT_MIN, min(WEIGHT_MAX, stepped))
+    return out
+
+
+def update_eligibility_traces(traces: dict, observed_routes: list, decay: float = TRACE_DECAY) -> dict:
+    """Decay all traces, then add 1 to observed routes. Hard core: idle decay is (gamma*lambda)^t."""
+    out = {}
+    for k, v in traces.items():
+        if k == "_meta":
+            continue
+        try:
+            out[k] = float(v) * decay
+        except (TypeError, ValueError):
+            continue
+    for r in observed_routes:
+        out[r] = out.get(r, 0.0) + 1.0
+    out["_meta"] = {"decay": decay, "gamma": GAMMA_TD, "lambda": LAMBDA_TD}
+    return out
+
+
+def eligibility_idle_decay(e0: float, t: int, decay: float = TRACE_DECAY) -> float:
+    return float(e0) * (decay ** int(t))
+
+
+def competitive_ratio_last_24h(log_path: Path, now: float, weights: dict | None = None) -> dict:
+    """ALG loss vs hindsight-best fixed route OPT over 24h.
+
+    Competitive ratio = (ALG_loss + eps) / (OPT_loss + eps) — always finite.
+    achieved_opt is ALWAYS False: online ALG cannot claim offline OPT.
+    """
+    cutoff = now - 24 * 3600
+    per_route = defaultdict(lambda: {"n": 0, "loss": 0.0})
+    alg_n = 0
+    alg_loss = 0.0
+    if log_path.exists():
+        for line in log_path.read_text().splitlines():
+            try:
+                row = json.loads(line)
+            except Exception:
+                continue
+            ts = float(row.get("ts", 0) or 0)
+            if ts < cutoff:
+                continue
+            route = row.get("route") or ""
+            if not route:
+                continue
+            result_count = int(row.get("result_count", -1) or -1)
+            loss = 0.0 if result_count > 0 else 1.0
+            per_route[route]["n"] += 1
+            per_route[route]["loss"] += loss
+            alg_n += 1
+            alg_loss += loss
+    # Offline OPT: hindsight best *fixed* route (lowest loss rate with n>0).
+    opt_loss = None
+    opt_route = None
+    for route, st in per_route.items():
+        if st["n"] <= 0:
+            continue
+        # Scale route loss to ALG's n via loss rate (expert-advice comparator).
+        rate = st["loss"] / st["n"]
+        scaled = rate * alg_n
+        if opt_loss is None or scaled < opt_loss:
+            opt_loss = scaled
+            opt_route = route
+    if opt_loss is None:
+        opt_loss = 0.0
+    # Additive +1 smoothing: finite even when OPT_loss=0; never 1e9-scale eps ratios.
+    ratio = (alg_loss + 1.0) / (opt_loss + 1.0)
+    finite = math.isfinite(ratio)
+    return {
+        "ts": now,
+        "window_hours": 24,
+        "alg_n": alg_n,
+        "alg_loss": round(alg_loss, 4),
+        "opt_loss": round(float(opt_loss), 4),
+        "opt_route": opt_route,
+        "competitive_ratio": round(ratio, 6) if finite else None,
+        "finite": finite,
+        "achieved_opt": False,
+        "note": "Offline OPT is a hindsight comparator only; ALG did not achieve OPT.",
+    }
+
 
 def _load_known_routes(weights_path: Path, log_path: Path) -> list:
     """Dynamic route discovery.
@@ -161,6 +270,16 @@ def main():
         import sys as _sys
         print(f"[advisory:routing-weight-updater] {type(_adv_e).__name__}: {_adv_e} — advisory failure", file=_sys.stderr)
 
+    TRACE_PATH = _hermes_root / "cache" / "routing-eligibility.json"
+    traces_in = {}
+    try:
+        if TRACE_PATH.exists():
+            _tr = json.loads(TRACE_PATH.read_text())
+            if isinstance(_tr, dict):
+                traces_in = _tr
+    except Exception:
+        traces_in = {}
+
     # ------------------------------------------------------------------ #
     # FTRL-EMA update
     # ------------------------------------------------------------------ #
@@ -196,7 +315,15 @@ def main():
             # At p=0.1 or p=0.9: lr ≈ EMA_NEW * 0.3 (faster update — strong signal)
             _fisher_weight = math.sqrt(max(1e-6, success_rate * (1.0 - success_rate)))
             _lr = EMA_NEW * _fisher_weight  # Fisher-adjusted learning rate
-            _decay = 1.0 - _lr              # complementary decay
+            # TD(lambda) credit: scale lr by eligibility (decays at (gamma*lambda)^t when idle)
+            try:
+                _elig = float(traces_in.get(route, 1.0))
+            except (TypeError, ValueError):
+                _elig = 1.0
+            if not math.isfinite(_elig) or _elig < 0:
+                _elig = 1.0
+            _lr = _lr * min(2.0, max(0.05, _elig))
+            _decay = 1.0 - min(0.5, _lr)  # keep decay in (0.5, 1]
             # EMA: new = prior * decay + success_rate * lr  (information-geometry weighted)
             new_weight = prior * _decay + success_rate * _lr
             # Clamp
@@ -217,6 +344,16 @@ def main():
             'n': n,
             'success_rate': round(success_rate, 3) if success_rate is not None else None,
         })
+
+    # Dirichlet-Multinomial natural gradient mix (Amari e-flat).
+    _emp = {r: float(route_stats.get(r, {}).get('successes', 0) or 0) for r in KNOWN_ROUTES}
+    _w_now = {r: float(updated_weights[r]['weight']) for r in KNOWN_ROUTES}
+    _nat = natural_gradient_dirichlet(_w_now, _emp)
+    for r in KNOWN_ROUTES:
+        blended = 0.7 * float(updated_weights[r]['weight']) + 0.3 * float(_nat[r])
+        blended = max(WEIGHT_MIN, min(WEIGHT_MAX, blended))
+        updated_weights[r]['weight'] = round(blended, 4)
+        updated_weights[r]['nat_grad'] = round(_nat[r], 4)
 
     # ------------------------------------------------------------------ #
     # O1: Compute cumulative regret vs uniform baseline                   #
@@ -273,6 +410,45 @@ def main():
         print(f"WARN: regret log write failed: {_re}")
 
     # ------------------------------------------------------------------ #
+    # Competitive ratio vs hindsight-best fixed route (Borodin/El-Yaniv)
+    # Last 24h. NEVER cite offline OPT as achieved.
+    # ------------------------------------------------------------------ #
+    try:
+        summary_comp = competitive_ratio_last_24h(LOG_PATH, now, updated_weights)
+        COMP_PATH = _hermes_root / "cache" / "routing-competitive-ratio.jsonl"
+        COMP_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(COMP_PATH, "a") as _clog:
+            _clog.write(json.dumps(summary_comp) + "\n")
+        print(f"[competitive-ratio] ratio={summary_comp.get('competitive_ratio')} "
+              f"finite={summary_comp.get('finite')} achieved_opt=False")
+    except Exception as _ce:
+        print(f"WARN: competitive ratio failed: {_ce}")
+        summary_comp = {"error": str(_ce), "achieved_opt": False}
+
+    # ------------------------------------------------------------------ #
+    # TD(lambda) eligibility traces (Sutton-Barto) for delayed routing credit
+    # ------------------------------------------------------------------ #
+    try:
+        TRACE_PATH = _hermes_root / "cache" / "routing-eligibility.json"
+        traces = {}
+        if TRACE_PATH.exists():
+            try:
+                traces = json.loads(TRACE_PATH.read_text())
+                if not isinstance(traces, dict):
+                    traces = {}
+            except Exception:
+                traces = {}
+        observed = [r for r in KNOWN_ROUTES if route_stats.get(r, {}).get("total", 0) > 0]
+        traces = update_eligibility_traces(traces, observed)
+        _tmp_t = TRACE_PATH.with_suffix(".tmp")
+        _tmp_t.write_text(json.dumps(traces, indent=2))
+        _tmp_t.rename(TRACE_PATH)
+        print(f"[eligibility] traces={ {k: round(float(v), 4) for k, v in traces.items() if k != '_meta'} }")
+    except Exception as _te:
+        print(f"WARN: eligibility traces failed: {_te}")
+        traces = {}
+
+    # ------------------------------------------------------------------ #
     # Write weights
     # ------------------------------------------------------------------ #
     try:
@@ -292,6 +468,8 @@ def main():
         'window_hours': 48,
         'routes': summary_rows,
         'weights_path': str(WEIGHTS_PATH),
+        'competitive_ratio': summary_comp if isinstance(summary_comp, dict) else None,
+        'eligibility_traces': {k: traces.get(k) for k in traces if k != '_meta'} if isinstance(traces, dict) else None,
     }
     # EXP3 shadow advisory (Lattimore & Szepesvari Ch.11)
     # Computes EXP3 weights alongside FTRL-EMA — detects adversarial reward patterns.

@@ -31,6 +31,7 @@ CACHE_DIR = _root / "cache" / "research"
 STATE_PATH = _root / "cache" / "spike-actuator-state.json"
 SCRIPTS_DIR = Path(__file__).parent
 GOVERNANCE_SCRIPT = SCRIPTS_DIR / "improvement_governance.py"
+MAX_PROPOSALS_PER_RUN = 5  # AIMD-style burst cap; avoid saturating governance
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -235,6 +236,10 @@ def main() -> int:
         if paper_id in done_ids:
             n_skipped += 1
             continue
+
+        if n_created >= MAX_PROPOSALS_PER_RUN:
+            print(f"[actuator] AIMD cap: {MAX_PROPOSALS_PER_RUN} proposals this run, deferring rest")
+            break
 
         print(f"[actuator] proposing: {paper_id!r} — {item['title'][:60]}")
         proposal = _propose(item)

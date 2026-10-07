@@ -43,6 +43,19 @@ Usage:
 
 Constraint schema follows arXiv:2608.24569 (Constraint Weakening): binding must
 stay action-binding (must/should/info), never collapse must→info on handoff.
+
+Complexity (Arora-Barak / Sipser) — do not claim P for NP-hard subproblems:
+  Session JSON load/store, HMAC-SHA256, bigram counts, Shannon entropy of a
+  finite skill sequence: all in P (linear / n log n). Belief-chain walk on a
+  finite parent pointer graph: P (DFS).
+  NOT claimed in P: general sheaf cohomology, unbounded concept-lattice
+  construction, or "optimal working-memory subset under arbitrary constraints"
+  (that last is a knapsack-like subset choice; we do not run an exact solver).
+  lookahead --steps-ahead k enumerates a prompt, not a state-space search.
+
+Reverse mathematics (Dean): RCA0. Finite JSON, primitive-recursive HMAC,
+finite counters. No ACA0 "there exists a globally optimal WM". Colimit/limit
+subcommands operate on the finite stored diagram, not on an infinite category.
 """
 from __future__ import annotations
 

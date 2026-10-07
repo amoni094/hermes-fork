@@ -37,6 +37,17 @@ Exit codes:
   3 — both sources failed with errors (service down)
 
 This script is callable standalone or imported as a module.
+
+Complexity (Arora-Barak / Sipser) — do not claim P for NP-hard subproblems:
+  Reciprocal Rank Fusion of k lists of length n: O(kn). MD5 dedup: O(n).
+  HTTP fetch is an oracle, not a complexity class claim.
+  NOT claimed in P: optimal fusion under arbitrary relevance (rank aggregation
+  Kemeny-Young is NP-hard — we do NOT run Kemeny; RRF is a P-time surrogate).
+  L0/L1 truncation is linear.
+
+Reverse mathematics (Dean): RCA0 on the finite fused list. External Hindsight
+and Graphiti are oracles (not RCA0). Do not treat "a memory that maximises
+relevance exists" as a proven existence; we return what the oracles sent.
 """
 
 import argparse

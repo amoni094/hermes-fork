@@ -36,6 +36,10 @@ from datetime import datetime, timezone
 Kp, Ki, Kd = 1.0, 0.15, 0.4
 U_MAX, U_MIN = 1.0, 0.0
 KAW = 0.5  # anti-windup back-calculation gain (Astrom eq 11.12)
+# Hard core (Astrom anti-windup): integral term bounded in [I_MIN, I_MAX].
+# Ki * |I| <= U_MAX keeps the integral contribution inside actuator range.
+I_MAX = (U_MAX / Ki) if Ki > 0 else 0.0
+I_MIN = -I_MAX
 
 STATE_FILE = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / 'cache' / 'loop-pid-state.json'
 SESSIONS_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / 'cache' / 'loop-pid-sessions'
@@ -66,6 +70,11 @@ def load_state(session=None):
         s = json.loads(path.read_text())
         s.setdefault('hypotheses_tried', 0)
         s.setdefault('ended', False)
+        # Clamp persisted integrator (old state may predate I_MIN/I_MAX).
+        try:
+            s['integrator'] = max(I_MIN, min(I_MAX, float(s.get('integrator') or 0.0)))
+        except (TypeError, ValueError):
+            s['integrator'] = 0.0
         return s
     return _empty_state()
 
@@ -112,12 +121,13 @@ def cmd_step(args):
     u_raw = Kp * e + Ki * s['integrator'] + Kd * de
     u = max(U_MIN, min(U_MAX, u_raw))
 
-    # Anti-windup back-calculation (Astrom §11.4)
+    # Anti-windup back-calculation (Astrom §11.4) then hard clamp.
     windup = u_raw != u
     if windup:
         s['integrator'] += KAW * (u - u_raw) / Ki if Ki > 0 else 0
     else:
         s['integrator'] += e  # normal integration
+    s['integrator'] = max(I_MIN, min(I_MAX, s['integrator']))
 
     # error plateau detector: delta < span_bound where span_bound = eps*(1-lam)/(2*lam)
     # using lambda=0.9 (Puterman §6.6 span seminorm stopping criterion, discount factor)
@@ -757,6 +767,36 @@ def cmd_gain_check(args):
     print(json.dumps(out, indent=2))
 
 
+def cmd_antiwindup_selftest(_args):
+    """Hard core: after any step, integrator in [I_MIN, I_MAX]."""
+    failures = []
+    integ = 0.0
+    prev = None
+    # Saturating errors must not wind the integral past I_MAX.
+    for e in [1.0] * 50 + [0.0] * 10 + [1.0] * 50:
+        de = (e - prev) if prev is not None else 0.0
+        u_raw = Kp * e + Ki * integ + Kd * de
+        u = max(U_MIN, min(U_MAX, u_raw))
+        if u_raw != u:
+            integ += KAW * (u - u_raw) / Ki if Ki > 0 else 0
+        else:
+            integ += e
+        integ = max(I_MIN, min(I_MAX, integ))
+        if not (I_MIN <= integ <= I_MAX):
+            failures.append(integ)
+        prev = e
+    ok = not failures
+    print(json.dumps({
+        'property': 'I_MIN <= integrator <= I_MAX',
+        'I_MIN': I_MIN,
+        'I_MAX': I_MAX,
+        'passed': ok,
+        'n_violations': len(failures),
+    }))
+    if not ok:
+        raise SystemExit(1)
+
+
 if __name__ == '__main__':
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest='cmd', required=True)
@@ -823,5 +863,8 @@ if __name__ == '__main__':
                          help='KHALIL-3: empirical L-infinity gain estimate (BIBO heuristic)')
     gc2.add_argument('--session', default=None)
     gc2.set_defaults(func=cmd_gain_check)
+    aw = sub.add_parser('antiwindup-selftest',
+                        help='Astrom hard core: integrator bounded in [I_MIN, I_MAX]')
+    aw.set_defaults(func=cmd_antiwindup_selftest)
     args = p.parse_args()
     args.func(args)

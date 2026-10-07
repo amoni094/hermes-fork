@@ -277,9 +277,21 @@ def main() -> None:
             except Exception as _adv_e:
                 import sys as _sys
                 print(f"[advisory:pre-compact-annotate] {type(_adv_e).__name__}: {_adv_e} — entropy advisory; fall back to no-entropy mode", file=_sys.stderr)
+            _adv_script = None
+            for _cand in (
+                Path(__file__).parent / "rd-compaction-advisor.py",
+                Path.home() / ".hermes" / "scripts" / "rd-compaction-advisor.py",
+                Path.home() / ".hermes" / "profiles" / "fork" / "scripts" / "rd-compaction-advisor.py",
+            ):
+                if _cand.exists():
+                    _adv_script = _cand
+                    break
+            if _adv_script is None:
+                raise FileNotFoundError("rd-compaction-advisor.py")
             _adv_result = _sp.run(
-                [_sys.executable, str(Path(__file__).parent / "rd-compaction-advisor.py"),
-                 "--current-tokens", str(_current_tokens)] + _entropy_flag,
+                [_sys.executable, str(_adv_script),
+                 "--current-tokens", str(_current_tokens),
+                 "--focus", str(focus)[:2000]] + _entropy_flag,
                 capture_output=True, text=True, timeout=10,
             )
             if _adv_result.returncode == 0 and _adv_result.stdout.strip():
@@ -288,8 +300,10 @@ def main() -> None:
                 _focus = _adv.get("focus_topic_prefix", "")
                 annotation += (
                     f"\nCompaction advisory: aggressiveness={_agg:.2f}, "
-                    f"focus={_focus} (rd-compaction-advisor)"
+                    f"focus={_focus} (rd-compaction-advisor; wired to pre_compress)"
                 )
+                if (_adv.get("dpi") or {}).get("dpi_violation"):
+                    annotation += "\nDPI FLAG: do not drop annotated focus tokens."
         except Exception as _adv_e:
             import sys as _sys
             print(f"[advisory:pre-compact-annotate] {type(_adv_e).__name__}: {_adv_e} — advisory is best-effort; never block annotation output", file=_sys.stderr)

@@ -130,3 +130,38 @@ def w1_distance(tf_a: Dict[str, float], tf_b: Dict[str, float], reg: float = 0.0
     a, b, C = tf_to_vec(tf_a, tf_b)
     _, cost = sinkhorn(a, b, C, reg=reg, max_iter=100)
     return float(cost)
+
+
+def gromov_wasserstein(
+    dX,
+    dY,
+    mu=None,
+    nu=None,
+    reg: float = 0.05,
+    max_iter: int = 20,
+) -> float:
+    """Squared-loss Gromov-Wasserstein (Peyré-Cuturi).
+
+    Hard core: GW(X,Y) >= 0 and GW(X,Y) == GW(Y,X) (symmetric).
+    """
+    dX = np.asarray(dX, dtype=np.float64)
+    dY = np.asarray(dY, dtype=np.float64)
+    n, m = dX.shape[0], dY.shape[0]
+    if mu is None:
+        mu = np.ones(n) / n
+    else:
+        mu = np.asarray(mu, dtype=np.float64)
+        mu = mu / mu.sum()
+    if nu is None:
+        nu = np.ones(m) / m
+    else:
+        nu = np.asarray(nu, dtype=np.float64)
+        nu = nu / nu.sum()
+    P = np.outer(mu, nu)
+    constC1 = (dX ** 2) @ mu
+    constC2 = (dY ** 2) @ nu
+    cost = 0.0
+    for _ in range(max_iter):
+        C = constC1[:, None] + constC2[None, :] - 2.0 * (dX @ P @ dY.T)
+        P, cost = sinkhorn(mu, nu, np.abs(C), reg=reg, max_iter=80)
+    return float(max(0.0, cost))

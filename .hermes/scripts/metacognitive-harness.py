@@ -41,6 +41,12 @@ Exit codes: 0 = proceed/stop, 1 = retry, 2 = escalate/aggregate, 3 = force-tool,
   kapro-check: 0=proceed, 1=use_cached_knowledge, 2=skip_action, 3=escalate
   boundary-check: 0=clean, 1=incomplete, 2=over_action, 3=scope_creep
   conflict-resolve: 0=resolved, 1=partial (low confidence), 2=escalate to human
+
+I/O automaton (Lynch / Jacobs): docs/agent-loop-io-automata.md
+  Safety  AG(tool_call → pre_hook_complete)
+  Liveness AF(request → eventually(response))  [fairness: LLM/tool/streak-halt]
+Naur theory document: profiles/fork/docs/naur-metacognitive-harness.md
+Reverse math: RCA0 (finite gates, exit-code certificates). No ACA0 maximiser.
 """
 
 import argparse
