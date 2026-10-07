@@ -89,12 +89,16 @@ _RENAME_PRIMITIVES = re.compile(
     # Path(nested).write_text/write_bytes: two-level nested parens in Path() arg (ADV-W9-003)
     r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch)"
     # getattr obfuscation bypass (ADV-W9-003): getattr(obj,'write_text'/'open'/'write_bytes')
-    r"|getattr\s*\([\s\S]{0,500}?,\s*['\"](?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink)['\"]"
+    r"|getattr\s*\([\s\S]{0,2000}?,\s*['\"](?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink)['\"]"
+    r"|io\.(?:FileIO|open)\s*\("  # ADV-W16-007 io write primitives
+    r"|operator\.(?:attrgetter|methodcaller)\s*\("  # ADV-W16-009 operator bypass
+    r"|\.(?:rename|replace)\s*\("  # ADV-W16-002 instance Path.rename/replace
     r"|json\.dump\b"
     r"|os\.(open|popen|system)\s*\("
     r"|os\.(symlink|symlinkat)\s*\("
     r"|subprocess\.(run|call|check_call|check_output|Popen)\s*\("
-    r"|(?<![\w.])(?:system|execv|execl|execle|execlp|execvp|execvpe)\s*\("  # ADV-W14-005
+    r"|(?<![\w.])(?:system|execv|execve|execl|execle|execlp|execvp|execvpe)\s*\("  # ADV-W14-005
+    r"|os\.exec[vle]\w*\s*\("  # ADV-W16-003 os.execv/execve/execl*
 )
 
 _BOOTSTRAP_DIR: Optional[Path] = None  # resolved lazily (ADV-004)
@@ -296,11 +300,12 @@ _SHELL_RENAME = re.compile(
 )
 # ADV-W14-001: tightened redirect reverted — space was over-restrictive.
 # fd digits accepted (1>file, 2>>file); terminal-only gate prevents non-shell FPs.
-_SHELL_REDIRECT = re.compile(r"(?:\d+)?>>?\s*(?:[./~]|[a-zA-Z_]\w*[./])")  # ADV-W15-004+W14-001: path-like target required; terminal-only gate
+_SHELL_REDIRECT = re.compile(r"(?:\d+)?>>?[|]?\s*(?:[./~]|[\'\"$`]|[a-zA-Z_]\w*[./])")  # ADV-W16-001+W15-004: quoted/special redirect targets; terminal-only gate
 
 # ADV-W14-002+006+009: terminal copy-verb scan — catches prefix chains (sudo -n cp),
 # wrappers (sh -c 'cp ...'), dd of=, install, and any verb depth not anchored to line start.
-_COPY_VERB = re.compile(r"\b(?:mv|cp|ln|rsync|tee|install|dd)\b")
+_COPY_VERB = re.compile(r"\b(?:mv|cp|scp|ln|rsync|tee|install|dd)\b")
+_INPLACE_EDITOR = re.compile(r"\b(?:sed|perl|awk|ruby|patch)\b")  # ADV-W16-008 in-place editors
 
 
 def looks_like_rename_or_copy(args: Any) -> bool:
@@ -430,7 +435,7 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
         # ADV-W14-003: also catch Path("plugins")/"..." and aliased join
         _join_context = bool(
             re.search(r"(?:os\.path\.join|joinpath)", code_blob)
-            or re.search(r"Path\s*\([^)]*['\"](?:plugins|agent)['\"]", code_blob)
+            or re.search(r"Path\s*\([^)]*['\"](?:plugins|agent)/", code_blob)
             or "from os.path import join" in code_blob
         )
         if _QUOTED_REL_HR.search(code_blob) and _RENAME_PRIMITIVES.search(code_blob) and (hr_tokens_present or _join_context):
@@ -480,6 +485,11 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
                 or bool(re.search(r"(?<!\w)(?:plugins|agent)/", blob))
             ):
                 high = ["<copy-verb + high-risk token>"]
+                if _INPLACE_EDITOR.search(blob) and re.search(r"\-i\b", blob) and (
+                    any(t in blob for t in ("config.yaml", "config.yml", "/plugins/", "/agent/", "plugin.yaml"))
+                    or bool(re.search(r"(?<!\w)(?:plugins|agent)/", blob))
+                ):
+                    high = ["<inplace-editor -i + high-risk token>"]  # ADV-W16-008
 
     if not high:
         return None
