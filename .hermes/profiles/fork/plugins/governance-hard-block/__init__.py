@@ -129,8 +129,8 @@ _RENAME_PRIMITIVES = re.compile(
     r"|asyncio\.create_subprocess_(?:exec|shell)\s*\("  # ADV-W26-014 asyncio subprocess
     r"|(?:ElementTree|xml\.etree\.ElementTree\.ElementTree|ET)\b[^\n]*\.write\s*\("  # ADV-W26-016 ET.write(path)
     r"|(?:globals|locals|vars)\s*\(\s*\)\s*(?:\[|\.).*\bopen\b"  # ADV-W27-001 globals()['open']/vars().open
-    r"|(?:globals|locals|vars)\s*\([^)]+\)\s*(?:\[|\.get\s*\().*\b(?:open|write_text|write_bytes|rename|replace|unlink|truncate|remove|rmtree|move|copy|copy2|execve|system|FileIO|touch|symlink|popen|execv|copyfile)\b"  # ADV-W30-003 vars(Path)['write_text']
-    r"|\b__dict__\s*(?:\[|\.get\s*\().*\b(?:open|write_text|write_bytes|rename|replace|unlink|truncate|remove|rmtree|move|copy|copy2|execve|system|FileIO|touch|symlink_to|hardlink_to|symlink|popen|execv|copyfile)\b"  # ADV-W27-001 W28-010 W29-003 W30-005 __dict__[/get dangerous-names
+    r"|(?:globals|locals|vars)\s*\([^)]+\)\s*(?:\[|\.get\s*\().*\b(?:open|write_text|write_bytes|rename|replace|unlink|truncate|remove|rmtree|move|copy|copy2|execve|system|FileIO|touch|symlink|symlink_to|hardlink_to|popen|execv|copyfile|link|run|check_output|check_call|call|chmod)\b"  # ADV-W30-003 W31-001 W31-002 vars(Path)['write_text']
+    r"|\b__dict__\s*(?:\[|\.get\s*\().*\b(?:open|write_text|write_bytes|rename|replace|unlink|truncate|remove|rmtree|move|copy|copy2|execve|system|FileIO|touch|symlink_to|hardlink_to|symlink|popen|execv|copyfile|link|run|check_output|check_call|call|chmod)\b"  # ADV-W27-001 W28-010 W29-003 W30-005 W31-002 __dict__[/get dangerous-names
     r"|\b__globals__\s*(?:\[|\.get\s*\().*\bopen\b"  # ADV-W29-007 fn.__globals__['open']
     r"|getattr\s*\((?:[^,()]|\([^)]*\)){0,300},\s*name\s*=\s*[bBfFrRuU]{0,2}[\x27\x22][^\x27\x22]*(?:write_text|write_bytes|open|replace|rename|unlink|truncate|link|copytree|run|execve|remove|execlpe|FileIO|spawnl|spawnv|spawnle|spawnvp|spawnlp|spawnvpe|posix_spawn|posix_spawnp|touch|system|execv|copy|copy2|copyfile|rmtree|move)[^\x27\x22]*[\x27\x22]"  # ADV-W27-002 W28-005 W28-006
     r"|\bopen\s*\([^)]{0,300},\s*[\[(][^\])[]*[wax+][^\])[]*[\])]"  # ADV-W27-005 W28-001 W29-002 list/tuple-subscript mode incl r+
@@ -143,6 +143,8 @@ _RENAME_PRIMITIVES = re.compile(
     r"|\.open\s*\(\s*[\[(][^\])]*[wax+]"  # ADV-W28-003 W29-002 Path.open(['w'][0]) positional-subscript incl r+
     r"|\.(?:__getattribute__|__getattr__)\s*\("  # ADV-W28-009 obj.__getattribute__('write_text')
     r"|operator\.(?:getitem|itemgetter)\s*\("  # ADV-W30-006 operator.getitem/itemgetter dict bypass
+    r"|(?:os|subprocess|shutil|operator|pathlib)\s*\.\s*(?:system|popen|replace|rename|remove|unlink|truncate|link|symlink|symlinkat|openat|unlinkat|exec\w+|spawn\w+|posix_spawn\w*|run|call|check_call|check_output|Popen|move|copy|copy2|copyfile|copytree|rmtree|attrgetter|methodcaller|getitem|itemgetter|call)\s*\("  # ADV-W31-003 dot-whitespace bypass: os .system()
+    r"|(?:type\s*\(\s*open\s*\)|open\s*\.\s*__class__)\s*\.\s*__call__\s*\("  # ADV-W31-004 type(open).__call__ / open.__class__.__call__
 )
 
 _BOOTSTRAP_DIR: Optional[Path] = None  # resolved lazily (ADV-004)
