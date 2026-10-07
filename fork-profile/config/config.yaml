@@ -17,7 +17,7 @@ fallback_providers:
 toolsets:
   - hermes-cli
 database:
-  journal_mode: delete
+  journal_mode: wal
   journal_size_limit: 16777216
 agent:
   max_turns: 500

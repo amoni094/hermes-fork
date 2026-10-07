@@ -234,7 +234,7 @@ custom_providers:
   models_discovered: true
   name: mistral
 database:
-  journal_mode: delete
+  journal_mode: wal
   journal_size_limit: 16777216
 delegation:
   child_timeout_seconds: 900
