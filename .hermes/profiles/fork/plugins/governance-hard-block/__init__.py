@@ -89,9 +89,12 @@ _RENAME_PRIMITIVES = re.compile(
     # Path(nested).write_text/write_bytes: two-level nested parens in Path() arg (ADV-W9-003)
     r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch|unlink)"
     # getattr obfuscation bypass (ADV-W9-003): getattr(obj,'write_text'/'open'/'write_bytes')
-    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*(?:\([^)]*\))?(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]*\)|\([a-zA-Z_][\w.]*(?:\([^)]*\))?\)|[a-zA-Z_][\w.]*(?:\[[^\]]*\])+(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|\w+\s*\([^)]*\)(?:\[[^\]]*\])+|\w+\s*\([^)]*\)\[[^\]]*\])\s*,\s*(?:[bBfFrRuU]{0,2})?['\"]{1,3}(?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch|extract|extractall|unpack_archive|symlink_to|hardlink_to|copy|copy2|move|rmtree|execv|execl|execle|execlp|execvp|execvpe|link|copytree|run|check_output|check_call|execve|remove|execlpe|truncate|link|copytree|run|check_output|check_call|execve|remove|execlpe)['\"]{1,3}"
-    r"|io\.FileIO\s*\([^)]{0,150},\s*['\"][^'\"]*[wax+]"  # ADV-W16-007 io.FileIO write-mode only (W17-004)
-    r'|io\.FileIO\s*\([^)]*\bmode\s*=\s*[^)]*[wax+]'  # ADV-W23-004 io.FileIO mode= keyword
+    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*(?:\([^)]*\))?(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]*\)|\([a-zA-Z_][\w.]*(?:\([^)]*\))?\)|[a-zA-Z_][\w.]*(?:\[[^\]]*\])+(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|[a-zA-Z_][\w.]*\s*\([^)]*\)(?:\[[^\]]*\])+|\([a-zA-Z_][\w.]*(?:\[[^\]]*\])+\)|\w+\s*\([^)]*\)(?:\[[^\]]*\])+|\w+\s*\([^)]*\)\[[^\]]*\])\s*,\s*(?:[bBfFrRuU]{0,2})?['\"]{1,3}(?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch|extract|extractall|unpack_archive|symlink_to|hardlink_to|copy|copy2|move|rmtree|execv|execl|execle|execlp|execvp|execvpe|link|copytree|run|check_output|check_call|execve|remove|execlpe|truncate|link|copytree|run|check_output|check_call|execve|remove|execlpe)['\"]{1,3}"
+    r"|getattr\s*\(\s*(?:object\s*=|name\s*=[bBfFrRuU]{0,2}['\"][^'\"]*(?:write_text|write_bytes|open|replace|rename|unlink|truncate|link|copytree|run|execve|remove)[^'\"]*[\'\"]{1,3})"  # ADV-W24-008 getattr keyword/object= form
+    r"|getattr\s*\(\s*\*\s*\["  # ADV-W24-008 getattr star-unpack
+    r"|io\.FileIO\s*\((?:[^()]|\([^)]*\)){0,200},\s*(?:['\"'][^'\"']*[wax+]|chr\s*\()"  # ADV-W24-001+004 io.FileIO positional nested+chr
+    r'|io\.FileIO\s*\((?:[^()]|\([^)]*\))*\bmode\s*=\s*(?:[^)]*[wax+]|chr\s*\()'  # ADV-W24-001+004 io.FileIO mode= nested+chr
+    r"|io\.FileIO\s*\([^)]*\*\*\s*(?:\{[^}]*mode[^}]*[wax+]|dict\s*\([^)]*mode\s*=)"  # ADV-W24-005 io.FileIO dict-unpack mode
     r"|io\.open\s*\([^)]{0,200},\s*['\"][awx]"  # ADV-W16-007 io.open write-mode only (W17-004)
     r"|operator\.(?:attrgetter|methodcaller)\s*\("  # ADV-W16-009 operator bypass
     r"|(?:\.extract(?:all)?|extractall|unpack_archive)\s*\("  # ADV-W17SAT-006 archive extract
@@ -103,10 +106,9 @@ _RENAME_PRIMITIVES = re.compile(
     r"|json\.dump\b"
     r"|os\.(open|popen|system|replace)\s*\("
     r"|os\.(remove|unlink|truncate)\s*\("  # ADV-W22-006+011
-    r"|os\.(remove|unlink|truncate)\s*\("  # ADV-W22-006+011
     r"|os\.(symlink|symlinkat)\s*\("
     r"|subprocess\.(run|call|check_call|check_output|Popen)\s*\("
-    r"|(?<![\w.])(?:system|execv|execve|execl|execle|execlp|execvp|execvpe)\s*\("  # ADV-W14-005
+    r"|(?<![\w.])(?:system|execv|execve|execl|execle|execlp|execvp|execvpe|FileIO|truncate|remove|unlink)\s*\("  # ADV-W14-005+W24-002+003
     r"|os\.exec[vle]\w*\s*\("  # ADV-W16-003 os.execv/execve/execl*
 )
 
