@@ -1,0 +1,14 @@
+name: governance-hard-block
+version: "1.0.0"
+description: >-
+  H-I8 fail-closed pre_tool_call gate. DENY writes to config.yaml,
+  plugins/*.py, and agent/*.py unless an approved/deployed governance
+  proposal covers the target. Bootstrap exception: this plugin's own
+  files (documented attack surface).
+provides_hooks:
+  - pre_tool_call
+settings:
+  enabled: true
+author: hermes-fork
+no_pip_deps: true
+governance_proposal: prop_d16153f3

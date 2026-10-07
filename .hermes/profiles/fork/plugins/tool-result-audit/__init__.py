@@ -3,10 +3,18 @@
 Shadow-mode only: never modifies results, never raises, never blocks.
 Wires tool-auth-shim.py into the live Hermes fork agent via post_tool_call hook.
 Implements Shoham inspection-game probabilistic auditing (tier='EXTERNAL').
+
+ASSUME: tool results are opaque objects; shim may be missing; shadow path only.
+GUARANTEE: never modifies results; sensitive vault/memories text is not written
+           raw to observable audit outputs (eps-DP accounting / redact).
+# inner_objective == outer_objective: True
+# inner_objective: audit external tool results for injection
+# outer_objective: session safety without mutating tool results
 """
 from __future__ import annotations
 import os
 
+import hashlib
 import importlib.util
 import logging
 import sys
@@ -14,6 +22,12 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+ISS_GAIN = 0.10
+EPS_DP = 0.0
+EPS_BUDGET = 1.0
+_eps_spent = 0.0
+_SENSITIVE_MARKERS = ("vault.db", "/memories/", ".hermes/memories")
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -96,6 +110,31 @@ def _extract_text(result: Any) -> str:
         return ""
 
 
+def _touches_sensitive(args: Any, text: str) -> bool:
+    try:
+        blob = f"{args!s}\n{text[:4000]}"
+        return any(m in blob for m in _SENSITIVE_MARKERS)
+    except Exception:
+        return False
+
+
+def _redact_for_audit(text: str) -> str:
+    digest = hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()[:16]
+    return f"[redacted sensitive len={len(text)} sha256_16={digest}]"
+
+
+def _account_eps(delta: float) -> bool:
+    """Basic DP composition: spend delta from EPS_BUDGET. Fail-open deny extra spend."""
+    global _eps_spent
+    try:
+        if _eps_spent + delta > EPS_BUDGET:
+            return False
+        _eps_spent += delta
+        return True
+    except Exception:
+        return False
+
+
 # ── Hook ─────────────────────────────────────────────────────────────────────
 
 def on_post_tool_call(
@@ -129,6 +168,13 @@ def on_post_tool_call(
         text = _extract_text(result)
         if not text:
             return None
+
+        if _touches_sensitive(args, text):
+            # Hard core: do not write raw sensitive text to observable audit output.
+            if not _account_eps(0.1):
+                logger.debug("tool-result-audit: eps budget exhausted; skipping sensitive audit")
+                return None
+            text = _redact_for_audit(text)
 
         # Load shim (cached after first successful load)
         shim = _load_shim()

@@ -39,6 +39,12 @@ _prune_old_tool_results on the instance. The patch wraps, not replaces: on any e
 it falls through to the original. Shadow-mode: never raises into the host process.
 
 Footprint: Rung 4 (plugin). No new core tools. Stdlib + hermes-agent venv imports only.
+
+ASSUME: agent.context_compressor exists or is absent; original prune is recoverable.
+GUARANTEE: fail-open to original prune; never raises into the host; instance patch only.
+# inner_objective == outer_objective: True
+# inner_objective: relevance-gated tool-result compaction
+# outer_objective: keep context useful under token pressure
 Config (config.yaml under plugins.jev_compaction):
   enabled: true
   call_budget: 8              # max Jev calls per compaction pass
@@ -68,6 +74,9 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("jev-compaction")
+
+ISS_GAIN = 0.55
+EPS_DP = 0.0
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
