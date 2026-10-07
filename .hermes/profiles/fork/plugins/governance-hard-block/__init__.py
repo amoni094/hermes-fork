@@ -53,7 +53,7 @@ _READ_SAFE = frozenset({
 _HIGH_BASENAME = re.compile(r"(?i)(^|/)config\.ya?ml(\.tmp)?$")  # tmp-rename bypass guard (ADV fix)
 _HIGH_PLUGIN_PY = re.compile(r"(?i)/plugins/[^/]+/.*\.py(?:\.tmp)?$")  # ADV-W14-008
 _HIGH_AGENT_PY = re.compile(r"(?i)/(hermes-fork/)?agent/.*\.py(?:\.tmp)?$")  # ADV-W14-008
-_HIGH_HERMES_PLUGIN_PY = re.compile(r"(?i)\.hermes/(profiles/[^/]+/)?plugins/.*\.py$")
+_HIGH_HERMES_PLUGIN_PY = re.compile(r"(?i)\.hermes/(profiles/[^/]+/)?plugins/.*\.py(?:\.tmp)?$")
 
 # Rename / copy primitives that can bypass write_file by temp+replace.
 _RENAME_PRIMITIVES = re.compile(
@@ -89,7 +89,7 @@ _RENAME_PRIMITIVES = re.compile(
     # Path(nested).write_text/write_bytes: two-level nested parens in Path() arg (ADV-W9-003)
     r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch)"
     # getattr obfuscation bypass (ADV-W9-003): getattr(obj,'write_text'/'open'/'write_bytes')
-    r"|getattr\s*\([\s\S]{0,100}?,\s*['\"](?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink)['\"]"
+    r"|getattr\s*\([\s\S]{0,500}?,\s*['\"](?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink)['\"]"
     r"|json\.dump\b"
     r"|os\.(open|popen|system)\s*\("
     r"|os\.(symlink|symlinkat)\s*\("
@@ -296,7 +296,7 @@ _SHELL_RENAME = re.compile(
 )
 # ADV-W14-001: tightened redirect reverted — space was over-restrictive.
 # fd digits accepted (1>file, 2>>file); terminal-only gate prevents non-shell FPs.
-_SHELL_REDIRECT = re.compile(r"(?:\d+)?>>?\s*\S")  # ADV-W14-001: accept nospace/fd redirects; terminal-only gate ensures context
+_SHELL_REDIRECT = re.compile(r"(?:\d+)?>>?\s*(?:[./~]|[a-zA-Z_]\w*[./])")  # ADV-W15-004+W14-001: path-like target required; terminal-only gate
 
 # ADV-W14-002+006+009: terminal copy-verb scan — catches prefix chains (sudo -n cp),
 # wrappers (sh -c 'cp ...'), dd of=, install, and any verb depth not anchored to line start.
@@ -477,7 +477,7 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
             blob = "\n".join(_string_values(args))
             if _COPY_VERB.search(blob) and (
                 any(t in blob for t in ("config.yaml", "config.yml", "/plugins/", "/agent/", "plugin.yaml"))
-                or bool(re.search(r"(?<!\\w)(?:plugins|agent)/", blob))
+                or bool(re.search(r"(?<!\w)(?:plugins|agent)/", blob))
             ):
                 high = ["<copy-verb + high-risk token>"]
 
