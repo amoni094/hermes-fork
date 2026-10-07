@@ -249,10 +249,23 @@ def _load_crystal_tiers() -> types.ModuleType | None:
 
 
 def _load_cfg(ctx: Any) -> dict[str, Any]:
-    """Load plugin config from ctx, merging with defaults. Never raises."""
+    """Load plugin config from ctx, merging with defaults. Never raises.
+
+    Reads from plugins.entries.jev-compaction.settings.* (PluginContext API).
+    Falls back to legacy plugins.jev_compaction.* for backwards compatibility.
+    """
     try:
         raw = getattr(ctx, "config", {}) or {}
-        plugin_cfg = raw.get("plugins", {}).get("jev_compaction", {})
+        plugins_block = raw.get("plugins", {})
+        # Primary: PluginContext-standard path (plugins.entries.jev-compaction.settings)
+        plugin_cfg = (
+            plugins_block.get("entries", {})
+            .get("jev-compaction", {})
+            .get("settings", {})
+        )
+        # Fallback: legacy direct key (plugins.jev_compaction)
+        if not plugin_cfg:
+            plugin_cfg = plugins_block.get("jev_compaction", {})
         cfg = dict(_DEFAULT_CFG)
         cfg.update({k: v for k, v in plugin_cfg.items() if k != "thresholds"})
         if "thresholds" in plugin_cfg:

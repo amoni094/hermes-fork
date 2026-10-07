@@ -6,16 +6,16 @@ providers:
   anthropic:
     stale_timeout_seconds: 900
 fallback_providers:
-  - model: grok-4.6
-    provider: xai
-  - base_url: https://api.mistral.ai/v1
-    model: mistral-large-latest
-    provider: mistral
-  - base_url: https://api.sambanova.ai/v1
-    model: gemma-4-31B-it
-    provider: sambanova
+- model: grok-4.6
+  provider: xai
+- base_url: https://api.mistral.ai/v1
+  model: mistral-large-latest
+  provider: mistral
+- base_url: https://api.sambanova.ai/v1
+  model: gemma-4-31B-it
+  provider: sambanova
 toolsets:
-  - hermes-cli
+- hermes-cli
 database:
   journal_mode: wal
   journal_size_limit: 16777216
@@ -53,21 +53,21 @@ tool_loop_guardrails:
   tool_result_cache:
     enabled: true
     excluded_tools:
-      - terminal
-      - browser_navigate
-      - browser_click
-      - browser_type
-      - browser_press
-      - browser_scroll
-      - computer_use
-      - cronjob
-      - delegate_task
-      - process
-      - process_manage
-      - execute_code
-      - skill_manage
-      - write_file
-      - patch
+    - terminal
+    - browser_navigate
+    - browser_click
+    - browser_type
+    - browser_press
+    - browser_scroll
+    - computer_use
+    - cronjob
+    - delegate_task
+    - process
+    - process_manage
+    - execute_code
+    - skill_manage
+    - write_file
+    - patch
     max_entries: 200
     scope: session
     ttl_seconds: 86400
@@ -101,11 +101,11 @@ auxiliary:
     provider: anthropic
     model: claude-haiku-4-5
     fallback_chain:
-      - model: claude-haiku-4-5
-        provider: anthropic
-      - base_url: https://api.sambanova.ai/v1
-        model: gemma-4-31B-it
-        provider: sambanova
+    - model: claude-haiku-4-5
+      provider: anthropic
+    - base_url: https://api.sambanova.ai/v1
+      model: gemma-4-31B-it
+      provider: sambanova
     max_concurrency: 2
     max_tokens: 4096
   title_generation:
@@ -166,7 +166,8 @@ memory:
     graphiti_halt_nodes: 50000
     graphiti_warn_nodes: 40000
     laplace_alpha: 1
-    laplace_note: Jaynes Ch18 rule of succession - smooths zero-observation skill priors
+    laplace_note: Jaynes Ch18 rule of succession - smooths zero-observation skill
+      priors
     laplace_smoothing: true
     max_ephemeral_facts: 500
     max_volatile_sessions: 20
@@ -195,46 +196,46 @@ delegation:
   toolset_profiles:
     code:
       enabled_toolsets:
-        - terminal
-        - file
+      - terminal
+      - file
       escalation_toolsets:
-        - terminal
-        - file
-        - delegation
+      - terminal
+      - file
+      - delegation
     cross_domain:
       enabled_toolsets:
-        - web
-        - terminal
-        - file
+      - web
+      - terminal
+      - file
       escalation_toolsets:
-        - web
-        - terminal
-        - file
-        - memory
-        - session_search
-        - delegation
+      - web
+      - terminal
+      - file
+      - memory
+      - session_search
+      - delegation
     research:
       enabled_toolsets:
-        - web
-        - file
+      - web
+      - file
       escalation_toolsets:
-        - web
-        - file
-        - memory
-        - session_search
+      - web
+      - file
+      - memory
+      - session_search
     write:
       enabled_toolsets:
-        - file
+      - file
       escalation_toolsets:
-        - file
-        - web
+      - file
+      - web
 moa:
   default_preset: default
   presets:
     default:
       reference_models:
-        - model: claude-haiku-4-5
-          provider: anthropic
+      - model: claude-haiku-4-5
+        provider: anthropic
       aggregator:
         provider: anthropic
         model: claude-sonnet-4-6
@@ -242,15 +243,16 @@ moa:
       reference_max_tokens: 600
 skills:
   disabled:
-    - humanizer
-    - nab-formatting
-    - powerpoint
-    - research-document-output
-    - rich-pdf-generation
-    - thunderbird-cli-anything
+  - humanizer
+  - nab-formatting
+  - powerpoint
+  - research-document-output
+  - rich-pdf-generation
+  - thunderbird-cli-anything
   mdl_dedup:
     enabled: true
-    note: Li-Vitanyi 2008 MDL - detect redundant skills by compressed description length
+    note: Li-Vitanyi 2008 MDL - detect redundant skills by compressed description
+      length
     run_on_skill_update: true
     script: ~/.hermes/profiles/fork/scripts/occam-skill-ranker.py
     subcommand: mdl-dedup
@@ -258,21 +260,21 @@ approvals:
   mode: smart
   destructive_slash_confirm: false
 command_allowlist:
-  - hermes update*
-  - plugin_rule:terminal
-  - systemctl *
+- hermes update*
+- plugin_rule:terminal
+- systemctl *
 plugins:
   enabled:
-    - cobra-guard
-    - context-pressure-guard
-    - governance-hard-block
-    - hindsight
-    - jev-compaction
-    - memory-ransac-gate
-    - orca-status
-    - tool-auth-gate
-    - tool-result-audit
-    - jev-turn-evaluator
+  - cobra-guard
+  - context-pressure-guard
+  - governance-hard-block
+  - hindsight
+  - jev-compaction
+  - memory-ransac-gate
+  - orca-status
+  - tool-auth-gate
+  - tool-result-audit
+  - jev-turn-evaluator
   entries:
     cobra-guard:
       allow_tool_override: false
@@ -280,18 +282,19 @@ plugins:
       settings:
         shadow_jev_evaluator: true
         sample_rate: 3
-  jev_compaction:
-    budget_tokens: 100000
-    call_budget: 8
-    ema_alpha: 0.15
-    enabled: true
-    rr_lambda: 0.18
-    sprt_skip_ratio: 0.6
-    thresholds:
-      assistant: 0.61
-      system: 1.0
-      tool_result: 0.55
-      user: 0.72
+    jev-compaction:
+      settings:
+        budget_tokens: 100000
+        call_budget: 8
+        ema_alpha: 0.15
+        enabled: true
+        rr_lambda: 0.18
+        sprt_skip_ratio: 0.6
+        thresholds:
+          assistant: 0.61
+          system: 1.0
+          tool_result: 0.55
+          user: 0.72
   disabled: []
 cron:
   allow_agent_scheduling: false
@@ -305,8 +308,8 @@ lsp:
   servers:
     bash-language-server:
       command:
-        - /var/home/rainbow/.hermes/lsp/bin/bash-language-server-wrapped
-        - start
+      - /var/home/rainbow/.hermes/lsp/bin/bash-language-server-wrapped
+      - start
 computer_use:
   wayland: true
 _config_version: 50
@@ -382,98 +385,98 @@ critique_bank:
   path: cache/critique-bank.jsonl
   source_model: cheap-family
 custom_providers:
-  - api_mode: chat_completions
-    base_url: https://api.openai.com/v1
-    context_length: 128000
-    key_env: OPENAI_API_KEY
-    max_output_tokens: 16384
-    models:
-      gpt-5.4:
-        context_length: 1050000
-      gpt-5.5:
-        context_length: 1050000
-      gpt-5.6-sol:
-        context_length: 1050000
-    name: openai
-  - api_mode: chat_completions
-    base_url: https://api.cerebras.ai/v1
-    key_env: CEREBRAS_API_KEY
-    models:
-      qwen-3.8-27b: {}
-      gpt-oss-120b: {}
-    models_discovered: true
-    name: cerebras
-  - api_mode: chat_completions
-    base_url: https://api.sambanova.ai/v1
-    key_env: SAMBANOVA_API_KEY
-    models:
-      DeepSeek-V3.1: {}
-      DeepSeek-V3.2: {}
-      Meta-Llama-3.3-70B-Instruct: {}
-      MiniMax-M3: {}
-      gemma-4-31B-it: {}
-      gpt-oss-120b: {}
-    models_discovered: true
-    name: sambanova
-  - api_mode: chat_completions
-    base_url: https://api.mistral.ai/v1
-    key_env: MISTRAL_API_KEY
-    models:
-      codestral-2508: {}
-      codestral-latest: {}
-      mistral-code-latest: {}
-      mistral-code-fim-latest: {}
-      mistral-small-2603: {}
-      mistral-small-latest: {}
-      mistral-vibe-cli-fast: {}
-      magistral-small-latest: {}
-      voxtral-small-2507: {}
-      voxtral-small-latest: {}
-      labs-leanstral-1-5-1: {}
-      labs-leanstral-1-5: {}
-      ministral-3b-2512: {}
-      ministral-3b-latest: {}
-      ministral-8b-2512: {}
-      ministral-8b-latest: {}
-      ministral-14b-2512: {}
-      ministral-14b-latest: {}
-      mistral-medium-latest: {}
-      mistral-medium: {}
-      mistral-medium-3-5: {}
-      mistral-medium-3.5: {}
-      mistral-medium-3: {}
-      mistral-medium-2604: {}
-      mistral-vibe-cli-latest: {}
-      mistral-vibe-cli-with-tools: {}
-      magistral-medium-latest: {}
-      mistral-embed-2312: {}
-      mistral-embed: {}
-      codestral-embed: {}
-      codestral-embed-2505: {}
-      mistral-moderation-2603: {}
-      mistral-ocr-2512: {}
-      mistral-ocr-3-0: {}
-      mistral-ocr-3: {}
-      mistral-ocr-4-0: {}
-      mistral-ocr-latest: {}
-      mistral-ocr-4: {}
-      mistral-ocr-4-1: {}
-      voxtral-mini-2602: {}
-      voxtral-mini-latest: {}
-      voxtral-mini-transcribe-realtime-2602: {}
-      voxtral-mini-realtime-2602: {}
-      voxtral-mini-realtime-latest: {}
-      voxtral-mini-tts-2603: {}
-      voxtral-mini-tts-latest: {}
-    models_discovered: true
-    name: mistral
+- api_mode: chat_completions
+  base_url: https://api.openai.com/v1
+  context_length: 128000
+  key_env: OPENAI_API_KEY
+  max_output_tokens: 16384
+  models:
+    gpt-5.4:
+      context_length: 1050000
+    gpt-5.5:
+      context_length: 1050000
+    gpt-5.6-sol:
+      context_length: 1050000
+  name: openai
+- api_mode: chat_completions
+  base_url: https://api.cerebras.ai/v1
+  key_env: CEREBRAS_API_KEY
+  models:
+    qwen-3.8-27b: {}
+    gpt-oss-120b: {}
+  models_discovered: true
+  name: cerebras
+- api_mode: chat_completions
+  base_url: https://api.sambanova.ai/v1
+  key_env: SAMBANOVA_API_KEY
+  models:
+    DeepSeek-V3.1: {}
+    DeepSeek-V3.2: {}
+    Meta-Llama-3.3-70B-Instruct: {}
+    MiniMax-M3: {}
+    gemma-4-31B-it: {}
+    gpt-oss-120b: {}
+  models_discovered: true
+  name: sambanova
+- api_mode: chat_completions
+  base_url: https://api.mistral.ai/v1
+  key_env: MISTRAL_API_KEY
+  models:
+    codestral-2508: {}
+    codestral-latest: {}
+    mistral-code-latest: {}
+    mistral-code-fim-latest: {}
+    mistral-small-2603: {}
+    mistral-small-latest: {}
+    mistral-vibe-cli-fast: {}
+    magistral-small-latest: {}
+    voxtral-small-2507: {}
+    voxtral-small-latest: {}
+    labs-leanstral-1-5-1: {}
+    labs-leanstral-1-5: {}
+    ministral-3b-2512: {}
+    ministral-3b-latest: {}
+    ministral-8b-2512: {}
+    ministral-8b-latest: {}
+    ministral-14b-2512: {}
+    ministral-14b-latest: {}
+    mistral-medium-latest: {}
+    mistral-medium: {}
+    mistral-medium-3-5: {}
+    mistral-medium-3.5: {}
+    mistral-medium-3: {}
+    mistral-medium-2604: {}
+    mistral-vibe-cli-latest: {}
+    mistral-vibe-cli-with-tools: {}
+    magistral-medium-latest: {}
+    mistral-embed-2312: {}
+    mistral-embed: {}
+    codestral-embed: {}
+    codestral-embed-2505: {}
+    mistral-moderation-2603: {}
+    mistral-ocr-2512: {}
+    mistral-ocr-3-0: {}
+    mistral-ocr-3: {}
+    mistral-ocr-4-0: {}
+    mistral-ocr-latest: {}
+    mistral-ocr-4: {}
+    mistral-ocr-4-1: {}
+    voxtral-mini-2602: {}
+    voxtral-mini-latest: {}
+    voxtral-mini-transcribe-realtime-2602: {}
+    voxtral-mini-realtime-2602: {}
+    voxtral-mini-realtime-latest: {}
+    voxtral-mini-tts-2603: {}
+    voxtral-mini-tts-latest: {}
+  models_discovered: true
+  name: mistral
 durable_file_write_gate:
   enabled: true
   guarded_paths:
-    - ~/.hermes/profiles/fork/memories/MEMORY.md
-    - ~/.hermes/profiles/fork/skills/
-    - AGENTS.md
-    - ~/.hermes/profiles/fork/
+  - ~/.hermes/profiles/fork/memories/MEMORY.md
+  - ~/.hermes/profiles/fork/skills/
+  - AGENTS.md
+  - ~/.hermes/profiles/fork/
   skill_spec_gate:
     block_on_fail: false
     enabled: true
@@ -481,9 +484,9 @@ durable_file_write_gate:
     validator_script: ~/.hermes/profiles/fork/scripts/validate-skill-ssl.py
 first_chunk_rank:
   apply_to_tools:
-    - web_extract
-    - read_file
-    - terminal
+  - web_extract
+  - read_file
+  - terminal
   chunk_size_chars: 2000
   enabled: true
   threshold_chars: 8000
@@ -495,11 +498,11 @@ handoff:
 harness_fingerprint:
   enabled: false
   hash_inputs:
-    - tools
-    - skills
-    - compaction_policy
-    - approval_mode
-    - timeout
+  - tools
+  - skills
+  - compaction_policy
+  - approval_mode
+  - timeout
 improvement_governance:
   auto_approve_low: true
   cooldown_seconds: 3600
@@ -510,15 +513,16 @@ information_flow_control:
   default_tool_result_label: session
   enabled: false
   labels:
-    - public
-    - session
-    - private
+  - public
+  - session
+  - private
 ledger_orchestration:
   enabled: false
   ledger_file: cache/session-ledger.jsonl
 loop_harness:
   dag_task_tracker:
-    _note: feature_list.json documents available reasoning subcommands. Not runtime-enforced — used as a capability inventory for skill routing.
+    _note: feature_list.json documents available reasoning subcommands. Not runtime-enforced
+      — used as a capability inventory for skill routing.
     enabled: true
     feature_list_path: cache/loop-harness/feature_list.json
     regression_check: true
@@ -541,7 +545,10 @@ loop_harness:
     enabled: true
     reacquisition_spike_threshold: 3
   reasoning_hooks:
-    _note: Skill-invocation hints consumed by LLM at skill-load time. These are NOT automated runtime gates — no script reads these keys. They document WHEN to invoke the corresponding script subcommands during task execution. See reasoning_selection.selector for the entry-point command.
+    _note: Skill-invocation hints consumed by LLM at skill-load time. These are NOT
+      automated runtime gates — no script reads these keys. They document WHEN to
+      invoke the corresponding script subcommands during task execution. See reasoning_selection.selector
+      for the entry-point command.
     mid_task_switch_framework: true
     on_attribution_causal_check: true
     on_failure_hypothesize: true
@@ -561,7 +568,7 @@ mcp_servers:
     enabled: false
   qmd:
     args:
-      - mcp
+    - mcp
     command: /var/home/rainbow/.hermes/scripts/qmd-local.sh
     enabled: false
   scrapfly:
@@ -569,7 +576,7 @@ mcp_servers:
     url: https://mcp.scrapfly.io/mcp
   stealth-browser-mcp:
     args:
-      - /var/home/rainbow/.hermes/mcp/stealth-browser-mcp/src/server.py
+    - /var/home/rainbow/.hermes/mcp/stealth-browser-mcp/src/server.py
     command: /var/home/rainbow/.hermes/mcp/stealth-browser-mcp/.venv/bin/python
     defer_loading: true
     enabled: true
@@ -582,10 +589,10 @@ observer_skip_list:
   log_body_char_count: true
   max_tail_messages: 5
   skip_tool_bodies:
-    - read_file
-    - search_files
-    - web_extract
-    - browser_snapshot
+  - read_file
+  - search_files
+  - web_extract
+  - browser_snapshot
 persona_execution_split:
   enabled: false
 persona_isolation:
@@ -594,38 +601,38 @@ persona_isolation:
   strip_persona_from_tool_context: false
 platform_toolsets:
   cli:
-    - browser
-    - clarify
-    - code_execution
-    - computer_use
-    - connections
-    - cronjob
-    - delegation
-    - file
-    - memory
-    - session_search
-    - skills
-    - terminal
-    - todo
-    - vision
-    - web
+  - browser
+  - clarify
+  - code_execution
+  - computer_use
+  - connections
+  - cronjob
+  - delegation
+  - file
+  - memory
+  - session_search
+  - skills
+  - terminal
+  - todo
+  - vision
+  - web
 reasoning_research:
   compression_research:
     arc_offload_future: true
     arc_offload_status: NOT_IMPLEMENTED
     avoid_retention_below: 0.4
     d_state_fields:
-      - goal
-      - active_subgoal
-      - open_files
-      - last_error
-      - pending_steps
+    - goal
+    - active_subgoal
+    - open_files
+    - last_error
+    - pending_steps
     pin_types:
-      - rule
-      - preference
-      - constraint
-      - safety
-      - policy
+    - rule
+    - preference
+    - constraint
+    - safety
+    - policy
   consensus:
     default_aggregator_closed: independent_majority
     default_aggregator_open: list_wise_dcr
@@ -642,14 +649,14 @@ reasoning_research:
       confidence_threshold: 0.8
       enabled: true
       irreversible_keywords:
-        - delete
-        - remove
-        - send
-        - publish
-        - deploy
-        - overwrite
-        - email
-        - pay
+      - delete
+      - remove
+      - send
+      - publish
+      - deploy
+      - overwrite
+      - email
+      - pay
     compositional_uncertainty:
       enabled: true
       gate_threshold: 0.4
@@ -696,24 +703,24 @@ reasoning_research:
     milestone_tag: milestone
     plan_over_skills: true
     planning_stack_order:
-      - milestone_orient
-      - coarse_expand_current
-      - horizon_expand_max_steps_3
-      - bind_constraints
-      - load_skill_current_step
-      - adaptive_redecompose
-      - commit_then_verify
-      - code_control_flow
+    - milestone_orient
+    - coarse_expand_current
+    - horizon_expand_max_steps_3
+    - bind_constraints
+    - load_skill_current_step
+    - adaptive_redecompose
+    - commit_then_verify
+    - code_control_flow
     progress_belief_update: true
   reasoning_frameworks:
     abductive_reasoning:
       enabled: true
       max_hypotheses: 3
       trigger_on_failure_mode:
-        - constraint_skip
-        - retry_loop
-        - stale_assumption
-        - false_attribution
+      - constraint_skip
+      - retry_loop
+      - stale_assumption
+      - false_attribution
     action_boundary:
       check_on_completion: true
       check_on_verify_gate: true
@@ -721,10 +728,10 @@ reasoning_research:
       enabled: true
     causal_reasoning:
       auto_trigger_on:
-        - debugging
-        - root_cause_analysis
-        - financial_analysis
-        - scientific_research
+      - debugging
+      - root_cause_analysis
+      - financial_analysis
+      - scientific_research
       confound_check: true
       counterfactual_test: true
       enabled: true
@@ -741,13 +748,13 @@ reasoning_research:
         auto_resolve_threshold: 0.2
         both_unknown_action: escalate
         cascade_order:
-          - abstain-check
-          - causal-check
-          - lookahead
-          - subplan-verify
-          - hypothesize
-          - boundary-check
-          - kapro-check
+        - abstain-check
+        - causal-check
+        - lookahead
+        - subplan-verify
+        - hypothesize
+        - boundary-check
+        - kapro-check
         enabled: true
         resolver_script: ~/.hermes/profiles/fork/scripts/metacognitive-harness.py
         resolver_subcommand: conflict-resolve
@@ -785,7 +792,8 @@ reasoning_research:
     shannon_context_monitor:
       consecutive_calls_trigger: 3
       enabled: true
-      note: Shannon 1948 - context utilization = mutual info / log2(vocab); below 10% = underutilized
+      note: Shannon 1948 - context utilization = mutual info / log2(vocab); below
+        10% = underutilized
       underutilization_threshold: 0.1
     six_verb_enabled: true
     width_first_enabled: true
@@ -823,44 +831,6 @@ platforms:
   telegram:
     enabled: false
     reason: Fork profile cron runs headless; Telegram token is owned by main gateway
-
-# ── Security ──────────────────────────────────────────────────────────
-# Secret redaction is ON by default — strings that look like API keys,
-# tokens, and passwords are masked in tool output, logs, and chat
-# responses before the model or user ever sees them. Set redact_secrets
-# to false to disable (e.g. when developing the redactor itself).
-# tirith pre-exec scanning is enabled by default when the tirith binary
-# is available. Configure via security.tirith_* keys or env vars
-# (TIRITH_ENABLED, TIRITH_BIN, TIRITH_TIMEOUT, TIRITH_FAIL_OPEN).
-#
-# security:
-#   redact_secrets: true
-#   tirith_enabled: true
-#   tirith_path: "tirith"
-#   tirith_timeout: 5
-#   tirith_fail_open: true
-
-# ── Fallback Model ────────────────────────────────────────────────────
-# Automatic provider failover when primary is unavailable.
-# Uncomment and configure to enable. Triggers on rate limits (429),
-# overload (529), service errors (503), or connection failures.
-#
-# Supported providers:
-#   openrouter   (OPENROUTER_API_KEY)  — routes to any model
-#   openai-codex (OAuth — hermes auth) — OpenAI Codex
-#   nous         (OAuth — hermes auth) — Nous Portal
-#   zai          (ZAI_API_KEY)         — Z.AI / GLM
-#   kimi-coding  (KIMI_API_KEY)        — Kimi / Moonshot
-#   kimi-coding-cn (KIMI_CN_API_KEY)   — Kimi / Moonshot (China)
-#   minimax      (MINIMAX_API_KEY)     — MiniMax
-#   minimax-cn   (MINIMAX_CN_API_KEY)  — MiniMax (China)
-#   bedrock      (AWS IAM / boto3)     — AWS Bedrock (Converse API)
-#
-# For custom OpenAI-compatible endpoints, add base_url and key_env.
-#
-# fallback_model:
-#   provider: openrouter
-#   model: anthropic/claude-sonnet-4
 telemetry:
   shared_metrics:
     enabled: false

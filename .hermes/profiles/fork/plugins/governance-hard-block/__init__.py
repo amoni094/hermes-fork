@@ -274,20 +274,29 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
                         "primitive with high-risk token; dynamic destination may target "
                         "config.yaml / plugins / agent (ADV-024). Requires approved proposal."
                     )
-        # ADV-025: chr()-encoded path bypass — detect chr() sequences in code that
-        # combines a write/rename primitive.  e.g. chr(99)+chr(111)+... = "config.yaml"
-        # Static token scan misses these; deny any execute_code with chr() + write/rename.
-        _CHR_PATTERN = re.compile(r"\bchr\s*\(\s*\d+\s*\)")
+        # ADV-025: obfuscated-path bypass — detect encoding primitives in code that
+        # combine a write/rename primitive.
+        # Attack vectors caught: chr(99)+chr(111)+..., bytes.fromhex("636f6e...").decode(),
+        # base64.b64decode("Y29u...").decode(), codecs.decode(..., "hex"/"base64").
+        # Static token scan misses all of these; deny any execute_code that pairs an
+        # encoding primitive with a write/rename primitive.
+        _ENCODE_PATTERN = re.compile(
+            r"\bchr\s*\(\s*\d+\s*\)"                   # chr(99)+chr(111)+...
+            r"|\.fromhex\s*\("                           # bytes.fromhex(...)
+            r"|\bb64decode\s*\("                         # base64.b64decode(...)
+            r"|codecs\.decode\s*\(.*?['\"][a-z0-9_]*['\"]"  # codecs.decode(..., "hex")
+        )
         _WRITE_RENAME = re.compile(
             r"\b(open\s*\(|write_text|write_bytes|os\.replace|os\.rename|shutil\.copy"
-            r"|Path\.write|\.replace\s*\(|tmp\.replace)\b"
+            r"|Path\.write|\.replace\s*\(|tmp\.replace)"
         )
-        if _CHR_PATTERN.search(code_blob) and _WRITE_RENAME.search(code_blob):
+        if _ENCODE_PATTERN.search(code_blob) and _WRITE_RENAME.search(code_blob):
             return _deny(
-                "[governance-hard-block] DENY: execute_code contains chr() encoding "
-                "combined with write/rename primitive (ADV-025). Dynamic paths built "
-                "via chr() can bypass static token detection. No proposal can approve "
-                "chr()-obfuscated writes — rewrite without chr() encoding."
+                "[governance-hard-block] DENY: execute_code contains an encoding primitive "
+                "(chr(), fromhex(), b64decode(), codecs.decode()) combined with a write/rename "
+                "primitive (ADV-025/ADV-025-EXT). Dynamic paths built via encoding can bypass "
+                "static token detection. No proposal can approve obfuscated writes — rewrite "
+                "without encoding."
             )
 
     cands = extract_candidate_paths(args)

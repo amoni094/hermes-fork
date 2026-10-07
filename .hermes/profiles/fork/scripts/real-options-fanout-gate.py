@@ -64,7 +64,7 @@ def main() -> int:
     else:
         results = []
         for t in tasks:
-            task_str = t if isinstance(t, str) else t.get("description", str(t))
+            task_str = t if isinstance(t, str) else t.get("task") or t.get("description") or str(t)
             result = _gate(task_str)
             result["ts"] = datetime.now(tz=timezone.utc).isoformat()
             results.append(result)

@@ -214,26 +214,29 @@ def main() -> int:
         try:
             adv_data = json.loads(adv)
             low_q = adv_data.get("counts", {}).get("noise", 0) + adv_data.get("counts", {}).get("empty", 0)
+            # Always rewrite the queue: remove stale entry from this source,
+            # add fresh entry only if there are low-quality rows to prune.
+            # This prevents stale tasks persisting when low_q drops to zero.
+            existing: list = []
+            if _FANOUT_Q.exists():
+                try:
+                    existing = json.loads(_FANOUT_Q.read_text())
+                except Exception:
+                    existing = []
+            # Remove any stale entry from this producer.
+            existing = [e for e in existing if e.get("source") != "doob-strata-consumer"]
             if low_q > 0:
-                existing: list = []
-                if _FANOUT_Q.exists():
-                    try:
-                        existing = json.loads(_FANOUT_Q.read_text())
-                    except Exception:
-                        existing = []
                 entry = {
                     "task": f"prune {low_q} low-quality doob memory entries (noise/empty)",
                     "source": "doob-strata-consumer",
                     "ts": __import__("time").strftime("%Y-%m-%dT%H:%M:%SZ", __import__("time").gmtime()),
                     "counts": adv_data.get("counts", {}),
                 }
-                # Deduplicate by source — one pending entry per producer at a time.
-                existing = [e for e in existing if e.get("source") != "doob-strata-consumer"]
                 existing.append(entry)
-                _FANOUT_Q.parent.mkdir(parents=True, exist_ok=True)
-                tmp2 = Path(str(_FANOUT_Q) + ".tmp")
-                tmp2.write_text(json.dumps(existing, indent=2))
-                tmp2.replace(_FANOUT_Q)
+            _FANOUT_Q.parent.mkdir(parents=True, exist_ok=True)
+            tmp2 = Path(str(_FANOUT_Q) + ".tmp")
+            tmp2.write_text(json.dumps(existing, indent=2))
+            tmp2.replace(_FANOUT_Q)
         except Exception:
             pass  # H-I7: never raise from annotation path
 
