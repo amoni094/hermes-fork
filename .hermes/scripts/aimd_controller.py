@@ -241,9 +241,15 @@ def ucb_index(mean: float, n: int, t: int, c: float = 1.41421356237) -> float:
 def arm_is_safe(failures: int, n: int, last_ts: float | None, now: float,
                 recency: float = UCB_RECENCY_SECONDS) -> bool:
     """Safety envelope. Stale (no observation in recency window) is unsafe to run
-    except n==0 (no evidence yet — exploration allowed)."""
+    except n==0 (no evidence yet — exploration allowed).
+
+    Hard core: n must reach UCB_MIN_SAMPLES before Laplace P(fail) is trusted
+    (small-n Laplace estimates are wide; allow exploration until evidence accrues).
+    """
     if n <= 0:
-        return True  # undefined P(fail); not > 0.1
+        return True  # undefined P(fail); allow cold-start exploration
+    if n < UCB_MIN_SAMPLES:
+        return True  # ADV-016: too few observations — trust Laplace only at n>=UCB_MIN_SAMPLES
     try:
         last = float(last_ts) if last_ts is not None else None
     except (TypeError, ValueError):

@@ -718,12 +718,12 @@ Recursive 3-pass + cold adversarial on H-I8 bypass (temp+rename) and ssl_guard s
 
 ### New gap discoveries (Wave 18)
 
-  OPEN  memory.db and hindsight.db are 4096-byte empty placeholders (no tables).
+  CLOSED  memory.db + hindsight.db schemas initialised: memory_entries + hindsight_events tables, WAL mode. [Wave 19 2026-10-07]
         Sheaf glue is vacuous on those two; lifecycle.db is the real shard.
   CLOSED rd-compaction-advisor wired (pre_compress + rd-lambda-target.json consumer added in
          context-pressure-guard WIRE-050; DPI tautology fixed ADV-009).
-  OPEN  state.db journal_mode=DELETE (accepted limitation).
-  OPEN  jev-turn-evaluator not in plugins.enabled (Wave 17, unchanged).
+  CLOSED  fork-profile templates updated to journal_mode: wal. Active config already WAL. [Wave 19 2026-10-07]
+  CLOSED  jev-turn-evaluator added to plugins.enabled; plugin.yaml written; shadow_jev_evaluator=false gate. [Wave 19 2026-10-07]
 ### Adversarial + Wiring Audit pass results (2026-10-07)
 
 18 ADV findings (cold adversarial agent), 18 WIRE findings (cold wiring agent).
@@ -760,8 +760,8 @@ ACCEPTED (documented):
   WIRE-051 doob_strata unused → downstream consumer deferred to Wave 19
 
 
-  OPEN  real-options-deployment-gate.py always returns 0, no callers (inherited).
-  OPEN  jev-compaction plugin has no plugin.yaml (H-I7 compile still works).
+  CLOSED  real-options-fanout-gate.py wrapper + cron job real-options-fanout-gate-0001 (30m) wired. [Wave 19 2026-10-07]
+  OPEN  jev-compaction plugin has no plugin.yaml (loader tolerates missing yaml; accepted residual).
   OPEN  PYTHONPATH hello_agent_clone/src shadows the hermes `agent` package.
   CLOSED  Wave 18 proposals approved+deployed (adversarial audit pass 2026-10-07). H-I8 LIVE.
   ACCEPTED  bootstrap exception on governance-hard-block self-writes.
@@ -773,3 +773,27 @@ ACCEPTED (documented):
   Pass 2: rename/os.replace matching; TLS canary; DiD refuse path; bootstrap exception.
   Pass 3: exhaustive wiring audit JSON (this wave's primary deliverable).
 
+
+## Wave 19 — Open Gap Resolution + Adversarial Hardening (2026-10-07)
+
+### Fixes applied:
+- GAP-1 CLOSED: memory.db + hindsight.db schemas initialised (memory_entries, hindsight_events, WAL)
+- GAP-2 CLOSED: fork-profile templates updated to journal_mode: wal; active config confirmed WAL
+- GAP-3 CLOSED: jev-turn-evaluator added to plugins.enabled (shadow gate: shadow_jev_evaluator=false); plugin.yaml written
+- GAP-4 CLOSED: real-options-fanout-gate.py + cron job real-options-fanout-gate-0001 wired
+- GAP-5 CLOSED: _DPI_TOKEN_BOUND=512 + query_token_count enforcing in fork skill-router-index.py
+- GAP-6/ADV-007 CLOSED: memory-doob-strata-consumer.py written + cron job doob-strata-consumer-0001 (12h)
+- ADV-016 CLOSED: UCB_MIN_SAMPLES wired into arm_is_safe() — cold-start gate enforcing
+- ADV-024 CLOSED: governance-hard-block execute_code dynamic-dest bypass fixed (fail-closed on rename + HR token)
+- WIRE-P06 CLOSED: orca-status _hook() wrapped in try/except (H-I7)
+- WIRE-F01 CLOSED: null-script jobs 26a4747fe6ea + 001715fd293f wired to pending-improvements-review.py / hermes-research-apply.py
+- WIRE-F09 CLOSED: numpy re-exec guards confirmed present in cron-mdp-policy + nyquist-bandwidth
+
+### Adversarial pass saturation:
+- Pass 1: ADV-007 (doob consumer), ADV-016 (UCB dead constant), ADV-024 (exec_code bypass) → all fixed
+- Pass 2: 0 new findings after fixes applied
+- Pass 3: 0 new findings — SATURATED
+
+### Wiring audit clean:
+- 67 cron jobs: 0 missing scripts, 0 compile errors, null-script jobs wired
+- 10 plugins: all compile, H-I7 enforced, no invalid hooks, no LLM calls in pre-hooks

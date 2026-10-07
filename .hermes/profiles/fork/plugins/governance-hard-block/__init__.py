@@ -251,6 +251,25 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
         if not any(is_high_risk_target(p) for p in cands):
             return None
 
+    # ADV-024: execute_code dest-variable bypass.
+    # extract_candidate_paths only sees static string literals; a code block that
+    # builds the destination path at runtime (dest = "...config.yaml"; os.replace(...))
+    # is invisible to path extraction.  Fail-closed: if the code blob contains any
+    # rename/copy primitive AND any high-risk token, treat the entire code as a
+    # high-risk rename even when no concrete path is extractable.
+    if tool_name == "execute_code":
+        code_blob = chr(10).join(_string_values(args))
+        if looks_like_rename_or_copy({"code": code_blob}):
+            _HR_TOKENS = ("config.yaml", "/plugins/", "/agent/", "plugin.yaml")
+            if any(tok in code_blob for tok in _HR_TOKENS):
+                proposals = load_latest_proposals()
+                if not any(has_approved_proposal(tok, proposals) for tok in _HR_TOKENS if tok in code_blob):
+                    return _deny(
+                        "[governance-hard-block] DENY: execute_code contains rename/copy "
+                        "primitive with high-risk token; dynamic destination may target "
+                        "config.yaml / plugins / agent (ADV-024). Requires approved proposal."
+                    )
+
     cands = extract_candidate_paths(args)
     rename = looks_like_rename_or_copy(args)
     high = [p for p in cands if is_high_risk_target(p)]

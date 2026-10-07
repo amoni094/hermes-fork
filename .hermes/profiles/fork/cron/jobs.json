@@ -142,19 +142,19 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/pre-compact-annotate.py",
       "no_agent": true,
       "description": "Every 15m R-D compaction advisory",
-      "next_run_at": "2026-10-07T20:00:00+11:00",
+      "next_run_at": "2026-10-07T20:45:00+11:00",
       "env": {
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T19:45:00+11:00",
-        "dispatched_at": "2026-10-07T19:45:56.720306+11:00",
-        "lateness_seconds": 56.7,
+        "scheduled_at": "2026-10-07T20:30:00+11:00",
+        "dispatched_at": "2026-10-07T20:30:57.137051+11:00",
+        "lateness_seconds": 57.1,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-10-07T19:45:58.526588+11:00",
+      "last_run_at": "2026-10-07T20:30:59.045286+11:00",
       "last_status": "ok",
       "failure_streak": 0,
       "last_delivery_error": null,
@@ -175,22 +175,22 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skillspector_guard.py",
       "no_agent": true,
       "description": "Every 4h skill integrity scan (H-I1 reactive gate)",
-      "next_run_at": "2026-10-07T20:00:00+11:00",
+      "next_run_at": "2026-10-08T00:00:00+11:00",
       "env": {
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T16:00:00+11:00",
-        "dispatched_at": "2026-10-07T16:00:07.169066+11:00",
-        "lateness_seconds": 7.2,
+        "scheduled_at": "2026-10-07T20:00:00+11:00",
+        "dispatched_at": "2026-10-07T20:00:57.124851+11:00",
+        "lateness_seconds": 57.1,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-10-07T16:07:07.294922+11:00",
-      "last_status": "error",
-      "last_error": "Script exited with code 1\nstdout:\nskills=211 bundled=0 non_bundled=211\nseverity_counts={\"CRITICAL\": 3, \"HIGH\": 3, \"LOW\": 197, \"MEDIUM\": 8}\nallowlisted=0\nquarantined=0\npending_quarantine=0\nflagged=3\nsummary=/var/home/rainbow/.hermes/skills-security/last-summary.json\nallowlist=/var/home/rainbow/.hermes/skills-security/allowlist.json\npending=/var/home/rainbow/.hermes/skills-security/pending_quarantine.json\nFLAGGED embedded-device-setup score=100 severity=CRITICAL report=/var/home/rainbow/.hermes/skills-security/reports/embedded-device-setup.json\nFLAGGED network-vulnerability-scanning score=87 severity=CRITICAL report=/var/home/rainbow/.hermes/skills-security/reports/network-vulnerability-scanning.json\nFLAGGED pi-os-cloudinit-ssh-setup score=100 severity=CRITICAL report=/var/home/rainbow/.hermes/skills-security/reports/pi-os-cloudinit-ssh-setup.json",
-      "failure_streak": 21,
+      "last_run_at": "2026-10-07T20:01:11.696474+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
       "last_delivery_error": null,
       "state": "scheduled",
       "profile": "fork",
@@ -415,15 +415,15 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-07T20:00:00+11:00",
+      "next_run_at": "2026-10-07T22:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T18:00:00+11:00",
-        "dispatched_at": "2026-10-07T18:00:05.174802+11:00",
-        "lateness_seconds": 5.2,
+        "scheduled_at": "2026-10-07T20:00:00+11:00",
+        "dispatched_at": "2026-10-07T20:00:57.124851+11:00",
+        "lateness_seconds": 57.1,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-10-07T18:00:07.453727+11:00",
+      "last_run_at": "2026-10-07T20:00:59.294806+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -725,15 +725,15 @@
       "schedule_display": "every 10m",
       "repeat": {
         "times": null,
-        "completed": 5366
+        "completed": 5370
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-06-26T11:06:08.602796+10:00",
-      "next_run_at": "2026-10-07T20:04:58.720849+11:00",
-      "last_run_at": "2026-10-07T19:54:58.720849+11:00",
+      "next_run_at": "2026-10-07T20:48:58.731020+11:00",
+      "last_run_at": "2026-10-07T20:38:58.731020+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -749,9 +749,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T19:54:08.829404+11:00",
-        "dispatched_at": "2026-10-07T19:54:57.124075+11:00",
-        "lateness_seconds": 48.3,
+        "scheduled_at": "2026-10-07T20:37:58.876494+11:00",
+        "dispatched_at": "2026-10-07T20:38:57.128968+11:00",
+        "lateness_seconds": 58.3,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -1184,7 +1184,7 @@
       "provider_snapshot": null,
       "model_snapshot": null,
       "base_url": null,
-      "script": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/pending-improvements-review.py",
       "no_agent": false,
       "monitor_script": null,
       "monitor_url": null,
@@ -1659,7 +1659,7 @@
       "provider_snapshot": "anthropic",
       "model_snapshot": "claude-sonnet-4-6",
       "base_url": null,
-      "script": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-research-apply.py",
       "no_agent": false,
       "monitor_script": null,
       "monitor_url": null,
@@ -2194,14 +2194,14 @@
       "last_error": null,
       "last_delivery_error": null,
       "fire_claim": null,
-      "next_run_at": "2026-10-07T20:14:10.355389+11:00",
+      "next_run_at": "2026-10-07T20:44:58.885428+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T18:52:06.818525+11:00",
-        "dispatched_at": "2026-10-07T19:44:05.085937+11:00",
-        "lateness_seconds": 3118.3,
-        "kind": "catch_up"
+        "scheduled_at": "2026-10-07T20:14:10.355389+11:00",
+        "dispatched_at": "2026-10-07T20:14:57.126343+11:00",
+        "lateness_seconds": 46.8,
+        "kind": "on_time"
       },
-      "last_run_at": "2026-10-07T19:44:10.355389+11:00",
+      "last_run_at": "2026-10-07T20:14:58.885428+11:00",
       "timeout_seconds": 1440,
       "startup_jitter_seconds": 55,
       "priority": 1
@@ -2270,14 +2270,14 @@
       },
       "state": "scheduled",
       "created_at": "2026-09-22T15:29:09.530109+10:00",
-      "next_run_at": "2026-10-07T20:14:58.754995+11:00",
-      "last_run_at": "2026-10-07T19:59:58.754995+11:00",
+      "next_run_at": "2026-10-07T20:46:58.655033+11:00",
+      "last_run_at": "2026-10-07T20:31:58.655033+11:00",
       "last_status": "ok",
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T19:59:11.050732+11:00",
-        "dispatched_at": "2026-10-07T19:59:57.133203+11:00",
-        "lateness_seconds": 46.1,
+        "scheduled_at": "2026-10-07T20:30:59.112004+11:00",
+        "dispatched_at": "2026-10-07T20:31:57.126785+11:00",
+        "lateness_seconds": 58.0,
         "kind": "on_time"
       },
       "fire_claim": null,
@@ -2898,18 +2898,18 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-07T20:14:11.560777+11:00",
-      "last_run_at": "2026-10-07T19:44:11.560777+11:00",
+      "next_run_at": "2026-10-07T20:44:59.085221+11:00",
+      "last_run_at": "2026-10-07T20:14:59.085221+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T18:28:08.041672+11:00",
-        "dispatched_at": "2026-10-07T19:44:05.085937+11:00",
-        "lateness_seconds": 4557.0,
-        "kind": "catch_up"
+        "scheduled_at": "2026-10-07T20:14:11.560777+11:00",
+        "dispatched_at": "2026-10-07T20:14:57.126343+11:00",
+        "lateness_seconds": 45.6,
+        "kind": "on_time"
       }
     },
     {
@@ -2928,7 +2928,31 @@
       ],
       "created": "2026-10-07T08:52:07Z",
       "next_run_at": "2026-10-08T07:52:57.124384+11:00"
+    },
+    {
+      "id": "real-options-fanout-gate-0001",
+      "name": "Real-options fanout gate (GAP-4)",
+      "enabled": true,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 30
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/real-options-fanout-gate.py",
+      "description": "Applies real-options theory to gate/defer subagent fan-out decisions. GAP-4 wiring fix.",
+      "next_run_at": "2026-10-07T21:03:57.125505+11:00"
+    },
+    {
+      "id": "doob-strata-consumer-0001",
+      "name": "Doob strata quality consumer (GAP-6/ADV-007)",
+      "enabled": true,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 720
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-doob-strata-consumer.py",
+      "description": "Scores working-memory entries by Doob stratum; writes quality advisory. Wires GAP-6/ADV-007.",
+      "next_run_at": "2026-10-08T08:34:57.128395+11:00"
     }
   ],
-  "updated_at": "2026-10-07T19:59:58.756031+11:00"
+  "updated_at": "2026-10-07T20:38:58.732071+11:00"
 }
