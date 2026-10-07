@@ -63,15 +63,18 @@ _RENAME_PRIMITIVES = re.compile(
     r"|Path\([^\)]*\)\.(write_text|write_bytes|replace|rename|touch)"
     # open() write-mode: require comma+mode, cap at 200 chars (avoids PATH-PREFIX FP and MULTILINE bypass)
     r"|open\s*\([\s\S]{0,200}?,\s*['\"][awx][bt+]*['\"]"           # w/a/x modes (+ optional b/t/+)
-    r"|open\s*\([\s\S]{0,200}?,\s*['\"]r\+[bt]*['\"]"             # r+ update mode only (not plain 'r')
+    r"|open\s*\([\s\S]{0,200}?,\s*['\"]r[bt]*\+[bt]*['\"]"         # r+/rb+/r+b update mode (not plain 'r')
     r"|open\s*\([\s\S]{0,200}?mode\s*=\s*['\"][awx][bt+]*['\"]"   # keyword mode: w/a/x
-    r"|open\s*\([\s\S]{0,200}?mode\s*=\s*['\"]r\+[bt]*['\"]"      # keyword mode: r+
+    r"|open\s*\([\s\S]{0,200}?mode\s*=\s*['\"]r[bt]*\+[bt]*['\"]" # keyword mode: r+/rb+/r+b
     r"|\.open\s*\(['\"][awx]"                                       # Path.open('a') etc.
-    # Dynamic mode: open(p, chr(119)) or open(p, mode=chr(119)) — fail-closed (ADV-025-OPEN-DYNAMIC-MODE)
-    r"|open\s*\([^\n]*\bchr\s*\("
-    r"|open\s*\([^\n]*mode\s*=\s*chr\s*\("
+    r"|\.open\s*\(['\"]r[bt]*\+[bt]*['\"]"                         # Path.open('r+') update mode
+    # Dynamic mode: open(p, chr(119)) — require comma before chr() (ADV-025-OPEN-DYNAMIC-MODE)
+    # [\\s\\S]{0,200}? allows multiline (ADV-W6-002); ,\\s*chr ensures chr is mode not preceding code
+    r"|open\s*\([\s\S]{0,200}?,\s*chr\s*\("
+    r"|open\s*\([\s\S]{0,200}?mode\s*=\s*chr\s*\("
     r"|json\.dump"
-    r"|os\.popen"
+    r"|os\.(popen|system)\s*\("
+    r"|os\.symlink\s*\("
     r"|subprocess\.(run|call|check_call|check_output|Popen)\s*\("
 )
 
@@ -302,9 +305,9 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
     # Anchored to shell context: preceded by start-of-line, whitespace, ;, |, &.
     # Redirect: >\s*[path-starting char] — avoids arithmetic 'x > 1' or '>> count'.
     _SHELL_WRITE = re.compile(
-        r"(?:^|[;|&\n])\s*(mv|cp|install|rsync|tee)\b"   # shell command verbs (after shell operator)
-        r"|(?:^|[\s;|&])(?:>>?)[\s]*[/'\"~.]"             # shell redirect to path (/, ~, ., ', ")
-        # Not \w — avoids 'x > 1', 'x >> count' arithmetic false positives
+        r"(?:^|[;|&\n])\s*(mv|cp|install|rsync|tee|ln)\b"  # shell command verbs (after shell operator)
+        r"|(?:^|[\s;|&])\d*(?:&?>>?)\s*[/'\"~]"            # shell redirect: >/path, 2>/path, &>/path
+        # Not \w or . — avoids 'x > 1', 'n > 0', 'x > .5' arithmetic false positives
     )
     _encode_blob = ""
     if tool_name in ("execute_code", "terminal"):
