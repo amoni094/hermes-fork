@@ -89,10 +89,11 @@ _RENAME_PRIMITIVES = re.compile(
     # Path(nested).write_text/write_bytes: two-level nested parens in Path() arg (ADV-W9-003)
     r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch)"
     # getattr obfuscation bypass (ADV-W9-003): getattr(obj,'write_text'/'open'/'write_bytes')
-    r"|getattr\s*\([\s\S]{0,2000}?,\s*['\"](?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink)['\"]"
-    r"|io\.(?:FileIO|open)\s*\("  # ADV-W16-007 io write primitives
+    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]{0,100}\)),\s*['\"](?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink)['\"]"
+    r"|io\.FileIO\s*\([^)]{0,150},\s*['\"][waxWAX]"  # ADV-W16-007 io.FileIO write-mode only (W17-004)
+    r"|io\.open\s*\([^)]{0,200},\s*['\"][awx]"  # ADV-W16-007 io.open write-mode only (W17-004)
     r"|operator\.(?:attrgetter|methodcaller)\s*\("  # ADV-W16-009 operator bypass
-    r"|\.(?:rename|replace)\s*\("  # ADV-W16-002 instance Path.rename/replace
+    r"|\.(?:rename|touch)\s*\("  # ADV-W16-002+W17-007 instance Path.rename/touch
     r"|json\.dump\b"
     r"|os\.(open|popen|system)\s*\("
     r"|os\.(symlink|symlinkat)\s*\("
@@ -437,6 +438,7 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
             re.search(r"(?:os\.path\.join|joinpath)", code_blob)
             or re.search(r"Path\s*\([^)]*['\"](?:plugins|agent)/", code_blob)
             or "from os.path import join" in code_blob
+            or bool(re.search("['\"](?:plugins|agent)['\"]\\s*,", code_blob))  # ADV-W17-006 multi-arg Path join
         )
         if _QUOTED_REL_HR.search(code_blob) and _RENAME_PRIMITIVES.search(code_blob) and (hr_tokens_present or _join_context):
             return _deny(
@@ -485,9 +487,9 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
                 or bool(re.search(r"(?<!\w)(?:plugins|agent)/", blob))
             ):
                 high = ["<copy-verb + high-risk token>"]
-                if _INPLACE_EDITOR.search(blob) and re.search(r"\-i\b", blob) and (
-                    any(t in blob for t in ("config.yaml", "config.yml", "/plugins/", "/agent/", "plugin.yaml"))
-                    or bool(re.search(r"(?<!\w)(?:plugins|agent)/", blob))
+            if _INPLACE_EDITOR.search(blob) and re.search(r"\-i\b", blob) and (
+                any(t in blob for t in ("config.yaml", "config.yml", "/plugins/", "/agent/", "plugin.yaml"))
+                or bool(re.search(r"(?<!\w)(?:plugins|agent)/", blob))
                 ):
                     high = ["<inplace-editor -i + high-risk token>"]  # ADV-W16-008
 
