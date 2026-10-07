@@ -77,7 +77,7 @@ _RENAME_PRIMITIVES = re.compile(
     #   ADV-W7-004 guard: exec(open(f).read()), chr — the ) of .read() terminates the outer alt.
     #   ADV-W8-002 residual: open(\n\np,'w') (two+ newlines before path) is a documented miss;
     #   mitigated by secondary encode+open+HR_TOKEN check in evaluate_write() for high-risk targets.
-    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150},\s*['\"][awx][bt+]*['\"]"
+    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150},\s*['\"][^'\"]*[wax+]"
     r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150},\s*['\"]r[bt]*\+[bt]*['\"]"
     r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150}mode\s*=\s*['\"][awx][bt+]*['\"]"
     r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150}mode\s*=\s*['\"]r[bt]*\+[bt]*['\"]"
@@ -89,11 +89,14 @@ _RENAME_PRIMITIVES = re.compile(
     # Path(nested).write_text/write_bytes: two-level nested parens in Path() arg (ADV-W9-003)
     r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch)"
     # getattr obfuscation bypass (ADV-W9-003): getattr(obj,'write_text'/'open'/'write_bytes')
-    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]{0,100}\)),\s*['\"](?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink)['\"]"
-    r"|io\.FileIO\s*\([^)]{0,150},\s*['\"][waxWAX]"  # ADV-W16-007 io.FileIO write-mode only (W17-004)
+    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]{0,100}\)|\([a-zA-Z_][\w.]*\)|[a-zA-Z_][\w.]*\[[^\]]{0,80}\]),\s*['\"](?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch)['\"]"
+    r"|io\.FileIO\s*\([^)]{0,150},\s*['\"][^'\"]*[wax+]"  # ADV-W16-007 io.FileIO write-mode only (W17-004)
     r"|io\.open\s*\([^)]{0,200},\s*['\"][awx]"  # ADV-W16-007 io.open write-mode only (W17-004)
     r"|operator\.(?:attrgetter|methodcaller)\s*\("  # ADV-W16-009 operator bypass
-    r"|\.(?:rename|touch)\s*\("  # ADV-W16-002+W17-007 instance Path.rename/touch
+    r"|(?:extractall|unpack_archive)\s*\("  # ADV-W17SAT-006 archive extract
+    r"|fileinput\.input\s*\("  # ADV-W17SAT-008 fileinput inplace
+    r"|partial\s*\(\s*open\b"  # ADV-W17SAT-010 partial(open,...)
+    r"|\.(?:rename|touch|replace)\s*\("  # ADV-W16-002+W17-007 instance Path.rename/touch
     r"|json\.dump\b"
     r"|os\.(open|popen|system)\s*\("
     r"|os\.(symlink|symlinkat)\s*\("
@@ -305,8 +308,8 @@ _SHELL_REDIRECT = re.compile(r"(?:\d+)?>>?[|]?\s*(?:[./~]|[\'\"$`]|[a-zA-Z_]\w*[
 
 # ADV-W14-002+006+009: terminal copy-verb scan — catches prefix chains (sudo -n cp),
 # wrappers (sh -c 'cp ...'), dd of=, install, and any verb depth not anchored to line start.
-_COPY_VERB = re.compile(r"\b(?:mv|cp|scp|ln|rsync|tee|install|dd)\b")
-_INPLACE_EDITOR = re.compile(r"\b(?:sed|perl|awk|ruby|patch)\b")  # ADV-W16-008 in-place editors
+_COPY_VERB = re.compile(r"\b(?:mv|cp|scp|ln|rsync|tee|install|dd|patch|ed|ex)\b")
+_INPLACE_EDITOR = re.compile(r"\b(?:sed|perl|awk|gawk|ruby)\b")  # ADV-W16-008 in-place editors
 
 
 def looks_like_rename_or_copy(args: Any) -> bool:
@@ -487,7 +490,7 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
                 or bool(re.search(r"(?<!\w)(?:plugins|agent)/", blob))
             ):
                 high = ["<copy-verb + high-risk token>"]
-            if _INPLACE_EDITOR.search(blob) and re.search(r"\-i\b", blob) and (
+            if _INPLACE_EDITOR.search(blob) and re.search(r"(?:--in-place|-[a-z]*i\b)", blob) and (
                 any(t in blob for t in ("config.yaml", "config.yml", "/plugins/", "/agent/", "plugin.yaml"))
                 or bool(re.search(r"(?<!\w)(?:plugins|agent)/", blob))
                 ):
