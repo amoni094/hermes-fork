@@ -276,6 +276,9 @@ plugins:
   entries:
     cobra-guard:
       allow_tool_override: false
+    jev-turn-evaluator:
+      shadow_jev_evaluator: true
+      sample_rate: 3
   jev_compaction:
     budget_tokens: 100000
     call_budget: 8

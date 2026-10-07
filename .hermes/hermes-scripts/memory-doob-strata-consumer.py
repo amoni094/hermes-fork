@@ -37,7 +37,7 @@ from pathlib import Path
 
 # ─── paths ───────────────────────────────────────────────────────────────────
 _HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
-_DOOB_DB = _HOME / "hermes-scripts" / "doob_strata.db"
+_DOOB_DB = _HOME / "profiles/fork/cache/memory-doob.db"
 _ADVISORY = _HOME / "profiles/fork/cache/doob-quality-advisory.json"
 
 # ─── hard-core score table ────────────────────────────────────────────────────

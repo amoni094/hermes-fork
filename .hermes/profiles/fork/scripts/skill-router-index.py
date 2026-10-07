@@ -855,7 +855,7 @@ def route(query_text: str, top: int = 5) -> list[dict]:
     LATTICE_BOOST = 0.15
     if len(scored) >= 2:
         gap = scored[0][0] - scored[1][0]
-        if should_semantic_fallback(scored, AMBIGUITY_GAP) and LATTICE_SCRIPT.exists():
+        if should_semantic_fallback(scored, AMBIGUITY_GAP, query_token_count=len(q_tokens)) and LATTICE_SCRIPT.exists():
             try:
                 _lat = subprocess.run(
                     [sys.executable, str(LATTICE_SCRIPT), "--query", query_text, "--top-k", "5"],
@@ -1051,7 +1051,7 @@ def cmd_query(query_text: str):
 
     if len(scored) >= 2:
         gap = scored[0][0] - scored[1][0]
-        if should_semantic_fallback(scored, AMBIGUITY_GAP) and LATTICE_SCRIPT.exists():
+        if should_semantic_fallback(scored, AMBIGUITY_GAP, query_token_count=len(q_tokens)) and LATTICE_SCRIPT.exists():
             try:
                 _lat_result = subprocess.run(
                     [sys.executable, str(LATTICE_SCRIPT),
