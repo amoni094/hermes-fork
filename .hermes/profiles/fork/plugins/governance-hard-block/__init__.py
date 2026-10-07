@@ -61,8 +61,14 @@ _RENAME_PRIMITIVES = re.compile(
     r"|os\.(replace|rename|link)"
     r"|shutil\.(move|copy|copy2|copyfile|copytree)"
     r"|Path\([^\)]*\)\.(write_text|write_bytes|replace|rename|touch)"
-    r"|open\([^\)]*['\"]w"
+    r"|open\s*\(.*?['\"][awx]"            # write/append/exclusive modes (.*? crosses nested parens)
+    r"|open\s*\(.*?['\"]r\+"             # read-update mode also writes
+    r"|open\s*\(.*?mode\s*=\s*['\"][awx]"   # keyword-form mode arg
+    r"|\.open\s*\(['\"][awx]"             # Path.open('a'), Path.open('w') etc.
     r"|json\.dump"
+    r"|>\s*\S"                            # shell redirect > file or >>
+    r"|os\.popen"
+    r"|subprocess\.(run|call|check_call|check_output|Popen)\s*\("  # subprocess shell
 )
 
 _BOOTSTRAP_DIR: Optional[Path] = None  # resolved lazily (ADV-004)
@@ -271,12 +277,12 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
     # high-risk rename even when no concrete path is extractable.
     # ADV-025/ADV-025-EXT/ADV-025-TERMINAL/ADV-025-OSSYSTEM/ADV-025-OBFUSCATION:
     # Encoding + write primitive bypass detection. Fires on execute_code AND terminal.
-    # ENCODE: chr(x), %c format string, fromhex, b64decode, codecs.decode, bytes([...]),
-    #         eval(), exec(). (\x escapes and string concat out-of-scope — resolved at parse time.)
-    # WRITE: file-open-for-write, path write methods, rename/copy, os.system, subprocess, json.dump.
-    # NOTE: _WRITE_RENAME uses precise anchoring to avoid str.replace false positives:
-    #   - \bos\.replace\b  (not the bare .replace which matches str.replace)
-    #   - \bPath\.replace\b / \btmp\.replace\b (explicit prefix)
+    # ENCODE: chr(x), '%c' quoted literal, fromhex, b64decode, codecs.decode, bytes([...]),
+    #         eval(), exec(). (\x hex escapes and string concat are out-of-scope.)
+    # WRITE: reuse _RENAME_PRIMITIVES which already covers mv/cp/tee/open(a/w/x/r+)/
+    #         shutil.copy2/copytree/os.popen/shell redirects/json.dump.
+    # NOTE: exec(open('file').read()) does NOT fire — open(...) with read-mode ('r' or
+    #         no 'w'/'a'/'x') does not match _RENAME_PRIMITIVES. Only write-mode opens fire.
     _ENCODE_PATTERN = re.compile(
         r"\bchr\s*\("                                   # chr(99) / chr(c) / chr(0x63)
         r"|['\"]%c['\"]"                                # '%c' string literal used as format-char
@@ -287,28 +293,16 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
         r"|\beval\s*\("                                 # eval(encoded_string)
         r"|\bexec\s*\("                                 # exec(compiled/encoded)
     )
-    _WRITE_RENAME = re.compile(
-        r"\bopen\s*\([^)]*['\"]w"                       # open(..., 'w') — write mode only
-        r"|\.write_text\b|\.write_bytes\b"              # Path.write_text / write_bytes
-        r"|\bos\.replace\b|\bos\.rename\b"              # os.replace / os.rename
-        r"|\bshutil\.copy\b|\bshutil\.move\b|\bshutil\.copyfile\b|\bshutil\.copyfileobj\b"
-        r"|\bPath\b[^)]*\.(replace|rename)\b"          # Path(...).replace / .rename
-        r"|\btmp\.replace\b"                             # common atomic write pattern
-        r"|\bos\.write\s*\(|\bos\.open\s*\("           # low-level file writes
-        r"|\bjson\.dump\s*\("                           # json.dump to file handle
-        r"|\bos\.system\s*\("                           # ADV-025-OSSYSTEM: shell redirect
-        r"|\bsubprocess\.(run|call|check_call|check_output|Popen)\s*\("  # subprocess shell
-    )
     _encode_blob = ""
     if tool_name in ("execute_code", "terminal"):
         _encode_blob = chr(10).join(_string_values(args))
-    if _encode_blob and _ENCODE_PATTERN.search(_encode_blob) and _WRITE_RENAME.search(_encode_blob):
+    if _encode_blob and _ENCODE_PATTERN.search(_encode_blob) and _RENAME_PRIMITIVES.search(_encode_blob):
         return _deny(
             "[governance-hard-block] DENY: code contains an encoding primitive "
-            "(chr(), %c%, fromhex(), b64decode(), codecs.decode(), bytes([...]), eval(), exec()) "
+            "(chr(), '%c', fromhex(), b64decode(), codecs.decode(), bytes([...]), eval(), exec()) "
             "combined with a write/rename primitive (ADV-025/ADV-025-EXT/ADV-025-TERMINAL/"
-            "ADV-025-OSSYSTEM). Dynamic paths built via encoding bypass static token detection. "
-            "No proposal can approve obfuscated writes — rewrite without encoding."
+            "ADV-025-OSSYSTEM/ADV-025-TEE). Dynamic paths built via encoding bypass static "
+            "token detection. No proposal can approve obfuscated writes — rewrite without encoding."
         )
     if tool_name == "execute_code":
         code_blob = chr(10).join(_string_values(args))
