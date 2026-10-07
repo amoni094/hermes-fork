@@ -275,9 +275,12 @@ def extract_candidate_paths(args: Any) -> List[str]:
     return uniq
 
 
+_SHELL_RENAME = re.compile(r"(?:^|[;|&\n])\s*(?:mv|cp|install|rsync|tee)\b")
+
+
 def looks_like_rename_or_copy(args: Any) -> bool:
     blob = "\n".join(_string_values(args))
-    return bool(_RENAME_PRIMITIVES.search(blob))
+    return bool(_RENAME_PRIMITIVES.search(blob) or _SHELL_RENAME.search(blob))
 
 
 def _deny(message: str) -> Dict[str, Any]:
@@ -343,7 +346,7 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
         # Secondary fail-closed: encode + open( + high-risk token — deny even when _RENAME_PRIMITIVES
         # can't match (e.g. newline before path arg, ADV-W8-002). If someone is encoding a value
         # AND calling open() AND referencing config.yaml / plugins / agent — deny regardless.
-        _HR_TOKENS_ENC = ("config.yaml", "/plugins/", "/agent/", "plugin.yaml")
+        _HR_TOKENS_ENC = ("config.yaml", "config.yml", "/plugins/", "plugins/", "/agent/", "agent/", "plugin.yaml")
         if (tool_name == "execute_code"
                 and r"open(" in _encode_blob.replace(" ", "").replace("\n", "")
                 and any(tok in _encode_blob for tok in _HR_TOKENS_ENC)):
@@ -362,7 +365,12 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
             )
     if tool_name == "execute_code":
         code_blob = chr(10).join(_string_values(args))
-        _HR_TOKENS = ("config.yaml", "/plugins/", "/agent/", "plugin.yaml")
+        _HR_TOKENS = (
+            "config.yaml", "config.yml",          # config files (ADV-W11-005)
+            "/plugins/", "plugins/",               # absolute and relative (ADV-W11-001..004)
+            "/agent/", "agent/",                   # absolute and relative
+            "plugin.yaml",
+        )
         hr_tokens_present = [tok for tok in _HR_TOKENS if tok in code_blob]
         if hr_tokens_present and (looks_like_rename_or_copy({"code": code_blob}) or _RENAME_PRIMITIVES.search(code_blob)):
             # ADV-W10-002: do NOT call has_approved_proposal here. Obfuscated writes
@@ -375,17 +383,18 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
                 "gate. Dynamic destinations cannot be approved — rewrite without encoding "
                 "(ADV-024/ADV-W10-002)."
             )
-        # ADV-024: execute_code dest-variable bypass (encode check already handled above).
-        # ADV-W10-003: relative plugins/*.py and agent/*.py paths are high-risk but not
-        # extracted by extract_candidate_paths (which requires absolute paths). Scan for
-        # them directly in the blob and treat as high-risk token presence.
-        _REL_HR = re.compile(r"""['"](?:plugins|\.hermes|agent)/[^'"]{1,200}\.py['"]""")
-        if _REL_HR.search(code_blob) and _RENAME_PRIMITIVES.search(code_blob):
+        # ADV-W10-003/W11-001..004: relative plugins/*.py paths covered by extended
+        # _HR_TOKENS above ('plugins/' without leading /). The old _REL_HR quote-anchored
+        # regex was too narrow (missed os.system shells, split/concat, unquoted paths).
+        # The extended token scan + _RENAME_PRIMITIVES gate is the correct approach.
+        # Also catch quoted bare 'plugins' or 'agent' as os.path.join arguments (no trailing /).
+        _QUOTED_REL_HR = re.compile(r"""['"](plugins|agent)['"]\s*[,)]""")
+        if _QUOTED_REL_HR.search(code_blob) and _RENAME_PRIMITIVES.search(code_blob):
             return _deny(
-                "[governance-hard-block] DENY: execute_code contains a relative high-risk "
-                "path (plugins/*.py or agent/*.py) combined with a write primitive. "
-                "Relative paths targeting plugin/agent directories require an approved "
-                "proposal with the absolute path (ADV-024/ADV-W10-003)."
+                "[governance-hard-block] DENY: execute_code contains quoted relative "
+                "plugin/agent directory token combined with a write primitive. "
+                "Relative paths via os.path.join('plugins',…) require an approved "
+                "proposal with the absolute path (ADV-W11-003)."
             )
     cands = extract_candidate_paths(args)
     rename = looks_like_rename_or_copy(args)
@@ -396,7 +405,11 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
         if rename:
             blob = "\n".join(_string_values(args))
             if is_high_risk_target(blob) or any(
-                x in blob for x in ("config.yaml", "/plugins/", "/agent/")
+                x in blob for x in (
+                    "config.yaml", "config.yml",   # ADV-W11-005
+                    "/plugins/", "plugins/",        # absolute and relative (ADV-W11-001..004)
+                    "/agent/", "agent/",
+                )
             ):
                 # treat whole blob as potential target
                 high = [p for p in extract_candidate_paths({"command": blob}) if is_high_risk_target(p)]
