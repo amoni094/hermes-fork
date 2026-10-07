@@ -116,18 +116,27 @@ _RENAME_PRIMITIVES = re.compile(
     r"|zipfile\.(?:ZipFile|Path)\s*\((?:[^()]|\([^)]*\)){0,100},\s*[\x27\x22][wxa][\x27\x22]"  # ADV-W25-009 W26-006 ZipFile [wxa] positional
     r"|zipfile\.(?:ZipFile|Path)\s*\((?:[^()]|\([^)]*\)){0,100}mode\s*=\s*[\x27\x22][wxa]"  # ADV-W26-006 ZipFile mode= keyword
     r"|gzip\.(?:open|GzipFile)\s*\([^)]*[\x27\x22][wa]b?[\x27\x22]"  # ADV-W25-009 W26-007 gzip binary modes
-    r"|urllib\.request\.(?:urlretrieve|URLopener)\b"  # ADV-W25-009 W26-015 urlretrieve+URLopener
+    r"|urllib\.request\.(?:urlretrieve|URLopener|FancyURLopener)\b"  # ADV-W25-009 W26-015 W27-008
     r"|\bbuiltins\.open\s*\("  # ADV-W26-001 builtins.open(...)
     r"|__builtins__\s*(?:\[|\b(?:get)\b|\.).*\bopen\b"  # ADV-W26-001 __builtins__[open]/get/attr
     r"|(?:\[open\]\s*\[[^\]]*\]|\(open,?\s*\)\s*\[[^\]]*\])\s*\("  # ADV-W26-002 [open][-1]/[open][N]/(open,)[N]
     r"|\bopen\.__call__\s*\("  # ADV-W26-003 open.__call__()
     r"|operator\.call\s*\(\s*(?:builtins\.)?open\b"  # ADV-W26-003 operator.call(open,...)
-    r"|tempfile\.(?:NamedTemporaryFile|mkstemp|mktemp|TemporaryDirectory)\s*\([^)]*dir\s*="  # ADV-W26-008 tempfile dir=
+    r"|tempfile\.(?:NamedTemporaryFile|mkstemp|mktemp|mkdtemp|TemporaryDirectory)\s*\([^)]*(?:dir\s*=|\*\*\s*(?:\{[^}]*[\x27\x22]dir[\x27\x22]|dict\s*\([^)]*dir\s*=))"  # ADV-W26-008 W27-010 tempfile dir= or **{dir:}
     r"|getattr\s*\(\s*\((?:[^()]|\([^)]*\))*\)\s*,\s*name\s*="  # ADV-W26-010 getattr((expr), name=...)
-    r"|\bopen\s*\([^)]{0,300},\s*\*[^)]*\[[^)]*[wax]"  # ADV-W26-012 open(*['w']) star-unpack mode
+    r"|\bopen\s*\([^)]{0,300},\s*\*[^)]*[\[(][^)]*[wax]"  # ADV-W26-012 W27-004 open(*['w']/(*('w',)) star-unpack mode
     r"|\bopen\s*\([^)]{0,300}\*\*\s*(?:\{[^}]*mode[^}]*[wax]|dict\s*\([^)]*mode\s*=)"  # ADV-W26-012 open(**{mode:w})
     r"|asyncio\.create_subprocess_(?:exec|shell)\s*\("  # ADV-W26-014 asyncio subprocess
     r"|(?:ElementTree|xml\.etree\.ElementTree\.ElementTree|ET)\b[^\n]*\.write\s*\("  # ADV-W26-016 ET.write(path)
+    r"|(?:globals|locals|vars)\s*\(\s*\)\s*(?:\[|\.).*\bopen\b"  # ADV-W27-001 globals()['open']/vars().open
+    r"|\b__dict__\s*\[.*\bopen\b"  # ADV-W27-001 __dict__['open'] lookup
+    r"|getattr\s*\([^,){}]{0,300},\s*name\s*=\s*[bBfFrRuU]{0,2}[\x27\x22][^\x27\x22]*(?:write_text|write_bytes|open|replace|rename|unlink|truncate|link|copytree|run|execve|remove|execlpe|FileIO|spawnl|spawnv|spawnle|spawnvp|spawnlp|spawnvpe|posix_spawn|posix_spawnp)[^\x27\x22]*[\x27\x22]"  # ADV-W27-002 getattr(p, name='dangerous')
+    r"|\bopen\s*\([^)]{0,300},\s*\[[^\]]*[wax][^\]]*\]"  # ADV-W27-005 open(path,['w'][0]) subscript mode
+    r"|\.open\s*\(\s*\*[\[(]"  # ADV-W27-006 .open(*['w'])/.open(*('w',)) star-unpack
+    r"|zipfile\.(?:ZipFile|Path)\s*\([^)]*\*[\[(][^)]*[wxa]"  # ADV-W27-007 ZipFile *[w] star-unpack
+    r"|zipfile\.(?:ZipFile|Path)\s*\([^)]*\*\*\s*(?:\{[^}]*mode[^}]*[wxa]|dict\s*\([^)]*mode\s*=)"  # ADV-W27-007 ZipFile **{mode:w}
+    r"|tarfile\.(?:open|TarFile)\s*\([^)]*[\x27\x22][wxa][^)]*\)"  # ADV-W27-009 tarfile write-mode
+    r"|\.subprocess_(?:exec|shell)\s*\("  # ADV-W27-011 asyncio loop.subprocess_exec/shell
 )
 
 _BOOTSTRAP_DIR: Optional[Path] = None  # resolved lazily (ADV-004)
