@@ -60,7 +60,8 @@ _RENAME_PRIMITIVES = re.compile(
     # Python file-write primitives (execute_code context)
     r"os\.(replace|rename|link)"
     r"|shutil\.(move|copy|copy2|copyfile|copytree)"
-    r"|Path\([^\)]*\)\.(write_text|write_bytes|replace|rename|touch)"
+    r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch)"
+    r"|\.(write_text|write_bytes)\s*\("
     r"|\.(?:symlink_to|hardlink_to)\s*\("
     # open() write-mode: (?:[^()\n]|\([^()]*\)){0,100} — allows one level of nested parens
     # (covers os.path.join(a,b)) while stopping at ) that closes the open() call itself.
@@ -89,8 +90,8 @@ _RENAME_PRIMITIVES = re.compile(
     r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch)"
     # getattr obfuscation bypass (ADV-W9-003): getattr(obj,'write_text'/'open'/'write_bytes')
     r"|getattr\s*\([^,)]{0,80},\s*['\"](?:write_text|write_bytes|open|replace|rename)['\"]"
-    r"|json\.dump"
-    r"|os\.(popen|system)\s*\("
+    r"|json\.dump\b"
+    r"|os\.(open|popen|system)\s*\("
     r"|os\.(symlink|symlinkat)\s*\("
     r"|subprocess\.(run|call|check_call|check_output|Popen)\s*\("
 )
@@ -364,28 +365,28 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
         _HR_TOKENS = ("config.yaml", "/plugins/", "/agent/", "plugin.yaml")
         hr_tokens_present = [tok for tok in _HR_TOKENS if tok in code_blob]
         if hr_tokens_present and (looks_like_rename_or_copy({"code": code_blob}) or _RENAME_PRIMITIVES.search(code_blob)):
-            proposals = load_latest_proposals()
-            # ADV-W9-004: use extract_candidate_paths() against actual resolved paths,
-            # not has_approved_proposal(substring) which resolves relative to CWD and
-            # would approve a blob containing 'config.yaml' whenever any deployed proposal
-            # has a relative target='config.yaml' (which resolves to ~/config.yaml, not
-            # the fork profile config). Fail-closed when no candidate paths extractable.
-            actual_paths = extract_candidate_paths({"code": code_blob})
-            hr_actual = [p for p in actual_paths if is_high_risk_target(p)]
-            if not hr_actual:
-                # No concrete path extractable but HR token + write primitive present.
-                return _deny(
-                    "[governance-hard-block] DENY: execute_code contains rename/copy "
-                    "primitive with high-risk token; no approved proposal found for the "
-                    "actual target path (ADV-024/ADV-W9-004). Requires approved proposal."
-                )
-            if not any(has_approved_proposal(p, proposals) for p in hr_actual):
-                return _deny(
-                    "[governance-hard-block] DENY: execute_code contains rename/copy "
-                    "primitive with high-risk token; dynamic destination may target "
-                    "config.yaml / plugins / agent (ADV-024). Requires approved proposal."
-                )
+            # ADV-W10-002: do NOT call has_approved_proposal here. Obfuscated writes
+            # (encode primitive + write primitive + HR token) cannot be approved via a
+            # proposal — the proposal system covers known concrete paths, not dynamic
+            # encode-built destinations. Fail-closed unconditionally.
+            return _deny(
+                "[governance-hard-block] DENY: execute_code contains rename/copy "
+                "primitive with high-risk token and was already approved by ADV-025 encode "
+                "gate. Dynamic destinations cannot be approved — rewrite without encoding "
+                "(ADV-024/ADV-W10-002)."
+            )
         # ADV-024: execute_code dest-variable bypass (encode check already handled above).
+        # ADV-W10-003: relative plugins/*.py and agent/*.py paths are high-risk but not
+        # extracted by extract_candidate_paths (which requires absolute paths). Scan for
+        # them directly in the blob and treat as high-risk token presence.
+        _REL_HR = re.compile(r"""['"](?:plugins|\.hermes|agent)/[^'"]{1,200}\.py['"]""")
+        if _REL_HR.search(code_blob) and _RENAME_PRIMITIVES.search(code_blob):
+            return _deny(
+                "[governance-hard-block] DENY: execute_code contains a relative high-risk "
+                "path (plugins/*.py or agent/*.py) combined with a write primitive. "
+                "Relative paths targeting plugin/agent directories require an approved "
+                "proposal with the absolute path (ADV-024/ADV-W10-003)."
+            )
     cands = extract_candidate_paths(args)
     rename = looks_like_rename_or_copy(args)
     high = [p for p in cands if is_high_risk_target(p)]
@@ -423,11 +424,9 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
                 if hint in blob and has_approved_proposal(hint, proposals):
                     covered = True
                     break
-            if "governance-hard-block" in blob:
-                sys.stderr.write(
-                    "[governance-hard-block] BOOTSTRAP EXCEPTION (rename into plugin dir)\n"
-                )
-                covered = True
+            # ADV-W10-004: removed unconditional bootstrap exception for 'governance-hard-block'
+            # substring. The synthetic placeholder must go through the same proposal check.
+            # Bootstrap exception applies only to concrete paths via is_bootstrap_exception(path).
             if covered:
                 continue
         return _deny(
