@@ -69,28 +69,28 @@ _RENAME_PRIMITIVES = re.compile(
     # ADV-W8-002 note: a single \n before the path arg (open(\np,'w')) is a documented miss;
     # mitigated by the encode+open+HR_TOKEN secondary check below in evaluate_write().
     # open() write-mode: two levels of nested parens, optional leading whitespace/newline.
-    # Pattern: [ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150}
+    # Pattern: [ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,300}
     #   - [ \t\n]? absorbs single leading whitespace after open( (ADV-W9-002 partial fix)
     #   - outer alt: non-paren-non-newline char, OR (...) where ... is non-paren or single (...)
     #   = two levels of nesting (e.g. os.path.split(os.path.join(a,b))[0]) (ADV-W9-001 fix)
-    #   - {0,150} cap restored from {0,100} (ADV-W9-005: 101-char ident bypass)
+    #   - {0,300} cap restored from {0,100} (ADV-W9-005: 101-char ident bypass)
     #   ADV-W7-004 guard: exec(open(f).read()), chr — the ) of .read() terminates the outer alt.
     #   ADV-W8-002 residual: open(\n\np,'w') (two+ newlines before path) is a documented miss;
     #   mitigated by secondary encode+open+HR_TOKEN check in evaluate_write() for high-risk targets.
-    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150},\s*['\"][^'\"]*[wax+]"
-    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150},\s*['\"]r[bt]*\+[bt]*['\"]"
-    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150}mode\s*=\s*['\"][awx][bt+]*['\"]"
-    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150}mode\s*=\s*['\"]r[bt]*\+[bt]*['\"]"
+    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,300},\s*['\"][^'\"]*[wax+]"
+    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,300},\s*['\"]r[bt]*\+[bt]*['\"]"
+    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,300}mode\s*=\s*['\"][awx][bt+]*['\"]"
+    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,300}mode\s*=\s*['\"]r[bt]*\+[bt]*['\"]"
     r"|(?:\(open\)|\[open\](?:\[\w*\])?)\s*\("  # ADV-W25-003 (open)(...) and [open][N](...) grouped/subscript
     # Path.open: unified with \s* after ( (ADV-W8-003); mode=[awx] only for keyword (ADV-W9-006 fix)
     r"|\.open\s*\(\s*(?:['\"][awx][bt+]*['\"]|['\"]r[bt]*\+[bt]*['\"]|mode\s*=\s*['\"][awx]|mode\s*=\s*['\"]r[bt]*\+|chr\s*\()"
     # open() dynamic mode: two-level nested-paren path + comma required (ADV-W7-004 guard)
-    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150},\s*chr\s*\("
-    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150}mode\s*=\s*chr\s*\("
+    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,300},\s*chr\s*\("
+    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,300}mode\s*=\s*chr\s*\("
     # Path(nested).write_text/write_bytes: two-level nested parens in Path() arg (ADV-W9-003)
     r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch|unlink)"
     # getattr obfuscation bypass (ADV-W9-003): getattr(obj,'write_text'/'open'/'write_bytes')
-    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*(?:\([^)]*\))?(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]*\)|\([a-zA-Z_][\w.]*(?:\([^)]*\))?\)|[a-zA-Z_][\w.]*(?:\[[^\]]*\])+(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|[a-zA-Z_][\w.]*\s*\([^)]*\)(?:\[[^\]]*\])+|\((?:[a-zA-Z_][\w.]*(?:\.[a-zA-Z_]\w*)*\s*\([^)]*\)(?:\[[^\]]*\])+|[a-zA-Z_][\w.]*(?:\[[^\]]*\])+)\)|\w+\s*\([^)]*\)(?:\[[^\]]*\])+|\w+\s*\([^)]*\)\[[^\]]*\])\s*,\s*(?:[bBfFrRuU]{0,2})?['\"]{1,3}(?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch|extract|extractall|unpack_archive|symlink_to|hardlink_to|copy|copy2|move|rmtree|execv|execl|execle|execlp|execvp|execvpe|link|copytree|run|check_output|check_call|execve|remove|execlpe|truncate|FileIO|link|copytree|run|check_output|check_call|execve|remove|execlpe)['\"]{1,3}"
+    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*(?:\([^)]*\))?(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]*\)|\([a-zA-Z_][\w.]*(?:\([^)]*\))?\)|[a-zA-Z_][\w.]*(?:\[[^\]]*\])+(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|[a-zA-Z_][\w.]*\s*\([^)]*\)(?:\[[^\]]*\])+|\((?:[a-zA-Z_][\w.]*(?:\.[a-zA-Z_]\w*)*\s*\([^)]*\)(?:\[[^\]]*\])+|[a-zA-Z_][\w.]*(?:\[[^\]]*\])+)\)|\w+\s*\([^)]*\)(?:\[[^\]]*\])+|\w+\s*\([^)]*\)\[[^\]]*\])\s*,\s*(?:[bBfFrRuU]{0,2})?['\"]{1,3}(?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch|extract|extractall|unpack_archive|symlink_to|hardlink_to|copy|copy2|move|rmtree|execv|execl|execle|execlp|execvp|execvpe|link|copytree|run|check_output|check_call|execve|remove|execlpe|truncate|FileIO|spawnl|spawnv|spawnle|spawnvp|spawnlp|spawnvpe|posix_spawn|posix_spawnp|link|copytree|run|check_output|check_call|execve|remove|execlpe)['\"]{1,3}"
     r"|getattr\s*\(\s*(?:object\s*=|name\s*=[bBfFrRuU]{0,2}['\"][^'\"]*(?:write_text|write_bytes|open|replace|rename|unlink|truncate|link|copytree|run|execve|remove)[^'\"]*[\'\"]{1,3})"  # ADV-W24-008 getattr keyword/object= form
     r"|getattr\s*\(\s*\*\s*[\[(]"  # ADV-W24-008 getattr star-unpack (*[list] or *(tuple))
     r"|io\.FileIO\s*\((?:[^()]|\([^)]*\)){0,200},\s*(?:['\"'][^'\"']*[wax+]|chr\s*\()"  # ADV-W24-001+004 io.FileIO positional nested+chr
@@ -105,17 +105,29 @@ _RENAME_PRIMITIVES = re.compile(
     r"|partial\s*\(\s*(?:os\.(?:system|popen|replace|exec\w+|symlink|link|remove|unlink|truncate)|subprocess\.(?:run|call|Popen|check_output|check_call)|shutil\.(?:copy|copy2|move|copyfile|unpack_archive|copytree|rmtree))\b"  # ADV-W20-003 partial(os.system|subprocess.run|shutil.*)
     r"|\.(?:rename|touch|replace|unlink)\s*\("  # ADV-W16-002+W17-007 instance Path.rename/touch
     r"|json\.dump\b"
-    r"|os\.(open|popen|system|replace)\s*\("
-    r"|os\.(remove|unlink|truncate)\s*\("  # ADV-W22-006+011
+    r"|os\.(open|openat|popen|system|replace)\s*\("
+    r"|os\.(remove|unlink|unlinkat|truncate)\s*\("  # ADV-W22-006+011 W26-013
     r"|os\.(symlink|symlinkat)\s*\("
     r"|subprocess\.(run|call|check_call|check_output|Popen)\s*\("
     r"|(?<![\w.])(?:system|execv|execve|execl|execle|execlp|execvp|execvpe|FileIO|truncate|remove|unlink)\s*\("  # ADV-W14-005+W24-002+003
     r"|os\.exec[vle]\w*\s*\("  # ADV-W16-003 os.execv/execve/execl*
-    r"|os\.(?:spawn[levpa]*|posix_spawn)\s*\("  # ADV-W25-008 os.spawnl/spawnle/spawnv/spawnlp/posix_spawn
+    r"|os\.(?:spawn[levpa]*|posix_spawn[p]?)\s*\("  # ADV-W25-008 W26-005 os.spawnl/spawnle/spawnv/spawnlp/posix_spawn
     r"|pty\.spawn\s*\("  # ADV-W25-008 pty.spawn write-capable
-    r"|zipfile\.ZipFile\s*\([^)]*,\s*[\x27\x22]w[\x27\x22]"  # ADV-W25-009 zipfile.ZipFile write-mode
-    r"|gzip\.(?:open|GzipFile)\s*\([^)]*[\x27\x22][wa][\x27\x22]"  # ADV-W25-009 gzip write-mode
-    r"|urllib\.request\.urlretrieve\s*\("  # ADV-W25-009 urlretrieve
+    r"|zipfile\.(?:ZipFile|Path)\s*\((?:[^()]|\([^)]*\)){0,100},\s*[\x27\x22][wxa][\x27\x22]"  # ADV-W25-009 W26-006 ZipFile [wxa] positional
+    r"|zipfile\.(?:ZipFile|Path)\s*\((?:[^()]|\([^)]*\)){0,100}mode\s*=\s*[\x27\x22][wxa]"  # ADV-W26-006 ZipFile mode= keyword
+    r"|gzip\.(?:open|GzipFile)\s*\([^)]*[\x27\x22][wa]b?[\x27\x22]"  # ADV-W25-009 W26-007 gzip binary modes
+    r"|urllib\.request\.(?:urlretrieve|URLopener)\b"  # ADV-W25-009 W26-015 urlretrieve+URLopener
+    r"|\bbuiltins\.open\s*\("  # ADV-W26-001 builtins.open(...)
+    r"|__builtins__\s*(?:\[|\b(?:get)\b|\.).*\bopen\b"  # ADV-W26-001 __builtins__[open]/get/attr
+    r"|(?:\[open\]\s*\[[^\]]*\]|\(open,?\s*\)\s*\[[^\]]*\])\s*\("  # ADV-W26-002 [open][-1]/[open][N]/(open,)[N]
+    r"|\bopen\.__call__\s*\("  # ADV-W26-003 open.__call__()
+    r"|operator\.call\s*\(\s*(?:builtins\.)?open\b"  # ADV-W26-003 operator.call(open,...)
+    r"|tempfile\.(?:NamedTemporaryFile|mkstemp|mktemp|TemporaryDirectory)\s*\([^)]*dir\s*="  # ADV-W26-008 tempfile dir=
+    r"|getattr\s*\(\s*\((?:[^()]|\([^)]*\))*\)\s*,\s*name\s*="  # ADV-W26-010 getattr((expr), name=...)
+    r"|\bopen\s*\([^)]{0,300},\s*\*[^)]*\[[^)]*[wax]"  # ADV-W26-012 open(*['w']) star-unpack mode
+    r"|\bopen\s*\([^)]{0,300}\*\*\s*(?:\{[^}]*mode[^}]*[wax]|dict\s*\([^)]*mode\s*=)"  # ADV-W26-012 open(**{mode:w})
+    r"|asyncio\.create_subprocess_(?:exec|shell)\s*\("  # ADV-W26-014 asyncio subprocess
+    r"|(?:ElementTree|xml\.etree\.ElementTree\.ElementTree|ET)\b[^\n]*\.write\s*\("  # ADV-W26-016 ET.write(path)
 )
 
 _BOOTSTRAP_DIR: Optional[Path] = None  # resolved lazily (ADV-004)
