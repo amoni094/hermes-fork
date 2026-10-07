@@ -133,9 +133,14 @@ def has_approved_proposal(target_path: str, proposals: Optional[Dict[str, dict]]
         if t_norm.rstrip("/") in norm:
             return True
         if Path(t).name and Path(t).name in Path(norm).parts:
-            # too loose for generic names like 'agent' — require a distinctive fragment
+            # Basename match is only safe for non-sensitive names.
+            # config.yaml and ssl_guard.py require exact realpath equality (ADV-031 fix):
+            # a deployed proposal for one config.yaml must NOT unlock all others.
             if Path(t).name in {"config.yaml", "ssl_guard.py"}:
-                return True
+                # Only allow if the proposal target is a suffix of the actual resolved path
+                if norm.endswith(t_norm) or t_norm.endswith(norm):
+                    return True
+                continue  # basename match alone is insufficient for these sensitive names
             if "governance-hard-block" in t_norm and "governance-hard-block" in norm:
                 return True
             if "ssl_guard" in t_norm and "ssl_guard" in norm:
@@ -269,6 +274,21 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
                         "primitive with high-risk token; dynamic destination may target "
                         "config.yaml / plugins / agent (ADV-024). Requires approved proposal."
                     )
+        # ADV-025: chr()-encoded path bypass — detect chr() sequences in code that
+        # combines a write/rename primitive.  e.g. chr(99)+chr(111)+... = "config.yaml"
+        # Static token scan misses these; deny any execute_code with chr() + write/rename.
+        _CHR_PATTERN = re.compile(r"\bchr\s*\(\s*\d+\s*\)")
+        _WRITE_RENAME = re.compile(
+            r"\b(open\s*\(|write_text|write_bytes|os\.replace|os\.rename|shutil\.copy"
+            r"|Path\.write|\.replace\s*\(|tmp\.replace)\b"
+        )
+        if _CHR_PATTERN.search(code_blob) and _WRITE_RENAME.search(code_blob):
+            return _deny(
+                "[governance-hard-block] DENY: execute_code contains chr() encoding "
+                "combined with write/rename primitive (ADV-025). Dynamic paths built "
+                "via chr() can bypass static token detection. No proposal can approve "
+                "chr()-obfuscated writes — rewrite without chr() encoding."
+            )
 
     cands = extract_candidate_paths(args)
     rename = looks_like_rename_or_copy(args)

@@ -1,0 +1,6 @@
+name: jev-compaction
+version: 1.0.0
+description: "JEV-Compaction — entropy-weighted context compaction using joint evaluation voting."
+# Hooks: pre_compress (trim low-value context), on_session_end (flush stats)
+# No external dependencies — stdlib only.
+requires_env: []
