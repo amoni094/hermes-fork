@@ -16,7 +16,7 @@ Quality classes:
   >  0.00  noise      (short TTL, deprioritise in recall)
   == 0.00  empty      (prune immediately)
 
-Advisory JSON written to: ~/.hermes/profiles/fork/cache/doob-quality-advisory.json
+Advisory JSON written to: $HERMES_HOME/cache/doob-quality-advisory.json
 
 Usage:
   python3 memory-doob-strata-consumer.py [--apply] [--self-test] [--dry-run]
@@ -40,7 +40,8 @@ from pathlib import Path
 # Do NOT append "profiles/fork" — HERMES_HOME already IS the profile root.
 _HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
 _DOOB_DB = _HOME / "cache" / "memory-doob.db"
-_ADVISORY = _HOME / "cache" / "doob-quality-advisory.json"
+_ADVISORY    = _HOME / "cache" / "doob-quality-advisory.json"
+_FANOUT_Q    = _HOME / "cache" / "pending-fanout-queue.json"
 
 # ─── hard-core score table ────────────────────────────────────────────────────
 _STRATUM_SCORE: dict[str, float] = {
@@ -206,6 +207,35 @@ def main() -> int:
         tmp = Path(str(_ADVISORY) + ".tmp")
         tmp.write_text(adv)
         tmp.replace(_ADVISORY)
+
+    # WIRE-102: emit noise/empty entries to fanout queue for real-options re-evaluation.
+    # The fanout gate (cron 30m) reads this queue and gates each task description.
+    if not args.dry_run:
+        try:
+            adv_data = json.loads(adv)
+            low_q = adv_data.get("counts", {}).get("noise", 0) + adv_data.get("counts", {}).get("empty", 0)
+            if low_q > 0:
+                existing: list = []
+                if _FANOUT_Q.exists():
+                    try:
+                        existing = json.loads(_FANOUT_Q.read_text())
+                    except Exception:
+                        existing = []
+                entry = {
+                    "task": f"prune {low_q} low-quality doob memory entries (noise/empty)",
+                    "source": "doob-strata-consumer",
+                    "ts": __import__("time").strftime("%Y-%m-%dT%H:%M:%SZ", __import__("time").gmtime()),
+                    "counts": adv_data.get("counts", {}),
+                }
+                # Deduplicate by source — one pending entry per producer at a time.
+                existing = [e for e in existing if e.get("source") != "doob-strata-consumer"]
+                existing.append(entry)
+                _FANOUT_Q.parent.mkdir(parents=True, exist_ok=True)
+                tmp2 = Path(str(_FANOUT_Q) + ".tmp")
+                tmp2.write_text(json.dumps(existing, indent=2))
+                tmp2.replace(_FANOUT_Q)
+        except Exception:
+            pass  # H-I7: never raise from annotation path
 
     return 0 if summary.get("status") == "ok" else 1
 

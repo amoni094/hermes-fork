@@ -105,6 +105,7 @@ def post_tool_call(tool_name: str, args: dict, result: Any) -> Optional[Any]:
                 result = dict(result)
                 result["_ransac_outlier"] = True
                 result["_ransac_score"] = verdict.get("score")
+                return result  # propagate tag to caller (ADV-030 fix)
         return None
     except Exception:  # H-I7: never raise
         return None
