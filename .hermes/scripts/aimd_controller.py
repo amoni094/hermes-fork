@@ -248,8 +248,16 @@ def arm_is_safe(failures: int, n: int, last_ts: float | None, now: float,
     """
     if n <= 0:
         return True  # undefined P(fail); allow cold-start exploration
+    # ADV-026 fix: 0 < n < UCB_MIN_SAMPLES → Laplace estimate is wide but not ignorable.
+    # A majority-failing arm (failures > n/2) with sufficient evidence (n >= 3) should be blocked.
+    # Use raw failure rate (not Laplace) to avoid blocking clean cold-start arms.
+    # At n < 3: only block if ALL observations are failures (0 successes).
     if n < UCB_MIN_SAMPLES:
-        return True  # ADV-016: too few observations — trust Laplace only at n>=UCB_MIN_SAMPLES
+        if n >= 3 and failures / n > 0.5:
+            return False  # majority-failing with 3+ samples — clearly unsafe
+        if n >= 1 and failures == n:
+            return False  # 100% failure rate at any sample count — block exploration
+        return True  # insufficient data for full stale/Laplace check — allow exploration
     try:
         last = float(last_ts) if last_ts is not None else None
     except (TypeError, ValueError):

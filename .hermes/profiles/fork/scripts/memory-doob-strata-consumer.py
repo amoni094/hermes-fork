@@ -36,9 +36,11 @@ import tempfile
 from pathlib import Path
 
 # ─── paths ───────────────────────────────────────────────────────────────────
+# HERMES_HOME is the profile root when set by cron (e.g. .../profiles/fork).
+# Do NOT append "profiles/fork" — HERMES_HOME already IS the profile root.
 _HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
-_DOOB_DB = _HOME / "profiles/fork/cache/memory-doob.db"
-_ADVISORY = _HOME / "profiles/fork/cache/doob-quality-advisory.json"
+_DOOB_DB = _HOME / "cache" / "memory-doob.db"
+_ADVISORY = _HOME / "cache" / "doob-quality-advisory.json"
 
 # ─── hard-core score table ────────────────────────────────────────────────────
 _STRATUM_SCORE: dict[str, float] = {

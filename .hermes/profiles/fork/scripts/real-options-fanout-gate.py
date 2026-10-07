@@ -32,15 +32,24 @@ def _load_queue() -> list:
         return []
 
 def _gate(task: str) -> dict:
-    """Run real-options-deployment-gate for one task. Returns parsed result."""
+    """Run real-options-deployment-gate for one task. Returns parsed result.
+    Fail-closed: parse error or nonzero rc → DEFER (not COMMIT).
+    """
     r = subprocess.run(
-        [PYTHON, str(GATE_SCRIPT), "--task", task, "--json-output"],
+        [PYTHON, str(GATE_SCRIPT), task, "--json-output"],  # positional task, then flag
         capture_output=True, text=True, timeout=15
     )
+    if r.returncode not in (0, 1):  # 0=COMMIT, 1=DEFER; anything else is a crash
+        return {"decision": "DEFER", "task": task,
+                "error": f"gate rc={r.returncode}: {r.stderr.strip()[:120]}"}
+    lines = [l for l in r.stdout.splitlines() if l.strip().startswith("{")]
+    if not lines:
+        return {"decision": "DEFER", "task": task,
+                "error": f"no JSON from gate (stdout={r.stdout.strip()[:80]!r})"}
     try:
-        return json.loads(r.stdout)
-    except Exception:
-        return {"decision": "COMMIT", "task": task, "error": r.stdout.strip()}
+        return json.loads(lines[-1])
+    except Exception as exc:
+        return {"decision": "DEFER", "task": task, "error": str(exc)}
 
 def main() -> int:
     if not GATE_SCRIPT.exists():
