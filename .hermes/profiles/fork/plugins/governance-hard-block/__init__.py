@@ -129,16 +129,17 @@ _RENAME_PRIMITIVES = re.compile(
     r"|asyncio\.create_subprocess_(?:exec|shell)\s*\("  # ADV-W26-014 asyncio subprocess
     r"|(?:ElementTree|xml\.etree\.ElementTree\.ElementTree|ET)\b[^\n]*\.write\s*\("  # ADV-W26-016 ET.write(path)
     r"|(?:globals|locals|vars)\s*\(\s*\)\s*(?:\[|\.).*\bopen\b"  # ADV-W27-001 globals()['open']/vars().open
-    r"|\b__dict__\s*(?:\[|\.get\s*\().*\bopen\b"  # ADV-W27-001 W28-010 __dict__[/get open
+    r"|\b__dict__\s*(?:\[|\.get\s*\().*\b(?:open|write_text|write_bytes|rename|replace|unlink|truncate|remove|rmtree|move|copy|copy2|execve|system)\b"  # ADV-W27-001 W28-010 W29-003 __dict__[/get dangerous-names
+    r"|\b__globals__\s*(?:\[|\.get\s*\().*\bopen\b"  # ADV-W29-007 fn.__globals__['open']
     r"|getattr\s*\((?:[^,()]|\([^)]*\)){0,300},\s*name\s*=\s*[bBfFrRuU]{0,2}[\x27\x22][^\x27\x22]*(?:write_text|write_bytes|open|replace|rename|unlink|truncate|link|copytree|run|execve|remove|execlpe|FileIO|spawnl|spawnv|spawnle|spawnvp|spawnlp|spawnvpe|posix_spawn|posix_spawnp|touch|system|execv|copy|copy2|copyfile|rmtree|move)[^\x27\x22]*[\x27\x22]"  # ADV-W27-002 W28-005 W28-006
-    r"|\bopen\s*\([^)]{0,300},\s*[\[(][^\])[]*[wax][^\])[]*[\])]"  # ADV-W27-005 W28-001 list/tuple-subscript mode
+    r"|\bopen\s*\([^)]{0,300},\s*[\[(][^\])[]*[wax+][^\])[]*[\])]"  # ADV-W27-005 W28-001 W29-002 list/tuple-subscript mode incl r+
     r"|\.open\s*\(\s*\*[\[(]"  # ADV-W27-006 .open(*['w'])/.open(*('w',)) star-unpack
     r"|zipfile\.(?:ZipFile|Path)\s*\([^)]*\*[\[(][^)]*[wxa]"  # ADV-W27-007 ZipFile *[w] star-unpack
     r"|zipfile\.(?:ZipFile|Path)\s*\([^)]*\*\*\s*(?:\{[^}]*mode[^}]*[wxa]|dict\s*\([^)]*mode\s*=)"  # ADV-W27-007 ZipFile **{mode:w}
     r"|tarfile\.(?:open|TarFile)\s*\([^)]*[\x27\x22][wxa][^)]*\)"  # ADV-W27-009 tarfile write-mode
     r"|\.subprocess_(?:exec|shell)\s*\("  # ADV-W27-011 asyncio loop.subprocess_exec/shell
-    r"|\bopen\s*\([^)]{0,300}mode\s*=\s*[\[(][^\])]*[wax]"  # ADV-W28-003 open(mode=['w'][0]) kw-subscript
-    r"|\.open\s*\(\s*[\[(][^\])]*[wax]"  # ADV-W28-003 Path.open(['w'][0]) positional-subscript
+    r"|\bopen\s*\([^)]{0,300}mode\s*=\s*[\[(][^\])]*[wax+]"  # ADV-W28-003 W29-002 open(mode=['w'][0]) kw-subscript incl r+
+    r"|\.open\s*\(\s*[\[(][^\])]*[wax+]"  # ADV-W28-003 W29-002 Path.open(['w'][0]) positional-subscript incl r+
     r"|\.(?:__getattribute__|__getattr__)\s*\("  # ADV-W28-009 obj.__getattribute__('write_text')
 )
 
