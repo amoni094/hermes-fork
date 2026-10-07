@@ -13,7 +13,7 @@ import sqlite3
 import sys
 import pathlib
 
-HERMES_HOME = pathlib.Path(os.environ.get("HERMES_HOME", pathlib.Path.home() / ".hermes"))
+HERMES_HOME = pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes")))
 FORK_DB = HERMES_HOME / "profiles" / "fork" / "state.db"
 
 

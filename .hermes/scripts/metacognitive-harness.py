@@ -61,8 +61,7 @@ CONF_GATE_THRESHOLD   = float(os.environ.get("MH_CONF_GATE",    "0.8"))
 DELEGATE_THRESHOLD    = float(os.environ.get("MH_DELEGATE",     "0.6"))
 BLEND_WEIGHT          = float(os.environ.get("MH_BLEND",        "0.5"))
 MIN_SAMPLES           = int(os.environ.get("MH_MIN_SAMPLES",    "5"))
-HERMES_HOME           = Path(os.environ.get("HERMES_HOME",
-                              str(Path.home() / ".hermes")))
+HERMES_HOME           = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 DB_PATH               = Path(os.environ.get(
     "MH_DB", str(HERMES_HOME / "memory-facts" / "metacognitive.db")))
 
@@ -118,12 +117,14 @@ def _is_rephrased_loop(response, history, threshold=0.85):
         return False  # shadow: never raise
 
 # ── Consistency scorer (lazy import, stdlib-only) ─────────────────────────────
-def _get_consistency_score(finding: str, n_samples: int = 3) -> float:
+def _get_consistency_score(finding: str, n_samples: int = 3, scope: str | None = None) -> float:
     """
     Import and call consistency_score() from consistency_scorer.py.
     Returns calibrated Condorcet confidence in {0.05, 0.20, 0.50, 1.00}.
     Falls back to 1.0 (passthrough) if the module is unavailable.
     Feature-flagged: only active when MH_CONSISTENCY=1.
+
+    scope: optional scope string (e.g. 'L2', 'L3') for per-scope calibration.
     """
     if os.environ.get("MH_CONSISTENCY", "0") not in ("1", "true", "yes"):
         return 1.0  # feature off by default
@@ -141,7 +142,7 @@ def _get_consistency_score(finding: str, n_samples: int = 3) -> float:
             """
             return True
 
-        return consistency_score(finding, _null_verify, config)
+        return consistency_score(finding, _null_verify, config, scope=scope)
     except Exception as _exc:
         print(f'[metacognitive-harness] consistency_scorer unavailable: {_exc}', file=__import__('sys').stderr)
         return 1.0  # safe fallback
@@ -160,7 +161,7 @@ def _write_consistency_calib_row(predicted_confidence: float, query_hash: str,
     try:
         _CONSISTENCY_CALIB_LOG.parent.mkdir(parents=True, exist_ok=True)
         row = {
-            "ts": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+            "ts": __import__("datetime").datetime.now(timezone.utc).isoformat() + "Z",
             "predicted_confidence": round(predicted_confidence, 4),
             "query_hash": query_hash,
             "scope": scope,
@@ -391,7 +392,7 @@ def _write_calibration_row(session_id: str | None, task_class: str | None,
     try:
         _CALIB_LOG.parent.mkdir(parents=True, exist_ok=True)
         row = {
-            "ts": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+            "ts": __import__("datetime").datetime.now(timezone.utc).isoformat() + "Z",
             "session_id": session_id,
             "task_class": task_class or "unknown",
             "fok_score": round(fok, 4),
@@ -543,6 +544,7 @@ def cmd_gate(args):
         condorcet = _get_consistency_score(
             finding=f"confidence={confidence} level={level} tool_called={tool_called}",
             n_samples=3,
+            scope=level,
         )
         # Conservative blend: take the min (Condorcet can only reduce confidence).
         augmented_confidence = round(min(confidence, condorcet), 4)

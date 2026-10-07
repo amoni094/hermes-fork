@@ -17,8 +17,8 @@ import time
 import fcntl
 from pathlib import Path
 
-LOG_PATH = Path.home() / '.hermes' / 'logs' / 'prefix-drift.jsonl'
-STATE_PATH = Path.home() / '.hermes' / 'cache' / 'racs-state.json'
+LOG_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / 'logs' / 'prefix-drift.jsonl'
+STATE_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / 'cache' / 'racs-state.json'
 
 STABILITY_ORDER = ['system_prompt', 'skills', 'memories', 'history']  # most to least stable
 

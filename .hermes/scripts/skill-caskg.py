@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 DEFAULT_LIVE = HERMES_HOME / "cache" / "delegation" / "live"
 DEFAULT_OUT = HERMES_HOME / "cache" / "skill-caskg-dag.json"
 

@@ -31,6 +31,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import re
 import sys
@@ -165,7 +166,7 @@ def _wm_must_texts(session_id: str | None) -> list[str]:
     if not session_id:
         return []
     safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id)[:120]
-    path = Path.home() / ".hermes" / "cache" / "working-memory" / f"{safe}.json"
+    path = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache" / "working-memory" / f"{safe}.json"
     if not path.exists():
         return []
     try:

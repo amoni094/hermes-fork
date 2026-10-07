@@ -44,6 +44,7 @@ Calibration: Flip Precision is the key metric (precision of overturning decision
 """
 from __future__ import annotations
 
+import os
 import argparse
 import json
 import math
@@ -53,7 +54,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-HERMES_HOME = Path.home() / ".hermes"
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 STATS_PATH = HERMES_HOME / "cache" / "minority-sentinel-stats.jsonl"
 
 # ─────────────────── Debate Fingerprint Extraction ──────────────────────────

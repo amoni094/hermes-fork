@@ -30,7 +30,7 @@ from typing import Any
 
 HINDSIGHT_BASE = os.environ.get("HINDSIGHT_BASE", "http://127.0.0.1:9177")
 HINDSIGHT_BANK = os.environ.get("HINDSIGHT_BANK", "hermes-default")
-HERMES_HOME    = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME    = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 LATTICE_CACHE  = HERMES_HOME / "cache" / "concept-lattice.json"
 LATTICE_LOG    = HERMES_HOME / "cache" / "concept-lattice.jsonl"
 

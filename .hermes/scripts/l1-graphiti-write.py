@@ -54,7 +54,7 @@ GRAPHITI_HALT_NODES = 50_000
 def _load_graphiti_caps() -> None:
     """Sweep 27: config.yaml memory.tier_thresholds graphiti_*_nodes."""
     global GRAPHITI_WARN_NODES, GRAPHITI_HALT_NODES
-    cfg_path = Path.home() / ".hermes" / "config.yaml"
+    cfg_path = pathlib.Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "config.yaml"
     try:
         import yaml  # type: ignore
         cfg = yaml.safe_load(cfg_path.read_text()) or {}
@@ -134,7 +134,7 @@ try:
     import importlib.util as _ilu
     _spec = _ilu.spec_from_file_location(
         "kg_contradiction_check",
-        str(Path.home() / ".hermes" / "scripts" / "kg-contradiction-check.py")
+        str(pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "scripts" / "kg-contradiction-check.py")
     )
     if _spec is None or _spec.loader is None:
         raise ImportError("spec or loader unavailable")
@@ -412,6 +412,15 @@ def write_fact(session_id: str, fact: dict, name: str, confidence: float = 0.8) 
     prov = _build_provenance()
     prov_inline = _prov_tag(prov)
     episode_body = f"{prov_inline} {source_tag} {as_of_tag} {vc_tag} {ns_tag} {conf_tag} {entity_hint}{anchor_hint}{fact['text']}"
+    # Origin attestation (arXiv:2609.21088): prepend verifiable provenance header so
+    # downstream retrieval can check origin without trusting the LLM to remember it.
+    # Use fact['source_type'] when present; fall back to 'internal' (never bare `source_type`
+    # which is undefined in this scope — F30).
+    _prov_header = (
+        f"[PROVENANCE source={fact.get('source_type', 'internal')} "
+        f"ts={datetime.datetime.utcnow().isoformat()} session=hermes-fork]"
+    )
+    episode_body = _prov_header + "\n" + episode_body
     # Preserve raw source for memory repair after model upgrades (arXiv:2609.05339).
     # KG-fixed schema transfers reliably; NOTES degrade 9-13pp on model swap.
     # Keeping source_text in metadata enables re-extraction if model changes.
@@ -437,7 +446,21 @@ def write_fact(session_id: str, fact: dict, name: str, confidence: float = 0.8) 
             content = result.get("content", [])
             if content and isinstance(content, list):
                 text = content[0].get("text", "")
-                return "queued" in text.lower() or "success" in text.lower()
+                success = "queued" in text.lower() or "success" in text.lower()
+                if success:
+                    # Episode provenance log (arXiv:2609.21088)
+                    try:
+                        import hashlib as _hl, json as _jj
+                        _ep_sha = _hl.sha256(episode_body.encode()).hexdigest()[:16]
+                        _prov_log = pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "profiles/fork/logs/episode-provenance.jsonl"
+                        _prov_log.parent.mkdir(parents=True, exist_ok=True)
+                        with _prov_log.open("a") as _pf:
+                            _pf.write(_jj.dumps({"ts": datetime.datetime.utcnow().isoformat(),
+                                                  "sha": _ep_sha, "source": fact.get("source_type", "internal"),
+                                                  "name": name}) + "\n")
+                    except Exception:
+                        pass
+                return success
         return False
 
     # Self-Healing Failure Taxonomy (arXiv sweep 19): per-class retry budgets
@@ -485,7 +508,7 @@ def main():
 
     staging_path = pathlib.Path(
         staging_arg if staging_arg
-        else pathlib.Path.home() / ".hermes/memory-facts/staging.md"
+        else pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "memory-facts/staging.md"
     )
 
     facts = parse_staging(staging_path, default_source=source_type)

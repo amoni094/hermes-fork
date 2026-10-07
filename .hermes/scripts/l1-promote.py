@@ -20,20 +20,25 @@ import sqlite3
 import sys
 from pathlib import Path
 
-LOCK = Path("~/.hermes/.l1-extract-running").expanduser()
+LOCK = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / ".l1-extract-running"
 METACOG_DB = Path(
     os.environ.get(
         "MH_DB",
-        str(Path.home() / ".hermes" / "memory-facts" / "metacognitive.db"),
+        str(Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "memory-facts" / "metacognitive.db"),
     )
 )
 _HERE = Path(__file__).resolve().parent
 _PYC_CANDIDATES = [
+    # cpython-314 first: payload compiled for 3.14, re-exec fires if running 3.11
     _HERE / "references" / "l1-promote.cpython-314.pyc.bak",
     _HERE / "__pycache__" / "l1-promote.cpython-314.pyc",
+    _HERE.parent.parent.parent / "scripts" / "references" / "l1-promote.cpython-314.pyc.bak",
+    _HERE.parent.parent.parent / "scripts" / "__pycache__" / "l1-promote.cpython-314.pyc",
+    # cpython-311 last: wrapper fallback (for inspection only, not payload)
+    _HERE / "__pycache__" / "l1-promote.cpython-311.pyc",
 ]
 
-_SYS_PYTHON = "/usr/bin/python3"
+_SYS_PYTHON = "/usr/bin/python3.14"
 
 
 def _pyc_magic(path: Path) -> bytes:
@@ -86,6 +91,7 @@ def _underpowered_skip(skill: str) -> bool:
         if not METACOG_DB.exists():
             return False
         conn = sqlite3.connect(str(METACOG_DB))
+        conn.execute("PRAGMA journal_mode=WAL")  # F28: shared db needs WAL
         try:
             rows = conn.execute(
                 "SELECT total, successes FROM skill_profiles WHERE skill=?",

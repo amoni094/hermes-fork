@@ -24,13 +24,14 @@ Usage:
 Callable as a module: from memory_provenance import write_edge, invalidate_memory, stale_actions
 """
 import argparse
+import os
 import json
 import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-FACTS_DIR = Path.home() / ".hermes" / "memory-facts"
+FACTS_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "memory-facts"
 PROVENANCE_DB = FACTS_DIR / "provenance.db"
 
 

@@ -27,7 +27,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-MAILBOX_ROOT = Path.home() / ".hermes" / "cache" / "mailbox"
+MAILBOX_ROOT = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache" / "mailbox"
 SESSION_KEY_FILE = MAILBOX_ROOT / ".session_key"
 
 # ---------------------------------------------------------------------------

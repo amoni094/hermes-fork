@@ -31,7 +31,7 @@ from pathlib import Path
 # so that running without env vars still resolves to the correct fork profile path.
 _hermes_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _hermes_profile = os.environ.get("HERMES_PROFILE", "")
-if _hermes_profile and "profiles" not in os.environ.get("HERMES_HOME", ""):
+if _hermes_profile and "profiles" not in os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")):
     HERMES_HOME = _hermes_base / "profiles" / _hermes_profile
 else:
     HERMES_HOME = _hermes_base

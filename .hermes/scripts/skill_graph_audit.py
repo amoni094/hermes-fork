@@ -215,7 +215,7 @@ def detect_skill_cycles(
 # ---------------------------------------------------------------------------
 
 _DEFAULT_SKILLS_DIR = (
-    Path.home() / ".hermes" / "profiles" / "fork" / "skills"
+    Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "profiles" / "fork" / "skills"
 )
 
 

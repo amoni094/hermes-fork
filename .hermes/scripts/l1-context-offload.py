@@ -44,7 +44,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 OFFLOAD_DIR = HERMES_HOME / "offload"
 LLM_MODEL = os.environ.get("L1_OFFLOAD_MODEL", "claude-haiku-4-5")
 
@@ -146,7 +146,9 @@ def load_index(session_id: str) -> dict:
 
 
 def save_index(session_id: str, idx: dict):
-    index_path(session_id).write_text(json.dumps(idx, indent=2))
+    _tmp_index_path_session_id = index_path(session_id).with_suffix(".tmp")
+    _tmp_index_path_session_id.write_text(json.dumps(idx, indent=2))
+    _tmp_index_path_session_id.replace(index_path(session_id))
 
 
 # ---------------------------------------------------------------------------

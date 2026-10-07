@@ -14,6 +14,10 @@ import os
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+if not Path(_hermes_base).is_dir():
+    print(f'ERROR: HERMES_HOME={_hermes_base} does not exist or is not a directory',
+          file=sys.stderr)
+    sys.exit(2)
 _hermes_profile = os.environ.get("HERMES_PROFILE", "")
 
 if _hermes_profile and "profiles" not in str(_hermes_base):

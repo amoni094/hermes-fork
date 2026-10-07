@@ -145,7 +145,9 @@ def _append_log(result: dict) -> None:
         except Exception:
             pass
     existing.append(result)
-    LOG_FILE.write_text(json.dumps(existing[-100:], indent=2))
+    _tmp_LOG_FILE = LOG_FILE.with_suffix(".tmp")
+    _tmp_LOG_FILE.write_text(json.dumps(existing[-100:], indent=2))
+    _tmp_LOG_FILE.replace(LOG_FILE)
 
 
 def main() -> None:

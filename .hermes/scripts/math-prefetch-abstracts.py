@@ -16,6 +16,7 @@ Usage:
 """
 from __future__ import annotations
 import argparse
+import os
 import json
 import re
 import sys
@@ -26,7 +27,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
-CACHE = Path.home() / ".hermes" / "cache" / "research"
+CACHE = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache" / "research"
 SWEEP_LATEST = CACHE / "hermes-math-sweep-latest.json"
 
 _ARXIV_RE = re.compile(r'(\d{4}\.\d{4,5})')
@@ -179,7 +180,9 @@ def main() -> int:
     sweep["prefetch_date"] = __import__("datetime").datetime.now(
         __import__("datetime").timezone.utc
     ).isoformat()
-    input_path.write_text(json.dumps(sweep, indent=2, default=str))
+    _tmp_input_path = input_path.with_suffix(".tmp")
+    _tmp_input_path.write_text(json.dumps(sweep, indent=2, default=str))
+    _tmp_input_path.replace(input_path)
     print(f"[prefetch] Written: {input_path}", file=sys.stderr)
 
     # Summary

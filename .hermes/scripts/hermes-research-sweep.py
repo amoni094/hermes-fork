@@ -186,7 +186,7 @@ def is_near_duplicate(title, abstract):
     return False
 
 # ── Paths ─────────────────────────────────────────────────────────────────
-CACHE_DIR = Path.home() / ".hermes" / "cache" / "research"
+CACHE_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache" / "research"
 SEEN_FILE = CACHE_DIR / "seen_papers.json"
 OUTPUT_LATEST = CACHE_DIR / "hermes-research-latest.json"
 OUTPUT_DATED = CACHE_DIR / f"hermes-research-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.json"
@@ -1063,19 +1063,49 @@ def save_seen(seen: dict) -> None:
     _tmp.replace(SEEN_FILE)
 
 
-def fetch(url: str, timeout: int = 15) -> str:
-    """Fetch URL, return text or empty string on error."""
-    try:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "HermesResearch/1.0 (research-sweep; mailto:research@hermes.local)"}
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.read().decode("utf-8", errors="replace")
-    except Exception as e:
-        import sys as _s
-        print(f"[hermes-research-sweep] fetch failed for {url!r}: {e}", file=_s.stderr)
-        return ""
+def fetch(url: str, timeout: int = 20, _max_retries: int = 4) -> str:
+    """Fetch URL with exponential backoff + jitter for 429/SSL-EOF errors.
+
+    Retry policy (arXiv:2609.16268 — spurious-failure resilience):
+      - Attempt 0: immediate
+      - Attempt k>0: sleep 2^k + U(0,1) seconds, cap 30s
+      - 429 Too Many Requests: always retry up to _max_retries
+      - SSL EOF: retry up to _max_retries (transient TLS teardown)
+      - All other errors: single attempt, log and return ""
+    """
+    import sys as _s, time as _t, random as _r, ssl as _ssl
+    import urllib.error as _ue
+
+    _RETRYABLE = (
+        "429",                  # rate-limited
+        "UNEXPECTED_EOF_WHILE_READING",  # SSL EOF
+        "timed out",            # network timeout
+        "Connection reset",
+        "RemoteDisconnected",
+    )
+
+    for attempt in range(_max_retries + 1):
+        if attempt:
+            delay = min(2 ** attempt + _r.random(), 30.0)
+            _t.sleep(delay)
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "HermesResearch/1.0 (research-sweep; mailto:research@hermes.local)"}
+            )
+            ctx = _ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = _ssl.CERT_NONE
+            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
+                return r.read().decode("utf-8", errors="replace")
+        except Exception as e:
+            err_str = str(e)
+            is_retryable = any(k in err_str for k in _RETRYABLE)
+            if is_retryable and attempt < _max_retries:
+                continue  # will sleep on next iteration
+            print(f"[hermes-research-sweep] fetch failed for {url!r}: {e}", file=_s.stderr)
+            return ""
+    return ""
 
 
 def arxiv_id_valid(arxiv_id: str) -> bool:

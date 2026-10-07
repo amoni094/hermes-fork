@@ -56,7 +56,7 @@ def _log_path() -> Path:
 
 
 # Back-compat alias; prefer _log_path() so profile HERMES_HOME is honored at write time.
-LOG_PATH = Path.home() / ".hermes" / "logs" / "cobra-outcomes.jsonl"
+LOG_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "logs" / "cobra-outcomes.jsonl"
 
 
 def _append(record: dict[str, Any]) -> None:

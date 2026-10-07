@@ -29,7 +29,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 COMMITMENTS_DIR = HERMES_HOME / "cache" / "plan-commitments"
 
 
@@ -63,7 +63,9 @@ def cmd_commit(args: argparse.Namespace) -> int:
         "nonce": nonce.hex(),
         "ts": ts,
     }
-    out_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    _tmp = out_path.with_suffix('.tmp')
+    _tmp.write_text(json.dumps(record, indent=2), encoding='utf-8')
+    _tmp.replace(out_path)
     print(json.dumps({
         "ok": True,
         "commitment": commitment,

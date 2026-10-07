@@ -190,7 +190,9 @@ def review_skill(rel: str) -> dict[str, Any]:
 
     ADVERSARIAL_DIR.mkdir(parents=True, exist_ok=True)
     out_path = ADVERSARIAL_DIR / (rel.replace("/", "__") + ".json")
-    out_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    _tmp_out_path = out_path.with_suffix('.tmp')
+    _tmp_out_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    _tmp_out_path.replace(out_path)
     result["_written_to"] = str(out_path)
     return result
 

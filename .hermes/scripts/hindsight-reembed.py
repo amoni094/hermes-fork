@@ -19,7 +19,7 @@ from pathlib import Path
 
 # Load OPENAI_API_KEY from .hermes/.env if not in environment
 def load_env():
-    env_path = Path.home() / ".hermes" / ".env"
+    env_path = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / ".env"
     if env_path.exists() and not os.environ.get("OPENAI_API_KEY"):
         for line in env_path.read_text().splitlines():
             line = line.strip()

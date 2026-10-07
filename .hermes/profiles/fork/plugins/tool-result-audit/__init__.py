@@ -25,7 +25,7 @@ INJECTION_RISK_TOOLS: frozenset[str] = frozenset({
     "web_extract_url",
 })
 
-_SHIM_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "tool-auth-shim.py"
+_SHIM_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))).expanduser() / "scripts" / "tool-auth-shim.py"
 _TIER = "EXTERNAL"  # inspection-game tier for all external-content tools
 
 # ── Dynamic import of tool-auth-shim ────────────────────────────────────────

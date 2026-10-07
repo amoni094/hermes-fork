@@ -14,6 +14,7 @@ Requires: gh CLI authenticated.
 """
 
 import argparse
+import os
 import json
 import subprocess
 import sys
@@ -130,7 +131,7 @@ def main():
         return
 
     # Write task manifest for the skill to consume
-    manifest_path = Path.home() / ".hermes" / "state" / f"issue-tasks-{datetime.now().strftime('%Y%m%dT%H%M%S')}.json"
+    manifest_path = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "state" / f"issue-tasks-{datetime.now().strftime('%Y%m%dT%H%M%S')}.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     _tmp_manifest_path = manifest_path.with_suffix('.tmp')
     _tmp_manifest_path.write_text(json.dumps(tasks, indent=2))

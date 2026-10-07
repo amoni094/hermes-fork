@@ -32,7 +32,7 @@ import re
 import sys
 from pathlib import Path
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 
 
 def _read_config_compression() -> dict:
@@ -132,6 +132,36 @@ def _current_from_log() -> int | None:
         return None
 
 
+
+def entropy_adjusted_aggressiveness(
+    base_aggressiveness: float,
+    normalized_entropy: float,
+    alpha: float = 0.3,
+) -> float:
+    """Scale aggressiveness down for high-entropy (information-dense) content.
+
+    Theory: Cover & Thomas "Elements of Information Theory" Ch.5 (rate-distortion).
+    High-entropy sources have more information per token; aggressive compression
+    destroys more irreplaceable content. Low-entropy (repetitive) sources tolerate
+    higher distortion at the same quality loss.
+
+    normalized_entropy: H/H_max where H_max = log2(vocab_size).
+    For LLM tool output: typically 0.3-0.6. For code: 0.5-0.8. For repetitive JSON: 0.1-0.3.
+
+    Scale factor = 1 - alpha * normalized_entropy.
+    alpha=0.3: entropy effect limited to ±30% of base aggressiveness.
+
+    Args:
+        base_aggressiveness: output of compute_aggressiveness() (float in [0,1])
+        normalized_entropy: estimated H/H_max for the content (float in [0,1])
+        alpha: blend weight (default 0.3; 0=no effect, 1=full entropy scaling)
+    Returns:
+        Adjusted aggressiveness in [0, 1].
+    """
+    scale = 1.0 - alpha * max(0.0, min(1.0, normalized_entropy))
+    return round(max(0.0, min(1.0, base_aggressiveness * scale)), 3)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Rate-distortion-shaped compaction advisor")
     parser.add_argument(
@@ -143,6 +173,10 @@ def main() -> None:
         help="compression.threshold_tokens (reads config.yaml if omitted)",
     )
     parser.add_argument("--k", type=float, default=3.0, help="Curve shape (default 3.0)")
+    parser.add_argument(
+        "--content-entropy", type=float, default=None, metavar="H",
+        help="Normalized content entropy H/H_max in [0,1]; reduces aggressiveness for info-dense content",
+    )
     parser.add_argument(
         "--from-log", action="store_true",
         help="Best-effort parse agent.log for prompt_tokens/context_tokens (unreliable)",
@@ -169,6 +203,17 @@ def main() -> None:
         sys.exit(1)
 
     result = compute_aggressiveness(current, threshold, k=args.k)
+    if args.content_entropy is not None:
+        raw_agg = result["aggressiveness"]
+        result["aggressiveness"] = entropy_adjusted_aggressiveness(
+            raw_agg, args.content_entropy
+        )
+        result["entropy_adjusted"] = True
+        result["normalized_entropy"] = args.content_entropy
+        result["rationale"] += (
+            f" Entropy-adjusted (H/H_max={args.content_entropy:.2f}, alpha=0.3): "
+            f"{raw_agg:.3f} → {result['aggressiveness']:.3f}."
+        )
     print(json.dumps(result, indent=2))
 
 

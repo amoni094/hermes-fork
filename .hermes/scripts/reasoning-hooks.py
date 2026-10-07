@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 CONFIG_PATH = HERMES_HOME / "config.yaml"
 INVENTORY_PATH = HERMES_HOME / "cache" / "loop-harness" / "feature_list.json"
 KAPRO_LOG = HERMES_HOME / "cache" / "kapro-check.jsonl"

@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Optional
 
 # ── paths ─────────────────────────────────────────────────────────────────────
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 CACHE_DIR = HERMES_HOME / "cache"
 LOG_PATH = CACHE_DIR / "calibration-log.jsonl"
 AUDIT_PATH = CACHE_DIR / "gate-audit.json"
@@ -466,7 +466,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("[gate_audit] DEMO MODE — synthetic gate decisions", file=sys.stderr)
         records = generate_demo_data(n=60)
     else:
-        records = load_gate_records(Path(args.log))
+        log_path = Path(args.log)
+        if not log_path.exists():
+            # Cold start: no calibration log yet — normal on first run, exit silently.
+            return 0
+        records = load_gate_records(log_path)
         if not records:
             print(
                 f"[gate_audit] no gate records found in {args.log} "

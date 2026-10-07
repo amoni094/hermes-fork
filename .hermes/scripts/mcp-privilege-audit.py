@@ -31,7 +31,7 @@ _hermes_profile_mca = _os_mca.environ.get("HERMES_PROFILE", "")
 _hermes_root_mca = (_hermes_base_mca / "profiles" / _hermes_profile_mca) if _hermes_profile_mca else _hermes_base_mca
 DEFAULT_CONFIG = _hermes_root_mca / "config.yaml"
 DEFAULT_WORKSPACE = Path.home()
-DEFAULT_REPORT = Path("/tmp/mcp-privilege-report.txt")
+DEFAULT_REPORT = Path("/var/home/rainbow/.hermes/logs/mcp-privilege-report.txt")
 TIMEOUT = 12
 
 FILE_WRITE_RE = re.compile(
@@ -406,7 +406,7 @@ def audit(config_path: Path, workspace: Path, report_path: Path) -> int:
 
     try:
         import os as _os_m, tempfile as _tf_m, json as _json_m, time as _time_m
-        _base_m = _os_m.environ.get('HERMES_HOME', str(Path.home() / '.hermes'))
+        _base_m = _os_m.environ.get('HERMES_HOME', str(Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))))
         _profile_m = _os_m.environ.get('HERMES_PROFILE', '')
         _root_m = (Path(_base_m) / 'profiles' / _profile_m) if _profile_m else Path(_base_m)
         _alarm_path_m = _root_m / 'cache' / 'mcp-privilege-alarm.json'

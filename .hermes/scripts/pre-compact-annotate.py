@@ -86,6 +86,51 @@ def _extract_signals(text: str) -> tuple[list[str], list[str]]:
     return decisions, verbatim
 
 
+# ── Anchored Context Distillation (arXiv:2609.31430) ─────────────────────────
+# Tag each tool result as ANCHOR or FLOATSAM before compaction.
+# ANCHOR = output cited by a subsequent reasoning step -> must preserve verbatim.
+# FLOATSAM = output never referenced again -> eligible for extractive summary.
+
+def _tag_tool_anchors(messages: list[tuple]) -> dict[int, str]:
+    """Return {msg_index: 'ANCHOR'|'FLOATSAM'} for tool-result messages.
+
+    A tool result at index i is an ANCHOR if any later assistant message
+    quotes a substring of it, references its file path/line, or overlaps
+    with a 'since X returned Y' causal phrase.
+    """
+    import re as _re
+    tool_indices = [
+        (i, content)
+        for i, (role, content, _tool) in enumerate(messages)
+        if role in ("tool", "function") and content
+    ]
+    assistant_texts = [
+        content for role, content, _ in messages
+        if role == "assistant" and content
+    ]
+    combined_assistant = " ".join(assistant_texts)
+
+    tags: dict[int, str] = {}
+    for idx, tcontent in tool_indices:
+        # Collect candidate tokens: full paths, stems (no ext), and basenames
+        candidates = set()
+        for tok in _re.findall(r'[/\w.-]{6,}', tcontent):
+            if len(tok) < 6:
+                continue
+            candidates.add(tok)
+            # Basename so "/long/path/foo.py" -> "foo.py"
+            base = tok.rsplit('/', 1)[-1]
+            if len(base) >= 4:
+                candidates.add(base)
+            # Stem so "foo.py" -> "foo"
+            stem = base.rsplit('.', 1)[0]
+            if len(stem) >= 4:
+                candidates.add(stem)
+        cited = any(c in combined_assistant for c in candidates)
+        tags[idx] = "ANCHOR" if cited else "FLOATSAM"
+    return tags
+
+
 def _recent_messages(con: sqlite3.Connection, session_id: str, limit: int = 30) -> list[tuple]:
     cur = con.cursor()
     cur.execute(
@@ -106,7 +151,12 @@ def _build_focus(messages: list[tuple]) -> str:
     decisions: list[str] = []
     verbatim:  list[str] = []
 
-    for role, content, tool_name in messages:
+    # ── Anchored Context Distillation (arXiv:2609.31430) ──────────────────────
+    # Tag tool results as ANCHOR/FLOATSAM before scanning for refs.
+    anchor_tags = _tag_tool_anchors(messages)
+    anchor_refs: list[str] = []
+
+    for i, (role, content, tool_name) in enumerate(messages):
         if not content:
             continue
         # User messages carry decisions; tool results carry verbatim refs
@@ -114,21 +164,29 @@ def _build_focus(messages: list[tuple]) -> str:
             d, v = _extract_signals(content)
             decisions.extend(d)
         elif role == "tool" or tool_name:
+            tag = anchor_tags.get(i, "FLOATSAM")
             _, v = _extract_signals(content)
-            verbatim.extend(v)
+            if tag == "ANCHOR":
+                anchor_refs.extend(v)  # prioritise anchor refs
+            else:
+                verbatim.extend(v)
         elif role == "assistant":
             d, v = _extract_signals(content)
             decisions.extend(d[:2])   # assistant summaries of decisions
 
     # Deduplicate preserving order
     seen: set[str] = set()
-    decisions = [x for x in decisions if not (x in seen or seen.add(x))][:MAX_DECISIONS]
+    decisions    = [x for x in decisions    if not (x in seen or seen.add(x))][:MAX_DECISIONS]
     seen.clear()
-    verbatim  = [x for x in verbatim  if not (x in seen or seen.add(x))][:MAX_VERBATIM]
+    anchor_refs  = [x for x in anchor_refs  if not (x in seen or seen.add(x))][:MAX_VERBATIM]
+    seen.clear()
+    verbatim     = [x for x in verbatim     if not (x in seen or seen.add(x))][:MAX_VERBATIM]
 
     parts: list[str] = []
     if decisions:
         parts.append("Recent decisions: " + "; ".join(decisions))
+    if anchor_refs:
+        parts.append("ANCHOR refs (must preserve): " + ", ".join(anchor_refs))
     if verbatim:
         parts.append("Key refs: " + ", ".join(verbatim))
 
@@ -202,9 +260,26 @@ def main() -> None:
             # Use input_tokens + cache tokens as best estimate; fall back to 80000
             _sid, _inp, _cache, _mcfg = row
             _current_tokens = max((_inp or 0) + (_cache or 0), 80000)
+            # Estimate content entropy for entropy-adjusted aggressiveness (Cover-Thomas IT Ch.5)
+            _entropy_flag = []
+            try:
+                import math as _math_ce, collections as _col_ce
+                _text_sample = " ".join(str(r) for r in [_inp, _cache] if r)[:30000]
+                _words = _text_sample.lower().split()
+                if len(_words) > 100:
+                    _freq = _col_ce.Counter(_words)
+                    _total = sum(_freq.values())
+                    _H = -sum((c/_total)*_math_ce.log2(c/_total) for c in _freq.values() if c > 0)
+                    _H_max = _math_ce.log2(max(len(_freq), 2))
+                    _norm_H = min(1.0, _H / _H_max)
+                    if _math_ce.isfinite(_norm_H) and 0.0 <= _norm_H <= 1.0:
+                        _entropy_flag = ["--content-entropy", f"{_norm_H:.3f}"]
+            except Exception as _adv_e:
+                import sys as _sys
+                print(f"[advisory:pre-compact-annotate] {type(_adv_e).__name__}: {_adv_e} — entropy advisory; fall back to no-entropy mode", file=_sys.stderr)
             _adv_result = _sp.run(
                 [_sys.executable, str(Path(__file__).parent / "rd-compaction-advisor.py"),
-                 "--current-tokens", str(_current_tokens)],
+                 "--current-tokens", str(_current_tokens)] + _entropy_flag,
                 capture_output=True, text=True, timeout=10,
             )
             if _adv_result.returncode == 0 and _adv_result.stdout.strip():
@@ -215,8 +290,9 @@ def main() -> None:
                     f"\nCompaction advisory: aggressiveness={_agg:.2f}, "
                     f"focus={_focus} (rd-compaction-advisor)"
                 )
-        except Exception:
-            pass  # advisory is best-effort; never block annotation output
+        except Exception as _adv_e:
+            import sys as _sys
+            print(f"[advisory:pre-compact-annotate] {type(_adv_e).__name__}: {_adv_e} — advisory is best-effort; never block annotation output", file=_sys.stderr)
 
         # Append alarm-aggregator summary
         try:
@@ -238,8 +314,9 @@ def main() -> None:
                     annotation += (
                         f"\nActive alarms ({_count}): {_alarm_lines}"
                     )
-        except Exception:
-            pass  # alarm aggregation is best-effort; never block annotation output
+        except Exception as _adv_e:
+            import sys as _sys
+            print(f"[advisory:pre-compact-annotate] {type(_adv_e).__name__}: {_adv_e} — alarm aggregation is best-effort; never block annotation output", file=_sys.stderr)
 
         # Append Focus Agent reminder (wires focus_compress.py as a live annotation)
         try:
@@ -252,8 +329,9 @@ def main() -> None:
             )
             if _fc_result.returncode == 0 and _fc_result.stdout.strip():
                 annotation += "\n\n## Focus Agent Reminder\n" + _fc_result.stdout.rstrip()
-        except Exception:
-            pass  # focus reminder is best-effort; never block annotation output
+        except Exception as _adv_e:
+            import sys as _sys
+            print(f"[advisory:pre-compact-annotate] {type(_adv_e).__name__}: {_adv_e} — focus reminder is best-effort; never block annotation output", file=_sys.stderr)
 
         print(annotation)
 

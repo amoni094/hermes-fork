@@ -202,7 +202,7 @@ def _load_budgets_from_config() -> None:
     global BUDGETS
     try:
         import yaml as _yaml
-        cfg_path = Path.home() / ".hermes" / "config.yaml"
+        cfg_path = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "config.yaml"
         if not cfg_path.exists():
             return
         cfg = _yaml.safe_load(cfg_path.read_text()) or {}

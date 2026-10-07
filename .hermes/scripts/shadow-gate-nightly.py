@@ -23,6 +23,10 @@ from shadow_telemetry import evaluate_flag  # noqa: E402
 
 import os as _os_sgn
 _hermes_base_sgn = pathlib.Path(_os_sgn.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+if not pathlib.Path(_hermes_base_sgn).is_dir():
+    print(f'ERROR: HERMES_HOME={_hermes_base_sgn} does not exist or is not a directory',
+          file=sys.stderr)
+    sys.exit(2)
 _hermes_profile_sgn = _os_sgn.environ.get("HERMES_PROFILE", "")
 _hermes_root_sgn = (_hermes_base_sgn / "profiles" / _hermes_profile_sgn) if _hermes_profile_sgn else _hermes_base_sgn
 TELEMETRY_DIR = _hermes_root_sgn / "cache" / "shadow-telemetry"

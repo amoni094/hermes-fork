@@ -28,6 +28,7 @@ Sweep 24 additions:
 """
 
 import json
+import os
 import re
 import sys
 import sqlite3
@@ -37,8 +38,8 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-DB_PATH = Path.home() / ".hermes" / "state.db"
-REPORT_DIR = Path.home() / ".hermes" / "cache"
+DB_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "state.db"
+REPORT_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache"
 HINDSIGHT_URL = "http://localhost:9177"
 
 # ── Sweep 24: Token-consumption baseline (SkillBloat DoS detection) ──────────
@@ -848,7 +849,7 @@ def scan_skill_credentials(verbose: bool = False) -> list[dict]:
     Scan skill files for credential leakage patterns (ASE 2026 finding:
     73.5% leaks come from debug logging into LLM context; 89.6% immediately exploitable).
     """
-    skills_root = Path.home() / ".hermes" / "skills"
+    skills_root = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "skills"
     if not skills_root.exists():
         return []
 
@@ -877,7 +878,7 @@ def scan_skill_credentials(verbose: bool = False) -> list[dict]:
                     print(f"  Match: {m.group(0)[:60]!r}")
 
     # Also scan scripts for debug-log patterns that expose tool outputs
-    scripts_root = Path.home() / ".hermes" / "scripts"
+    scripts_root = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts"
     for script_file in scripts_root.glob("*.py"):
         try:
             text = script_file.read_text(errors="replace")
@@ -909,7 +910,7 @@ def scan_asi06_unguarded_copies(verbose: bool = False) -> list[dict]:
     and conversation logs unguarded. Check filesystem permissions.
     """
     flags = []
-    hermes_home = Path.home() / ".hermes"
+    hermes_home = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 
     # Check backup files
     for backup in list(hermes_home.rglob("*.zip")) + list(hermes_home.rglob("*.tar.gz")):

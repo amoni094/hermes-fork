@@ -164,10 +164,12 @@ def run_monitor(dry_run: bool = False) -> int:
 
     if not dry_run:
         out = CACHE_DIR / "information-refinement-report.json"
-        out.write_text(json.dumps({
+        _tmp_out = out.with_suffix(".tmp")
+        _tmp_out.write_text(json.dumps({
             "ts": now, "utilities": utilities, "counts": counts,
             "results": results, "alarms": alarms,
         }, indent=2))
+        _tmp_out.replace(out)
         print(f"\nWritten: {out}")
 
     return alarm_exit

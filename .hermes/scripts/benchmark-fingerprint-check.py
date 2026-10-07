@@ -26,6 +26,7 @@ Output (JSON to stdout):
 """
 from __future__ import annotations
 
+import os
 import json
 import sys
 import hashlib
@@ -33,7 +34,7 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
-HERMES_DIR = Path(__import__("os").environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+HERMES_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 SKILLS_DIR = HERMES_DIR / "skills"
 CACHE_DIR = HERMES_DIR / "cache"
 

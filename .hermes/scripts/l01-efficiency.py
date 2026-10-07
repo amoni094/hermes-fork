@@ -60,6 +60,7 @@ Exit codes:
 """
 from __future__ import annotations
 
+import os
 import argparse
 import json
 import re
@@ -67,7 +68,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-HERMES_HOME = Path.home() / ".hermes"
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 COD_EXAMPLES_PATH = HERMES_HOME / "scripts" / "l01-cod-examples.json"
 
 # ─── Query type taxonomy (cheap deterministic gate, no LLM call) ──────────────

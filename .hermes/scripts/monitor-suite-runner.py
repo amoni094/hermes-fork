@@ -5,6 +5,7 @@ monitor-suite-runner.py
 Runs all Hermes monitoring scripts and prints a consolidated summary.
 Designed for cron execution (no_agent=true).
 """
+import os
 import subprocess, sys, json, os
 from pathlib import Path
 from datetime import datetime, timezone

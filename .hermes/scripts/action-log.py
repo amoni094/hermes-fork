@@ -25,7 +25,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 LOG_PATH = HERMES_HOME / "cache" / "action-log.jsonl"
 
 GENESIS_HASH = "0" * 64  # sentinel prev_hash for first entry

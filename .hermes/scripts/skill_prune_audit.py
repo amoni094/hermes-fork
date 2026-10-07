@@ -48,7 +48,7 @@ if _OT_UTILS_PATH.exists():
 else:
     _ot_utils = None  # type: ignore[assignment]
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 SKILLS_DIR = HERMES_HOME / "skills"
 USAGE_JSON = SKILLS_DIR / ".usage.json"
 ARCHIVE_DIR = SKILLS_DIR / ".archive"
@@ -450,4 +450,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)

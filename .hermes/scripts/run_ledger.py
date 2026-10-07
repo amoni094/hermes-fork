@@ -38,6 +38,7 @@ Usage:
 from __future__ import annotations
 
 import hashlib
+import os
 import json
 import random
 import threading
@@ -46,7 +47,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-DEFAULT_LEDGER_DIR = Path.home() / ".hermes" / "logs" / "run_ledger"
+DEFAULT_LEDGER_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "logs" / "run_ledger"
 
 # Valid state transitions for a Hermes run
 RUN_LEGAL_TRANSITIONS: dict[str, set[str]] = {

@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Optional
 
 # ── paths ─────────────────────────────────────────────────────────────────────
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 CACHE_DIR = HERMES_HOME / "cache"
 LOG_PATH = CACHE_DIR / "calibration-log.jsonl"
 TRAJECTORY_PATH = CACHE_DIR / "confidence-trajectory.json"

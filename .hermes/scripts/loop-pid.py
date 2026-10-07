@@ -28,6 +28,7 @@ Usage:
 State is persisted to ~/.hermes/cache/loop-pid-state.json
 Per-session copies (when --session is set) live in ~/.hermes/cache/loop-pid-sessions/<SID>.json
 """
+import os
 import argparse, hashlib, json, math
 from pathlib import Path
 from datetime import datetime, timezone
@@ -36,8 +37,8 @@ Kp, Ki, Kd = 1.0, 0.15, 0.4
 U_MAX, U_MIN = 1.0, 0.0
 KAW = 0.5  # anti-windup back-calculation gain (Astrom eq 11.12)
 
-STATE_FILE = Path.home() / '.hermes' / 'cache' / 'loop-pid-state.json'
-SESSIONS_DIR = Path.home() / '.hermes' / 'cache' / 'loop-pid-sessions'
+STATE_FILE = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / 'cache' / 'loop-pid-state.json'
+SESSIONS_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / 'cache' / 'loop-pid-sessions'
 DEFAULT_HYP_THRESHOLD = 5
 MIN_SESSIONS_FOR_PERCENTILE = 5
 

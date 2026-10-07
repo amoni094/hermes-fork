@@ -26,7 +26,7 @@ import re
 import sys
 from pathlib import Path
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 
 # Patterns that often mean a must-constraint was paraphrased into soft guidance
 SOFTEN_RE = re.compile(

@@ -42,6 +42,7 @@ Usage
 from __future__ import annotations
 
 import re
+import os
 import sys
 import json
 import argparse
@@ -55,8 +56,8 @@ import networkx as nx
 # ---------------------------------------------------------------------------
 
 SKILLS_DIRS = [
-    Path.home() / ".hermes" / "skills",
-    Path.home() / ".hermes" / "profiles" / "fork" / "skills",
+    Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "skills",
+    Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "profiles" / "fork" / "skills",
 ]
 
 # ---------------------------------------------------------------------------
@@ -69,6 +70,9 @@ _FIELD_RE = {
     "description": re.compile(r"^description:\s*(.+)$", re.MULTILINE),
 }
 
+# Block-scalar YAML description (description: >\n  line1\n  line2)
+_DESC_BLOCK_RE = re.compile(r"^description:\s*[>|]\s*\n((?:[ \t]+.+\n?)+)", re.MULTILINE)
+
 
 def _extract_frontmatter(text: str) -> dict:
     m = _FM_RE.match(text)
@@ -79,7 +83,18 @@ def _extract_frontmatter(text: str) -> dict:
     for key, pat in _FIELD_RE.items():
         hit = pat.search(fm)
         if hit:
-            out[key] = hit.group(1).strip()
+            val = hit.group(1).strip()
+            # Reject bare block scalars (description: >) — the value is on the next line
+            if val not in (">", "|", ">-", "|-", ">+", "|+"):
+                out[key] = val
+    # Handle YAML block scalars (description: >\n  content) — common in Hermes skills
+    if "description" not in out:
+        block_hit = _DESC_BLOCK_RE.search(fm)
+        if block_hit:
+            # Strip leading indentation, join into a single line
+            raw_block = block_hit.group(1)
+            lines_b = [l.strip() for l in raw_block.splitlines() if l.strip()]
+            out["description"] = " ".join(lines_b)
     return out
 
 

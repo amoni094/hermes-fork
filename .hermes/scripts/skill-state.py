@@ -47,7 +47,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 STATE_DIR = HERMES_HOME / "cache" / "skill-state"
 OBS_RING_BUFFER = 3
 MAX_REASONING_TRACES = 0

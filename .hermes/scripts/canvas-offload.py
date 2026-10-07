@@ -35,7 +35,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 CANVAS_DIR = HERMES_HOME / "canvas"
 STATE_DB = HERMES_HOME / "state.db"
 
@@ -78,7 +78,9 @@ def load_canvas(session_id: str) -> dict:
 def save_canvas(session_id: str, canvas: dict):
     sdir = session_dir(session_id)
     meta_path = sdir / "canvas.json"
-    meta_path.write_text(json.dumps(canvas, indent=2), encoding="utf-8")
+    _tmp = meta_path.with_suffix('.tmp')
+    _tmp.write_text(json.dumps(canvas, indent=2), encoding="utf-8")
+    _tmp.replace(meta_path)
     # Render Mermaid
     mmd = render_mermaid(canvas)
     (sdir / "canvas.md").write_text(mmd, encoding="utf-8")

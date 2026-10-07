@@ -48,7 +48,7 @@ def now_utc_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-PRUNE_LOG_PATH = Path.home() / ".hermes" / "logs" / "prestudy-prune-log.jsonl"
+PRUNE_LOG_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "logs" / "prestudy-prune-log.jsonl"
 
 
 def _log_prune_event(file: str, ttl_hours: float, age_hours: float) -> None:
@@ -163,8 +163,8 @@ def main():
         cmd_renewal_stats()
         return
 
-    cache_dir = Path.home() / ".hermes" / "cache" / "prestudy"
-    log_path = Path.home() / ".hermes" / "logs" / "prestudy-prune.jsonl"
+    cache_dir = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache" / "prestudy"
+    log_path = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "logs" / "prestudy-prune.jsonl"
 
     # Create cache dir if missing
     cache_dir.mkdir(parents=True, exist_ok=True)

@@ -37,6 +37,7 @@ Output: comparison table of RR ranking vs current positional (oldest-first) prun
         plus an estimated token reclaim delta.
 """
 
+import os
 import argparse
 import json
 import math
@@ -57,7 +58,7 @@ if _OT_UTILS_PATH.exists():
 else:
     _ot_utils = None  # type: ignore[assignment]
 
-HERMES_HOME = Path.home() / ".hermes"
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 SESSION_DB = HERMES_HOME / "memory-facts" / "lifecycle.db"
 LAMBDA_LOG_PATH = HERMES_HOME / "logs" / "rr-lambda-history.jsonl"
 

@@ -51,10 +51,10 @@ import sqlite3
 from collections import Counter
 from pathlib import Path
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 # Skill-state and PID files live in the *base* ~/.hermes hierarchy regardless of
 # which profile is active.  Fall back to the base path when the profile path is absent.
-_HERMES_BASE = Path.home() / ".hermes"
+_HERMES_BASE = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 
 
 def _resolve_cache_path(rel: str) -> Path:

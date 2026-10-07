@@ -75,7 +75,7 @@ SEED_QUERIES = [
 
 def _load_dotenv() -> None:
     """Load ~/.hermes/.env into os.environ without overwriting existing keys."""
-    env_path = Path.home() / ".hermes" / ".env"
+    env_path = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / ".env"
     try:
         text = env_path.read_text()
     except OSError:
@@ -541,7 +541,7 @@ def main() -> int:
     # Post-consolidation: surface unresolved H2 obstructions from profinite-thread-check.
     # Fail-open: any I/O or parse error is silently skipped.
     try:
-        _hermes_home = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+        _hermes_home = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
         _profile = os.environ.get("HERMES_PROFILE", "")
         # Profile-aware cache path: prefer <profile>/cache/ when HERMES_PROFILE is set,
         # otherwise fall back to the default <HERMES_HOME>/cache/ location.

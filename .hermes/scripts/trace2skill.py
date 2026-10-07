@@ -20,9 +20,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-DB_PATH = Path.home() / ".hermes" / "state.db"
-PENDING_DIR = Path.home() / ".hermes" / "cache" / "pending-improvements"
-ENV_PATH = Path.home() / ".hermes" / ".env"
+DB_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "state.db"
+PENDING_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache" / "pending-improvements"
+ENV_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / ".env"
 
 SKILL_DRAFT_PROMPT = """\
 You are analyzing a Hermes Agent session trajectory to extract a reusable skill.

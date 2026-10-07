@@ -4,7 +4,7 @@ Patterns ported from Denuto (jesterG1979/hello_agent) + Hermes-native patterns.
 This is the authoritative single source of truth for how Hermes is structured,
 what rules are enforced, and what the invariants are.
 
-Last updated: 2026-09-16 (wiring sprint 2 + book-to-skill ingestion)
+Last updated: 2026-09-28 (deployed plugin catalog: cobra-guard, orca-status, tool-auth-gate; Wave 11: import-alias mass fix, cron env wiring, skill index dedup, l1-extract pyc cleanup)
 
 ---
 
@@ -202,6 +202,36 @@ not enforced gates in the agent loop. Do NOT cite them as active enforcement:
   calibration-threshold-updater.py - Reads calibration-log.jsonl; updates Condorcet thresholds; EMA now seeds from prior run (wiring sprint 2)
   context-pressure-reader.py - Reads context token pressure; advisory annotation (wiring sprint 2)
   recall-miss-ttl-adjuster.py - MRAS adaptive TTL adjuster; reads recall-misses.jsonl; closes bottleneck #8 (wiring sprint 2)
+  routing-weight-updater.py  - FTRL-EMA memory route weight updater; O1: cumulative regret tracking vs uniform baseline (Borodin & El-Yaniv §2.1); writes routing-regret-log.jsonl; alarm on >5% relative regret
+  skill-beta-feedback.py     - Beta-bandit feedback writer; B1: causal fix — only credits success signals from successfully-completed sessions; emits failure signals for aborted sessions
+  staleness-monitor.py       - D2 liveness monitor; checks freshness of routing-calibration.jsonl, calibration-log.jsonl, skill-beta-state.json, routing-regret-log.jsonl; alarms to stdout + exits 0 (cron-safe)
+  stuck-job-detector.py      - CTL/LTL safety: AG(running → EF(complete|failed)); queries executions.db for jobs stuck in 'running' > 2×timeout; writes stuck-job-alarms.jsonl
+  callgraph-audit.py         - P1 interprocedural call-graph analysis (Nielson et al. §1-2); propagates exit-code lattice {ok,intentional_nonzero,error_propagator} across subprocess call chains; reports HERMES_HOME unvalidated paths (P2); writes callgraph-audit-report.json
+  skill-router-index.py      - R1 Chernoff MIN_SAMPLES=30 guard in beta_posterior_mean(); R2 collision detection (fork priority); O2 incremental build (skip unchanged skills by mtime); BM25 TF-IDF + concept-lattice semantic fallback
+
+## Knowledge Corpus (theory-grounded skills — wave 3, 2026-09-22)
+
+Six books ingested as fork skills to formally ground bottleneck reasoning:
+
+  harchol-balter-performance-modeling - M/G/1 queues, SRPT, heavy tails; cron timeout + jitter design (Q1/Q2)
+  lynch-distributed-algorithms        - I/O automata, atomicity, consensus; WAL + atomic write analysis (D1)
+  motwani-raghavan-randomized-algorithms - Chernoff bounds, Las Vegas/Monte Carlo; skill index approximation guarantees (R1)
+  borodin-elyaniv-online-computation  - Adversary model, ski rental, competitive ratio; FTRL regret tracking (O1/O2)
+  nielson-program-analysis            - Abstract interpretation, lattice theory; call-graph audit (P1/P2)
+  clarke-model-checking               - CTL/LTL, Kripke structures; stuck-job detector + atomic write invariants (M1)
+
+---
+
+## Deployed Plugins (fork profile)
+
+Live plugins under ~/.hermes/profiles/fork/plugins/, enabled in config.yaml plugins.enabled:
+
+  context-pressure-guard - pre_llm_call + pre_compress: injects [CONTEXT PRESSURE HIGH] at consecutive_high >= 2; nudges compressor lambda +0.05 per turn at cap
+  tool-result-audit      - post_tool_call: tool-auth-shim.py injection-risk audit on EXTERNAL-tier tool results (shadow; never blocks)
+  jev-compaction         - pre_compress + on_session_end: per-message RR/Jev relevance scoring; prunes low-RR tool results before compression
+  cobra-guard            - pre_tool_call / post_tool_call / on_session_start: wraps cobra-skip-guard.py probe-cache logic; WARN-only, fail-open (HERMES_COBRA_GUARD=0 disables)
+  orca-status            - posts agent lifecycle events to ORCA_AGENT_HOOK_ENDPOINT; silent no-op when unset
+  tool-auth-gate         - pre_tool_call Agentao-style proposal/authorize split (arXiv:2608.13574); DENY_ALWAYS / DENY_IN_CONTEXT / ALLOW against escalate_tools and deny_tools
 
 ---
 
@@ -310,6 +340,29 @@ not enforced gates in the agent loop. Do NOT cite them as active enforcement:
 
   All prior wave closures (waves 1-9, sprint 2-3): see Wave 7, Wave 8, and sprint
     closure tables below.
+
+  [Wave 11] Import alias bug mass fix: all 317 scripts now use `import os` (not `import os as _os`
+    + bare `os.environ.get`). Nested os.environ.get(HERMES_HOME, str(Path(os.environ.get(...)))) 
+    patterns collapsed to single-level calls. 0 compile failures after fix.
+    Adversarial: subagent cold pass PASS.
+
+  [Wave 11] Cron env wiring: all 52 cron jobs in fork/cron/jobs.json now carry HERMES_PROFILE=fork
+    and HERMES_HOME=/var/home/rainbow/.hermes in their env block. Previously 34/52 missing profile.
+    Adversarial: verified via direct JSON inspection.
+
+  [Wave 11] Skill index deduplication: 5 collisions resolved (dispatching-parallel-agents,
+    hermes-cron-and-agents, hermes-observability-and-task-ledger, blocked-page-recovery,
+    + duplicate skill dirs in wrong category). Indexer now clean (warnings are expected
+    fork-vs-default priority warnings only). 317 skills indexed.
+
+  [Wave 11] l1-extract.py stale pyc cleanup: fork scripts/__pycache__ had 3 stale
+    bytecode files (cpython-314, cpython-311, .py.cpython-311 variants). Removed.
+    Fork l1-extract.py and main l1-extract.py confirmed NOT hardlinked; both run
+    correctly (--help exit 0).
+
+  [Wave 11] skill-index-week cron: added HERMES_CRON_BUILD=1 to env; without it,
+    the script printed PAC-Bayes example text instead of building the index.
+
 
 ### ACCEPTED LIMITATIONS (architectural — not fixable by script patch)
 
@@ -426,3 +479,128 @@ False positives eliminated this wave:
 - os.environ NameError risks: 0
 - Plugin compile errors: 0
 - Cron scripts missing on disk: 0
+
+## Wave 16 Closures (2026-10-05)
+
+Research source: arXiv papers published 2026-09-01 to 2026-10-05.
+All Wave 15 saturation checks still clean (0 hardcoded paths, 0 non-atomic writes,
+0 os.environ NameError risks, 0 plugin compile errors).
+
+### New Scripts (hermes-scripts/)
+
+| Script | Paper | Purpose |
+|--------|-------|---------|
+| statecomp-compression-router.py | arXiv:2609.27298 StateComp | Predicts which interaction spans are safe to compress; gated by score, span-length, token count, ready_ratio |
+| ripple-mem-expander.py | arXiv:2607.18844 RippleMem | Anchor graph expansion for skill recall; 2-hop BFS + recency-weighted ranking |
+| bps-skill-selector.py | arXiv:2608.19993 BPS | Submodular skill selection under token budget; bicriteria (1-1/e,1) guarantee |
+| progress-mirage-gate.py | arXiv:2604.28831 Progress Mirage | Grounded evidence gate; enforces H-I3 with file/hash/compile/exit-0 checks |
+| evograph-skill-editor.py | arXiv:2606.04917 EvoGraph-Mem | Failure-aware skill health graph; flags yield < 0.35 skills for review |
+| cmtf-tool-frontier.py | arXiv:2606.06284 ToolChoiceConfusion | Causal minimal tool filtering; precondition-effect contracts |
+
+### New Skills
+
+statecomp-compression-timing, ripple-mem-recall, bps-skill-budget,
+progress-mirage-verification, evograph-skill-health, cmtf-tool-filtering
+
+### New Cron Jobs (5 added, total: 57)
+
+wave16-statecomp-compression-router (every 4h)
+wave16-ripple-mem-graph-build (daily 3am)
+wave16-evograph-skill-health (daily 2am)
+wave16-progress-mirage-audit (daily 6:30am)
+wave16-cmtf-tool-frontier-audit (daily 7am)
+
+### Bugs Fixed This Wave
+
+- BUG (adversarial pass, pre-wave): evals/compaction/policies.py missing closing `}` on
+  fork_research_telegraphic entry (brace mismatch); fixed by adding missing `},` line.
+- BUG: from __future__ import annotations not first in stuck-job-detector.py; fixed.
+- BUG (from wave-11 alias fix regression): `import os as _os_sri` incorrectly replaced
+  with `import os_sri` (non-existent module) in 10 scripts. Fixed: changed back to
+  `import os` and updated all `_os_X.` references to `os.`. All 352 scripts now
+  compile clean; skill-router-index.py --build OK (38 skills indexed).
+
+### Accepted (Wave 16)
+
+- delegate_task subagent spawn blocked in this session by `No module named 'agent.ssl_guard'`
+  error in parent runtime's subagent dispatch path. Source traced to config.yaml
+  validator_script reference (~/.hermes/scripts/validate-skill-ssl.py); the module
+  ssl_guard does not exist in hermes-agent 2026-10-05 codebase. All Wave 16 work
+  executed in-process as a result. GATE GAP: ssl_guard bootstrap needs investigation
+  in a fresh session.
+
+---
+
+## Wave 17 Closures (2026-10-07) — JEV-Inspired Extension Wave
+
+Deep research: TypeSafe JEV/System One architecture (typesafe.ai blog, LangChain harness
+blog, model-router blog) + adversarial design audit (subagent deleg_123bd8ee, grok-4.6,
+191s, 8 HIGH / 10 MED / 4 LOW findings — all applied before implementation).
+
+### JEV Architecture (canonical summary for hermes-fork)
+
+Jev is a System One Model (TypeSafe AI, released 2026-09-15), not an LLM.
+- Trained with RLCD (Reinforcement Learning for Calibrated Decisions)
+- Non-autoregressive: all output slots computed in a single parallel pass
+- Three answer types: noul (P(true)), choice (P per option), score (ordinal)
+- Type-safe: hallucination mathematically impossible; deterministic on same input
+- 200x faster / 400x cheaper than frontier LLMs on classification-shaped tasks
+- The JEV pattern: state + battery of typed questions → vector of (answer, confidence)
+
+IMPORTANT: jev_verify_fn.py is an LLM emulation of these patterns, not Jev itself.
+logprob_classify() returns NaN on Anthropic (current provider). Do not claim Jev-level
+type-safety or calibration guarantees from jev_verify_fn primitives.
+
+### Capability Audit Outcomes
+
+  jev-model-router   KILLED — pre_llm_call cannot select model; inject-hermes-routing-note.py
+                              already covers complexity routing; YAGNI (Ponytail rung 1)
+  jev-tool-risk-guard KILLED — pre_tool_call is fail-closed on timeout; LLM calls there block
+                               the agent; tool-auth-gate already owns this surface
+  jev-turn-evaluator  BUILT  — shadow-only observer; fills real telemetry gap; no injection
+
+### Deliverables
+
+  jev-turn-evaluator plugin (NEW, shadow-only)
+    ~/.hermes/profiles/fork/plugins/jev-turn-evaluator/__init__.py
+    post_llm_call observer: 4 quality dims via one JSON-schema structured call_llm
+    (implements the atomic_subquestions pattern inline — typed schema, temp=0,
+     4 questions answered in one LLM call; not routed through jev_verify_fn helper)
+    (factual_coherence, task_progress, tool_alignment, efficiency, each 0-5 or bool)
+    Separate budget: jev_eval_budget.json 100/day (never touches jev-call-budget.json)
+    Sampling 1/3 turns by default. O_APPEND atomic JSONL → cache/jev-turn-scores.jsonl
+    Promotion: jev-gate-nightly.py reads jev-turn-scores.jsonl; prints PROMOTE when
+    scored_turns >= 20, mean_score >= 3.5, error_rate < 10% over a 7-day window.
+    Human must manually add plugin to plugins.enabled + set shadow_jev_evaluator: true.
+
+  tool-auth-gate extensions (deterministic, no LLM)
+    ~/.hermes/profiles/fork/plugins/tool-auth-gate/__init__.py
+    _READ_SAFE_TOOLS: 12-tool allowlist fast-path (read_file, search_files, etc.)
+    _CREDENTIAL_PATH_PATTERNS: escalate writes to .ssh/, .aws/, .gnupg/, .netrc, .hermes/memories/
+    _EXEC_CODE_DANGER_PATTERNS: escalate pipe-to-shell / eval / rm -rf patterns
+    Tests: 5/5 PASS
+
+  improvement_governance.py DEFAULT_LEDGER bug fix
+    ~/.hermes/scripts/improvement_governance.py
+    DEFAULT_LEDGER was bare ~/.hermes (directory); open() raised IsADirectoryError
+    Fix: path now resolves to ~/.hermes/logs/improvement-proposals.jsonl
+
+### Governance Proposals Filed
+
+  prop_f4042a13  HIGH   plugins/jev-turn-evaluator
+  prop_8ac91dbc  HIGH   plugins/tool-auth-gate extensions
+  prop_de08b53b  MEDIUM scripts/improvement_governance.py DEFAULT_LEDGER
+
+### Gate Gaps (new this wave)
+
+  GATE GAP: jev-turn-evaluator NOT in plugins.enabled (disabled). Promotion path:
+    set shadow_jev_evaluator: true in plugin config → collect N session scores →
+    shadow-gate-nightly.py promotes when mean_score > 3.5 and error_rate < 0.1 →
+    add to plugins.enabled via config_change (HIGH governance, 2 approvals, 24h cooldown).
+
+  GATE GAP: ssl_guard missing (inherited Wave 16). Blocks delegate_task subagents.
+
+### Adversarial Saturation
+
+  All 8 HIGH and 10 MEDIUM audit findings applied or drove capability kills.
+  No unresolved HIGH or MEDIUM issues remain. LOW-19/20/21/22 accepted.

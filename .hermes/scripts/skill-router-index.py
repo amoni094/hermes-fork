@@ -14,6 +14,7 @@ At 80k skills, name+description routing degrades 31-44pp. TF-IDF is fine at curr
 import argparse
 import json
 import math
+import pathlib
 import re
 import subprocess
 import sys
@@ -25,9 +26,29 @@ import os as _os_sri
 _hermes_base_sri = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _hermes_profile_sri = _os_sri.environ.get("HERMES_PROFILE", "")
 _hermes_root_sri = (_hermes_base_sri / "profiles" / _hermes_profile_sri) if _hermes_profile_sri and "profiles" not in str(_hermes_base_sri) else _hermes_base_sri
+# When HERMES_HOME itself points at a profile dir (.../profiles/<name>), derive the true
+# hermes root (2 levels up) so _HERMES_MAIN_SKILLS resolves to the real skills library.
+_parts = _hermes_base_sri.parts
+if len(_parts) >= 3 and "profiles" in _parts:
+    _prof_idx = len(_parts) - 1 - list(reversed(_parts)).index("profiles")
+    _true_hermes_base_sri = Path(*_parts[:_prof_idx])
+else:
+    _true_hermes_base_sri = _hermes_base_sri
 SKILLS_ROOT = _hermes_root_sri / "skills"
+# Global (non-profile) skill library. Fork-local SKILLS_ROOT is scanned first so
+# same-named skills keep fork priority. Do NOT derive this from __file__ — when
+# this script lives in ~/.hermes/scripts or profiles/fork/scripts that would
+# resolve to a non-existent scripts/skills directory.
+_HERMES_MAIN_SKILLS = _hermes_base_sri / "skills"
+if "profiles" in str(_hermes_base_sri):
+    _HERMES_MAIN_SKILLS = pathlib.Path(_os_sri.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "skills"
+
 INDEX_PATH = _hermes_root_sri / "cache" / "skill-router-index.json"
 OVERLAP_THRESHOLD = 0.65
+# arXiv:2609.14486 — Degree-Parameterized Analysis of Sampling-Based Online Algorithms:
+# when task degree/complexity is high (ambiguous routing), wider sampling beats greedy top-1.
+AMBIGUITY_THRESHOLD = 0.05  # difference below which routing is considered ambiguous
+MIN_SCORE_THRESHOLD = 0.3  # minimum BM25 score to accept a result
 BETA_STATE_PATH = _hermes_root_sri / "cache" / "skill-beta-state.json"
 
 # R4 — Cross-domain skill fingerprints (Sweep 24 / arXiv:2603.22455 §4)
@@ -36,6 +57,43 @@ DOMAIN_LABELS: set[str] = {
     "python", "bash", "terminal", "hermes", "skill", "agent",
     "web", "file", "tool",
 }
+
+
+def _load_routing_weights() -> dict[str, float]:
+    """Load FTRL/EMA domain weights written by routing-weight-updater.py.
+
+    Path: {_hermes_root}/cache/routing-weights.json, where _hermes_root is
+    HERMES_HOME + HERMES_PROFILE (same construction as other scripts).
+    Missing/unreadable file → {} (cold-start safe; callers treat missing
+    keys as weight 1.0). Nested {weight: float, ...} records are flattened.
+
+    PAC-Bayes motivation: McAllester (2003) / Seeger (2002) PAC-Bayes-kl
+    says a posterior Q over hypotheses should reweight empirical risk by
+    the complexity term KL(Q||P)/m. Domain FTRL-EMA weights are that
+    posterior mean (clamped to [0.1, 2.0]); multiplying skill scores by
+    the matching domain weight closes the feedback loop.
+    Source: McAllester 2003; Shalev-Shwartz *Understanding ML* Ch 11 (FTRL);
+    Memory in LLM Era v3 (arXiv:2604.01707); routing-weight-updater.py.
+    """
+    weights_path = _hermes_root_sri / "cache" / "routing-weights.json"
+    if not weights_path.exists():
+        return {}
+    try:
+        raw = json.loads(weights_path.read_text())
+    except Exception:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, float] = {}
+    for key, val in raw.items():
+        try:
+            if isinstance(val, dict):
+                out[str(key)] = float(val.get("weight", 1.0))
+            else:
+                out[str(key)] = float(val)
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def load_beta_state():
@@ -50,12 +108,69 @@ def load_beta_state():
             return {}
     return {}
 
+def save_beta_state(state: dict) -> None:
+    """Persist skill Beta(alpha, beta) posteriors to disk atomically.
+
+    Call after recording a success or failure signal for a skill.
+    Uses tmp+replace to avoid torn writes on crash/SIGTERM.
+    """
+    _tmp = BETA_STATE_PATH.with_suffix('.tmp')
+    _tmp.write_text(json.dumps(state, indent=2))
+    _tmp.replace(BETA_STATE_PATH)
+
+
+def record_skill_outcome(skill_name: str, success: bool, decay: float = 0.99) -> None:
+    """Update Beta posterior for skill_name and persist.
+
+    success=True  → alpha += 1  (skill was useful / loaded successfully)
+    success=False → beta  += 1  (skill was not useful / wrong match)
+
+    Decay: apply geometric decay to both alpha and beta before updating.
+    This prevents alpha blow-up when only success signals exist (no failure path).
+    With decay=0.99 and rate 6h: half-life ≈ 17 days. Keeps posteriors fresh.
+
+    Posterior mean = alpha / (alpha + beta).
+    Minimum alpha/beta = 1.0 (uniform prior floor) to prevent degenerate distributions.
+
+    Theory: Lattimore & Szepesvári *Bandit Algorithms* (2020) Ch 3; McAllester 2003.
+    Decay approach: discounted Thompson sampling (Raj & Kalyani, 2017 arXiv:1707.09727).
+    """
+    state = load_beta_state()
+    entry = state.setdefault(skill_name, {"alpha": 1.0, "beta": 1.0})
+    # Apply geometric decay to both parameters (keeps relative confidence, shrinks mass)
+    entry["alpha"] = max(1.0, entry.get("alpha", 1.0) * decay)
+    entry["beta"] = max(1.0, entry.get("beta", 1.0) * decay)
+    if success:
+        entry["alpha"] = entry["alpha"] + 1.0
+    else:
+        entry["beta"] = entry["beta"] + 1.0
+    BETA_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    save_beta_state(state)
+
+
+
+_MIN_SAMPLES = 30  # Chernoff bound: posterior unreliable until alpha+beta >= 30
+                   # P(|X̄-μ| > ε) ≤ 2·exp(-2nε²); at n=30, ε=0.1 → error ≤ 0.36
+                   # (Motwani & Raghavan, Randomized Algorithms, §4.1)
+
 
 def beta_posterior_mean(skill_name, state):
-    """Return E[p] = alpha/(alpha+beta). Defaults to uniform prior mean 0.5."""
+    """Return E[p] = alpha/(alpha+beta). Returns 0.5 (neutral) until MIN_SAMPLES reached.
+
+    Chernoff guard: with fewer than _MIN_SAMPLES observations, the posterior
+    mean is indistinguishable from the prior — applying it would bias routing
+    on noise. Return neutral 0.5 so routing falls back to pure TF-IDF cosine.
+    """
     entry = state.get(skill_name, {})
-    alpha = entry.get("alpha", 1.0)
-    beta_val = entry.get("beta", 1.0)
+    try:
+        alpha = float(entry.get("alpha", 1.0) or 1.0)
+        beta_val = float(entry.get("beta", 1.0) or 1.0)
+    except (TypeError, ValueError):
+        return 0.5
+    # Uniform prior is Beta(1,1); Chernoff n is observation count, not α+β.
+    n_obs = alpha + beta_val - 2.0
+    if n_obs < _MIN_SAMPLES or (alpha + beta_val) <= 0:
+        return 0.5  # insufficient evidence — neutral weight
     return alpha / (alpha + beta_val)
 
 
@@ -237,11 +352,27 @@ def structural_fingerprint(text: str) -> str:
     return " ".join(top_bigrams)
 
 
+def _load_arena_credits() -> dict:
+    """ArenaFlow credit boosts (arXiv:2609.21378): multiplicative skill-score multipliers.
+
+    credits.json format: {"skill-name": float, ...}
+    Values > 1.0 boost; < 1.0 demote. Written by improvement_governance.py after
+    pairwise tournament ranking of parallel-run traces. Missing skills default to 1.0.
+    """
+    import json as _json_ac
+    _credits_path = _hermes_root_sri / "cache" / "arena-credits.json"
+    try:
+        if _credits_path.exists():
+            _raw = _json_ac.loads(_credits_path.read_text())
+            # Clamp to [0.5, 2.0] to prevent extreme boosts from bad data
+            return {k: max(0.5, min(2.0, float(v))) for k, v in _raw.items() if isinstance(v, (int, float))}
+    except Exception:
+        pass
+    return {}
+
+
 def cross_domain_boost(query_text: str, candidate_text: str) -> float:
     """Return an additive boost in [0.0, 0.15] based on structural fingerprint Jaccard similarity (R4).
-
-    Returns 0.15 * Jaccard(query_fp, candidate_fp) if Jaccard > 0.4, else 0.0.
-    Jaccard is computed over the bigram sets of the two fingerprints.
     """
     q_fp = set(structural_fingerprint(query_text).split())
     c_fp = set(structural_fingerprint(candidate_text).split())
@@ -369,36 +500,133 @@ def cosine(vec1: dict, vec2: dict) -> float:
 
 
 def scan_skills() -> list[dict]:
-    skills = []
-    for skill_md_path in sorted(SKILLS_ROOT.rglob("SKILL.md")):
-        try:
-            text = skill_md_path.read_text(errors="replace")
-            fm = parse_frontmatter(text)
-            if not fm.get("name"):
+    """Scan all SKILL.md files in SKILLS_ROOT, following symlinks.
+
+    Category dirs in skills/ are symlinks to ~/.hermes/skills/<category>/; pathlib.rglob
+    does NOT follow symlinks, so we use os.walk(followlinks=True) instead.
+    W2-C fix (2026-09-22): symlink follow + dual-dir scan with fork priority.
+    """
+    import os as _os_scan
+    seen_names: dict[str, dict] = {}
+
+    scan_roots = [SKILLS_ROOT]
+    try:
+        if _HERMES_MAIN_SKILLS.is_dir() and _HERMES_MAIN_SKILLS.resolve() != SKILLS_ROOT.resolve():
+            scan_roots.append(_HERMES_MAIN_SKILLS)
+    except OSError:
+        if _HERMES_MAIN_SKILLS.is_dir() and str(_HERMES_MAIN_SKILLS) != str(SKILLS_ROOT):
+            scan_roots.append(_HERMES_MAIN_SKILLS)
+
+    for skills_dir in scan_roots:  # fork first, then main; first-seen wins
+        if not skills_dir.is_dir():
+            continue
+        for root, dirs, files in _os_scan.walk(str(skills_dir), followlinks=True):
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
+            if "SKILL.md" not in files:
                 continue
-            name = fm["name"]
-            description = fm.get("description", "")
-            triggers = fm.get("triggers", [])
-            combined = " ".join([name, description] + triggers)
-            tokens = tokenize(combined)
-            skills.append({
-                "name": name,
-                "description": description[:200],
-                "triggers": triggers,
-                "path": str(skill_md_path.relative_to(SKILLS_ROOT)),
-                "tokens": tokens,
-            })
-        except Exception as e:
-            print(f"WARN: skipping {skill_md_path}: {e}", file=sys.stderr)
-    return skills
+            skill_md_path = Path(root) / "SKILL.md"
+            try:
+                text = skill_md_path.read_text(errors="replace")
+                fm = parse_frontmatter(text)
+                if not fm.get("name"):
+                    continue
+                name = fm["name"]
+                description = fm.get("description", "")
+                triggers = fm.get("triggers", [])
+                combined = " ".join([name, description] + triggers)
+                tokens = tokenize(combined)
+                try:
+                    rel_path = str(skill_md_path.relative_to(skills_dir))
+                except ValueError:
+                    rel_path = str(skill_md_path)
+                entry = {
+                    "name": name,
+                    "description": description[:200],
+                    "triggers": triggers,
+                    "path": rel_path,
+                    "skill_path": str(skill_md_path),  # R2: full path for collision detection
+                    "tokens": tokens,
+                }
+                # R2: Collision detection (Motwani&Raghavan universal hashing §5.2)
+                # Two skills with the same frontmatter name would silently overwrite;
+                # warn and keep first-seen (fork skills take priority via walk order).
+                if name in seen_names:
+                    existing_path = seen_names[name].get("skill_path", "unknown")
+                    try:
+                        same_file = Path(existing_path).resolve() == skill_md_path.resolve()
+                    except OSError:
+                        same_file = existing_path == str(skill_md_path)
+                    if not same_file:
+                        print(
+                            f"[skill-router WARN] name collision: '{name}' in both "
+                            f"{existing_path!r} and {str(skill_md_path)!r} — "
+                            f"keeping first-seen (fork priority).",
+                            file=sys.stderr,
+                        )
+                    # Do NOT overwrite — first-seen wins
+                else:
+                    seen_names[name] = entry
+            except Exception as e:
+                print(f"WARN: skipping {skill_md_path}: {e}", file=sys.stderr)
+    return list(seen_names.values())
 
 
-def cmd_build():
+def cmd_build(incremental: bool = False):
+    """Build or incrementally update the skill router index.
+
+    O2 incremental mode (Borodin & El-Yaniv, ski rental §1.2):
+    Full rebuild cost = O(N·|tokens|). Incremental: only re-index skills
+    whose SKILL.md mtime is newer than the existing index built_at timestamp.
+    Amortises rebuild cost from O(N) to O(changed) per run.
+    Forced full rebuild when: index absent, total count changes, --build (explicit).
+    """
     print(f"Scanning {SKILLS_ROOT} ...")
-    skills = scan_skills()
-    print(f"Found {len(skills)} skills with valid frontmatter.")
+    skills_all = scan_skills()
+    print(f"Found {len(skills_all)} skills with valid frontmatter.")
 
-    skills, idf = build_tfidf(skills)
+    if incremental and INDEX_PATH.exists():
+        try:
+            existing_index = json.loads(INDEX_PATH.read_text())
+            built_at_str = existing_index.get("built_at", "")
+            existing_skills = {s["name"]: s for s in existing_index.get("skills", [])}
+            if len(existing_skills) == len(skills_all):
+                # Determine which skills changed since last build
+                import datetime as _dt
+                built_ts = _dt.datetime.fromisoformat(built_at_str).timestamp() if built_at_str else 0.0
+                changed = []
+                unchanged_entries = []
+                for s in skills_all:
+                    sp = s.get("skill_path", "")
+                    try:
+                        mtime = pathlib.Path(sp).stat().st_mtime if sp else 0.0
+                    except OSError:
+                        mtime = 0.0
+                    if mtime > built_ts or s["name"] not in existing_skills:
+                        changed.append(s)
+                    else:
+                        unchanged_entries.append(existing_skills[s["name"]])
+                if changed:
+                    print(f"[incremental] {len(changed)} changed, {len(unchanged_entries)} unchanged")
+                    # Do NOT build_tfidf() on the changed subset — IDF would be
+                    # computed on a partial corpus. Tokens are stored; TF-IDF is
+                    # rebuilt from the full token set at query time.
+                    merged = {e["name"]: e for e in unchanged_entries}
+                    for s in changed:
+                        merged[s["name"]] = s
+                    skills = list(merged.values())
+                else:
+                    print("[incremental] No changes detected — index up to date.")
+                    return
+            else:
+                print(f"[incremental] Skill count changed ({len(existing_skills)} → {len(skills_all)}) — full rebuild")
+                skills = skills_all
+                skills, _ = build_tfidf(skills)
+        except Exception as _e:
+            print(f"[incremental] Fallback to full rebuild: {_e}")
+            skills = skills_all
+            skills, _ = build_tfidf(skills)
+    else:
+        skills, _ = build_tfidf(skills_all)  # full build: enrich skills_all in-place
 
     # Strip tfidf from the JSON (rebuild at query time from tokens)
     index = {
@@ -433,6 +661,27 @@ def load_index_with_tfidf():
     return skills, idf, index
 
 
+def _adaptive_bm25_threshold(scored: list, top: int) -> tuple[float, int]:
+    """Widen sampling when BM25 routing is low-confidence or ambiguous.
+
+    arXiv:2609.14486: high-degree/ambiguous tasks — wider sampling beats greedy top-1.
+    """
+    score_threshold = MIN_SCORE_THRESHOLD
+    result_top = top
+    if not scored:
+        return score_threshold, result_top
+    s1 = float(scored[0][0])
+    s2 = float(scored[1][0]) if len(scored) > 1 else 0.0
+    if s1 < MIN_SCORE_THRESHOLD or (len(scored) > 1 and (s1 - s2) < AMBIGUITY_THRESHOLD):
+        score_threshold = 0.0  # reduce threshold to admit more candidates
+        result_top = max(top, 2)
+        print(
+            f"[skill-router] AMBIGUOUS: top scores {s1:.3f}/{s2:.3f}, returning top-2",
+            file=sys.stderr,
+        )
+    return score_threshold, result_top
+
+
 def route(query_text: str, top: int = 5) -> list[dict]:
     """Return top-N skill matches as a list of dicts (callable API, no side-effects).
 
@@ -457,18 +706,27 @@ def route(query_text: str, top: int = 5) -> list[dict]:
 
     beta_state = load_beta_state()
     beta_active = bool(beta_state)
+    # PAC-Bayes / FTRL loop: one load; multiply score by domain weight
+    # (first path component). Missing domain → 1.0. McAllester 2003.
+    routing_weights = _load_routing_weights()
     scored = [
         (
-            (0.6 * cosine(q_vec, s["tfidf"]) + 0.4 * beta_posterior_mean(s["name"], beta_state))
-            if beta_active else cosine(q_vec, s["tfidf"])
-        ) + cross_domain_boost(query_text, s.get("description", ""))
+            (
+                (0.6 * cosine(q_vec, s["tfidf"]) + 0.4 * beta_posterior_mean(s["name"], beta_state))
+                if beta_active else cosine(q_vec, s["tfidf"])
+            ) + cross_domain_boost(query_text, s.get("description", ""))
+        ) * float(routing_weights.get(
+            (s.get("path") or "").split("/")[0] or (s.get("category") or ""),
+            1.0,
+        )) * float(_load_arena_credits().get(s["name"], 1.0))
         for s in skills
     ]
     scored = list(zip(scored, skills))
     scored.sort(key=lambda x: -x[0])
+    score_threshold, result_top = _adaptive_bm25_threshold(scored, top)
 
     # Concept-lattice semantic reranking (same logic as cmd_query)
-    LATTICE_SCRIPT = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
+    LATTICE_SCRIPT = Path(_os_sri.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
     AMBIGUITY_GAP = 0.12
     LATTICE_BOOST = 0.15
     if len(scored) >= 2:
@@ -497,8 +755,8 @@ def route(query_text: str, top: int = 5) -> list[dict]:
                 scored = sorted(_boosted, key=lambda x: -x[0])
 
     results = []
-    for sc, s in scored[:top]:
-        if sc <= 0.0:
+    for sc, s in scored[:result_top]:
+        if sc < score_threshold:
             continue
         results.append({
             "name": s["name"],
@@ -657,9 +915,10 @@ def cmd_query(query_text: str):
     ]
     scored = list(zip([score for score in scored], skills))
     scored.sort(key=lambda x: -x[0])
+    _score_threshold, _result_top = _adaptive_bm25_threshold(scored, 5)
 
     # ── Semantic reranking: concept-lattice fallback when BM25 is ambiguous ──
-    LATTICE_SCRIPT = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
+    LATTICE_SCRIPT = Path(_os_sri.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
     AMBIGUITY_GAP  = 0.12
     LATTICE_BOOST  = 0.15
     semantic_reranked = False
@@ -700,7 +959,9 @@ def cmd_query(query_text: str):
                 semantic_reranked = True
 
     print(f"Top 5 matches for: '{query_text}'\n")
-    for rank, (score, s) in enumerate(scored[:5], 1):
+    for rank, (score, s) in enumerate(scored[:_result_top], 1):
+        if score < _score_threshold:
+            continue
         desc = s["description"][:70].replace("\n", " ")
         # PAC-Bayes-kl interval is display-only; ranking still uses posterior mean.
         _entry = beta_state.get(s["name"], {})
@@ -891,14 +1152,25 @@ def main():
     group.add_argument("--check", action="store_true", help="Flag high-overlap pairs")
     group.add_argument("--pattern-check", action="store_true",
                        help="SIP-3: Lint skill trigger patterns for over-complexity (>15 words, nested conditions)")
+    group.add_argument("--feedback", metavar="SKILL:OUTCOME",
+                       help="Record skill outcome (e.g. 'my-skill:success' or 'my-skill:failure'); updates Beta posterior")
     group.add_argument("--compile-patterns", action="store_true",
                        help="SIP-4: Compile trigger descriptions as regex patterns; report backtracking risks")
     parser.add_argument("--json", action="store_true", dest="as_json",
                         help="With --query: print results as JSON array instead of table")
+    parser.add_argument("--incremental", action="store_true",
+                        help="With --build: re-index only skills whose SKILL.md mtime is newer than the index")
     args = parser.parse_args()
 
+    # Cron compatibility: scheduler doesn't pass CLI args to scripts (scheduler_script.py §326)
+    # When HERMES_CRON_BUILD=1 is set in job env, default to --build behavior.
+    import os as _os_main
+    if not any([args.build, args.query, args.check, args.pattern_check, args.feedback, args.compile_patterns]):
+        if _os_main.environ.get("HERMES_CRON_BUILD", "") == "1":
+            args.build = True
+
     if args.build:
-        cmd_build()
+        cmd_build(incremental=bool(args.incremental))
     elif args.query:
         if args.as_json:
             print(json.dumps(route(args.query), indent=2))
@@ -910,6 +1182,14 @@ def main():
         cmd_pattern_check()
     elif args.compile_patterns:
         cmd_compile_patterns()
+    elif args.feedback:
+        skill_name, _, outcome = args.feedback.partition(":")
+        if skill_name and outcome in ("success", "failure"):
+            record_skill_outcome(skill_name.strip(), outcome == "success")
+            print(json.dumps({"ok": True, "skill": skill_name.strip(), "outcome": outcome}))
+        else:
+            print(json.dumps({"error": "format must be 'skill-name:success' or 'skill-name:failure'"}))
+            import sys; sys.exit(1)
     else:
         _print_worked_example()
 

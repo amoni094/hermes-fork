@@ -55,8 +55,101 @@ _CALIBRATION: dict[int, float] = {
     3: 1.00,
 }
 
+
+
+def _load_dynamic_calibration() -> dict:
+    """Load calibration thresholds from condorcet-thresholds.json if fresh (<2h).
+
+    Theory: Gelman BDA3 §2.4 (posterior predictive); calibration-threshold-updater.py
+    writes EMA-updated thresholds for each scope. We use the global observed_rate as
+    a scaling hint: if observed agreement_rate < 0.5, all calibrated confidences
+    are scaled down proportionally.
+
+    Returns: {0: float, 1: float, 2: float, 3: float} — same shape as _CALIBRATION.
+    Fails open: returns _CALIBRATION on any error.
+    """
+    import time as _t
+    try:
+        thresh_path = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / (
+            ("profiles/" + os.environ.get("HERMES_PROFILE", "") + "/")
+            if os.environ.get("HERMES_PROFILE", "") else ""
+        ) / "cache" / "condorcet-thresholds.json"
+        if not thresh_path.exists():
+            return dict(_CALIBRATION)
+        age = _t.time() - thresh_path.stat().st_mtime
+        if age > 7200:  # 2h stale → fall back
+            return dict(_CALIBRATION)
+        import json as _j
+        data = _j.loads(thresh_path.read_text())
+        # Find a usable threshold from any scope
+        rates = [v.get('observed_rate') for v in data.values()
+                 if isinstance(v, dict) and v.get('observed_rate') is not None]
+        if not rates:
+            return dict(_CALIBRATION)
+        mean_rate = sum(rates) / len(rates)
+        if mean_rate <= 0 or mean_rate >= 1:
+            return dict(_CALIBRATION)
+        # Scale: at mean_rate=0.5 (expected), scale=1.0 (no change).
+        # At mean_rate=0.3: scale=0.6 (lower confidence); at 0.7: scale=1.4 (higher).
+        scale = mean_rate / 0.5
+        scale = max(0.5, min(2.0, scale))  # clamp to ±2x
+        scaled = {k: min(1.0, max(0.0, round(v * scale, 3))) for k, v in _CALIBRATION.items()}
+        return scaled
+    except Exception:
+        return dict(_CALIBRATION)
+
+# Runtime calibration (overrides _CALIBRATION if condorcet-thresholds.json is fresh)
+_RUNTIME_CALIBRATION: dict | None = None
+_RUNTIME_CALIBRATION_MTIME: float = 0.0
+
+def _get_calibration() -> dict:
+    """Return calibration dict, using dynamic thresholds if available.
+    
+    Cache invalidation: re-loads if condorcet-thresholds.json mtime has changed.
+    This allows long-running sessions to pick up calibration updates mid-session.
+    """
+    global _RUNTIME_CALIBRATION, _RUNTIME_CALIBRATION_MTIME
+    try:
+        thresh_path = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / (
+            ("profiles/" + os.environ.get("HERMES_PROFILE", "") + "/")
+            if os.environ.get("HERMES_PROFILE", "") else ""
+        ) / "cache" / "condorcet-thresholds.json"
+        current_mtime = thresh_path.stat().st_mtime if thresh_path.exists() else 0.0
+        if _RUNTIME_CALIBRATION is None or current_mtime != _RUNTIME_CALIBRATION_MTIME:
+            _RUNTIME_CALIBRATION = _load_dynamic_calibration()
+            _RUNTIME_CALIBRATION_MTIME = current_mtime
+    except Exception:
+        if _RUNTIME_CALIBRATION is None:
+            _RUNTIME_CALIBRATION = dict(_CALIBRATION)
+    return _RUNTIME_CALIBRATION
+
 # Sentinel for a failed/timeout verification call
 _CALL_FAILED = object()
+
+import math as _math
+
+
+def hoeffding_ci(agreements: int, n: int, delta: float = 0.05) -> tuple[float, float]:
+    """Hoeffding confidence interval for empirical mean of n Bernoulli trials.
+
+    Theoretical basis: Hoeffding (1963). For bounded [0,1] r.v.s:
+      P(|empirical_mean - true_mean| > t) <= 2*exp(-2*n*t^2)
+    Setting 2*exp(-2*n*t^2) = delta => t = sqrt(log(2/delta) / (2*n)).
+
+    Reference: Vershynin "High-Dimensional Probability" §2.2 (Hoeffding's inequality);
+    Lugosi "Concentration of Measure" notes.
+
+    Returns (lower, upper) bounds on the true agreement probability, clamped to [0, 1].
+    """
+    if n <= 0:
+        return 0.0, 1.0
+    p_hat = agreements / n
+    t = _math.sqrt(_math.log(2.0 / delta) / (2.0 * n))
+    lower = max(0.0, p_hat - t)
+    upper = min(1.0, p_hat + t)
+    return lower, upper
+
+
 
 
 @dataclass
@@ -71,6 +164,7 @@ def consistency_score(
     finding: str,
     verify_fn: Callable[[str], bool],
     config: ConsistencyConfig | None = None,
+    scope: str | None = None,
 ) -> float:
     """
     Run N parallel verify_fn calls on finding, return calibrated confidence.
@@ -114,12 +208,33 @@ def consistency_score(
     agreements = sum(1 for r in results if r is True)
     # Clamp to valid table keys (n might not be 3)
     table_key = min(agreements, 3)
-    calibrated = _CALIBRATION.get(table_key, 0.05)
+    calibrated = _get_calibration().get(table_key, 0.05)
+    # Per-scope scale adjustment (Gelman BDA3 §2.4) — if scope is provided,
+    # look up per-scope observed_rate from condorcet-thresholds.json and scale.
+    if scope is not None:
+        try:
+            import json as _j, time as _t, os as _os
+            from pathlib import Path as _Path
+            _hh = _Path(_os.environ.get("HERMES_HOME", str(_Path.home() / ".hermes")))
+            _hp = _os.environ.get("HERMES_PROFILE", "")
+            _thresh_path = (
+                (_hh / "profiles" / _hp) if _hp and "profiles" not in str(_hh) else _hh
+            ) / "cache" / "condorcet-thresholds.json"
+            if _thresh_path.exists() and (_t.time() - _thresh_path.stat().st_mtime) < 7200:
+                _thresh_data = _j.loads(_thresh_path.read_text())
+                _scope_data = _thresh_data.get(scope, {})
+                _scope_rate = _scope_data.get('observed_rate') or _scope_data.get('threshold')
+                if _scope_rate and 0 < _scope_rate < 1:
+                    calibrated = min(1.0, max(0.0, calibrated * (_scope_rate / 0.5)))
+        except Exception:
+            pass  # scope lookup is advisory; fall back to global calibration
+    # Hoeffding CI (Vershynin HDP §2.2) — attach to return value for callers that want uncertainty
+    _ci_lo, _ci_hi = hoeffding_ci(agreements, len(results))
 
     if config.log_results:
         logger.debug(
-            "consistency_scorer: n=%d agreements=%d/%d → confidence=%.2f",
-            n, agreements, len(results), calibrated,
+            "consistency_scorer: n=%d agreements=%d/%d → confidence=%.2f CI=[%.2f,%.2f]",
+            n, agreements, len(results), calibrated, _ci_lo, _ci_hi,
         )
         try:
             _calib_path = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / 'cache' / 'calibration-log.jsonl'

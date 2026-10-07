@@ -22,11 +22,16 @@ from pathlib import Path
 LOCK = Path("~/.hermes/.l1-extract-running").expanduser()
 _HERE = Path(__file__).resolve().parent
 _PYC_CANDIDATES = [
+    # cpython-314 first: payload compiled for 3.14, re-exec fires if running 3.11
     _HERE / "references" / "l1-extract.cpython-314.pyc.bak",
     _HERE / "__pycache__" / "l1-extract.cpython-314.pyc",
+    _HERE.parent.parent.parent / "scripts" / "references" / "l1-extract.cpython-314.pyc.bak",
+    _HERE.parent.parent.parent / "scripts" / "__pycache__" / "l1-extract.cpython-314.pyc",
+    # cpython-311 last: wrapper fallback (for inspection only, not payload)
+    _HERE / "__pycache__" / "l1-extract.cpython-311.pyc",
 ]
 
-_SYS_PYTHON = "/usr/bin/python3"
+_SYS_PYTHON = "/usr/bin/python3.14"
 
 
 def _pyc_magic(path: Path) -> bytes:

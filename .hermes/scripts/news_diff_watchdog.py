@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # ── Config ────────────────────────────────────────────────────────────────
-CACHE_FILE = Path.home() / ".hermes" / "cache" / "news" / "seen_items.json"
+CACHE_FILE = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache" / "news" / "seen_items.json"
 MAX_CACHE_ITEMS = 500  # Rolling window to prevent unbounded growth
 
 # Feed sources: list of (name, url) tuples

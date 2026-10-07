@@ -166,6 +166,10 @@ def run(task: str, uncertainty: float | None, horizon: int, dry_run: bool) -> in
         _tmp_out_file.replace(OUT_FILE)
         print(f"Written: {OUT_FILE}")
 
+    # Exit 1 when ALL tasks deferred — signals to callers that no work should proceed
+    # (M1 gate-silent fix: gates must signal failure when the gate blocks)
+    if deferred == len(results) and len(results) > 0 and not dry_run:
+        return 1
     return 0
 
 

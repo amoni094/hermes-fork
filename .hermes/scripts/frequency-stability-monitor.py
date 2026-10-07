@@ -198,7 +198,8 @@ def main():
     print(f"ALARM:        {'YES (' + alarm_type + ')' if alarm else 'no'}")
     if args.dry_run:
         print("  (dry-run: no writes)")
+    return 1 if alarm else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)

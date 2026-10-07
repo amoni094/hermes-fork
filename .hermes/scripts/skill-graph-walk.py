@@ -31,8 +31,8 @@ import argparse
 import heapq
 from pathlib import Path
 
-SKILLS_DIR = Path.home() / ".hermes" / "skills"
-TAXONOMY_PATH = Path.home() / ".hermes" / "cache" / "provides-taxonomy.json"
+SKILLS_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "skills"
+TAXONOMY_PATH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "cache" / "provides-taxonomy.json"
 
 
 def parse_frontmatter(path: Path) -> dict:

@@ -247,7 +247,9 @@ def main():
             "n_synthetic": 2000,
         }
         probe_path.parent.mkdir(parents=True, exist_ok=True)
-        probe_path.write_text(json.dumps(probe_data, indent=2))
+        _tmp = probe_path.with_suffix('.tmp')
+        _tmp.write_text(json.dumps(probe_data, indent=2), encoding='utf-8')
+        _tmp.replace(probe_path)
         print(json.dumps({"status": "trained", "path": str(probe_path)}))
         sys.exit(0)
 
@@ -296,4 +298,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)

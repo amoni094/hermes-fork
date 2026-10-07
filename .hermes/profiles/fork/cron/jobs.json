@@ -9,10 +9,29 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/shadow-gate-nightly.py",
       "no_agent": true,
       "description": "Nightly shadow flag evaluation",
-      "next_run_at": "2026-09-20T08:00:00+10:00",
+      "next_run_at": "2026-10-08T08:00:00+11:00",
       "env": {
-        "HERMES_PROFILE": "fork"
-      }
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T08:00:00+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 7683.1,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:08:11.370872+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "shadow-gate"
     },
     {
       "id": "calibration-threshold-updater-0001",
@@ -23,10 +42,29 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/calibration-threshold-updater.py",
       "no_agent": true,
       "description": "Daily Condorcet threshold EMA update",
-      "next_run_at": "2026-09-20T06:00:00+10:00",
+      "next_run_at": "2026-10-08T06:00:00+11:00",
       "env": {
-        "HERMES_PROFILE": "fork"
-      }
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T06:00:00+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 14883.1,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:08:10.135209+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "timeout_seconds": 1800,
+      "priority": 2,
+      "name": "calibration-threshold-updater"
     },
     {
       "id": "recall-miss-ttl-adjuster-0001",
@@ -37,10 +75,29 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/recall-miss-ttl-adjuster.py",
       "no_agent": true,
       "description": "Daily MRAS adaptive TTL adjustment (bottleneck #8)",
-      "next_run_at": "2026-09-20T05:00:00+10:00",
+      "next_run_at": "2026-10-08T05:00:00+11:00",
       "env": {
-        "HERMES_PROFILE": "fork"
-      }
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T05:00:00+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 18483.1,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:08:10.275249+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "recall-miss-ttl-adjuster"
     },
     {
       "id": "routing-weight-updater-0001",
@@ -51,11 +108,30 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-weight-updater.py",
       "no_agent": true,
       "description": "Daily FTRL routing weight update (bottleneck #2)",
-      "next_run_at": "2026-09-20T07:00:00+10:00",
+      "next_run_at": "2026-10-08T07:00:00+11:00",
       "env": {
-        "HERMES_PROFILE": "fork"
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "display": "daily at 09:00"
+      "display": "daily at 09:00",
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T07:00:00+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 11283.1,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:08:10.549926+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "routing-weight-updater"
     },
     {
       "id": "pre-compact-annotate-0001",
@@ -66,23 +142,29 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/pre-compact-annotate.py",
       "no_agent": true,
       "description": "Every 15m R-D compaction advisory",
-      "next_run_at": "2026-09-19T23:00:00+10:00",
+      "next_run_at": "2026-10-07T16:00:00+11:00",
       "env": {
-        "HERMES_PROFILE": "fork"
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-09-19T22:45:00+10:00",
-        "dispatched_at": "2026-09-19T22:45:23.494411+10:00",
-        "lateness_seconds": 23.5,
+        "scheduled_at": "2026-10-07T15:45:00+11:00",
+        "dispatched_at": "2026-10-07T15:45:05.166301+11:00",
+        "lateness_seconds": 5.2,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-09-19T22:45:24.163619+10:00",
+      "last_run_at": "2026-10-07T15:45:11.788437+11:00",
       "last_status": "ok",
       "failure_streak": 0,
       "last_delivery_error": null,
       "state": "scheduled",
-      "last_error": null
+      "last_error": null,
+      "profile": "fork",
+      "enabled": true,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "pre-compact-annotate"
     },
     {
       "id": "skillspector-guard-0001",
@@ -93,23 +175,33 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skillspector_guard.py",
       "no_agent": true,
       "description": "Every 4h skill integrity scan (H-I1 reactive gate)",
-      "next_run_at": "2026-09-20T00:00:00+10:00",
+      "next_run_at": "2026-10-07T16:00:00+11:00",
       "env": {
-        "HERMES_PROFILE": "fork"
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-09-19T20:00:00+10:00",
-        "dispatched_at": "2026-09-19T20:00:06.256629+10:00",
-        "lateness_seconds": 6.3,
+        "scheduled_at": "2026-10-07T12:00:00+11:00",
+        "dispatched_at": "2026-10-07T12:00:38.785277+11:00",
+        "lateness_seconds": 38.8,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-09-19T20:00:09.827982+10:00",
-      "last_status": "ok",
-      "last_error": null,
-      "failure_streak": 0,
+      "last_run_at": "2026-10-07T12:00:51.788728+11:00",
+      "last_status": "error",
+      "last_error": "Script exited with code 1\nstdout:\nskills=42 bundled=0 non_bundled=42\nseverity_counts={\"CRITICAL\": 3, \"HIGH\": 2, \"LOW\": 33, \"MEDIUM\": 4}\nallowlisted=0\nquarantined=0\npending_quarantine=0\nflagged=3\nsummary=/var/home/rainbow/.hermes/skills-security/last-summary.json\nallowlist=/var/home/rainbow/.hermes/skills-security/allowlist.json\npending=/var/home/rainbow/.hermes/skills-security/pending_quarantine.json\nFLAGGED embedded-device-setup score=100 severity=CRITICAL report=/var/home/rainbow/.hermes/skills-security/reports/embedded-device-setup.json\nFLAGGED network-vulnerability-scanning score=87 severity=CRITICAL report=/var/home/rainbow/.hermes/skills-security/reports/network-vulnerability-scanning.json\nFLAGGED pi-os-cloudinit-ssh-setup score=100 severity=CRITICAL report=/var/home/rainbow/.hermes/skills-security/reports/pi-os-cloudinit-ssh-setup.json",
+      "failure_streak": 20,
       "last_delivery_error": null,
-      "state": "scheduled"
+      "state": "scheduled",
+      "profile": "fork",
+      "enabled": true,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "skillspector-guard",
+      "last_failure": {
+        "at": "2026-10-07T12:00:51.788728+11:00",
+        "detail": "Script exited with code 1\nstdout:\nskills=42 bundled=0 non_bundled=42\nseverity_counts={\"CRITICAL\": 3, \"HIGH\": 2, \"LOW\": 33, \"MEDIUM\": 4}\nallowlisted=0\nquarantined=0\npending_quarantine=0\nflagged=3\nsummary=/var/home/rainbow/.hermes/skills-security/last-summary.json\nallowlist=/var/home/rainbow/.hermes/skills-security/allowlist.json\npending=/var/home/rainbow/.hermes/skills-security/pending_quarantine.json\nFLAGGED embedded-device-setup score=100 severity=CRITICAL report=/var/home/rainbow/.hermes/skills-security/reports/embedded-device-setup.json\nFLAGGED network-vulnerability-scanning score=87 severity=CRITICAL report=/var/home/rainbow/.hermes/skills-security/reports/network-vulnerability-scanning.json\nFLAGGED pi-os-cloudinit-ssh-setup score=100 severity=CRITICAL report=/var/home/rainbow/.hermes/skills-security/reports/pi-os-cloudinit-ssh-setup.json"
+      }
     },
     {
       "id": "fork-state-vacuum-0001",
@@ -120,10 +212,29 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/fork-state-vacuum.py",
       "no_agent": true,
       "description": "Weekly SQLite VACUUM on fork state.db",
-      "next_run_at": "2026-09-20T03:00:00+10:00",
+      "next_run_at": "2026-10-11T03:00:00+11:00",
       "env": {
-        "HERMES_PROFILE": "fork"
-      }
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-04T03:00:00+10:00",
+        "dispatched_at": "2026-10-04T11:43:04.990331+11:00",
+        "lateness_seconds": 27785.0,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-04T11:43:09.090927+11:00",
+      "last_status": "error",
+      "last_error": "Script exited with code 1\nstderr:\nTraceback (most recent call last):\n  File \"/var/home/rainbow/.hermes/profiles/fork/scripts/fork-state-vacuum.py\", line 16, in <module>\n    HERMES_HOME = pathlib.Path(os.environ.get(\"HERMES_HOME\", str(Path.home() / \".hermes\")))\n                                                                 ^^^^\nNameError: name 'Path' is not defined",
+      "failure_streak": 1,
+      "last_delivery_error": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "fork-state-vacuum"
     },
     {
       "id": "memory-ttl-purge-0001",
@@ -134,10 +245,29 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-ttl-purge.py",
       "no_agent": true,
       "description": "Daily TTL purge of staged memories",
-      "next_run_at": "2026-09-20T04:00:00+10:00",
+      "next_run_at": "2026-10-08T04:00:00+11:00",
       "env": {
-        "HERMES_PROFILE": "fork"
-      }
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T04:00:00+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 22083.1,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:08:11.546405+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "timeout_seconds": 1800,
+      "priority": 2,
+      "name": "memory-ttl-purge"
     },
     {
       "id": "concept-lattice-rebuild-0001",
@@ -148,10 +278,29 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/concept-lattice-index.py",
       "no_agent": true,
       "description": "Nightly concept lattice rebuild (skill router semantic fallback)",
-      "next_run_at": "2026-09-20T02:00:00+10:00",
+      "next_run_at": "2026-10-08T02:00:00+11:00",
       "env": {
-        "HERMES_PROFILE": "fork"
-      }
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T02:00:00+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 29283.1,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:08:09.992229+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "concept-lattice-rebuild"
     },
     {
       "id": "omni-skill-scan-0001",
@@ -162,10 +311,29 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/omni_skill_scan.py",
       "no_agent": true,
       "description": "Nightly skill scan and variance tracking",
-      "next_run_at": "2026-09-20T01:00:00+10:00",
+      "next_run_at": "2026-10-08T01:00:00+11:00",
       "env": {
-        "HERMES_PROFILE": "fork"
-      }
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T01:00:00+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 32883.1,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:08:11.196227+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "omni-skill-scan"
     },
     {
       "id": "spike-queue-actuator-0001",
@@ -177,10 +345,29 @@
       "no_agent": true,
       "description": "Daily SPIKE queue actuator — dispatch research spikes as improvement proposals",
       "env": {
-        "HERMES_PROFILE": "fork"
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
       "display": "daily at 10:00",
-      "next_run_at": "2026-09-20T10:00:00+10:00"
+      "next_run_at": "2026-10-08T10:00:00+11:00",
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T10:00:00+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 483.1,
+        "kind": "late"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:08:10.839981+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "timeout_seconds": 1800,
+      "priority": 4,
+      "name": "spike-queue-actuator"
     },
     {
       "id": "cross-calibration-monitor-0001",
@@ -191,10 +378,29 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cross-calibration-monitor.py",
       "no_agent": true,
       "description": "Daily cross-calibration drift monitor (DRIFT_ALARM + TREND_DIVERGENCE)",
-      "next_run_at": "2026-09-20T11:00:00+10:00",
+      "next_run_at": "2026-10-08T11:00:00+11:00",
       "env": {
-        "HERMES_PROFILE": "fork"
-      }
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T11:00:00+11:00",
+        "dispatched_at": "2026-10-07T11:00:38.774754+11:00",
+        "lateness_seconds": 38.8,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T11:00:40.406399+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "timeout_seconds": 1800,
+      "priority": 1,
+      "name": "cross-calibration-monitor"
     },
     {
       "id": "monitor-suite-runner-0001",
@@ -206,22 +412,28 @@
       "no_agent": true,
       "description": "Every 2h monitor suite run — collects alarm JSON for alarm-aggregator",
       "env": {
-        "HERMES_PROFILE": "fork"
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-09-20T00:00:00+10:00",
+      "next_run_at": "2026-10-07T16:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-09-19T22:00:00+10:00",
-        "dispatched_at": "2026-09-19T22:00:18.758541+10:00",
-        "lateness_seconds": 18.8,
+        "scheduled_at": "2026-10-07T14:00:00+11:00",
+        "dispatched_at": "2026-10-07T14:00:07.173120+11:00",
+        "lateness_seconds": 7.2,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-09-19T22:00:24.741307+10:00",
+      "last_run_at": "2026-10-07T14:00:09.209040+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "last_delivery_error": null,
-      "state": "scheduled"
+      "state": "scheduled",
+      "profile": "fork",
+      "enabled": true,
+      "timeout_seconds": 1800,
+      "priority": 1,
+      "name": "monitor-suite-runner"
     },
     {
       "id": "mcp-privilege-audit-0001",
@@ -233,9 +445,28 @@
       "no_agent": true,
       "description": "Weekly MCP least-privilege audit (cs-mcp-overpriv / arXiv:2603.21641)",
       "env": {
-        "HERMES_PROFILE": "fork"
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-09-21T03:00:00+10:00"
+      "next_run_at": "2026-10-12T03:00:00+11:00",
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-05T03:00:00+10:00",
+        "dispatched_at": "2026-10-05T16:00:44.202758+11:00",
+        "lateness_seconds": 43244.2,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-05T16:00:48.558505+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "mcp-privilege-audit"
     },
     {
       "id": "gate-audit-0001",
@@ -247,9 +478,28 @@
       "no_agent": true,
       "description": "Daily gate audit output capture",
       "env": {
-        "HERMES_PROFILE": "fork"
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-09-20T06:30:00+10:00"
+      "next_run_at": "2026-10-08T06:30:00+11:00",
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T06:30:00+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 13083.1,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:08:12.579562+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "gate-audit"
     },
     {
       "id": "hermes-gateway-prestart-0001",
@@ -260,12 +510,2185 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-gateway-prestart.py",
       "no_agent": true,
       "env": {
-        "HERMES_PROFILE": "fork"
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
       "failure_streak": 0,
       "description": "Pre-gateway: WAL checkpoint + retired-wal cleanup before state.db opens",
-      "next_run_at": "2026-09-20T04:00:00+10:00"
+      "next_run_at": "2026-10-08T04:00:00+11:00",
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T04:00:00+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 22083.1,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:08:15.622661+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "hermes-gateway-prestart"
+    },
+    {
+      "id": "b053e57fd10b",
+      "name": "hermes-chat-sync-4h",
+      "prompt": "Resolve the current local date/time with `date`. Then synchronize recent Hermes chat activity into the Obsidian vault at /var/home/rainbow/Documents/SecondBrain.\n\nFollow the `hermes-obsidian-sync` skill strictly, with these priority rules:\n1. Read the current live-sync note first: `/var/home/rainbow/Documents/SecondBrain/04 Resources/Hermes Chat Live Sync.md`.\n2. Resolve today’s daily-note path from the runtime date and read that note before making any rewrite/patch.\n3. Treat those two note files as the continuity baseline. Preserve already-curated durable state unless newer verified evidence supersedes it.\n4. Use `session_search` to browse recent sessions, but only drill into the most relevant substantive sessions from the last 24 hours, and avoid brute-reading full prior sync sessions unless a narrowed slice is truly needed.\n5. If recent results are crowded by prior cron sync runs, treat them as maintenance context rather than primary source material.\n6. If present, inspect `~/.hermes/logs/hermes-memory-capture.jsonl`, `~/.hermes/logs/hermes-obsidian-file-events.jsonl`, and `~/.hermes/state/obsidian-dirty-paths.json` for high-signal local hints, but prefer search-first and tail-window reads for large files.\n7. Never brute-read a large log or note from line 1 if it is big. If a read exceeds safety limits, immediately re-read only a small tail window near the end using the reported total_lines/size hint.\n8. Capture only durable/high-signal items: workflow changes, configuration facts, verified runtime state, note syncs, cron changes, maintenance actions, and stable follow-ups.\n9. Rewrite `/var/home/rainbow/Documents/SecondBrain/04 Resources/Hermes Chat Live Sync.md` as a curated note with frontmatter, last synced timestamp, scope, recent sessions, key durable themes, follow-ups, and privacy notes.\n10. Ensure today's daily note exists and contains or updates a `## Hermes Chat Sync` section linking to `[[Hermes Chat Live Sync]]` with 3-5 concise bullets.\n11. Keep the daily note thin: one link bullet plus only the most durable 2-4 items. Do not copy detailed PR/commit/test minutiae into the daily note unless they changed an ongoing operating rule.\n12. Keep the output curated and concise. Do NOT dump raw transcripts or secrets.\n13. Prefer rewriting the live-sync note cleanly rather than appending duplicate sections forever.\n14. Treat `~/.hermes/memories/MEMORY.md` as the canonical agent-facing durable memory store; vault `MEMORY.md` and live-sync notes are curated human-readable surfaces, while session/log/state files are retrieval or telemetry sources.\n\nVerification:\n- Read back the files you wrote/updated and confirm the sync landed.\n- If there are no meaningful new sessions, keep the note stable and only refresh the timestamp when appropriate.\n- Report only the curated result, not raw logs.",
+      "skills": [
+        "hermes-obsidian-sync"
+      ],
+      "skill": "hermes-obsidian-sync",
+      "model": "claude-haiku-4-5",
+      "provider": "anthropic",
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-chat-sync-precheck.py",
+      "no_agent": false,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 240,
+        "display": "every 240m"
+      },
+      "schedule_display": "every 240m",
+      "repeat": {
+        "times": null,
+        "completed": 492
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-05T19:33:16.539234+10:00",
+      "next_run_at": "2026-10-07T18:11:44.270493+11:00",
+      "last_run_at": "2026-10-07T14:11:44.270493+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": [
+        "file",
+        "terminal",
+        "memory"
+      ],
+      "workdir": "/var/home/rainbow",
+      "profile": "fork",
+      "fire_claim": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "failure_streak": 0,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T14:09:08.349037+11:00",
+        "dispatched_at": "2026-10-07T14:10:07.176795+11:00",
+        "lateness_seconds": 58.8,
+        "kind": "on_time"
+      },
+      "timeout_seconds": 3600,
+      "startup_jitter_seconds": 19,
+      "priority": 4,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "52776e518fc1",
+      "name": "hermes-mutation-gate-watch",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-mutation-gate-watch.sh",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 1440,
+        "display": "every 1440m"
+      },
+      "schedule_display": "every 1440m",
+      "repeat": {
+        "times": null,
+        "completed": 100
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-06T20:19:02.184896+10:00",
+      "next_run_at": "2026-10-07T22:49:59.813093+11:00",
+      "last_run_at": "2026-10-06T22:49:59.813093+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": [
+        "terminal"
+      ],
+      "workdir": null,
+      "profile": "fork",
+      "fire_claim": null,
+      "failure_streak": 0,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-06T22:49:37.002904+11:00",
+        "dispatched_at": "2026-10-06T22:49:58.288131+11:00",
+        "lateness_seconds": 21.3,
+        "kind": "on_time"
+      },
+      "timeout_seconds": 3600,
+      "startup_jitter_seconds": 18,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "3170e542c493",
+      "name": "hermes-memory-drift-audit",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-memory-drift-audit.py",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 1440,
+        "display": "every 1440m"
+      },
+      "schedule_display": "every 1440m",
+      "repeat": {
+        "times": null,
+        "completed": 103
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-07T14:34:04.244533+10:00",
+      "next_run_at": "2026-10-07T22:49:59.983237+11:00",
+      "last_run_at": "2026-10-06T22:49:59.983237+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": [
+        "terminal"
+      ],
+      "workdir": null,
+      "profile": "fork",
+      "fire_claim": null,
+      "failure_streak": 0,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-06T22:49:37.135643+11:00",
+        "dispatched_at": "2026-10-06T22:49:58.288131+11:00",
+        "lateness_seconds": 21.2,
+        "kind": "on_time"
+      },
+      "timeout_seconds": 3600,
+      "startup_jitter_seconds": 37,
+      "priority": 2,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "064999e8aff3",
+      "name": "firecrawl-watchdog",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/firecrawl_watchdog.sh",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 10,
+        "display": "every 10m"
+      },
+      "schedule_display": "every 10m",
+      "repeat": {
+        "times": null,
+        "completed": 5350
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-26T11:06:08.602796+10:00",
+      "next_run_at": "2026-10-07T15:57:08.785402+11:00",
+      "last_run_at": "2026-10-07T15:47:08.785402+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": {
+        "platform": "telegram",
+        "chat_id": "8642613127",
+        "chat_name": "A",
+        "thread_id": null
+      },
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null,
+      "failure_streak": 0,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T15:46:06.688576+11:00",
+        "dispatched_at": "2026-10-07T15:47:07.168735+11:00",
+        "lateness_seconds": 60.5,
+        "kind": "on_time"
+      },
+      "profile": "fork",
+      "timeout_seconds": 480,
+      "startup_jitter_seconds": 44,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "last_failure": {
+        "at": "2026-10-07T10:08:57.009644+11:00",
+        "detail": "Script exited with code 1\nstderr:\ncurl: (56) Recv failure: Connection reset by peer\ncurl: (56) Recv failure: Connection reset by peer\nstdout:\n[2026-10-07 10:08:18 AEDT] Firecrawl watchdog: API health check failed; restart attempted but endpoint is still unhealthy."
+      }
+    },
+    {
+      "id": "2b3f3a0f79a0",
+      "name": "hermes-platform-watchdog",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-platform-watchdog.sh",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 720,
+        "display": "every 720m"
+      },
+      "schedule_display": "every 720m",
+      "repeat": {
+        "times": null,
+        "completed": 133
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-29T08:48:03.927634+10:00",
+      "next_run_at": "2026-10-07T22:15:44.621163+11:00",
+      "last_run_at": "2026-10-07T10:15:44.621163+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": [
+        "terminal"
+      ],
+      "workdir": null,
+      "fire_claim": null,
+      "failure_streak": 0,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T10:15:03.844109+11:00",
+        "dispatched_at": "2026-10-07T10:15:38.780233+11:00",
+        "lateness_seconds": 34.9,
+        "kind": "on_time"
+      },
+      "profile": "fork",
+      "timeout_seconds": 3600,
+      "startup_jitter_seconds": 17,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "1ea1d2459f51",
+      "name": "session-auto-prune",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/session-prune.sh",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 245,
+        "display": "every 245m"
+      },
+      "schedule_display": "every 245m",
+      "repeat": {
+        "times": null,
+        "completed": 282
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-07-01T20:18:29.618545+10:00",
+      "next_run_at": "2026-10-07T18:20:38.188455+11:00",
+      "last_run_at": "2026-10-07T14:15:38.188455+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null,
+      "failure_streak": 0,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T14:13:28.795866+11:00",
+        "dispatched_at": "2026-10-07T14:14:07.177089+11:00",
+        "lateness_seconds": 38.4,
+        "kind": "on_time"
+      },
+      "profile": "fork",
+      "timeout_seconds": 3600,
+      "startup_jitter_seconds": 14,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "ebe4fd06d379",
+      "name": "l1-extract-periodic",
+      "prompt": "Run l1-extract.py to extract atomic facts from recent Hermes session turns",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-extract.py",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 180,
+        "display": "every 180m"
+      },
+      "schedule_display": "every 180m",
+      "repeat": {
+        "times": null,
+        "completed": 323
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-07-09T19:28:37.783372+10:00",
+      "next_run_at": "2026-10-07T16:09:12.168942+11:00",
+      "last_run_at": "2026-10-07T13:09:12.168942+11:00",
+      "last_status": "error",
+      "last_error": "Script exited with code 1\nstderr:\nTraceback (most recent call last):\n  File \"<string>\", line 16, in <module>\n    exec(code, main.__dict__)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^\n  File \"/var/home/rainbow/.hermes/profiles/fork/scripts/l1-extract.py\", line 105, in <module>\n    raise SystemExit(main() or 0)\n                     ~~~~^^\n  File \"/var/home/rainbow/.hermes/profiles/fork/scripts/l1-extract.py\", line 99, in main\n    return _load().main()\n           ~~~~~~~~~~~~^^\n  File \"/var/home/rainbow/.hermes/scripts/l1-extract.py\", line 628, in main\n  File \"/var/home/rainbow/.hermes/scripts/l1-extract.py\", line 289, in get_recent_turns\nsqlite3.OperationalError: database is locked",
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null,
+      "failure_streak": 1,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T13:08:24.593853+11:00",
+        "dispatched_at": "2026-10-07T13:09:05.164934+11:00",
+        "lateness_seconds": 40.6,
+        "kind": "on_time"
+      },
+      "profile": "fork",
+      "timeout_seconds": 3600,
+      "startup_jitter_seconds": 41,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "last_failure": {
+        "at": "2026-10-07T13:09:12.168942+11:00",
+        "detail": "Script exited with code 1\nstderr:\nTraceback (most recent call last):\n  File \"<string>\", line 16, in <module>\n    exec(code, main.__dict__)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^\n  File \"/var/home/rainbow/.hermes/profiles/fork/scripts/l1-extract.py\", line 105, in <module>\n    raise SystemExit(main() or 0)\n                     ~~~~^^\n  File \"/var/home/rainbow/.hermes/profiles/fork/scripts/l1-extract.py\", line 99, in main\n    return _load().main()\n           ~~~~~~~~~~~~^^\n  File \"/var/home/rainbow/.hermes/scripts/l1-extract.py\", line 628, in main\n  File \"/var/home/rainbow/.hermes/scripts/l1-extract.py\", line 289, in get_recent_turns\nsqlite3.OperationalError: database is locked"
+      }
+    },
+    {
+      "id": "e034d0179aa9",
+      "name": "l1-hindsight-promote",
+      "prompt": "Read ~/.hermes/memory-facts/staging.md. For each bullet line in that file:\n\n1. Strip the timestamp and score prefix (e.g. \"- [2026-07-09T09:27Z] [score=3] \").\n\n2. Parse ALL inline tags from the line before extracting fact text:\n   - Memory type: [type=fact], [type=correction], [type=outcome], [type=preference], [type=reasoning], [type=observation]. Default: \"fact\".\n   - Volatility class: [vc=stable], [vc=volatile], [vc=ephemeral]. Default: \"volatile\".\n   - Memory namespace: [ns=profile], [ns=event], [ns=record]. Default: \"record\".\n   - Anchors: [anchors: term1, term2, term3] — split on comma.\n   - Entities: [entities: Type:Name, Type:Name] — split on comma.\n   - Valid-from: [valid_from=<ISO timestamp>] — use as the temporal anchor.\n   - Retention score: [retention=<float>] — include as a tag.\n   - Supersedes: [supersedes=<id>] — include as a tag.\n   - Access count: [access_count=<int>] — pass through.\n   Strip ALL of these tag patterns from the line before extracting the clean fact text.\n\n3. Build the hindsight_retain call:\n   - content = clean fact text (all tags removed)\n   - context = \"l1-extract\"\n   - tags = [\n       \"l1\",\n       \"type:<memory_type>\",\n       \"volatility:<volatility_class>\",\n       \"ns:<memory_namespace>\",\n     ]\n     + [\"entity:<entity_str>\" for each entity in entities list]\n     + [\"anchor:<anchor>\" for each anchor in anchors list]\n     + ([\"valid_from:<valid_from>\"] if valid_from)\n     + ([\"retention:<retention>\"] if retention present)\n     + ([\"supersedes:<supersedes_id>\"] if supersedes present)\n\n4. For types \"correction\" and \"outcome\": bypass the recurrence check — retain immediately (high-signal one-time events).\n\n5. BEFORE running l1-graphiti-write.py and BEFORE truncating staging.md:\n   Register all facts as pending in graphiti-state.db so we have a durable record:\n   run: python3 ~/.hermes/scripts/l1-graphiti-reconcile.py register\n   This ensures facts are recoverable even if Graphiti write fails.\n\n6. After retaining all facts via hindsight_retain, run this shell command to also write them to the Graphiti knowledge graph:\n   python3 ~/.hermes/scripts/l1-graphiti-write.py ~/.hermes/memory-facts/staging.md 2>&1\n   IMPORTANT: capture the output and exit code. Run it BEFORE truncating staging.md.\n   - If it succeeds: mark facts written with:\n     echo \"<script output>\" | python3 ~/.hermes/scripts/l1-graphiti-reconcile.py mark-written\n   - If it fails (non-zero exit or error lines in output): log the failure.\n     Do NOT abort the job — the reconcile cron will retry. Proceed to truncate.\n\n7. After retaining all facts and running l1-graphiti-write.py, REPLACE the contents of staging.md with an empty string (truncate it): write an empty string to ~/.hermes/memory-facts/staging.md\n\n8. Finally run: python3 ~/.hermes/scripts/l1-graphiti-reconcile.py status\n   to confirm the DB state. Report the summary.",
+      "skills": [
+        "hindsight-stack-operations"
+      ],
+      "skill": "hindsight-stack-operations",
+      "model": "claude-sonnet-4-6",
+      "provider": "anthropic",
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-provenance-tagger.py",
+      "no_agent": false,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 240,
+        "display": "every 240m"
+      },
+      "schedule_display": "every 240m",
+      "repeat": {
+        "times": null,
+        "completed": 256
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-07-09T19:28:48.500415+10:00",
+      "next_run_at": "2026-10-07T18:09:34.435695+11:00",
+      "last_run_at": "2026-10-07T14:09:34.435695+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": [
+        "file",
+        "terminal",
+        "memory"
+      ],
+      "workdir": null,
+      "fire_claim": null,
+      "failure_streak": 0,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T14:08:44.527934+11:00",
+        "dispatched_at": "2026-10-07T14:09:05.159988+11:00",
+        "lateness_seconds": 20.6,
+        "kind": "on_time"
+      },
+      "profile": "fork",
+      "timeout_seconds": 3600,
+      "startup_jitter_seconds": 23,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "3f5af7731df4",
+      "name": "l1-promote-periodic",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-promote.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 220,
+        "display": "every 220m"
+      },
+      "schedule_display": "every 220m",
+      "repeat": {
+        "times": null,
+        "completed": 189
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-08-15T10:00:51.863995+10:00",
+      "next_run_at": "2026-10-07T17:29:06.858493+11:00",
+      "last_run_at": "2026-10-07T13:49:06.858493+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null,
+      "failure_streak": 0,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T13:48:17.064669+11:00",
+        "dispatched_at": "2026-10-07T13:49:05.165888+11:00",
+        "lateness_seconds": 48.1,
+        "kind": "on_time"
+      },
+      "profile": "fork",
+      "timeout_seconds": 3600,
+      "startup_jitter_seconds": 57,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "7dc01def3354",
+      "name": "g-memory-tier3-nightly",
+      "prompt": "Run G-Memory three-tier nightly consolidation: pull high-recurrence facts from Hindsight, cluster, distill via haiku, write insights to Graphiti.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-gmemory-consolidation.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 3 * * *",
+        "display": "0 3 * * *"
+      },
+      "schedule_display": "0 3 * * *",
+      "repeat": {
+        "times": null,
+        "completed": 48
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-08-18T14:52:03.390285+10:00",
+      "next_run_at": "2026-10-08T03:00:00+11:00",
+      "last_run_at": "2026-10-07T10:08:17.535699+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T03:00:00+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 25683.1,
+        "kind": "catch_up"
+      },
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 2,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "061dfd4d2bb9",
+      "name": "l1-graphiti-periodic",
+      "prompt": "Run l1-graphiti-reconcile.py reconcile to retry failed Graphiti writes.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": "anthropic",
+      "model_snapshot": "claude-sonnet-4-6",
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-graphiti-reconcile.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 250,
+        "display": "every 250m"
+      },
+      "schedule_display": "every 250m",
+      "repeat": {
+        "times": null,
+        "completed": 163
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-08-18T22:21:31.548987+10:00",
+      "next_run_at": "2026-10-07T18:29:07.679364+11:00",
+      "last_run_at": "2026-10-07T14:19:07.679364+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": [
+        "terminal",
+        "file"
+      ],
+      "workdir": null,
+      "fire_claim": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T14:18:19.110381+11:00",
+        "dispatched_at": "2026-10-07T14:19:05.652033+11:00",
+        "lateness_seconds": 46.5,
+        "kind": "on_time"
+      },
+      "profile": "fork",
+      "timeout_seconds": 3600,
+      "startup_jitter_seconds": 59,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "26a4747fe6ea",
+      "name": "pending-improvements-review",
+      "prompt": "You are a Hermes skill curator. Your job is to review skill candidates that were auto-generated by trace2skill.py and staged to ~/.hermes/cache/pending-improvements/.\n\nSteps:\n1. List all files in ~/.hermes/cache/pending-improvements/ matching skill-candidate-*.md using the terminal tool.\n2. If none exist, print \"No pending skill candidates.\" and stop.\n3. For each candidate file (max 5 per run):\n   a. Read its content.\n   b. Evaluate: Does it describe a genuinely reusable workflow with a clear trigger, concrete steps, and at least one pitfall? Is it distinct from existing skills?\n   c. Check if a similar skill already exists using: python3 ~/.hermes/scripts/skill-router-index.py --query \"TRIGGER_TEXT_HERE\"\n   d. If the candidate is high quality and distinct: use skill_manage(action='create') to create the skill, then delete the candidate file.\n   e. If it's low quality, redundant, or too session-specific: delete the candidate file without creating a skill.\n4. Print a summary: N reviewed, N promoted to skills, N discarded.\n\nBe conservative — only promote candidates that a future session would actually load and benefit from. Discard anything that's just a session log or task record.",
+      "skills": [],
+      "skill": null,
+      "model": "claude-sonnet-4-6",
+      "provider": "anthropic",
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": [
+        "001715fd293f"
+      ],
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 10 * * 0",
+        "display": "0 10 * * 0"
+      },
+      "schedule_display": "0 10 * * 0",
+      "repeat": {
+        "times": null,
+        "completed": 7
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-08-22T19:53:38.582732+10:00",
+      "next_run_at": "2026-10-11T10:00:00+11:00",
+      "last_run_at": "2026-10-04T11:43:30.627526+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-04T10:00:00+10:00",
+        "dispatched_at": "2026-10-04T11:43:04.990331+11:00",
+        "lateness_seconds": 2585.0,
+        "kind": "late"
+      },
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "625d44f3ef9f",
+      "name": "skill-wiki-weekly",
+      "prompt": "Run the WikiSkill maintenance pass: for each active skill in ~/.hermes/skills/, check if there are recent session insights (from the past 7 days in ~/.hermes/cache/skill-wiki/) that should be upserted into the skill wiki. Use: python3 ~/.hermes/scripts/skill-wiki.py prune --days 90 to remove stale entries, then python3 ~/.hermes/scripts/skill-wiki.py show --skill-name <skill> for any skill with recent activity. Report a summary of entries added, updated, and pruned.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": "anthropic",
+      "model_snapshot": "claude-sonnet-4-6",
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-wiki.py",
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 6 * * 0",
+        "display": "0 6 * * 0"
+      },
+      "schedule_display": "0 6 * * 0",
+      "repeat": {
+        "times": null,
+        "completed": 6
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-08-29T23:55:32.309435+10:00",
+      "next_run_at": "2026-10-11T06:00:00+11:00",
+      "last_run_at": "2026-10-04T11:43:57.964553+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": [
+        "terminal"
+      ],
+      "workdir": "/tmp",
+      "fire_claim": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-04T06:00:00+10:00",
+        "dispatched_at": "2026-10-04T11:43:04.990331+11:00",
+        "lateness_seconds": 16985.0,
+        "kind": "catch_up"
+      },
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "fa1df4f4270e",
+      "name": "hypermem-promote",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-hypermem-promote.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 230,
+        "display": "every 230m"
+      },
+      "schedule_display": "every 230m",
+      "repeat": {
+        "times": null,
+        "completed": 117
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-09-06T13:30:29.886527+10:00",
+      "next_run_at": "2026-10-07T17:49:06.894628+11:00",
+      "last_run_at": "2026-10-07T13:59:06.894628+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T13:58:20.264080+11:00",
+        "dispatched_at": "2026-10-07T13:59:05.159729+11:00",
+        "lateness_seconds": 44.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "profile": "fork",
+      "timeout_seconds": 3600,
+      "startup_jitter_seconds": 50,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "bcb9c8082d9c",
+      "name": "obsidian-weekly-review",
+      "prompt": "The script has already run and written a weekly review scaffold to the Obsidian vault at ~/Documents/SecondBrain/Reviews/YYYY-MM-DD-weekly.md with the list of modified notes. Your job is to synthesize the review:\n\n1. Read the scaffold file that was just written (most recent file in ~/Documents/SecondBrain/Reviews/ matching today's date).\n2. Read the actual note files listed in the scaffold (the modified notes section).\n3. Write a concise weekly review (under 400 words) covering: accomplishments/completed work, decisions made and rationale, tasks completed vs planned, patterns or recurring themes, suggested priorities for next week.\n4. Append the synthesis under the \"## Review\" section in that scaffold file, replacing the \"_Pending synthesis_\" placeholder.\n5. Do not sync or push anything — this is local-only synthesis.",
+      "skills": [
+        "hermes-obsidian-sync",
+        "obsidian"
+      ],
+      "skill": "hermes-obsidian-sync",
+      "model": "claude-sonnet-4-6",
+      "provider": "anthropic",
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/obsidian_weekly_review.sh",
+      "no_agent": false,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 17 * * 5",
+        "display": "0 17 * * 5"
+      },
+      "schedule_display": "0 17 * * 5",
+      "repeat": {
+        "times": null,
+        "completed": 2
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-07-02T16:03:15.177763+10:00",
+      "next_run_at": "2026-10-09T17:00:00+10:00",
+      "last_run_at": "2026-10-02T17:00:47.340703+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": [
+        "file",
+        "terminal",
+        "memory"
+      ],
+      "workdir": null,
+      "fire_claim": null,
+      "failure_streak": 0,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-02T17:00:00+10:00",
+        "dispatched_at": "2026-10-02T17:00:28.393733+10:00",
+        "lateness_seconds": 28.4,
+        "kind": "on_time"
+      },
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "d984a185e83a",
+      "name": "omni-skill-quality-scan",
+      "prompt": "Weekly scan of all Hermes skills using GEPA omni quality dimensions. Writes report to ~/.hermes/omni/scan-YYYY-MM-DD.md and patch-queue.json of candidates below threshold. No skills are auto-modified.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/omni_skill_scan.py",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 3 * * 0",
+        "display": "0 3 * * 0"
+      },
+      "schedule_display": "0 3 * * 0",
+      "repeat": {
+        "times": null,
+        "completed": 3
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-07-24T10:26:05.507894+10:00",
+      "next_run_at": "2026-10-11T03:00:00+11:00",
+      "last_run_at": "2026-10-04T11:43:14.036157+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null,
+      "failure_streak": 0,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-04T03:00:00+10:00",
+        "dispatched_at": "2026-10-04T11:43:04.990331+11:00",
+        "lateness_seconds": 27785.0,
+        "kind": "catch_up"
+      },
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "f8aa4b717a18",
+      "name": "skill-prune-audit",
+      "prompt": "Monthly skill library audit: identify never-used and semantically duplicate skills for pruning/merging.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skill_prune_audit.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 9 1 * *",
+        "display": "0 9 1 * *"
+      },
+      "schedule_display": "0 9 1 * *",
+      "repeat": {
+        "times": null,
+        "completed": 1
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-08-08T23:45:54.698812+10:00",
+      "next_run_at": "2026-11-01T09:00:00+10:00",
+      "last_run_at": "2026-10-01T11:28:10.745392+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null,
+      "failure_streak": 0,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-01T09:00:00+10:00",
+        "dispatched_at": "2026-10-01T11:28:02.739417+10:00",
+        "lateness_seconds": 8882.7,
+        "kind": "catch_up"
+      },
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "8dea5993a20b",
+      "name": "news-diff-watchdog",
+      "prompt": "Deliver new news items from RSS feeds (Reuters Markets/World, Hacker News, MIT Tech Review, Guardian AU). Silent if no new items.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/news_diff_watchdog.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 90,
+        "display": "every 90m"
+      },
+      "schedule_display": "every 90m",
+      "repeat": {
+        "times": null,
+        "completed": 93
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-08-30T12:47:26.633369+10:00",
+      "next_run_at": "2026-10-07T16:10:18.295199+11:00",
+      "last_run_at": "2026-10-07T14:40:18.295199+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T14:39:15.149963+11:00",
+        "dispatched_at": "2026-10-07T14:40:05.159795+11:00",
+        "lateness_seconds": 50.0,
+        "kind": "on_time"
+      },
+      "profile": "fork",
+      "timeout_seconds": 3600,
+      "startup_jitter_seconds": 53,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "8ef59f993787",
+      "name": "hermes-research-weekly",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-research-sweep.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 6 * * 2",
+        "display": "0 6 * * 2"
+      },
+      "schedule_display": "0 6 * * 2",
+      "repeat": {
+        "times": null,
+        "completed": 2
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-08-30T22:32:13.360731+10:00",
+      "next_run_at": "2026-10-13T06:00:00+11:00",
+      "last_run_at": "2026-10-06T11:14:31.323108+11:00",
+      "last_status": "error",
+      "last_error": "Script timed out after 3600s: /var/home/rainbow/.hermes/profiles/fork/scripts/hermes-research-sweep.py",
+      "last_delivery_error": null,
+      "failure_streak": 1,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-06T06:00:00+10:00",
+        "dispatched_at": "2026-10-06T10:14:12.375311+11:00",
+        "lateness_seconds": 11652.4,
+        "kind": "catch_up"
+      },
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 4,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "last_failure": {
+        "at": "2026-10-06T11:14:31.323108+11:00",
+        "detail": "Script timed out after 3600s: /var/home/rainbow/.hermes/profiles/fork/scripts/hermes-research-sweep.py"
+      }
+    },
+    {
+      "id": "001715fd293f",
+      "name": "hermes-research-apply",
+      "prompt": "Load ~/.hermes/cache/research/hermes-research-latest.json. If the file does not exist or is older than 48h, skip silently (write nothing, exit 0). Otherwise: triage all new_papers_flat entries against the 7 Hermes research categories (reasoning_planning, tool_use, memory, multi_agent, evaluation, self_improvement, agentic_rag). For each paper: (1) assess relevance to Hermes skills (HIGH = directly actionable implementation signal, MED = useful context worth patching, LOW = peripheral). (2) For HIGH papers: read the abstract at the paper URL, extract the key implementation signal (what concrete change to a Hermes skill or workflow?), identify the target skill, and apply a skill_manage patch using the trajectory-research-synthesis-to-skills write ownership protocol. (3) For MED papers: apply a skill_manage patch to the target skill (same process as HIGH — read abstract, extract signal, patch skill) AND record the finding in the arxiv-sweep-findings skill findings bank. Do NOT block or defer MED patches on any ownership classification — patch all target skills regardless of whether they are marked user-owned or system-owned. (4) For LOW: log a one-line skip note. After all patches: run adversarial-review on every patched skill (CDH check, oscillation check, trigger coherence). Call verification-before-completion. Write a full apply-report to ~/.hermes/cache/research/hermes-research-apply-latest.md covering: sweep date, papers processed, HIGH/MED/LOW counts, skills patched, adversarial findings. Print a one-paragraph summary to stdout for cron delivery.",
+      "skills": [
+        "hermes-research",
+        "trajectory-research-synthesis-to-skills",
+        "arxiv-sweep-findings",
+        "adversarial-review",
+        "verification-before-completion",
+        "spike"
+      ],
+      "skill": "hermes-research",
+      "model": null,
+      "provider": null,
+      "provider_snapshot": "anthropic",
+      "model_snapshot": "claude-sonnet-4-6",
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 7 * * 2",
+        "display": "0 7 * * 2"
+      },
+      "schedule_display": "0 7 * * 2",
+      "repeat": {
+        "times": null,
+        "completed": 3
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-08-30T22:32:25.283961+10:00",
+      "next_run_at": "2026-10-13T07:00:00+11:00",
+      "last_run_at": "2026-10-06T10:15:00.023162+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-06T07:00:00+10:00",
+        "dispatched_at": "2026-10-06T10:14:12.375311+11:00",
+        "lateness_seconds": 8052.4,
+        "kind": "catch_up"
+      },
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 4,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "ed8d542e084d",
+      "name": "hermes-math-interpret",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/math-paper-interpreter.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 6 * * 2",
+        "display": "30 6 * * 2"
+      },
+      "schedule_display": "30 6 * * 2",
+      "repeat": {
+        "times": null,
+        "completed": 3
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-09-07T04:04:00.292185+10:00",
+      "next_run_at": "2026-10-13T06:30:00+11:00",
+      "last_run_at": "2026-10-06T10:19:38.302397+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-06T06:30:00+10:00",
+        "dispatched_at": "2026-10-06T10:14:12.375311+11:00",
+        "lateness_seconds": 9852.4,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "7508115b4e01",
+      "name": "cs-research-weekly",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cs-research-sweep.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 2 * * 4",
+        "display": "0 2 * * 4"
+      },
+      "schedule_display": "0 2 * * 4",
+      "repeat": {
+        "times": null,
+        "completed": 2
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-09-07T15:16:47.079880+10:00",
+      "next_run_at": "2026-10-08T02:00:00+10:00",
+      "last_run_at": "2026-10-01T11:50:10.538364+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-01T02:00:00+10:00",
+        "dispatched_at": "2026-10-01T11:28:02.739417+10:00",
+        "lateness_seconds": 34082.7,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 4,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "fcb99db39abe",
+      "name": "cs-research-interpret",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cs-paper-interpreter.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 6 * * 4",
+        "display": "30 6 * * 4"
+      },
+      "schedule_display": "30 6 * * 4",
+      "repeat": {
+        "times": null,
+        "completed": 2
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-09-07T15:16:47.933626+10:00",
+      "next_run_at": "2026-10-08T06:30:00+10:00",
+      "last_run_at": "2026-10-01T11:29:38.571629+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-01T06:30:00+10:00",
+        "dispatched_at": "2026-10-01T11:28:02.739417+10:00",
+        "lateness_seconds": 17882.7,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 4,
+      "status": "ok",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "25c7645aa11d",
+      "name": "cs-primers-quarterly",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cs-primers-overnight.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 3 1 */3 *",
+        "display": "0 3 1 */3 *"
+      },
+      "schedule_display": "0 3 1 */3 *",
+      "repeat": {
+        "times": null,
+        "completed": 1
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-09-07T15:16:48.803401+10:00",
+      "next_run_at": "2027-01-01T03:00:00+10:00",
+      "last_run_at": "2026-10-01T11:28:11.438185+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-01T03:00:00+10:00",
+        "dispatched_at": "2026-10-01T11:28:02.739417+10:00",
+        "lateness_seconds": 30482.7,
+        "kind": "catch_up"
+      },
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "fire_claim": null
+    },
+    {
+      "id": "cc67685ee9bd",
+      "name": "hermes-math-sweep",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-math-sweep.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 1 * * 2",
+        "display": "0 1 * * 2"
+      },
+      "schedule_display": "0 1 * * 2",
+      "repeat": {
+        "times": null,
+        "completed": 2
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-09-09T09:03:45.916150+10:00",
+      "next_run_at": "2026-10-13T01:00:00+11:00",
+      "last_run_at": "2026-10-06T11:14:32.788421+11:00",
+      "last_status": "error",
+      "last_error": "Script timed out after 3600s: /var/home/rainbow/.hermes/profiles/fork/scripts/hermes-math-sweep.py",
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 1,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-06T01:00:00+10:00",
+        "dispatched_at": "2026-10-06T10:14:12.375311+11:00",
+        "lateness_seconds": 29652.4,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "failure_policy": {
+        "kind": "pause",
+        "after": 2
+      },
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 4,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "last_failure": {
+        "at": "2026-10-06T11:14:32.788421+11:00",
+        "detail": "Script timed out after 3600s: /var/home/rainbow/.hermes/profiles/fork/scripts/hermes-math-sweep.py"
+      }
+    },
+    {
+      "id": "670a8904edf4",
+      "name": "se-gos-weekly",
+      "prompt": "Weekly SE-GoS skill graph evolution: read skill-yield-tracker SQLite metrics and write reinforce/decay edge-weight episodes to Graphiti. No LLM needed. Empty yield table is a successful no-op.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/se-gos-graphiti-bridge.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 5 * * 0",
+        "display": "0 5 * * 0"
+      },
+      "schedule_display": "0 5 * * 0",
+      "repeat": {
+        "times": null,
+        "completed": 3
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-09-09T16:48:58.414064+10:00",
+      "next_run_at": "2026-10-11T05:00:00+11:00",
+      "last_run_at": "2026-10-04T11:43:15.537440+11:00",
+      "last_status": "error",
+      "last_error": "Script exited with code 1\nstderr:\nTraceback (most recent call last):\n  File \"/var/home/rainbow/.hermes/profiles/fork/scripts/se-gos-graphiti-bridge.py\", line 7, in <module>\n    runpy.run_path(str(TARGET), run_name='__main__')\n  File \"<frozen runpy>\", line 290, in run_path\n  File \"<frozen runpy>\", line 254, in _get_code_from_file\nFileNotFoundError: [Errno 2] No such file or directory: '/var/home/rainbow/.hermes/skills/autonomous-ai-agents/autonomous-agent-loop-design/scripts/se-gos-graphiti-bridge.py'",
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 1,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-04T05:00:00+10:00",
+        "dispatched_at": "2026-10-04T11:43:04.990331+11:00",
+        "lateness_seconds": 20585.0,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "c7e4d8aa60d5",
+      "name": "hermes-monitor-suite",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/monitor-suite-runner.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 7 * * *",
+        "display": "every day at 7am"
+      },
+      "schedule_display": "every day at 7am",
+      "repeat": {
+        "times": null,
+        "completed": 17
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-09-15T16:55:48.858974+10:00",
+      "next_run_at": "2026-10-08T07:00:00+11:00",
+      "last_run_at": "2026-10-07T10:08:22.316176+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T07:00:00+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 11283.1,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 1,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "ea4a9468f4d9",
+      "name": "skill-router-index-rebuild",
+      "prompt": null,
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-router-index-rebuild.py",
+      "no_agent": true,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 5 * * 6",
+        "display": "0 5 * * 6"
+      },
+      "schedule_display": "0 5 * * 6",
+      "enabled": true,
+      "state": "scheduled",
+      "failure_streak": 0,
+      "deliver": "local",
+      "repeat": {
+        "times": null,
+        "completed": 2
+      },
+      "created_at": "2026-09-19T17:00:00+10:00",
+      "next_run_at": "2026-10-10T05:00:00+10:00",
+      "last_status": "ok",
+      "last_error": null,
+      "paused_at": null,
+      "paused_reason": null,
+      "last_run_at": "2026-10-03T05:01:00.761435+10:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-03T05:00:00+10:00",
+        "dispatched_at": "2026-10-03T05:00:59.543405+10:00",
+        "lateness_seconds": 59.5,
+        "kind": "on_time"
+      },
+      "profile": "fork",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "fire_claim": null,
+      "last_delivery_error": null,
+      "status": "ok",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "alarm-agg-fork-0001",
+      "name": "alarm-aggregator",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/alarm-aggregator.py",
+      "no_agent": true,
+      "description": "Consolidates cross-calibration and gate alarm JSON files; exits 1 if active alarm",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 30,
+        "display": "every 30m"
+      },
+      "schedule_display": "every 30m",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-09-19T14:35:05.590474+00:00",
+      "failure_streak": 0,
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "next_run_at": "2026-10-07T16:17:08.996901+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T15:46:08.862395+11:00",
+        "dispatched_at": "2026-10-07T15:47:07.168735+11:00",
+        "lateness_seconds": 58.3,
+        "kind": "on_time"
+      },
+      "last_run_at": "2026-10-07T15:47:08.996901+11:00",
+      "timeout_seconds": 1440,
+      "startup_jitter_seconds": 55,
+      "priority": 1
+    },
+    {
+      "id": "d026ce426364",
+      "name": "skill-beta-feedback",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-beta-feedback.py",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 360
+      },
+      "deliver": "local",
+      "no_agent": true,
+      "enabled": true,
+      "created_at": "2026-09-22T04:46:17Z",
+      "last_run_at": "2026-10-07T10:08:23.251217+11:00",
+      "next_run_at": "2026-10-07T16:08:23.251217+11:00",
+      "last_status": "error",
+      "timeout_seconds": 3600,
+      "startup_jitter_seconds": 29,
+      "priority": 3,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T04:26:58.293713+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 20464.8,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_error": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/scripts/skill-beta-feedback.py'",
+      "failure_streak": 1,
+      "last_failure": {
+        "at": "2026-10-07T10:08:23.251217+11:00",
+        "detail": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/scripts/skill-beta-feedback.py'"
+      },
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "stuck-job-detector-beb3cf57",
+      "name": "stuck-job-detector",
+      "description": "Detect cron jobs stuck in running state for >2x expected duration (Clarke et al. CTL/LTL safety property AG(running -> EF(complete|failed)))",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/stuck-job-detector.py",
+      "no_agent": true,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 15,
+        "display": "every 15m",
+        "type": "interval",
+        "interval_seconds": 900
+      },
+      "schedule_display": "every 15m",
+      "priority": 1,
+      "startup_jitter_seconds": 15,
+      "timeout_seconds": 120,
+      "enabled": true,
+      "deliver": "local",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "state": "scheduled",
+      "created_at": "2026-09-22T15:29:09.530109+10:00",
+      "next_run_at": "2026-10-07T15:56:06.811606+11:00",
+      "last_run_at": "2026-10-07T15:41:06.811606+11:00",
+      "last_status": "ok",
+      "failure_streak": 0,
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T15:40:07.096134+11:00",
+        "dispatched_at": "2026-10-07T15:41:05.170733+11:00",
+        "lateness_seconds": 58.1,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_error": null,
+      "last_delivery_error": null
+    },
+    {
+      "id": "staleness-monitor-24f8e4a1",
+      "name": "staleness-monitor",
+      "description": "Monitor freshness of critical Hermes log files (D2 liveness: Lynch Distributed Algorithms §8 AF(log_written))",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/staleness-monitor.py",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 60
+      },
+      "priority": 1,
+      "startup_jitter_seconds": 20,
+      "timeout_seconds": 120,
+      "enabled": true,
+      "deliver": "local",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "next_run_at": "2026-10-07T16:16:58.231468+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T15:15:54.293242+11:00",
+        "dispatched_at": "2026-10-07T15:16:07.178190+11:00",
+        "lateness_seconds": 12.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T15:16:58.231468+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "skill-index-weekly-rebuild-4fffb154",
+      "name": "skill-index-weekly-rebuild",
+      "description": "Unconditional weekly skill index rebuild — AF(skill_index_built) liveness (Clarke et al. LTL)",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-router-index.py",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 3 * * 0"
+      },
+      "priority": 3,
+      "startup_jitter_seconds": 30,
+      "timeout_seconds": 300,
+      "enabled": true,
+      "deliver": "local",
+      "next_run_at": "2026-10-11T03:00:00+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-04T03:00:00+10:00",
+        "dispatched_at": "2026-10-04T11:43:04.990331+11:00",
+        "lateness_seconds": 27785.0,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-04T11:44:00.710662+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_CRON_BUILD": "1"
+      }
+    },
+    {
+      "id": "d2916301202e",
+      "name": "graphiti-edge-health-check",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/graphiti-edge-health.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 */6 * * *",
+        "display": "0 */6 * * *"
+      },
+      "schedule_display": "0 */6 * * *",
+      "repeat": {
+        "times": null,
+        "completed": 34
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-09-22T21:35:08.085093+10:00",
+      "next_run_at": "2026-10-07T18:00:00+11:00",
+      "last_run_at": "2026-10-07T12:00:41.092362+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "failure_deliver": "local",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T12:00:00+11:00",
+        "dispatched_at": "2026-10-07T12:00:38.785277+11:00",
+        "lateness_seconds": 38.8,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "93b389046fb6",
+      "name": "session-resource-audit",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/session-resource-audit.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 21 * * *",
+        "display": "0 21 * * *"
+      },
+      "schedule_display": "0 21 * * *",
+      "repeat": {
+        "times": null,
+        "completed": 13
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-09-22T21:35:11.381643+10:00",
+      "next_run_at": "2026-10-07T21:00:00+11:00",
+      "last_run_at": "2026-10-06T21:00:06.954449+11:00",
+      "last_status": "error",
+      "last_error": "Script exited with code 1\nstderr:\n/var/home/rainbow/.hermes/profiles/fork/scripts/session-resource-audit.py:30: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).\n  return datetime.datetime.utcnow().isoformat() + \"Z\"\nstdout:\nsession-resource-audit: 168 unaudited resources (168 grants, 0 cron, 0 tools checked)",
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 8,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "failure_deliver": "local",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-06T21:00:00+11:00",
+        "dispatched_at": "2026-10-06T21:00:04.921301+11:00",
+        "lateness_seconds": 4.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "status": "ok",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "last_failure": {
+        "at": "2026-10-06T21:00:06.954449+11:00",
+        "detail": "Script exited with code 1\nstderr:\n/var/home/rainbow/.hermes/profiles/fork/scripts/session-resource-audit.py:30: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).\n  return datetime.datetime.utcnow().isoformat() + \"Z\"\nstdout:\nsession-resource-audit: 168 unaudited resources (168 grants, 0 cron, 0 tools checked)"
+      }
+    },
+    {
+      "id": "06e4c802b583",
+      "name": "skill-shadow-registry-update",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": null,
+      "model_snapshot": null,
+      "base_url": null,
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-shadow-registry.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 23 * * *",
+        "display": "0 23 * * *"
+      },
+      "schedule_display": "0 23 * * *",
+      "repeat": {
+        "times": null,
+        "completed": 14
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-09-22T21:35:14.423335+10:00",
+      "next_run_at": "2026-10-07T23:00:00+11:00",
+      "last_run_at": "2026-10-06T23:01:01.966291+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": null,
+      "enabled_toolsets": null,
+      "workdir": null,
+      "failure_deliver": "local",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-06T23:00:00+11:00",
+        "dispatched_at": "2026-10-06T23:00:59.713434+11:00",
+        "lateness_seconds": 59.7,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      }
+    },
+    {
+      "id": "w16-statecomp-f3622785",
+      "name": "wave16-statecomp-compression-router",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 360,
+        "display": "every 360m"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/statecomp-compression-router.py",
+      "no_agent": true,
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "enabled": true,
+      "next_run_at": "2026-10-07T16:08:27.036958+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T04:26:58.293713+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 20464.8,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:08:27.036958+11:00",
+      "last_status": "error",
+      "last_error": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/hermes-scripts/statecomp-compression-router.py'",
+      "failure_streak": 1,
+      "last_failure": {
+        "at": "2026-10-07T10:08:27.036958+11:00",
+        "detail": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/hermes-scripts/statecomp-compression-router.py'"
+      },
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "w16-ripple-build-6848b287",
+      "name": "wave16-ripple-mem-graph-build",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 720,
+        "display": "every 720m"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/ripple-mem-expander.py",
+      "no_agent": true,
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "enabled": true,
+      "next_run_at": "2026-10-07T22:27:40.267005+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T10:26:58.293713+11:00",
+        "dispatched_at": "2026-10-07T10:27:38.780972+11:00",
+        "lateness_seconds": 40.5,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:27:40.267005+11:00",
+      "last_status": "error",
+      "last_error": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/hermes-scripts/ripple-mem-expander.py'",
+      "failure_streak": 1,
+      "last_failure": {
+        "at": "2026-10-07T10:27:40.267005+11:00",
+        "detail": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/hermes-scripts/ripple-mem-expander.py'"
+      },
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "w16-evograph-b03ef1d3",
+      "name": "wave16-evograph-skill-health",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 5 * * *",
+        "display": "daily at 05:00"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/evograph-with-homology.py",
+      "no_agent": true,
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "enabled": true,
+      "next_run_at": "2026-10-08T05:00:00+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T05:00:00+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 18483.1,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:08:27.653212+11:00",
+      "last_status": "error",
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "w16-mirage-audit-02cdb6c7",
+      "name": "wave16-progress-mirage-audit",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 480,
+        "display": "every 480m"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/progress-mirage-gate.py",
+      "no_agent": true,
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "enabled": true,
+      "next_run_at": "2026-10-07T18:08:27.420606+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T06:26:58.293713+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 13264.8,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:08:27.420606+11:00",
+      "last_status": "error",
+      "last_error": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/hermes-scripts/progress-mirage-gate.py'",
+      "failure_streak": 1,
+      "last_failure": {
+        "at": "2026-10-07T10:08:27.420606+11:00",
+        "detail": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/hermes-scripts/progress-mirage-gate.py'"
+      },
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "w16-cmtf-audit-91ca72ad",
+      "name": "wave16-cmtf-tool-frontier-audit",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 480,
+        "display": "every 480m"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cmtf-tool-frontier.py",
+      "no_agent": true,
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "enabled": true,
+      "next_run_at": "2026-10-07T18:08:28.164066+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T06:26:58.293713+11:00",
+        "dispatched_at": "2026-10-07T10:08:03.111776+11:00",
+        "lateness_seconds": 13264.8,
+        "kind": "catch_up"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T10:08:28.164066+11:00",
+      "last_status": "error",
+      "last_error": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/hermes-scripts/cmtf-tool-frontier.py'",
+      "failure_streak": 1,
+      "last_failure": {
+        "at": "2026-10-07T10:08:28.164066+11:00",
+        "detail": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/hermes-scripts/cmtf-tool-frontier.py'"
+      },
+      "last_delivery_error": null,
+      "state": "scheduled"
     }
   ],
-  "updated_at": "2026-09-19T22:45:24.185516+10:00"
+  "updated_at": "2026-10-07T15:47:08.998470+11:00"
 }

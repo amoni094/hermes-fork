@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 CS_PATH = HERMES_HOME / "cache" / "research" / "cs-interpretation-latest.json"
 MATH_PATH = HERMES_HOME / "cache" / "research" / "math-interpretation-latest.json"
 DEFAULT_OUT = Path("/tmp/corpus-index.json")
@@ -268,7 +268,9 @@ def consolidate(out_path: Path = DEFAULT_OUT) -> dict[str, Any]:
         "sources": sources_used,
         "findings": findings,
     }
-    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+    _tmp = out_path.with_suffix('.tmp')
+    _tmp.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+    _tmp.replace(out_path)
     return payload
 
 

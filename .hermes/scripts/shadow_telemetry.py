@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 SHADOW_EVENT_SCHEMA_VERSION = 1
 import os as _os_st
-_hermes_base_st = Path.home() / ".hermes"
+_hermes_base_st = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _hermes_profile_st = _os_st.environ.get("HERMES_PROFILE", "")
 _hermes_root_st = (_hermes_base_st / "profiles" / _hermes_profile_st) if _hermes_profile_st else _hermes_base_st
 DEFAULT_SINK = _hermes_root_st / "cache" / "shadow-telemetry" / "shadow_telemetry.jsonl"

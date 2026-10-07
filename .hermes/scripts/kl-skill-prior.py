@@ -32,7 +32,7 @@ import re
 import sys
 from pathlib import Path
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 SKILL_STATE_DIR = HERMES_HOME / "cache" / "skill-state"
 _SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
@@ -342,14 +342,14 @@ def _frequency_estimate_data() -> list[dict]:
     """
     counts: dict[str, int] = {}
 
-    hermes_home = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+    hermes_home = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
     lifecycle_db = hermes_home / "memory-facts" / "lifecycle.db"
 
     # Try explicit MH_DB env var first, then standard locations
     _meta_candidates = [
         Path(os.environ["MH_DB"]) if "MH_DB" in os.environ else None,
         hermes_home / "memory-facts" / "metacognitive.db",
-        Path.home() / ".hermes" / "memory-facts" / "metacognitive.db",
+        Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "memory-facts" / "metacognitive.db",
     ]
     meta_db = next((p for p in _meta_candidates if p is not None and p.is_file()), None)
 
@@ -375,7 +375,7 @@ def _frequency_estimate_data() -> list[dict]:
     # Lifecycle.db fallback: also try default path
     _lc_candidates = [
         lifecycle_db,
-        Path.home() / ".hermes" / "memory-facts" / "lifecycle.db",
+        Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "memory-facts" / "lifecycle.db",
     ]
     lc_db = next((p for p in _lc_candidates if p.is_file()), None)
     if not counts and lc_db is not None:

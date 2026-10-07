@@ -49,10 +49,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Literal
 
-DEFAULT_LEDGER = Path.home() / ".hermes" / "logs" / "improvement-proposals.jsonl"
-
+DEFAULT_LEDGER = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "logs" / "improvement-proposals.jsonl"
 # Profile-aware rate-state persistence path
-_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
+_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _profile = os.environ.get('HERMES_PROFILE', '')
 _root = (_base / 'profiles' / _profile) if _profile else _base
 _RATE_STATE_PATH = _root / 'cache' / 'governance-rate-state.json'
@@ -133,19 +132,50 @@ def _proposal_id(session_id: str, change_type: str, target: str) -> str:
     return f"prop_{h}"
 
 
+def _causal_effect_estimate(target: str, description: str, evidence: list) -> float:
+    """Causal Bayesian effect estimate (arXiv:2609.24112).
+
+    Proxy for do-calculus P(outcome | do(intervention)) vs P(outcome) using:
+    - evidence count (more evidence → higher prior confidence)
+    - keyword salience (quantitative claims like %, ms, score → higher weight)
+    - target type (script > skill > config for measurable effect)
+
+    Returns a float in [0.0, 1.0] representing estimated uplift probability.
+    This is a heuristic proxy; a full structural causal model would require
+    before/after benchmark comparisons (see arena-credits.json for that path).
+    """
+    import re as _re
+    base = 0.3 + min(len(evidence), 5) * 0.06  # up to +0.30 for 5+ evidence items
+    # Quantitative claim bonus
+    quant_hits = len(_re.findall(
+        r'\b(\d+\.?\d*\s*%|\d+\s*ms|\bscore\b|\bimprove\b|\bfaster\b|\breduced?\b)',
+        description, _re.IGNORECASE
+    ))
+    quant_bonus = min(quant_hits * 0.04, 0.20)
+    # Target type bonus: scripts/runtime > skills > config
+    target_lower = (target or "").lower()
+    target_bonus = (
+        0.10 if any(t in target_lower for t in (".py", "script", "runtime", "cron"))
+        else 0.05 if "skill" in target_lower
+        else 0.0
+    )
+    return round(min(base + quant_bonus + target_bonus, 1.0), 4)
+
+
 def propose_improvement(
     change_type: str,
     target: str,
     description: str,
     session_id: str,
-    evidence: list[str],
-    ledger: Path | None = None,
+    evidence: list,
+    ledger=None,
 ) -> dict:
     """
     Create a new proposal and append to the ledger (JSONL, append-only).
     Returns the proposal dict.
     """
     risk = classify_change_risk(change_type, target)  # type: ignore[arg-type]
+    causal_effect = _causal_effect_estimate(target, description, evidence)
     proposal = {
         "id": _proposal_id(session_id, change_type, target),
         "state": "pending_review",
@@ -158,6 +188,7 @@ def propose_improvement(
         "updated_at": _now_iso(),
         "reviewers": [],
         "evidence": evidence,
+        "causal_effect_estimate": causal_effect,  # arXiv:2609.24112
     }
     _append_to_ledger(proposal, ledger)
     return proposal

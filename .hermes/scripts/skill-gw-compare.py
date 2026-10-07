@@ -32,7 +32,7 @@ from ot_utils import build_tf, w1_distance, sinkhorn  # noqa: E402
 
 import numpy as np
 
-HERMES_HOME = Path.home() / ".hermes"
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 DEFAULT_SKILLS_DIR = HERMES_HOME / "skills"
 FORK_SKILLS_DIR = HERMES_HOME / "profiles" / "fork" / "skills"
 
