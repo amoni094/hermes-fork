@@ -90,7 +90,7 @@ _RENAME_PRIMITIVES = re.compile(
     # Path(nested).write_text/write_bytes: two-level nested parens in Path() arg (ADV-W9-003)
     r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch|unlink)"
     # getattr obfuscation bypass (ADV-W9-003): getattr(obj,'write_text'/'open'/'write_bytes')
-    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*(?:\([^)]*\))?(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]*\)|\([a-zA-Z_][\w.]*(?:\([^)]*\))?\)|[a-zA-Z_][\w.]*(?:\[[^\]]*\])+(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|[a-zA-Z_][\w.]*\s*\([^)]*\)(?:\[[^\]]*\])+|\((?:[a-zA-Z_][\w.]*(?:\.[a-zA-Z_]\w*)*\s*\([^)]*\)(?:\[[^\]]*\])+|[a-zA-Z_][\w.]*(?:\[[^\]]*\])+)\)|\w+\s*\([^)]*\)(?:\[[^\]]*\])+|\w+\s*\([^)]*\)\[[^\]]*\])\s*,\s*(?:[bBfFrRuU]{0,2})?['\"]{1,3}(?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch|extract|extractall|unpack_archive|symlink_to|hardlink_to|copy|copy2|move|rmtree|execv|execl|execle|execlp|execvp|execvpe|link|copytree|run|check_output|check_call|execve|remove|execlpe|truncate|FileIO|spawnl|spawnv|spawnle|spawnvp|spawnlp|spawnvpe|posix_spawn|posix_spawnp|link|copytree|run|check_output|check_call|execve|remove|execlpe)['\"]{1,3}"
+    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*(?:\([^)]*\))?(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]*\)|\([a-zA-Z_][\w.]*(?:\([^)]*\))?\)|[a-zA-Z_][\w.]*(?:\[[^\]]*\])+(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|[a-zA-Z_][\w.]*\s*\([^)]*\)(?:\[[^\]]*\])+|\((?:[a-zA-Z_][\w.]*(?:\.[a-zA-Z_]\w*)*\s*\([^)]*\)(?:\[[^\]]*\])+|[a-zA-Z_][\w.]*(?:\[[^\]]*\])+)\)|\w+\s*\([^)]*\)(?:\[[^\]]*\])+|\w+\s*\([^)]*\)\[[^\]]*\])\s*,\s*(?:[bBfFrRuU]{0,2})?[\x27\x22]{1,3}(?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch|extract|extractall|unpack_archive|symlink_to|hardlink_to|copy|copy2|move|rmtree|execv|execl|execle|execlp|execvp|execvpe|link|copytree|run|check_output|check_call|execve|remove|execlpe|truncate|FileIO|spawnl|spawnv|spawnle|spawnvp|spawnlp|spawnvpe|posix_spawn|posix_spawnp|link|copytree|run|check_output|check_call|execve|remove|execlpe|mknod|Popen|connect|BZ2File|LZMAFile)[\x27\x22]{1,3}"
     r"|getattr\s*\(\s*(?:object\s*=|name\s*=[bBfFrRuU]{0,2}['\"][^'\"]*(?:write_text|write_bytes|open|replace|rename|unlink|truncate|link|copytree|run|execve|remove)[^'\"]*[\'\"]{1,3})"  # ADV-W24-008 getattr keyword/object= form
     r"|getattr\s*\(\s*\*\s*[\[(]"  # ADV-W24-008 getattr star-unpack (*[list] or *(tuple))
     r"|io\.FileIO\s*\((?:[^()]|\([^)]*\)){0,200},\s*(?:['\"'][^'\"']*[wax+]|chr\s*\()"  # ADV-W24-001+004 io.FileIO positional nested+chr
@@ -120,8 +120,8 @@ _RENAME_PRIMITIVES = re.compile(
     r"|\bbuiltins\.open\s*\("  # ADV-W26-001 builtins.open(...)
     r"|__builtins__\s*(?:\[|\b(?:get)\b|\.).*\bopen\b"  # ADV-W26-001 __builtins__[open]/get/attr
     r"|(?:\[open\]\s*\[[^\]]*\]|\(open,?\s*\)\s*\[[^\]]*\])\s*\("  # ADV-W26-002 [open][-1]/[open][N]/(open,)[N]
-    r"|\((?:os|subprocess|shutil|posix)\s*\.\s*(?:system|popen|remove|unlink|truncate|rename|replace|link|symlink|exec\w+|spawn\w+|run|call|Popen|move|copy|copy2|rmtree)\)\s*\("  # ADV-W32-007 (os.remove)(...) grouped dotted primitive
-    r"|\[(?:os|subprocess|shutil|posix)\s*\.\s*(?:system|popen|remove|unlink|truncate|rename|replace|link|symlink|exec\w+|spawn\w+|run|call|Popen|move|copy|copy2|rmtree)\]\s*\[[^\]]*\]\s*\("  # ADV-W33-001 [os.remove][0](...) list-wrap bypass
+    r"|\((?:os|subprocess|shutil|posix)\s*\.\s*(?:system|popen|remove|unlink|truncate|rename|replace|link|symlink|exec\w+|spawn\w+|run|call|Popen|move|copy|copy2|rmtree|mknod|openat|unlinkat)\)\s*\("  # ADV-W32-007 W34-001 (os.remove)(...) paren-wrap incl mknod/openat
+    r"|\[\s*(?:os|subprocess|shutil|posix)\s*\.\s*(?:system|popen|remove|unlink|truncate|rename|replace|link|symlink|exec\w+|spawn\w+|run|call|Popen|move|copy|copy2|rmtree|mknod|openat|unlinkat)\s*\]\s*\[[^\]]*\]\s*\("  # ADV-W33-001 W34-001 W34-005 [os.remove][0](...) list-wrap incl mknod + inner ws
     r"|\bopen\.__call__\s*\("  # ADV-W26-003 open.__call__()
     r"|operator\.call\s*\(\s*(?:builtins\.)?open\b"  # ADV-W26-003 operator.call(open,...)
     r"|tempfile\.(?:NamedTemporaryFile|mkstemp|mktemp|mkdtemp|TemporaryDirectory)\s*\([^)]*(?:dir\s*=|\*\*\s*(?:\{[^}]*[\x27\x22]dir[\x27\x22]|dict\s*\([^)]*dir\s*=))"  # ADV-W26-008 W27-010 tempfile dir= or **{dir:}
@@ -131,8 +131,8 @@ _RENAME_PRIMITIVES = re.compile(
     r"|asyncio\.create_subprocess_(?:exec|shell)\s*\("  # ADV-W26-014 asyncio subprocess
     r"|(?:ElementTree|xml\.etree\.ElementTree\.ElementTree|ET)\b[^\n]*\.write\s*\("  # ADV-W26-016 ET.write(path)
     r"|(?:globals|locals|vars)\s*\(\s*\)\s*(?:\[|\.).*\bopen\b"  # ADV-W27-001 globals()['open']/vars().open
-    r"|(?:globals|locals|vars)\s*\([^)]+\)\s*(?:\[|\.get\s*\().*\b(?:open|write_text|write_bytes|rename|replace|unlink|truncate|remove|rmtree|move|copy|copy2|execve|system|FileIO|touch|symlink|symlink_to|hardlink_to|popen|execv|copyfile|link|run|check_output|check_call|call|chmod|Popen)\b"  # ADV-W30-003 W31-001 W31-002 W32-009 vars(Path)['write_text']
-    r"|\b__dict__\s*(?:\[|\.get\s*\().*\b(?:open|write_text|write_bytes|rename|replace|unlink|truncate|remove|rmtree|move|copy|copy2|execve|system|FileIO|touch|symlink_to|hardlink_to|symlink|popen|execv|copyfile|link|run|check_output|check_call|call|chmod|Popen)\b"  # ADV-W27-001 W28-010 W29-003 W30-005 W31-002 W32-009 __dict__[/get dangerous-names
+    r"|(?:globals|locals|vars)\s*\([^)]+\)\s*(?:\[|\.get\s*\().*\b(?:open|write_text|write_bytes|rename|replace|unlink|truncate|remove|rmtree|move|copy|copy2|execve|system|FileIO|touch|symlink|symlink_to|hardlink_to|popen|execv|copyfile|link|run|check_output|check_call|call|chmod|Popen|mknod)\b"  # ADV-W30-003 W31-001 W31-002 W32-009 W34-006 vars(Path)['write_text']/Popen/mknod vars(Path)['write_text']
+    r"|\b__dict__\s*(?:\[|\.get\s*\().*\b(?:open|write_text|write_bytes|rename|replace|unlink|truncate|remove|rmtree|move|copy|copy2|execve|system|FileIO|touch|symlink_to|hardlink_to|symlink|popen|execv|copyfile|link|run|check_output|check_call|call|chmod|Popen|mknod)\b"  # ADV-W27-001 W28-010 W29-003 W30-005 W31-002 W32-009 W34-006 __dict__[/get dangerous-names incl mknod
     r"|\b__globals__\s*(?:\[|\.get\s*\().*\bopen\b"  # ADV-W29-007 fn.__globals__['open']
     r"|getattr\s*\((?:[^,()]|\([^)]*\)){0,300},\s*name\s*=\s*[bBfFrRuU]{0,2}[\x27\x22][^\x27\x22]*(?:write_text|write_bytes|open|replace|rename|unlink|truncate|link|copytree|run|execve|remove|execlpe|FileIO|spawnl|spawnv|spawnle|spawnvp|spawnlp|spawnvpe|posix_spawn|posix_spawnp|touch|system|execv|copy|copy2|copyfile|rmtree|move|Popen|mknod)[^\x27\x22]*[\x27\x22]"  # ADV-W27-002 W28-005 W28-006 W33-003 getattr(obj,name='write_text')/name='Popen'
     r"|\bopen\s*\([^)]{0,300},\s*[\[(][^\])[]*[wax+][^\])[]*[\])]"  # ADV-W27-005 W28-001 W29-002 list/tuple-subscript mode incl r+
@@ -148,7 +148,7 @@ _RENAME_PRIMITIVES = re.compile(
     r"|(?:os|subprocess|shutil|operator|pathlib)\s*\.\s*(?:system|popen|replace|rename|remove|unlink|truncate|link|symlink|symlinkat|openat|unlinkat|exec\w+|spawn\w+|posix_spawn\w*|run|call|check_call|check_output|Popen|move|copy|copy2|copyfile|copytree|rmtree|attrgetter|methodcaller|getitem|itemgetter|call)\s*\("  # ADV-W31-003 dot-whitespace bypass: os .system()
     r"|(?:type\s*\(\s*open\s*\)|open\s*\.[\s]*__class__|types\s*\.[\s]*(?:BuiltinFunctionType|BuiltinMethodType))\s*\.[\s]*__call__\s*\("  # ADV-W31-004 W32-001 W33-007 type(open).__call__ / BuiltinFunctionType.__call__ incl dot-whitespace
     r"|\bopen\s*\.[\s]*__call__\s*\("  # ADV-W32-002 open . __call__ with whitespace around dot
-    r"|sys\s*\.\s*modules\s*(?:\[[^\]]*\]|\.\s*(?:get|pop|setdefault)\s*\([^)]*\))\s*\.[\s]*(?:open|remove|unlink|truncate|rename|replace|link|symlink|system|popen|exec\w+|spawn\w+|run|call|check_call|check_output|Popen|move|copy|copy2|rmtree|copytree|write_text|write_bytes|FileIO|mknod)\s*\("  # ADV-W32-003 W33-002 sys.modules['os'].remove() / sys.modules.get('os').remove()
+    r"|sys\s*\.\s*modules\s*(?:\[[^\]]*\]|\.\s*(?:get|pop|setdefault)\s*\([^)]*\))\s*\.[\s]*(?:open|remove|unlink|truncate|rename|replace|link|symlink|system|popen|exec\w+|spawn\w+|run|call|check_call|check_output|Popen|move|copy|copy2|rmtree|copytree|write_text|write_bytes|FileIO|mknod|connect|BZ2File|LZMAFile|GzipFile)\s*\("  # ADV-W32-003 W33-002 W34-003 sys.modules access forms + W32-010 names
     r"|posix\s*\.[\s]*(?:system|popen|remove|unlink|truncate|rename|replace|link|symlink|exec\w+|spawn\w+|openat|unlinkat|open|mknod)\s*\("  # ADV-W32-004 W33-004 posix.system/remove/mknod
     r"|sqlite3\s*\.\s*connect\s*\("  # ADV-W32-010 sqlite3.connect creates file
     r"|shelve\s*\.\s*open\s*\("  # ADV-W32-010 shelve.open creates file
@@ -156,6 +156,8 @@ _RENAME_PRIMITIVES = re.compile(
     r"|dbm\s*\.\s*open\s*\([^)]*[\x27\x22][ncrw]"  # ADV-W32-010 dbm.open create/write modes
     r"|dbm\s*\.\s*(?:gnu|dumb|ndbm)\s*\.\s*open\s*\([^)]*[\x27\x22][ncrw]"  # ADV-W33-005 dbm.gnu.open/dbm.dumb.open create bypass
     r"|\bos\s*\.\s*mknod\s*\("  # ADV-W32-010 os.mknod creates file
+    r"|\(\s*(?:sqlite3\s*\.\s*connect|shelve\s*\.\s*open|bz2\s*\.\s*BZ2File|lzma\s*\.\s*LZMAFile)\s*\)\s*\("  # ADV-W34-002 (sqlite3.connect)(...) paren-wrap W32-010 constructors
+    r"|\[\s*(?:sqlite3\s*\.\s*connect|shelve\s*\.\s*open|bz2\s*\.\s*BZ2File|lzma\s*\.\s*LZMAFile)\s*\]\s*\[[^\]]*\]\s*\("  # ADV-W34-002 [sqlite3.connect][0](...) list-wrap W32-010 constructors
 )
 
 _BOOTSTRAP_DIR: Optional[Path] = None  # resolved lazily (ADV-004)
