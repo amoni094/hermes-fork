@@ -67,15 +67,28 @@ _RENAME_PRIMITIVES = re.compile(
     # This fixes ADV-W8-001 (nested-paren bypass) while preserving ADV-W7-004 FP guard.
     # ADV-W8-002 note: a single \n before the path arg (open(\np,'w')) is a documented miss;
     # mitigated by the encode+open+HR_TOKEN secondary check below in evaluate_write().
-    r"|open\s*\((?:[^()\n]|\([^()]*\)){0,100},\s*['\"][awx][bt+]*['\"]"
-    r"|open\s*\((?:[^()\n]|\([^()]*\)){0,100},\s*['\"]r[bt]*\+[bt]*['\"]"
-    r"|open\s*\((?:[^()\n]|\([^()]*\)){0,100}mode\s*=\s*['\"][awx][bt+]*['\"]"
-    r"|open\s*\((?:[^()\n]|\([^()]*\)){0,100}mode\s*=\s*['\"]r[bt]*\+[bt]*['\"]"
-    # Path.open: unified with \s* after ( to catch whitespace/newline before mode (ADV-W8-003)
-    r"|\.open\s*\(\s*(?:['\"][awx][bt+]*['\"]|['\"]r[bt]*\+[bt]*['\"]|mode\s*=\s*['\"][awxr]|chr\s*\()"
-    # open() dynamic mode: nested-paren path support + comma required (ADV-W7-004 guard preserved)
-    r"|open\s*\((?:[^()\n]|\([^()]*\)){0,100},\s*chr\s*\("
-    r"|open\s*\((?:[^()\n]|\([^()]*\)){0,100}mode\s*=\s*chr\s*\("
+    # open() write-mode: two levels of nested parens, optional leading whitespace/newline.
+    # Pattern: [ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150}
+    #   - [ \t\n]? absorbs single leading whitespace after open( (ADV-W9-002 partial fix)
+    #   - outer alt: non-paren-non-newline char, OR (...) where ... is non-paren or single (...)
+    #   = two levels of nesting (e.g. os.path.split(os.path.join(a,b))[0]) (ADV-W9-001 fix)
+    #   - {0,150} cap restored from {0,100} (ADV-W9-005: 101-char ident bypass)
+    #   ADV-W7-004 guard: exec(open(f).read()), chr — the ) of .read() terminates the outer alt.
+    #   ADV-W8-002 residual: open(\n\np,'w') (two+ newlines before path) is a documented miss;
+    #   mitigated by secondary encode+open+HR_TOKEN check in evaluate_write() for high-risk targets.
+    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150},\s*['\"][awx][bt+]*['\"]"
+    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150},\s*['\"]r[bt]*\+[bt]*['\"]"
+    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150}mode\s*=\s*['\"][awx][bt+]*['\"]"
+    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150}mode\s*=\s*['\"]r[bt]*\+[bt]*['\"]"
+    # Path.open: unified with \s* after ( (ADV-W8-003); mode=[awx] only for keyword (ADV-W9-006 fix)
+    r"|\.open\s*\(\s*(?:['\"][awx][bt+]*['\"]|['\"]r[bt]*\+[bt]*['\"]|mode\s*=\s*['\"][awx]|mode\s*=\s*['\"]r[bt]*\+|chr\s*\()"
+    # open() dynamic mode: two-level nested-paren path + comma required (ADV-W7-004 guard)
+    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150},\s*chr\s*\("
+    r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150}mode\s*=\s*chr\s*\("
+    # Path(nested).write_text/write_bytes: two-level nested parens in Path() arg (ADV-W9-003)
+    r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch)"
+    # getattr obfuscation bypass (ADV-W9-003): getattr(obj,'write_text'/'open'/'write_bytes')
+    r"|getattr\s*\([^,)]{0,80},\s*['\"](?:write_text|write_bytes|open|replace|rename)['\"]"
     r"|json\.dump"
     r"|os\.(popen|system)\s*\("
     r"|os\.(symlink|symlinkat)\s*\("
@@ -352,7 +365,21 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
         hr_tokens_present = [tok for tok in _HR_TOKENS if tok in code_blob]
         if hr_tokens_present and (looks_like_rename_or_copy({"code": code_blob}) or _RENAME_PRIMITIVES.search(code_blob)):
             proposals = load_latest_proposals()
-            if not any(has_approved_proposal(tok, proposals) for tok in hr_tokens_present):
+            # ADV-W9-004: use extract_candidate_paths() against actual resolved paths,
+            # not has_approved_proposal(substring) which resolves relative to CWD and
+            # would approve a blob containing 'config.yaml' whenever any deployed proposal
+            # has a relative target='config.yaml' (which resolves to ~/config.yaml, not
+            # the fork profile config). Fail-closed when no candidate paths extractable.
+            actual_paths = extract_candidate_paths({"code": code_blob})
+            hr_actual = [p for p in actual_paths if is_high_risk_target(p)]
+            if not hr_actual:
+                # No concrete path extractable but HR token + write primitive present.
+                return _deny(
+                    "[governance-hard-block] DENY: execute_code contains rename/copy "
+                    "primitive with high-risk token; no approved proposal found for the "
+                    "actual target path (ADV-024/ADV-W9-004). Requires approved proposal."
+                )
+            if not any(has_approved_proposal(p, proposals) for p in hr_actual):
                 return _deny(
                     "[governance-hard-block] DENY: execute_code contains rename/copy "
                     "primitive with high-risk token; dynamic destination may target "
