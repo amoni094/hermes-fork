@@ -80,7 +80,21 @@ EPS_DP = 0.0
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
-_SCRIPTS = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts"
+def _hermes_root() -> "Path":
+    """Return the true hermes root (e.g. ~/.hermes), stripping profiles/<name> suffix.
+
+    Fork sessions set HERMES_HOME=.../profiles/fork. The global scripts (jev_verify_fn.py etc.)
+    live under ~/.hermes/scripts, not under the profile. Peel the profiles/<name> pair
+    so _SCRIPTS points at the right location regardless of which profile is active.
+    """
+    hh = os.environ.get("HERMES_HOME", "").strip()
+    base = Path(hh) if hh else Path.home() / ".hermes"
+    if base.parent.name == "profiles":
+        return base.parent.parent
+    return base
+
+
+_SCRIPTS = _hermes_root() / "scripts"
 _JEV_PATH = _SCRIPTS / "jev_verify_fn.py"
 _RR_PATH = _SCRIPTS / "rr_compaction_spike.py"
 _COT_SCORER_PATH = _SCRIPTS / "cot_phase_scorer.py"
@@ -249,29 +263,30 @@ def _load_crystal_tiers() -> types.ModuleType | None:
 
 
 def _load_cfg(ctx: Any) -> dict[str, Any]:
-    """Load plugin config from ctx, merging with defaults. Never raises.
+    """Load plugin config from ctx via PluginContext.get_config(). Never raises.
 
-    Reads from plugins.entries.jev-compaction.settings.* (PluginContext API).
-    Falls back to legacy plugins.jev_compaction.* for backwards compatibility.
+    WIRE-JEV-CFG fix: PluginContext has no .config attribute; use ctx.get_config(key, default)
+    which reads from plugins.entries.jev-compaction.settings.<key>.
+    Falls back to _DEFAULT_CFG values for any missing key.
     """
     try:
-        raw = getattr(ctx, "config", {}) or {}
-        plugins_block = raw.get("plugins", {})
-        # Primary: PluginContext-standard path (plugins.entries.jev-compaction.settings)
-        plugin_cfg = (
-            plugins_block.get("entries", {})
-            .get("jev-compaction", {})
-            .get("settings", {})
-        )
-        # Fallback: legacy direct key (plugins.jev_compaction)
-        if not plugin_cfg:
-            plugin_cfg = plugins_block.get("jev_compaction", {})
         cfg = dict(_DEFAULT_CFG)
-        cfg.update({k: v for k, v in plugin_cfg.items() if k != "thresholds"})
-        if "thresholds" in plugin_cfg:
-            thresh = dict(_DEFAULT_CFG["thresholds"])
-            thresh.update(plugin_cfg["thresholds"])
-            cfg["thresholds"] = thresh
+        if not callable(getattr(ctx, "get_config", None)):
+            return cfg
+        # Scalar keys
+        for key, default in _DEFAULT_CFG.items():
+            if key == "thresholds":
+                continue
+            val = ctx.get_config(key, default)
+            if val is not None:
+                cfg[key] = val
+        # Thresholds sub-dict: read per-role keys
+        thresh = dict(_DEFAULT_CFG["thresholds"])
+        for role, tdefault in _DEFAULT_CFG["thresholds"].items():
+            tval = ctx.get_config(f"thresholds.{role}", tdefault)
+            if tval is not None:
+                thresh[role] = tval
+        cfg["thresholds"] = thresh
         return cfg
     except Exception:
         return dict(_DEFAULT_CFG)

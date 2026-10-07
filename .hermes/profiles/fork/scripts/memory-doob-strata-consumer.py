@@ -220,7 +220,9 @@ def main() -> int:
             existing: list = []
             if _FANOUT_Q.exists():
                 try:
-                    existing = json.loads(_FANOUT_Q.read_text())
+                    loaded = json.loads(_FANOUT_Q.read_text())
+                    # WIRE-102-NONLIST: guard against non-list JSON (e.g. a dict or string)
+                    existing = loaded if isinstance(loaded, list) else []
                 except Exception:
                     existing = []
             # Remove any stale entry from this producer.

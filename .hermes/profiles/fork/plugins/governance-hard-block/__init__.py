@@ -113,9 +113,12 @@ def load_latest_proposals(ledger: Optional[Path] = None) -> Dict[str, dict]:
 def has_approved_proposal(target_path: str, proposals: Optional[Dict[str, dict]] = None) -> bool:
     """True iff some proposal in approved/deployed covers *target_path*.
 
-    Coverage: proposal.target is a suffix, prefix, or infix of the path
-    (normalized). Over-broad targets of length < 4 are ignored so a
-    proposal for '/' cannot unlock every write.
+    ADV-031: realpath-suffix check only. No basename short-circuits.
+    A proposal for /profiles/default/config.yaml must NOT unlock /profiles/fork/config.yaml.
+    Coverage rule: proposal.target resolves to a suffix of the resolved write target,
+    with a path-separator boundary (so 'fork/config.yaml' is not a suffix of 'default/config.yaml').
+
+    Over-broad targets of length < 4 are ignored so '/' cannot unlock every write.
     """
     if proposals is None:
         proposals = load_latest_proposals()
@@ -127,23 +130,26 @@ def has_approved_proposal(target_path: str, proposals: Optional[Dict[str, dict]]
         if len(t) < 4:
             continue
         t_norm = _norm_path(t)
-        if t_norm in norm or Path(norm).name == Path(t_norm).name and t_norm.endswith(Path(norm).name):
+        # Exact match: proposal target == write target
+        if t_norm == norm:
             return True
-        # plugin dir coverage: target 'plugins/governance-hard-block' covers its files
-        if t_norm.rstrip("/") in norm:
+        # Directory coverage: proposal target is a parent directory of write target
+        # (e.g. target='plugins/governance-hard-block' covers its __init__.py).
+        # Require path-separator boundary: norm must start with t_norm + os.sep.
+        if norm.startswith(t_norm.rstrip("/") + "/"):
             return True
-        if Path(t).name and Path(t).name in Path(norm).parts:
-            # Basename match is only safe for non-sensitive names.
-            # config.yaml and ssl_guard.py require exact realpath equality (ADV-031 fix):
-            # a deployed proposal for one config.yaml must NOT unlock all others.
-            if Path(t).name in {"config.yaml", "ssl_guard.py"}:
-                # Only allow if the proposal target is a suffix of the actual resolved path
-                if norm.endswith(t_norm) or t_norm.endswith(norm):
-                    return True
-                continue  # basename match alone is insufficient for these sensitive names
-            if "governance-hard-block" in t_norm and "governance-hard-block" in norm:
+        # Suffix coverage: proposal target path is a suffix of the write target,
+        # with a path-separator boundary before the match.
+        # e.g. t_norm='/profiles/fork/config.yaml' is a suffix of norm='/var/home/rainbow/...fork/config.yaml' ✓
+        # e.g. t_norm='/profiles/default/config.yaml' is NOT a suffix of '.../fork/config.yaml' ✓
+        if t_norm.startswith("/") and norm.endswith(t_norm):
+            # Verify boundary: the char before the match must be a separator (or exact match)
+            boundary_pos = len(norm) - len(t_norm)
+            if boundary_pos == 0 or norm[boundary_pos - 1] == "/":
                 return True
-            if "ssl_guard" in t_norm and "ssl_guard" in norm:
+        elif not t_norm.startswith("/") and len(t_norm) >= 8:
+            # Relative proposal target: match as path suffix with separator boundary
+            if norm.endswith("/" + t_norm):
                 return True
     return False
 
@@ -262,6 +268,38 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
     # is invisible to path extraction.  Fail-closed: if the code blob contains any
     # rename/copy primitive AND any high-risk token, treat the entire code as a
     # high-risk rename even when no concrete path is extractable.
+    # ADV-025/ADV-025-EXT/ADV-025-TERMINAL: obfuscated-path bypass via encoding primitives.
+    # Attack vectors: chr(c), chr(0x63), ''.join(chr(c) for c in [...]), bytes.fromhex(...).decode(),
+    # base64.b64decode(...), codecs.decode(...), bytes([99,...]).decode(), exec/eval with encoded string.
+    # Deny ANY tool that combines an encoding primitive with a write/rename primitive.
+    # Applies to execute_code AND terminal (python -c '...' can carry the same attack).
+    _ENCODE_PATTERN = re.compile(
+        r"\bchr\s*\("                                   # chr(99) / chr(c) / chr(0x63)
+        r"|\.fromhex\s*\("                              # bytes.fromhex(...)
+        r"|\bb64decode\s*\("                            # base64.b64decode(...)
+        r"|codecs\.decode\s*\("                         # codecs.decode(...)
+        r"|bytes\s*\(\s*\["                             # bytes([99, 111, ...]).decode()
+        r"|\beval\s*\("                                 # eval(encoded_string)
+        r"|\bexec\s*\("                                 # exec(compiled/encoded)
+    )
+    _WRITE_RENAME = re.compile(
+        r"\b(open\s*\(|write_text|write_bytes|os\.replace|os\.rename|shutil\.copy"
+        r"|shutil\.move|shutil\.copyfile|Path\.write|os\.write\s*\(|os\.open\s*\("
+        r"|\.replace\s*\(|tmp\.replace|json\.dump\s*\()"
+    )
+    _encode_blob = ""
+    if tool_name == "execute_code":
+        _encode_blob = chr(10).join(_string_values(args))
+    elif tool_name == "terminal":
+        _encode_blob = chr(10).join(_string_values(args))
+    if _encode_blob and _ENCODE_PATTERN.search(_encode_blob) and _WRITE_RENAME.search(_encode_blob):
+        return _deny(
+            "[governance-hard-block] DENY: code contains an encoding primitive "
+            "(chr(), fromhex(), b64decode(), codecs.decode(), bytes([...]), eval(), exec()) "
+            "combined with a write/rename primitive (ADV-025/ADV-025-EXT/ADV-025-TERMINAL). "
+            "Dynamic paths built via encoding can bypass static token detection. "
+            "No proposal can approve obfuscated writes — rewrite without encoding."
+        )
     if tool_name == "execute_code":
         code_blob = chr(10).join(_string_values(args))
         if looks_like_rename_or_copy({"code": code_blob}):
@@ -274,31 +312,7 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
                         "primitive with high-risk token; dynamic destination may target "
                         "config.yaml / plugins / agent (ADV-024). Requires approved proposal."
                     )
-        # ADV-025: obfuscated-path bypass — detect encoding primitives in code that
-        # combine a write/rename primitive.
-        # Attack vectors caught: chr(99)+chr(111)+..., bytes.fromhex("636f6e...").decode(),
-        # base64.b64decode("Y29u...").decode(), codecs.decode(..., "hex"/"base64").
-        # Static token scan misses all of these; deny any execute_code that pairs an
-        # encoding primitive with a write/rename primitive.
-        _ENCODE_PATTERN = re.compile(
-            r"\bchr\s*\(\s*\d+\s*\)"                   # chr(99)+chr(111)+...
-            r"|\.fromhex\s*\("                           # bytes.fromhex(...)
-            r"|\bb64decode\s*\("                         # base64.b64decode(...)
-            r"|codecs\.decode\s*\(.*?['\"][a-z0-9_]*['\"]"  # codecs.decode(..., "hex")
-        )
-        _WRITE_RENAME = re.compile(
-            r"\b(open\s*\(|write_text|write_bytes|os\.replace|os\.rename|shutil\.copy"
-            r"|Path\.write|\.replace\s*\(|tmp\.replace)"
-        )
-        if _ENCODE_PATTERN.search(code_blob) and _WRITE_RENAME.search(code_blob):
-            return _deny(
-                "[governance-hard-block] DENY: execute_code contains an encoding primitive "
-                "(chr(), fromhex(), b64decode(), codecs.decode()) combined with a write/rename "
-                "primitive (ADV-025/ADV-025-EXT). Dynamic paths built via encoding can bypass "
-                "static token detection. No proposal can approve obfuscated writes — rewrite "
-                "without encoding."
-            )
-
+        # ADV-024: execute_code dest-variable bypass (encode check already handled above).
     cands = extract_candidate_paths(args)
     rename = looks_like_rename_or_copy(args)
     high = [p for p in cands if is_high_risk_target(p)]

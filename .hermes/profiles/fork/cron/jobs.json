@@ -142,19 +142,19 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/pre-compact-annotate.py",
       "no_agent": true,
       "description": "Every 15m R-D compaction advisory",
-      "next_run_at": "2026-10-07T21:00:00+11:00",
+      "next_run_at": "2026-10-07T22:15:00+11:00",
       "env": {
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T20:45:00+11:00",
-        "dispatched_at": "2026-10-07T20:45:57.128075+11:00",
+        "scheduled_at": "2026-10-07T22:00:00+11:00",
+        "dispatched_at": "2026-10-07T22:00:57.124410+11:00",
         "lateness_seconds": 57.1,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-10-07T20:45:59.479388+11:00",
+      "last_run_at": "2026-10-07T22:00:59.225652+11:00",
       "last_status": "ok",
       "failure_streak": 0,
       "last_delivery_error": null,
@@ -343,7 +343,7 @@
       },
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/spike-queue-actuator.py",
       "no_agent": true,
-      "description": "Daily SPIKE queue actuator — dispatch research spikes as improvement proposals",
+      "description": "Daily SPIKE queue actuator \u2014 dispatch research spikes as improvement proposals",
       "env": {
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
@@ -410,20 +410,20 @@
       },
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/monitor-suite-runner.py",
       "no_agent": true,
-      "description": "Every 2h monitor suite run — collects alarm JSON for alarm-aggregator",
+      "description": "Every 2h monitor suite run \u2014 collects alarm JSON for alarm-aggregator",
       "env": {
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-07T22:00:00+11:00",
+      "next_run_at": "2026-10-08T00:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T20:00:00+11:00",
-        "dispatched_at": "2026-10-07T20:00:57.124851+11:00",
+        "scheduled_at": "2026-10-07T22:00:00+11:00",
+        "dispatched_at": "2026-10-07T22:00:57.124410+11:00",
         "lateness_seconds": 57.1,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-10-07T20:00:59.294806+11:00",
+      "last_run_at": "2026-10-07T22:00:59.411537+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -537,7 +537,7 @@
     {
       "id": "b053e57fd10b",
       "name": "hermes-chat-sync-4h",
-      "prompt": "Resolve the current local date/time with `date`. Then synchronize recent Hermes chat activity into the Obsidian vault at /var/home/rainbow/Documents/SecondBrain.\n\nFollow the `hermes-obsidian-sync` skill strictly, with these priority rules:\n1. Read the current live-sync note first: `/var/home/rainbow/Documents/SecondBrain/04 Resources/Hermes Chat Live Sync.md`.\n2. Resolve today’s daily-note path from the runtime date and read that note before making any rewrite/patch.\n3. Treat those two note files as the continuity baseline. Preserve already-curated durable state unless newer verified evidence supersedes it.\n4. Use `session_search` to browse recent sessions, but only drill into the most relevant substantive sessions from the last 24 hours, and avoid brute-reading full prior sync sessions unless a narrowed slice is truly needed.\n5. If recent results are crowded by prior cron sync runs, treat them as maintenance context rather than primary source material.\n6. If present, inspect `~/.hermes/logs/hermes-memory-capture.jsonl`, `~/.hermes/logs/hermes-obsidian-file-events.jsonl`, and `~/.hermes/state/obsidian-dirty-paths.json` for high-signal local hints, but prefer search-first and tail-window reads for large files.\n7. Never brute-read a large log or note from line 1 if it is big. If a read exceeds safety limits, immediately re-read only a small tail window near the end using the reported total_lines/size hint.\n8. Capture only durable/high-signal items: workflow changes, configuration facts, verified runtime state, note syncs, cron changes, maintenance actions, and stable follow-ups.\n9. Rewrite `/var/home/rainbow/Documents/SecondBrain/04 Resources/Hermes Chat Live Sync.md` as a curated note with frontmatter, last synced timestamp, scope, recent sessions, key durable themes, follow-ups, and privacy notes.\n10. Ensure today's daily note exists and contains or updates a `## Hermes Chat Sync` section linking to `[[Hermes Chat Live Sync]]` with 3-5 concise bullets.\n11. Keep the daily note thin: one link bullet plus only the most durable 2-4 items. Do not copy detailed PR/commit/test minutiae into the daily note unless they changed an ongoing operating rule.\n12. Keep the output curated and concise. Do NOT dump raw transcripts or secrets.\n13. Prefer rewriting the live-sync note cleanly rather than appending duplicate sections forever.\n14. Treat `~/.hermes/memories/MEMORY.md` as the canonical agent-facing durable memory store; vault `MEMORY.md` and live-sync notes are curated human-readable surfaces, while session/log/state files are retrieval or telemetry sources.\n\nVerification:\n- Read back the files you wrote/updated and confirm the sync landed.\n- If there are no meaningful new sessions, keep the note stable and only refresh the timestamp when appropriate.\n- Report only the curated result, not raw logs.",
+      "prompt": "Resolve the current local date/time with `date`. Then synchronize recent Hermes chat activity into the Obsidian vault at /var/home/rainbow/Documents/SecondBrain.\n\nFollow the `hermes-obsidian-sync` skill strictly, with these priority rules:\n1. Read the current live-sync note first: `/var/home/rainbow/Documents/SecondBrain/04 Resources/Hermes Chat Live Sync.md`.\n2. Resolve today\u2019s daily-note path from the runtime date and read that note before making any rewrite/patch.\n3. Treat those two note files as the continuity baseline. Preserve already-curated durable state unless newer verified evidence supersedes it.\n4. Use `session_search` to browse recent sessions, but only drill into the most relevant substantive sessions from the last 24 hours, and avoid brute-reading full prior sync sessions unless a narrowed slice is truly needed.\n5. If recent results are crowded by prior cron sync runs, treat them as maintenance context rather than primary source material.\n6. If present, inspect `~/.hermes/logs/hermes-memory-capture.jsonl`, `~/.hermes/logs/hermes-obsidian-file-events.jsonl`, and `~/.hermes/state/obsidian-dirty-paths.json` for high-signal local hints, but prefer search-first and tail-window reads for large files.\n7. Never brute-read a large log or note from line 1 if it is big. If a read exceeds safety limits, immediately re-read only a small tail window near the end using the reported total_lines/size hint.\n8. Capture only durable/high-signal items: workflow changes, configuration facts, verified runtime state, note syncs, cron changes, maintenance actions, and stable follow-ups.\n9. Rewrite `/var/home/rainbow/Documents/SecondBrain/04 Resources/Hermes Chat Live Sync.md` as a curated note with frontmatter, last synced timestamp, scope, recent sessions, key durable themes, follow-ups, and privacy notes.\n10. Ensure today's daily note exists and contains or updates a `## Hermes Chat Sync` section linking to `[[Hermes Chat Live Sync]]` with 3-5 concise bullets.\n11. Keep the daily note thin: one link bullet plus only the most durable 2-4 items. Do not copy detailed PR/commit/test minutiae into the daily note unless they changed an ongoing operating rule.\n12. Keep the output curated and concise. Do NOT dump raw transcripts or secrets.\n13. Prefer rewriting the live-sync note cleanly rather than appending duplicate sections forever.\n14. Treat `~/.hermes/memories/MEMORY.md` as the canonical agent-facing durable memory store; vault `MEMORY.md` and live-sync notes are curated human-readable surfaces, while session/log/state files are retrieval or telemetry sources.\n\nVerification:\n- Read back the files you wrote/updated and confirm the sync landed.\n- If there are no meaningful new sessions, keep the note stable and only refresh the timestamp when appropriate.\n- Report only the curated result, not raw logs.",
       "skills": [
         "hermes-obsidian-sync"
       ],
@@ -725,15 +725,15 @@
       "schedule_display": "every 10m",
       "repeat": {
         "times": null,
-        "completed": 5371
+        "completed": 5377
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-06-26T11:06:08.602796+10:00",
-      "next_run_at": "2026-10-07T20:59:58.771702+11:00",
-      "last_run_at": "2026-10-07T20:49:58.771702+11:00",
+      "next_run_at": "2026-10-07T22:05:58.910278+11:00",
+      "last_run_at": "2026-10-07T21:55:58.910278+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -749,9 +749,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T20:48:58.731020+11:00",
-        "dispatched_at": "2026-10-07T20:49:57.124523+11:00",
-        "lateness_seconds": 58.4,
+        "scheduled_at": "2026-10-07T21:54:58.987105+11:00",
+        "dispatched_at": "2026-10-07T21:55:57.125412+11:00",
+        "lateness_seconds": 58.1,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -939,7 +939,7 @@
     {
       "id": "e034d0179aa9",
       "name": "l1-hindsight-promote",
-      "prompt": "Read ~/.hermes/memory-facts/staging.md. For each bullet line in that file:\n\n1. Strip the timestamp and score prefix (e.g. \"- [2026-07-09T09:27Z] [score=3] \").\n\n2. Parse ALL inline tags from the line before extracting fact text:\n   - Memory type: [type=fact], [type=correction], [type=outcome], [type=preference], [type=reasoning], [type=observation]. Default: \"fact\".\n   - Volatility class: [vc=stable], [vc=volatile], [vc=ephemeral]. Default: \"volatile\".\n   - Memory namespace: [ns=profile], [ns=event], [ns=record]. Default: \"record\".\n   - Anchors: [anchors: term1, term2, term3] — split on comma.\n   - Entities: [entities: Type:Name, Type:Name] — split on comma.\n   - Valid-from: [valid_from=<ISO timestamp>] — use as the temporal anchor.\n   - Retention score: [retention=<float>] — include as a tag.\n   - Supersedes: [supersedes=<id>] — include as a tag.\n   - Access count: [access_count=<int>] — pass through.\n   Strip ALL of these tag patterns from the line before extracting the clean fact text.\n\n3. Build the hindsight_retain call:\n   - content = clean fact text (all tags removed)\n   - context = \"l1-extract\"\n   - tags = [\n       \"l1\",\n       \"type:<memory_type>\",\n       \"volatility:<volatility_class>\",\n       \"ns:<memory_namespace>\",\n     ]\n     + [\"entity:<entity_str>\" for each entity in entities list]\n     + [\"anchor:<anchor>\" for each anchor in anchors list]\n     + ([\"valid_from:<valid_from>\"] if valid_from)\n     + ([\"retention:<retention>\"] if retention present)\n     + ([\"supersedes:<supersedes_id>\"] if supersedes present)\n\n4. For types \"correction\" and \"outcome\": bypass the recurrence check — retain immediately (high-signal one-time events).\n\n5. BEFORE running l1-graphiti-write.py and BEFORE truncating staging.md:\n   Register all facts as pending in graphiti-state.db so we have a durable record:\n   run: python3 ~/.hermes/scripts/l1-graphiti-reconcile.py register\n   This ensures facts are recoverable even if Graphiti write fails.\n\n6. After retaining all facts via hindsight_retain, run this shell command to also write them to the Graphiti knowledge graph:\n   python3 ~/.hermes/scripts/l1-graphiti-write.py ~/.hermes/memory-facts/staging.md 2>&1\n   IMPORTANT: capture the output and exit code. Run it BEFORE truncating staging.md.\n   - If it succeeds: mark facts written with:\n     echo \"<script output>\" | python3 ~/.hermes/scripts/l1-graphiti-reconcile.py mark-written\n   - If it fails (non-zero exit or error lines in output): log the failure.\n     Do NOT abort the job — the reconcile cron will retry. Proceed to truncate.\n\n7. After retaining all facts and running l1-graphiti-write.py, REPLACE the contents of staging.md with an empty string (truncate it): write an empty string to ~/.hermes/memory-facts/staging.md\n\n8. Finally run: python3 ~/.hermes/scripts/l1-graphiti-reconcile.py status\n   to confirm the DB state. Report the summary.",
+      "prompt": "Read ~/.hermes/memory-facts/staging.md. For each bullet line in that file:\n\n1. Strip the timestamp and score prefix (e.g. \"- [2026-07-09T09:27Z] [score=3] \").\n\n2. Parse ALL inline tags from the line before extracting fact text:\n   - Memory type: [type=fact], [type=correction], [type=outcome], [type=preference], [type=reasoning], [type=observation]. Default: \"fact\".\n   - Volatility class: [vc=stable], [vc=volatile], [vc=ephemeral]. Default: \"volatile\".\n   - Memory namespace: [ns=profile], [ns=event], [ns=record]. Default: \"record\".\n   - Anchors: [anchors: term1, term2, term3] \u2014 split on comma.\n   - Entities: [entities: Type:Name, Type:Name] \u2014 split on comma.\n   - Valid-from: [valid_from=<ISO timestamp>] \u2014 use as the temporal anchor.\n   - Retention score: [retention=<float>] \u2014 include as a tag.\n   - Supersedes: [supersedes=<id>] \u2014 include as a tag.\n   - Access count: [access_count=<int>] \u2014 pass through.\n   Strip ALL of these tag patterns from the line before extracting the clean fact text.\n\n3. Build the hindsight_retain call:\n   - content = clean fact text (all tags removed)\n   - context = \"l1-extract\"\n   - tags = [\n       \"l1\",\n       \"type:<memory_type>\",\n       \"volatility:<volatility_class>\",\n       \"ns:<memory_namespace>\",\n     ]\n     + [\"entity:<entity_str>\" for each entity in entities list]\n     + [\"anchor:<anchor>\" for each anchor in anchors list]\n     + ([\"valid_from:<valid_from>\"] if valid_from)\n     + ([\"retention:<retention>\"] if retention present)\n     + ([\"supersedes:<supersedes_id>\"] if supersedes present)\n\n4. For types \"correction\" and \"outcome\": bypass the recurrence check \u2014 retain immediately (high-signal one-time events).\n\n5. BEFORE running l1-graphiti-write.py and BEFORE truncating staging.md:\n   Register all facts as pending in graphiti-state.db so we have a durable record:\n   run: python3 ~/.hermes/scripts/l1-graphiti-reconcile.py register\n   This ensures facts are recoverable even if Graphiti write fails.\n\n6. After retaining all facts via hindsight_retain, run this shell command to also write them to the Graphiti knowledge graph:\n   python3 ~/.hermes/scripts/l1-graphiti-write.py ~/.hermes/memory-facts/staging.md 2>&1\n   IMPORTANT: capture the output and exit code. Run it BEFORE truncating staging.md.\n   - If it succeeds: mark facts written with:\n     echo \"<script output>\" | python3 ~/.hermes/scripts/l1-graphiti-reconcile.py mark-written\n   - If it fails (non-zero exit or error lines in output): log the failure.\n     Do NOT abort the job \u2014 the reconcile cron will retry. Proceed to truncate.\n\n7. After retaining all facts and running l1-graphiti-write.py, REPLACE the contents of staging.md with an empty string (truncate it): write an empty string to ~/.hermes/memory-facts/staging.md\n\n8. Finally run: python3 ~/.hermes/scripts/l1-graphiti-reconcile.py status\n   to confirm the DB state. Report the summary.",
       "skills": [
         "hindsight-stack-operations"
       ],
@@ -1022,15 +1022,15 @@
       "schedule_display": "every 220m",
       "repeat": {
         "times": null,
-        "completed": 190
+        "completed": 191
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-15T10:00:51.863995+10:00",
-      "next_run_at": "2026-10-07T21:10:07.069885+11:00",
-      "last_run_at": "2026-10-07T17:30:07.069885+11:00",
+      "next_run_at": "2026-10-08T00:50:58.903403+11:00",
+      "last_run_at": "2026-10-07T21:10:58.903403+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -1041,9 +1041,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T17:29:06.858493+11:00",
-        "dispatched_at": "2026-10-07T17:30:05.162026+11:00",
-        "lateness_seconds": 58.3,
+        "scheduled_at": "2026-10-07T21:10:07.069885+11:00",
+        "dispatched_at": "2026-10-07T21:10:57.130000+11:00",
+        "lateness_seconds": 50.1,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -1176,7 +1176,7 @@
     {
       "id": "26a4747fe6ea",
       "name": "pending-improvements-review",
-      "prompt": "You are a Hermes skill curator. Your job is to review skill candidates that were auto-generated by trace2skill.py and staged to ~/.hermes/cache/pending-improvements/.\n\nSteps:\n1. List all files in ~/.hermes/cache/pending-improvements/ matching skill-candidate-*.md using the terminal tool.\n2. If none exist, print \"No pending skill candidates.\" and stop.\n3. For each candidate file (max 5 per run):\n   a. Read its content.\n   b. Evaluate: Does it describe a genuinely reusable workflow with a clear trigger, concrete steps, and at least one pitfall? Is it distinct from existing skills?\n   c. Check if a similar skill already exists using: python3 ~/.hermes/scripts/skill-router-index.py --query \"TRIGGER_TEXT_HERE\"\n   d. If the candidate is high quality and distinct: use skill_manage(action='create') to create the skill, then delete the candidate file.\n   e. If it's low quality, redundant, or too session-specific: delete the candidate file without creating a skill.\n4. Print a summary: N reviewed, N promoted to skills, N discarded.\n\nBe conservative — only promote candidates that a future session would actually load and benefit from. Discard anything that's just a session log or task record.",
+      "prompt": "You are a Hermes skill curator. Your job is to review skill candidates that were auto-generated by trace2skill.py and staged to ~/.hermes/cache/pending-improvements/.\n\nSteps:\n1. List all files in ~/.hermes/cache/pending-improvements/ matching skill-candidate-*.md using the terminal tool.\n2. If none exist, print \"No pending skill candidates.\" and stop.\n3. For each candidate file (max 5 per run):\n   a. Read its content.\n   b. Evaluate: Does it describe a genuinely reusable workflow with a clear trigger, concrete steps, and at least one pitfall? Is it distinct from existing skills?\n   c. Check if a similar skill already exists using: python3 ~/.hermes/scripts/skill-router-index.py --query \"TRIGGER_TEXT_HERE\"\n   d. If the candidate is high quality and distinct: use skill_manage(action='create') to create the skill, then delete the candidate file.\n   e. If it's low quality, redundant, or too session-specific: delete the candidate file without creating a skill.\n4. Print a summary: N reviewed, N promoted to skills, N discarded.\n\nBe conservative \u2014 only promote candidates that a future session would actually load and benefit from. Discard anything that's just a session log or task record.",
       "skills": [],
       "skill": null,
       "model": "claude-sonnet-4-6",
@@ -1316,15 +1316,15 @@
       "schedule_display": "every 230m",
       "repeat": {
         "times": null,
-        "completed": 118
+        "completed": 119
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-06T13:30:29.886527+10:00",
-      "next_run_at": "2026-10-07T21:40:06.880652+11:00",
-      "last_run_at": "2026-10-07T17:50:06.880652+11:00",
+      "next_run_at": "2026-10-08T01:30:59.274129+11:00",
+      "last_run_at": "2026-10-07T21:40:59.274129+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -1335,9 +1335,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T17:49:06.894628+11:00",
-        "dispatched_at": "2026-10-07T17:50:05.167093+11:00",
-        "lateness_seconds": 58.3,
+        "scheduled_at": "2026-10-07T21:40:06.880652+11:00",
+        "dispatched_at": "2026-10-07T21:40:57.240422+11:00",
+        "lateness_seconds": 50.4,
         "kind": "on_time"
       },
       "fire_claim": null,
@@ -1353,7 +1353,7 @@
     {
       "id": "bcb9c8082d9c",
       "name": "obsidian-weekly-review",
-      "prompt": "The script has already run and written a weekly review scaffold to the Obsidian vault at ~/Documents/SecondBrain/Reviews/YYYY-MM-DD-weekly.md with the list of modified notes. Your job is to synthesize the review:\n\n1. Read the scaffold file that was just written (most recent file in ~/Documents/SecondBrain/Reviews/ matching today's date).\n2. Read the actual note files listed in the scaffold (the modified notes section).\n3. Write a concise weekly review (under 400 words) covering: accomplishments/completed work, decisions made and rationale, tasks completed vs planned, patterns or recurring themes, suggested priorities for next week.\n4. Append the synthesis under the \"## Review\" section in that scaffold file, replacing the \"_Pending synthesis_\" placeholder.\n5. Do not sync or push anything — this is local-only synthesis.",
+      "prompt": "The script has already run and written a weekly review scaffold to the Obsidian vault at ~/Documents/SecondBrain/Reviews/YYYY-MM-DD-weekly.md with the list of modified notes. Your job is to synthesize the review:\n\n1. Read the scaffold file that was just written (most recent file in ~/Documents/SecondBrain/Reviews/ matching today's date).\n2. Read the actual note files listed in the scaffold (the modified notes section).\n3. Write a concise weekly review (under 400 words) covering: accomplishments/completed work, decisions made and rationale, tasks completed vs planned, patterns or recurring themes, suggested priorities for next week.\n4. Append the synthesis under the \"## Review\" section in that scaffold file, replacing the \"_Pending synthesis_\" placeholder.\n5. Do not sync or push anything \u2014 this is local-only synthesis.",
       "skills": [
         "hermes-obsidian-sync",
         "obsidian"
@@ -1547,15 +1547,15 @@
       "schedule_display": "every 90m",
       "repeat": {
         "times": null,
-        "completed": 96
+        "completed": 97
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-30T12:47:26.633369+10:00",
-      "next_run_at": "2026-10-07T21:14:29.129515+11:00",
-      "last_run_at": "2026-10-07T19:44:29.129515+11:00",
+      "next_run_at": "2026-10-07T22:45:09.146928+11:00",
+      "last_run_at": "2026-10-07T21:15:09.146928+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -1566,10 +1566,10 @@
       "workdir": null,
       "fire_claim": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T19:12:14.183911+11:00",
-        "dispatched_at": "2026-10-07T19:44:05.085937+11:00",
-        "lateness_seconds": 1910.9,
-        "kind": "late"
+        "scheduled_at": "2026-10-07T21:14:29.129515+11:00",
+        "dispatched_at": "2026-10-07T21:14:57.158513+11:00",
+        "lateness_seconds": 28.0,
+        "kind": "on_time"
       },
       "profile": "fork",
       "timeout_seconds": 3600,
@@ -1644,7 +1644,7 @@
     {
       "id": "001715fd293f",
       "name": "hermes-research-apply",
-      "prompt": "Load ~/.hermes/cache/research/hermes-research-latest.json. If the file does not exist or is older than 48h, skip silently (write nothing, exit 0). Otherwise: triage all new_papers_flat entries against the 7 Hermes research categories (reasoning_planning, tool_use, memory, multi_agent, evaluation, self_improvement, agentic_rag). For each paper: (1) assess relevance to Hermes skills (HIGH = directly actionable implementation signal, MED = useful context worth patching, LOW = peripheral). (2) For HIGH papers: read the abstract at the paper URL, extract the key implementation signal (what concrete change to a Hermes skill or workflow?), identify the target skill, and apply a skill_manage patch using the trajectory-research-synthesis-to-skills write ownership protocol. (3) For MED papers: apply a skill_manage patch to the target skill (same process as HIGH — read abstract, extract signal, patch skill) AND record the finding in the arxiv-sweep-findings skill findings bank. Do NOT block or defer MED patches on any ownership classification — patch all target skills regardless of whether they are marked user-owned or system-owned. (4) For LOW: log a one-line skip note. After all patches: run adversarial-review on every patched skill (CDH check, oscillation check, trigger coherence). Call verification-before-completion. Write a full apply-report to ~/.hermes/cache/research/hermes-research-apply-latest.md covering: sweep date, papers processed, HIGH/MED/LOW counts, skills patched, adversarial findings. Print a one-paragraph summary to stdout for cron delivery.",
+      "prompt": "Load ~/.hermes/cache/research/hermes-research-latest.json. If the file does not exist or is older than 48h, skip silently (write nothing, exit 0). Otherwise: triage all new_papers_flat entries against the 7 Hermes research categories (reasoning_planning, tool_use, memory, multi_agent, evaluation, self_improvement, agentic_rag). For each paper: (1) assess relevance to Hermes skills (HIGH = directly actionable implementation signal, MED = useful context worth patching, LOW = peripheral). (2) For HIGH papers: read the abstract at the paper URL, extract the key implementation signal (what concrete change to a Hermes skill or workflow?), identify the target skill, and apply a skill_manage patch using the trajectory-research-synthesis-to-skills write ownership protocol. (3) For MED papers: apply a skill_manage patch to the target skill (same process as HIGH \u2014 read abstract, extract signal, patch skill) AND record the finding in the arxiv-sweep-findings skill findings bank. Do NOT block or defer MED patches on any ownership classification \u2014 patch all target skills regardless of whether they are marked user-owned or system-owned. (4) For LOW: log a one-line skip note. After all patches: run adversarial-review on every patched skill (CDH check, oscillation check, trigger coherence). Call verification-before-completion. Write a full apply-report to ~/.hermes/cache/research/hermes-research-apply-latest.md covering: sweep date, papers processed, HIGH/MED/LOW counts, skills patched, adversarial findings. Print a one-paragraph summary to stdout for cron delivery.",
       "skills": [
         "hermes-research",
         "trajectory-research-synthesis-to-skills",
@@ -2194,14 +2194,14 @@
       "last_error": null,
       "last_delivery_error": null,
       "fire_claim": null,
-      "next_run_at": "2026-10-07T21:15:59.343009+11:00",
+      "next_run_at": "2026-10-07T22:17:58.909014+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T20:44:58.885428+11:00",
-        "dispatched_at": "2026-10-07T20:45:57.128075+11:00",
+        "scheduled_at": "2026-10-07T21:46:58.964603+11:00",
+        "dispatched_at": "2026-10-07T21:47:57.125310+11:00",
         "lateness_seconds": 58.2,
         "kind": "on_time"
       },
-      "last_run_at": "2026-10-07T20:45:59.343009+11:00",
+      "last_run_at": "2026-10-07T21:47:58.909014+11:00",
       "timeout_seconds": 1440,
       "startup_jitter_seconds": 55,
       "priority": 1
@@ -2270,14 +2270,14 @@
       },
       "state": "scheduled",
       "created_at": "2026-09-22T15:29:09.530109+10:00",
-      "next_run_at": "2026-10-07T21:02:58.959499+11:00",
-      "last_run_at": "2026-10-07T20:47:58.959499+11:00",
+      "next_run_at": "2026-10-07T22:06:59.079271+11:00",
+      "last_run_at": "2026-10-07T21:51:59.079271+11:00",
       "last_status": "ok",
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T20:46:58.655033+11:00",
-        "dispatched_at": "2026-10-07T20:47:57.184412+11:00",
-        "lateness_seconds": 58.5,
+        "scheduled_at": "2026-10-07T21:50:59.126165+11:00",
+        "dispatched_at": "2026-10-07T21:51:57.125585+11:00",
+        "lateness_seconds": 58.0,
         "kind": "on_time"
       },
       "fire_claim": null,
@@ -2287,7 +2287,7 @@
     {
       "id": "staleness-monitor-24f8e4a1",
       "name": "staleness-monitor",
-      "description": "Monitor freshness of critical Hermes log files (D2 liveness: Lynch Distributed Algorithms §8 AF(log_written))",
+      "description": "Monitor freshness of critical Hermes log files (D2 liveness: Lynch Distributed Algorithms \u00a78 AF(log_written))",
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/staleness-monitor.py",
       "schedule": {
         "kind": "interval",
@@ -2302,15 +2302,15 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-07T21:45:44.168627+11:00",
+      "next_run_at": "2026-10-07T22:46:43.314592+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T20:44:48.909344+11:00",
-        "dispatched_at": "2026-10-07T20:44:57.127471+11:00",
-        "lateness_seconds": 8.2,
+        "scheduled_at": "2026-10-07T21:45:44.168627+11:00",
+        "dispatched_at": "2026-10-07T21:45:57.137250+11:00",
+        "lateness_seconds": 13.0,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-10-07T20:45:44.168627+11:00",
+      "last_run_at": "2026-10-07T21:46:43.314592+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -2320,7 +2320,7 @@
     {
       "id": "skill-index-weekly-rebuild-4fffb154",
       "name": "skill-index-weekly-rebuild",
-      "description": "Unconditional weekly skill index rebuild — AF(skill_index_built) liveness (Clarke et al. LTL)",
+      "description": "Unconditional weekly skill index rebuild \u2014 AF(skill_index_built) liveness (Clarke et al. LTL)",
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-router-index.py",
       "schedule": {
         "kind": "cron",
@@ -2432,29 +2432,29 @@
       "schedule_display": "0 21 * * *",
       "repeat": {
         "times": null,
-        "completed": 13
+        "completed": 14
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-22T21:35:11.381643+10:00",
-      "next_run_at": "2026-10-07T21:00:00+11:00",
-      "last_run_at": "2026-10-06T21:00:06.954449+11:00",
-      "last_status": "error",
-      "last_error": "Script exited with code 1\nstderr:\n/var/home/rainbow/.hermes/profiles/fork/scripts/session-resource-audit.py:30: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).\n  return datetime.datetime.utcnow().isoformat() + \"Z\"\nstdout:\nsession-resource-audit: 168 unaudited resources (168 grants, 0 cron, 0 tools checked)",
+      "next_run_at": "2026-10-08T21:00:00+11:00",
+      "last_run_at": "2026-10-07T21:00:59.351745+11:00",
+      "last_status": "ok",
+      "last_error": null,
       "last_delivery_error": null,
       "last_delivery_unverified": null,
-      "failure_streak": 8,
+      "failure_streak": 0,
       "deliver": "local",
       "origin": null,
       "enabled_toolsets": null,
       "workdir": null,
       "failure_deliver": "local",
       "last_dispatch": {
-        "scheduled_at": "2026-10-06T21:00:00+11:00",
-        "dispatched_at": "2026-10-06T21:00:04.921301+11:00",
-        "lateness_seconds": 4.9,
+        "scheduled_at": "2026-10-07T21:00:00+11:00",
+        "dispatched_at": "2026-10-07T21:00:57.124016+11:00",
+        "lateness_seconds": 57.1,
         "kind": "on_time"
       },
       "fire_claim": null,
@@ -2754,17 +2754,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-07T21:45:00.454671+11:00",
-      "last_run_at": "2026-10-07T20:45:00.454671+11:00",
+      "next_run_at": "2026-10-07T22:46:00.641831+11:00",
+      "last_run_at": "2026-10-07T21:46:00.641831+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T20:44:10.059794+11:00",
-        "dispatched_at": "2026-10-07T20:44:57.127471+11:00",
-        "lateness_seconds": 47.1,
+        "scheduled_at": "2026-10-07T21:45:00.454671+11:00",
+        "dispatched_at": "2026-10-07T21:45:57.137250+11:00",
+        "lateness_seconds": 56.7,
         "kind": "on_time"
       },
       "last_failure": {
@@ -2792,17 +2792,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-07T21:45:00.274060+11:00",
-      "last_run_at": "2026-10-07T20:45:00.274060+11:00",
+      "next_run_at": "2026-10-07T22:46:00.308368+11:00",
+      "last_run_at": "2026-10-07T21:46:00.308368+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T20:44:10.649986+11:00",
-        "dispatched_at": "2026-10-07T20:44:57.127471+11:00",
-        "lateness_seconds": 46.5,
+        "scheduled_at": "2026-10-07T21:45:00.274060+11:00",
+        "dispatched_at": "2026-10-07T21:45:57.137250+11:00",
+        "lateness_seconds": 56.9,
         "kind": "on_time"
       },
       "last_failure": {
@@ -2830,17 +2830,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-07T21:44:59.767809+11:00",
-      "last_run_at": "2026-10-07T20:44:59.767809+11:00",
+      "next_run_at": "2026-10-07T22:46:00.053783+11:00",
+      "last_run_at": "2026-10-07T21:46:00.053783+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T20:44:10.739898+11:00",
-        "dispatched_at": "2026-10-07T20:44:57.127471+11:00",
-        "lateness_seconds": 46.4,
+        "scheduled_at": "2026-10-07T21:44:59.767809+11:00",
+        "dispatched_at": "2026-10-07T21:45:57.137250+11:00",
+        "lateness_seconds": 57.4,
         "kind": "on_time"
       }
     },
@@ -2864,17 +2864,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-07T21:45:00.156297+11:00",
-      "last_run_at": "2026-10-07T20:45:00.156297+11:00",
+      "next_run_at": "2026-10-07T22:46:00.453252+11:00",
+      "last_run_at": "2026-10-07T21:46:00.453252+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T20:44:10.911204+11:00",
-        "dispatched_at": "2026-10-07T20:44:57.127471+11:00",
-        "lateness_seconds": 46.2,
+        "scheduled_at": "2026-10-07T21:45:00.156297+11:00",
+        "dispatched_at": "2026-10-07T21:45:57.137250+11:00",
+        "lateness_seconds": 57.0,
         "kind": "on_time"
       }
     },
@@ -2898,23 +2898,23 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-07T21:15:59.200527+11:00",
-      "last_run_at": "2026-10-07T20:45:59.200527+11:00",
+      "next_run_at": "2026-10-07T22:17:59.105997+11:00",
+      "last_run_at": "2026-10-07T21:47:59.105997+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-07T20:44:59.085221+11:00",
-        "dispatched_at": "2026-10-07T20:45:57.128075+11:00",
+        "scheduled_at": "2026-10-07T21:46:59.150040+11:00",
+        "dispatched_at": "2026-10-07T21:47:57.125310+11:00",
         "lateness_seconds": 58.0,
         "kind": "on_time"
       }
     },
     {
       "id": "wave18-memory-invariants-0001",
-      "description": "Wave 18 memory invariant harness — 109 property tests (Doob/VOI/Eckart-Young/Kalman)",
+      "description": "Wave 18 memory invariant harness \u2014 109 property tests (Doob/VOI/Eckart-Young/Kalman)",
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-wave18-invariants.py",
       "schedule": {
         "kind": "interval",
@@ -2939,11 +2939,24 @@
       },
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/real-options-fanout-gate.py",
       "description": "Applies real-options theory to gate/defer subagent fan-out decisions. GAP-4 wiring fix.",
-      "next_run_at": "2026-10-07T21:03:57.125505+11:00",
+      "next_run_at": "2026-10-07T22:05:58.906247+11:00",
       "no_agent": true,
       "env": {
         "HERMES_HOME": "/var/home/rainbow/.hermes/profiles/fork"
-      }
+      },
+      "last_dispatch": {
+        "scheduled_at": "2026-10-07T21:34:58.630192+11:00",
+        "dispatched_at": "2026-10-07T21:35:57.123761+11:00",
+        "lateness_seconds": 58.5,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-07T21:35:58.906247+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
     },
     {
       "id": "doob-strata-consumer-0001",
@@ -2956,7 +2969,10 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-doob-strata-consumer.py",
       "description": "Scores working-memory entries by Doob stratum; writes quality advisory. Wires GAP-6/ADV-007.",
       "next_run_at": "2026-10-08T08:34:57.128395+11:00",
-      "no_agent": true
+      "no_agent": true,
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes/profiles/fork"
+      }
     },
     {
       "id": "doob-strata-decompose-0001",
@@ -2977,5 +2993,5 @@
       "next_run_at": "2026-10-08T03:30:00+11:00"
     }
   ],
-  "updated_at": "2026-10-07T20:54:57.208047+11:00"
+  "updated_at": "2026-10-07T22:00:59.431084+11:00"
 }
