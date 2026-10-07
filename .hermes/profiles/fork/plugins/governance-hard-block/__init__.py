@@ -283,16 +283,19 @@ def extract_candidate_paths(args: Any) -> List[str]:
     return uniq
 
 
-# ADV-W12-001: allow optional prefix words (sudo, nice, time, busybox, /bin/…) before verb.
-# ADV-W12-002: add 'ln' (symlink creation = write into target dir).
+# ADV-W13-005: removed 'install' (matched pip/apt-get install FP).
+# ADV-W13-005: ONE optional prefix word only (sudo/time/nice/env) — not unbounded chain.
+#   Consequence: 'sudo nice cp' misses (two prefixes); accepted as exotic.
+# ADV-W12-002: 'ln' retained.
 _SHELL_RENAME = re.compile(
-    r"(?:^|[;|&\n])"                                   # start of command or after operator
-    r"(?:\s*(?!mv\b|cp\b|ln\b|install\b|rsync\b|tee\b)[^\s/][^\s]*\s+)*"  # prefix words (no leading-slash path)
-    r"(?:/\S+/)?"                                       # optional absolute-path prefix (/bin/, /usr/bin/)
-    r"\s*(?:mv|cp|ln|install|rsync|tee)\b"
+    r"(?:^|[;|&\n])"           # start of command or after operator
+    r"\s*(?:\w+\s+)?"          # ONE optional prefix word (sudo, time, nice, env, command)
+    r"(?:/\S+/)?"              # optional absolute-path prefix (/bin/, /usr/bin/)
+    r"\s*(?:mv|cp|ln|rsync|tee)\b"
 )
-# Redirect to any path (absolute or relative) — for terminal HR-token fallback (ADV-W12-006).
-_SHELL_REDIRECT = re.compile(r">>?\s*\S")
+# ADV-W13-003: terminal-only redirect gate. Require space/operator before >.
+# NOT applied to non-terminal tools to avoid matching Python >> or HTML >.
+_SHELL_REDIRECT = re.compile(r"(?:^|[\s;|&])>>?\s+\S")
 
 
 def looks_like_rename_or_copy(args: Any) -> bool:
@@ -383,12 +386,16 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
     if tool_name == "execute_code":
         code_blob = chr(10).join(_string_values(args))
         _HR_TOKENS = (
-            "config.yaml", "config.yml",          # config files (ADV-W11-005)
-            "/plugins/",                           # absolute only — bare 'plugins/' too broad (ADV-W12-004)
-            "/agent/",                             # absolute only — bare 'agent/' too broad (ADV-W12-004)
+            "config.yaml", "config.yml",
+            "/plugins/", "/agent/",           # absolute forms
             "plugin.yaml",
         )
+        # ADV-W13-001: also match relative 'plugins/' and 'agent/' when NOT preceded by
+        # a word char (avoids matching 'subagent/', 'user_agent/', 'myplugins/').
+        _HR_REL = re.compile(r"(?<!\w)(?:plugins|agent)/")
         hr_tokens_present = [tok for tok in _HR_TOKENS if tok in code_blob]
+        if not hr_tokens_present and _HR_REL.search(code_blob):
+            hr_tokens_present = ["<relative-plugin-path>"]
         # ADV-W12-005: kwargs/var-mode open('plugins/evil.py', **mode) remains a documented
         # miss — we cannot safely distinguish write vs read from an arbitrary open() call without
         # parsing. has_open was removed because it caused FP on open('/plugins/x','r') reads.
@@ -414,7 +421,8 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
         # ADV-W12-003 fix: only fire when a HR token is ALSO present OR a join/Path context
         # is present — prevents FP on open('/tmp/x','w') with 'agent' as an unrelated variable.
         _QUOTED_REL_HR = re.compile(r"""['"](plugins|agent)['"]\s*[,)]""")
-        _join_context = bool(re.search(r"(?:os\.path\.join|joinpath|Path\s*\()", code_blob))
+        # ADV-W13-004: removed bare Path( — too broad (print("agent") + Path("x").write_text fires FP).
+        _join_context = bool(re.search(r"(?:os\.path\.join|joinpath)", code_blob))
         if _QUOTED_REL_HR.search(code_blob) and _RENAME_PRIMITIVES.search(code_blob) and (hr_tokens_present or _join_context):
             return _deny(
                 "[governance-hard-block] DENY: execute_code contains quoted relative "
@@ -428,29 +436,29 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
 
     if not high:
         # temp+rename: command has mv/os.replace AND a high-risk token in blob
+        # ADV-W13-001: use word-boundary anchored _HR_REL for relative plugin paths.
+        _HR_REL_FALLBACK = re.compile(r"(?<!\w)(?:plugins|agent)/")
         if rename:
             blob = "\n".join(_string_values(args))
             if is_high_risk_target(blob) or any(
                 x in blob for x in (
                     "config.yaml", "config.yml",
-                    "/plugins/",                  # absolute only (ADV-W12-004: revert bare 'plugins/')
-                    "/agent/",
+                    "/plugins/", "/agent/",
                 )
-            ):
+            ) or _HR_REL_FALLBACK.search(blob):
                 # treat whole blob as potential target
                 high = [p for p in extract_candidate_paths({"command": blob}) if is_high_risk_target(p)]
                 if not high:
                     high = ["<rename-primitive + high-risk token>"]
-        # ADV-W12-006: shell redirect to relative HR path (echo x > plugins/foo.py).
-        # _SHELL_RENAME only matches verbs; redirect operators (> >>) evade it.
-        # If a redirect appears AND a HR token (including relative forms) is in the blob, deny.
-        elif _SHELL_REDIRECT.search("\n".join(_string_values(args))):
+        # ADV-W12-006 / ADV-W13-002: shell redirect to HR path.
+        # ADV-W13-002: moved from 'elif' to a separate check so it fires even when rename=True
+        #   (e.g. os.system('echo x > plugins/evil.py') triggers RENAME on os.system AND redirect).
+        # ADV-W13-003: only apply for terminal tool (avoids matching Python >> or HTML > in other tools).
+        if not high and tool_name == "terminal":
             blob = "\n".join(_string_values(args))
-            if any(
-                x in blob for x in (
-                    "config.yaml", "config.yml", "/plugins/", "/agent/", "plugin.yaml",
-                    "plugins/", "agent/",   # relative forms safe here: redirect confirms write intent
-                )
+            if _SHELL_REDIRECT.search(blob) and (
+                any(x in blob for x in ("config.yaml", "config.yml", "/plugins/", "/agent/", "plugin.yaml"))
+                or _HR_REL_FALLBACK.search(blob)
             ):
                 high = ["<shell-redirect + high-risk token>"]
 
