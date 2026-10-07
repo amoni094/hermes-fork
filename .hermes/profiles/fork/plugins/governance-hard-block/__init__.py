@@ -89,13 +89,14 @@ _RENAME_PRIMITIVES = re.compile(
     # Path(nested).write_text/write_bytes: two-level nested parens in Path() arg (ADV-W9-003)
     r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch)"
     # getattr obfuscation bypass (ADV-W9-003): getattr(obj,'write_text'/'open'/'write_bytes')
-    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*(?:\([^)]{0,80}\))?(?:\.[a-zA-Z_]\w*(?:\([^)]{0,80}\))?)*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]{0,100}\)|\([a-zA-Z_][\w.]*\)|[a-zA-Z_][\w.]*\[[^\]]{0,80}\])\s*,\s*['\"](?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch|extract|extractall|unpack_archive)['\"]"
+    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*(?:\([^)]*\))?(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]*\)|\([a-zA-Z_][\w.]*\)|[a-zA-Z_][\w.]*\[[^\]]{0,80}\](?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*)\s*,\s*(?:[frb]|rb|br)?['\"](?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch|extract|extractall|unpack_archive)['\"]"
     r"|io\.FileIO\s*\([^)]{0,150},\s*['\"][^'\"]*[wax+]"  # ADV-W16-007 io.FileIO write-mode only (W17-004)
     r"|io\.open\s*\([^)]{0,200},\s*['\"][awx]"  # ADV-W16-007 io.open write-mode only (W17-004)
     r"|operator\.(?:attrgetter|methodcaller)\s*\("  # ADV-W16-009 operator bypass
     r"|(?:\.extract(?:all)?|extractall|unpack_archive)\s*\("  # ADV-W17SAT-006 archive extract
-    r"|fileinput\.(?:input|FileInput)\s*\([^)]{0,200}inplace\s*=\s*True"  # ADV-W17SAT-008 fileinput inplace
-    r"|partial\s*\(\s*(?:open|io\.open|io\.FileIO|builtins\.open|Path\.\w+)\b"  # ADV-W17SAT-010 partial(open,...)
+    r"|fileinput\.(?:input|FileInput)\s*\([^)]{0,300}(?:inplace\s*=\s*(?:True|[1-9]\d*|\([^)]{0,40}\)|not\s+\w+)|\*\*\s*\{)"  # ADV-W17SAT-008 fileinput inplace
+    r"|partial\s*\(\s*(?:open|io\.open|io\.FileIO|builtins\.open|(?:pathlib\.)?Path\.(?:write_text|write_bytes|open|replace|rename|touch))\b"  # ADV-W17SAT-010 partial(open,...)
+    r"|partial\s*\(\s*(?:os\.(?:system|popen|replace|execve|execvp|execl)|subprocess\.(?:run|call|Popen|check_output)|shutil\.(?:copy|copy2|move|copyfile|unpack_archive|copytree))\b"  # ADV-W20-003 partial(os.system|subprocess.run|shutil.*)
     r"|\.(?:rename|touch|replace)\s*\("  # ADV-W16-002+W17-007 instance Path.rename/touch
     r"|json\.dump\b"
     r"|os\.(open|popen|system|replace)\s*\("
