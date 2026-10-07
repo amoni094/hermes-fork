@@ -59,7 +59,7 @@ _HIGH_HERMES_PLUGIN_PY = re.compile(r"(?i)\.hermes/(profiles/[^/]+/)?plugins/.*\
 _RENAME_PRIMITIVES = re.compile(
     # Python file-write primitives (execute_code context)
     r"os\.(replace|rename|link)"
-    r"|shutil\.(move|copy|copy2|copyfile|copytree)"
+    r"|shutil\.(move|copy|copy2|copyfile|copytree|rmtree)"  # ADV-W25-004 shutil.rmtree
     r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch|unlink)"
     r"|\.(write_text|write_bytes)\s*\("
     r"|\.(?:symlink_to|hardlink_to)\s*\("
@@ -81,6 +81,7 @@ _RENAME_PRIMITIVES = re.compile(
     r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150},\s*['\"]r[bt]*\+[bt]*['\"]"
     r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150}mode\s*=\s*['\"][awx][bt+]*['\"]"
     r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150}mode\s*=\s*['\"]r[bt]*\+[bt]*['\"]"
+    r"|(?:\(open\)|\[open\](?:\[\w*\])?)\s*\("  # ADV-W25-003 (open)(...) and [open][N](...) grouped/subscript
     # Path.open: unified with \s* after ( (ADV-W8-003); mode=[awx] only for keyword (ADV-W9-006 fix)
     r"|\.open\s*\(\s*(?:['\"][awx][bt+]*['\"]|['\"]r[bt]*\+[bt]*['\"]|mode\s*=\s*['\"][awx]|mode\s*=\s*['\"]r[bt]*\+|chr\s*\()"
     # open() dynamic mode: two-level nested-paren path + comma required (ADV-W7-004 guard)
@@ -89,9 +90,9 @@ _RENAME_PRIMITIVES = re.compile(
     # Path(nested).write_text/write_bytes: two-level nested parens in Path() arg (ADV-W9-003)
     r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch|unlink)"
     # getattr obfuscation bypass (ADV-W9-003): getattr(obj,'write_text'/'open'/'write_bytes')
-    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*(?:\([^)]*\))?(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]*\)|\([a-zA-Z_][\w.]*(?:\([^)]*\))?\)|[a-zA-Z_][\w.]*(?:\[[^\]]*\])+(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|[a-zA-Z_][\w.]*\s*\([^)]*\)(?:\[[^\]]*\])+|\([a-zA-Z_][\w.]*(?:\[[^\]]*\])+\)|\w+\s*\([^)]*\)(?:\[[^\]]*\])+|\w+\s*\([^)]*\)\[[^\]]*\])\s*,\s*(?:[bBfFrRuU]{0,2})?['\"]{1,3}(?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch|extract|extractall|unpack_archive|symlink_to|hardlink_to|copy|copy2|move|rmtree|execv|execl|execle|execlp|execvp|execvpe|link|copytree|run|check_output|check_call|execve|remove|execlpe|truncate|link|copytree|run|check_output|check_call|execve|remove|execlpe)['\"]{1,3}"
+    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*(?:\([^)]*\))?(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]*\)|\([a-zA-Z_][\w.]*(?:\([^)]*\))?\)|[a-zA-Z_][\w.]*(?:\[[^\]]*\])+(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|[a-zA-Z_][\w.]*\s*\([^)]*\)(?:\[[^\]]*\])+|\((?:[a-zA-Z_][\w.]*(?:\.[a-zA-Z_]\w*)*\s*\([^)]*\)(?:\[[^\]]*\])+|[a-zA-Z_][\w.]*(?:\[[^\]]*\])+)\)|\w+\s*\([^)]*\)(?:\[[^\]]*\])+|\w+\s*\([^)]*\)\[[^\]]*\])\s*,\s*(?:[bBfFrRuU]{0,2})?['\"]{1,3}(?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch|extract|extractall|unpack_archive|symlink_to|hardlink_to|copy|copy2|move|rmtree|execv|execl|execle|execlp|execvp|execvpe|link|copytree|run|check_output|check_call|execve|remove|execlpe|truncate|FileIO|link|copytree|run|check_output|check_call|execve|remove|execlpe)['\"]{1,3}"
     r"|getattr\s*\(\s*(?:object\s*=|name\s*=[bBfFrRuU]{0,2}['\"][^'\"]*(?:write_text|write_bytes|open|replace|rename|unlink|truncate|link|copytree|run|execve|remove)[^'\"]*[\'\"]{1,3})"  # ADV-W24-008 getattr keyword/object= form
-    r"|getattr\s*\(\s*\*\s*\["  # ADV-W24-008 getattr star-unpack
+    r"|getattr\s*\(\s*\*\s*[\[(]"  # ADV-W24-008 getattr star-unpack (*[list] or *(tuple))
     r"|io\.FileIO\s*\((?:[^()]|\([^)]*\)){0,200},\s*(?:['\"'][^'\"']*[wax+]|chr\s*\()"  # ADV-W24-001+004 io.FileIO positional nested+chr
     r'|io\.FileIO\s*\((?:[^()]|\([^)]*\))*\bmode\s*=\s*(?:[^)]*[wax+]|chr\s*\()'  # ADV-W24-001+004 io.FileIO mode= nested+chr
     r"|io\.FileIO\s*\([^)]*\*\*\s*(?:\{[^}]*mode[^}]*[wax+]|dict\s*\([^)]*mode\s*=)"  # ADV-W24-005 io.FileIO dict-unpack mode
@@ -110,6 +111,11 @@ _RENAME_PRIMITIVES = re.compile(
     r"|subprocess\.(run|call|check_call|check_output|Popen)\s*\("
     r"|(?<![\w.])(?:system|execv|execve|execl|execle|execlp|execvp|execvpe|FileIO|truncate|remove|unlink)\s*\("  # ADV-W14-005+W24-002+003
     r"|os\.exec[vle]\w*\s*\("  # ADV-W16-003 os.execv/execve/execl*
+    r"|os\.(?:spawn[levpa]*|posix_spawn)\s*\("  # ADV-W25-008 os.spawnl/spawnle/spawnv/spawnlp/posix_spawn
+    r"|pty\.spawn\s*\("  # ADV-W25-008 pty.spawn write-capable
+    r"|zipfile\.ZipFile\s*\([^)]*,\s*[\x27\x22]w[\x27\x22]"  # ADV-W25-009 zipfile.ZipFile write-mode
+    r"|gzip\.(?:open|GzipFile)\s*\([^)]*[\x27\x22][wa][\x27\x22]"  # ADV-W25-009 gzip write-mode
+    r"|urllib\.request\.urlretrieve\s*\("  # ADV-W25-009 urlretrieve
 )
 
 _BOOTSTRAP_DIR: Optional[Path] = None  # resolved lazily (ADV-004)
