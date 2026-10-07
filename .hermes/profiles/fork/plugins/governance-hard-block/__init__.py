@@ -133,11 +133,15 @@ def has_approved_proposal(target_path: str, proposals: Optional[Dict[str, dict]]
         # Exact match: proposal target == write target
         if t_norm == norm:
             return True
-        # Directory coverage: proposal target is a parent directory of write target
+        # Directory coverage: proposal target is the DIRECT parent of the write target.
         # (e.g. target='plugins/governance-hard-block' covers its __init__.py).
-        # Require path-separator boundary: norm must start with t_norm + os.sep.
-        if norm.startswith(t_norm.rstrip("/") + "/"):
-            return True
+        # Must be a DIRECT child — no additional slashes in the remainder — so that
+        # a proposal for ~/.hermes does NOT unlock profiles/fork/config.yaml.
+        t_stripped = t_norm.rstrip("/")
+        if norm.startswith(t_stripped + "/"):
+            remainder = norm[len(t_stripped) + 1:]
+            if "/" not in remainder:   # direct child only
+                return True
         # Suffix coverage: proposal target path is a suffix of the write target,
         # with a path-separator boundary before the match.
         # e.g. t_norm='/profiles/fork/config.yaml' is a suffix of norm='/var/home/rainbow/...fork/config.yaml' ✓
