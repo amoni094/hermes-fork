@@ -60,7 +60,7 @@ _RENAME_PRIMITIVES = re.compile(
     # Python file-write primitives (execute_code context)
     r"os\.(replace|rename|link)"
     r"|shutil\.(move|copy|copy2|copyfile|copytree)"
-    r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch)"
+    r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch|unlink)"
     r"|\.(write_text|write_bytes)\s*\("
     r"|\.(?:symlink_to|hardlink_to)\s*\("
     # open() write-mode: (?:[^()\n]|\([^()]*\)){0,100} — allows one level of nested parens
@@ -87,19 +87,22 @@ _RENAME_PRIMITIVES = re.compile(
     r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150},\s*chr\s*\("
     r"|open\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,150}mode\s*=\s*chr\s*\("
     # Path(nested).write_text/write_bytes: two-level nested parens in Path() arg (ADV-W9-003)
-    r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch)"
+    r"|Path\s*\([ \t\n]?(?:[^()\n]|\((?:[^()]|\([^()]*\))*\)){0,100}\)\.(write_text|write_bytes|replace|rename|touch|unlink)"
     # getattr obfuscation bypass (ADV-W9-003): getattr(obj,'write_text'/'open'/'write_bytes')
-    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*(?:\([^)]*\))?(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]*\)|\([a-zA-Z_][\w.]*(?:\([^)]*\))?\)|[a-zA-Z_][\w.]*\[[^\]]*\](?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*)\s*,\s*(?:[bBfFrRuU]{0,2})?['\"]{1,3}(?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch|extract|extractall|unpack_archive|symlink_to|hardlink_to|copy|copy2|move|rmtree|execv|execl|execle|execlp|execvp|execvpe)['\"]{1,3}"
+    r"|getattr\s*\(\s*(?:[a-zA-Z_][\w.]*(?:\([^)]*\))?(?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|Path\s*\([^)]{0,200}\)|\w+\s*\([^)]*\)|\([a-zA-Z_][\w.]*(?:\([^)]*\))?\)|[a-zA-Z_][\w.]*\[[^\]]*\](?:\.[a-zA-Z_]\w*(?:\([^)]*\))?)*|\w+\s*\([^)]*\)\[[^\]]*\]|\w+\s*\([^)]*\)\[[^\]]*\])\s*,\s*(?:[bBfFrRuU]{0,2})?['\"]{1,3}(?:write_text|write_bytes|open|replace|rename|system|popen|symlink|unlink|touch|extract|extractall|unpack_archive|symlink_to|hardlink_to|copy|copy2|move|rmtree|execv|execl|execle|execlp|execvp|execvpe|link|copytree|run|check_output|check_call|execve|remove|execlpe|link|copytree|run|check_output|check_call|execve|remove|execlpe)['\"]{1,3}"
     r"|io\.FileIO\s*\([^)]{0,150},\s*['\"][^'\"]*[wax+]"  # ADV-W16-007 io.FileIO write-mode only (W17-004)
     r"|io\.open\s*\([^)]{0,200},\s*['\"][awx]"  # ADV-W16-007 io.open write-mode only (W17-004)
     r"|operator\.(?:attrgetter|methodcaller)\s*\("  # ADV-W16-009 operator bypass
     r"|(?:\.extract(?:all)?|extractall|unpack_archive)\s*\("  # ADV-W17SAT-006 archive extract
-    r"|fileinput\.(?:input|FileInput)\s*\((?:[^()]|\([^)]*\))*(?:inplace\s*=\s*(?!(?:False|0(?![\d.])|None|''\s*))|\*\*\s*\{)"  # ADV-W17SAT-008+W22-001 fileinput inplace
+    r"|fileinput\.(?:input|FileInput)\s*\((?:[^()]|\((?:[^()]|\([^)]*\))*\))*(?:inplace\s*=\s*(?!\s*(?:False|0(?![\d.])|None|'')\s*[,)#])|\*\*\s*(?:\{|(?:dict|vars|locals|globals)\s*\())"  # ADV-W17SAT-008+W22-001+003+004 fileinput keyword
+    r"|fileinput\.(?:input|FileInput)\s*\((?:[^(),]|\((?:[^()]|\([^)]*\))*\))+,\s*(?!\s*(?:[a-zA-Z_]\w*\s*=|(?:False|0(?![\d.])|None|'')\s*[,)#]))"  # ADV-W22-002 fileinput positional inplace
     r"|partial\s*\(\s*(?:open|io\.open|io\.FileIO|builtins\.open|(?:pathlib\.)?Path\.(?:write_text|write_bytes|open|replace|rename|touch|symlink_to|hardlink_to|unlink))\b"  # ADV-W17SAT-010 partial(open,...)
     r"|partial\s*\(\s*(?:os\.(?:system|popen|replace|exec\w+|symlink|link|remove|unlink)|subprocess\.(?:run|call|Popen|check_output|check_call)|shutil\.(?:copy|copy2|move|copyfile|unpack_archive|copytree|rmtree))\b"  # ADV-W20-003 partial(os.system|subprocess.run|shutil.*)
-    r"|\.(?:rename|touch|replace)\s*\("  # ADV-W16-002+W17-007 instance Path.rename/touch
+    r"|\.(?:rename|touch|replace|unlink)\s*\("  # ADV-W16-002+W17-007 instance Path.rename/touch
     r"|json\.dump\b"
     r"|os\.(open|popen|system|replace)\s*\("
+    r"|os\.(remove|unlink|truncate)\s*\("  # ADV-W22-006+011
+    r"|os\.(remove|unlink|truncate)\s*\("  # ADV-W22-006+011
     r"|os\.(symlink|symlinkat)\s*\("
     r"|subprocess\.(run|call|check_call|check_output|Popen)\s*\("
     r"|(?<![\w.])(?:system|execv|execve|execl|execle|execlp|execvp|execvpe)\s*\("  # ADV-W14-005
@@ -407,7 +410,7 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
         )
         # ADV-W13-001: also match relative 'plugins/' and 'agent/' when NOT preceded by
         # a word char (avoids matching 'subagent/', 'user_agent/', 'myplugins/').
-        _HR_REL = re.compile(r"(?<!\w)(?:plugins|agent)(?:/|\b)")
+        _HR_REL = re.compile(r"(?<!\w)(?:plugins(?:/|\b)|agent/)")
         hr_tokens_present = [tok for tok in _HR_TOKENS if tok in code_blob]
         if not hr_tokens_present and _HR_REL.search(code_blob):
             hr_tokens_present = ["<relative-plugin-path>"]
@@ -458,7 +461,7 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
     if not high:
         # temp+rename: command has mv/os.replace AND a high-risk token in blob
         # ADV-W13-001: use word-boundary anchored _HR_REL for relative plugin paths.
-        _HR_REL_FALLBACK = re.compile(r"(?<!\w)(?:plugins|agent)(?:/|\b)")
+        _HR_REL_FALLBACK = re.compile(r"(?<!\w)(?:plugins(?:/|\b)|agent/)")
         if rename:
             blob = "\n".join(_string_values(args))
             if is_high_risk_target(blob) or any(
@@ -488,12 +491,12 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
             blob = "\n".join(_string_values(args))
             if _COPY_VERB.search(blob) and (
                 any(t in blob for t in ("config.yaml", "config.yml", "/plugins/", "/agent/", "plugin.yaml"))
-                or bool(re.search(r"(?<!\w)(?:plugins|agent)(?:/|\b)", blob))
+                or bool(re.search(r"(?<!\w)(?:plugins(?:/|\b)|agent/)", blob))
             ):
                 high = ["<copy-verb + high-risk token>"]
             if _INPLACE_EDITOR.search(blob) and re.search(r"(?:--in-place|-[a-zA-Z]{0,4}i[a-zA-Z]{0,4}\b)", blob) and (
                 any(t in blob for t in ("config.yaml", "config.yml", "/plugins/", "/agent/", "plugin.yaml"))
-                or bool(re.search(r"(?<!\w)(?:plugins|agent)(?:/|\b)", blob))
+                or bool(re.search(r"(?<!\w)(?:plugins(?:/|\b)|agent/)", blob))
                 ):
                     high = ["<inplace-editor -i + high-risk token>"]  # ADV-W16-008
 
