@@ -1,0 +1,136 @@
+{
+  "generated_at": "2026-10-05T06:01:02.672865+00:00",
+  "call_edges": [
+    [
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/math-paper-interpreter.py",
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/run-header.py"
+    ],
+    [
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/monitor-suite-runner.py",
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/absorption-capacity-regime-monitor.py"
+    ],
+    [
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/monitor-suite-runner.py",
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/hierarchy-coherence-monitor.py"
+    ],
+    [
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/monitor-suite-runner.py",
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/information-refinement-utility-monitor.py"
+    ],
+    [
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/monitor-suite-runner.py",
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/redundancy-stability-monitor.py"
+    ],
+    [
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-beta-feedback.py",
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-router-index.py"
+    ],
+    [
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-router-index.py",
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/concept-lattice-index.py"
+    ],
+    [
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/skill_prune_audit.py",
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-wiki.py"
+    ],
+    [
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/skillspector_guard.py",
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/adversarial_quarantine_review.py"
+    ],
+    [
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/working-memory.py",
+      "/var/home/rainbow/.hermes/profiles/fork/scripts/occam-skill-ranker.py"
+    ]
+  ],
+  "exit_code_labels": {
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/absorption-capacity-regime-monitor.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/adversarial_quarantine_review.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/alarm-aggregator.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/bandit-model-selector.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/calibration-threshold-updater.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/callgraph-audit.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/catastrophic-forgetting-guard.py": "intentional_nonzero",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/cobra-skip-guard.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/concept-lattice-index.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/corpus-consolidation-index.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/cross-calibration-monitor.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/cs-paper-interpreter.py": "intentional_nonzero",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/cs-primers-overnight.py": "intentional_nonzero",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/cs-research-sweep.py": "intentional_nonzero",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/execution-integrity-guard.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/fork-state-vacuum.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/gate_audit.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/graphiti-edge-health.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-chat-sync-precheck.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-gateway-prestart.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-math-sweep.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-memory-drift-audit.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-research-apply.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-research-sweep.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/hierarchy-coherence-monitor.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/information-refinement-utility-monitor.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/it-task-complexity-estimator.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-extract.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-gmemory-consolidation.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-graphiti-reconcile.py": "intentional_nonzero",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-hindsight-promote.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-hypermem-promote.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-promote.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/math-paper-interpreter.py": "intentional_nonzero",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/mcp-auth-drift-check.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/mcp-privilege-audit.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/mdp-session-planner.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-provenance-tagger.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-query-router.py": "intentional_nonzero",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-ttl-purge.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-zscore-retention.py": "intentional_nonzero",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/merkle-skill-check.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/metacognitive-harness.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/monitor-suite-runner.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/news_diff_watchdog.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/occam-skill-ranker.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/omni_skill_scan.py": "intentional_nonzero",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/pending-improvements-review.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/plan-commitment.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/pre-compact-annotate.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/real-options-deployment-gate.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/reasoning-complexity-classifier.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/recall-miss-ttl-adjuster.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/redundancy-stability-monitor.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-weight-updater.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/run-header.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/se-gos-graphiti-bridge.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/session-resource-audit.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/shadow-gate-nightly.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-beta-feedback.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-integrity-check.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-router-index-rebuild.py": "intentional_nonzero",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-router-index.py": "intentional_nonzero",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-shadow-registry.py": "ok",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-wiki.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-yield-tracker.py": "intentional_nonzero",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/skill_prune_audit.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/skillspector_guard.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/spike-queue-actuator.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/staleness-monitor.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/stuck-job-detector.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/trigger-phrase-validator.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/validate-skill-ssl.py": "unknown",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/working-memory.py": "unknown"
+  },
+  "risk_paths": [],
+  "hermes_home_unvalidated": [
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/cs-research-sweep.py",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/execution-integrity-guard.py",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/hermes-math-sweep.py",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/hierarchy-coherence-monitor.py",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/information-refinement-utility-monitor.py",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-extract.py",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-gmemory-consolidation.py",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-hypermem-promote.py",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/l1-promote.py",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/redundancy-stability-monitor.py",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/shadow-gate-nightly.py",
+    "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-yield-tracker.py"
+  ]
+}

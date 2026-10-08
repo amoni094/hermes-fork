@@ -142,19 +142,19 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/pre-compact-annotate.py",
       "no_agent": true,
       "description": "Every 15m R-D compaction advisory",
-      "next_run_at": "2026-10-08T19:00:00+11:00",
+      "next_run_at": "2026-10-08T20:45:00+11:00",
       "env": {
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T18:45:00+11:00",
-        "dispatched_at": "2026-10-08T18:45:57.125136+11:00",
-        "lateness_seconds": 57.1,
+        "scheduled_at": "2026-10-08T20:30:00+11:00",
+        "dispatched_at": "2026-10-08T20:30:57.884874+11:00",
+        "lateness_seconds": 57.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-10-08T18:45:59.208063+11:00",
+      "last_run_at": "2026-10-08T20:31:02.022407+11:00",
       "last_status": "ok",
       "failure_streak": 0,
       "last_delivery_error": null,
@@ -175,19 +175,19 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skillspector_guard.py",
       "no_agent": true,
       "description": "Every 4h skill integrity scan (H-I1 reactive gate)",
-      "next_run_at": "2026-10-08T20:00:00+11:00",
+      "next_run_at": "2026-10-09T00:00:00+11:00",
       "env": {
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T16:00:00+11:00",
-        "dispatched_at": "2026-10-08T16:00:57.137582+11:00",
-        "lateness_seconds": 57.1,
+        "scheduled_at": "2026-10-08T20:00:00+11:00",
+        "dispatched_at": "2026-10-08T20:00:57.892590+11:00",
+        "lateness_seconds": 57.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-10-08T16:01:12.475894+11:00",
+      "last_run_at": "2026-10-08T20:01:36.427311+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -415,15 +415,15 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-08T20:00:00+11:00",
+      "next_run_at": "2026-10-08T22:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T18:00:00+11:00",
-        "dispatched_at": "2026-10-08T18:00:57.128578+11:00",
-        "lateness_seconds": 57.1,
+        "scheduled_at": "2026-10-08T20:00:00+11:00",
+        "dispatched_at": "2026-10-08T20:00:57.892590+11:00",
+        "lateness_seconds": 57.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-10-08T18:00:59.740955+11:00",
+      "last_run_at": "2026-10-08T20:01:04.059584+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -729,15 +729,15 @@
       "schedule_display": "every 10m",
       "repeat": {
         "times": null,
-        "completed": 5491
+        "completed": 5500
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-06-26T11:06:08.602796+10:00",
-      "next_run_at": "2026-10-08T19:00:02.261538+11:00",
-      "last_run_at": "2026-10-08T18:50:02.261538+11:00",
+      "next_run_at": "2026-10-08T20:38:59.470968+11:00",
+      "last_run_at": "2026-10-08T20:28:59.470968+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -753,9 +753,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T18:48:58.983122+11:00",
-        "dispatched_at": "2026-10-08T18:50:00.486104+11:00",
-        "lateness_seconds": 61.5,
+        "scheduled_at": "2026-10-08T20:27:59.748677+11:00",
+        "dispatched_at": "2026-10-08T20:28:57.884258+11:00",
+        "lateness_seconds": 58.1,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -848,15 +848,15 @@
       "schedule_display": "every 245m",
       "repeat": {
         "times": null,
-        "completed": 288
+        "completed": 289
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-07-01T20:18:29.618545+10:00",
-      "next_run_at": "2026-10-08T18:56:04.224681+11:00",
-      "last_run_at": "2026-10-08T14:51:04.224681+11:00",
+      "next_run_at": "2026-10-08T23:02:05.039708+11:00",
+      "last_run_at": "2026-10-08T18:57:05.039708+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -867,9 +867,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T14:50:03.875665+11:00",
-        "dispatched_at": "2026-10-08T14:50:57.127697+11:00",
-        "lateness_seconds": 53.3,
+        "scheduled_at": "2026-10-08T18:56:04.224681+11:00",
+        "dispatched_at": "2026-10-08T18:56:57.886422+11:00",
+        "lateness_seconds": 53.7,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -903,15 +903,15 @@
       "schedule_display": "every 180m",
       "repeat": {
         "times": null,
-        "completed": 332
+        "completed": 333
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-07-09T19:28:37.783372+10:00",
-      "next_run_at": "2026-10-08T19:51:11.255452+11:00",
-      "last_run_at": "2026-10-08T16:51:11.255452+11:00",
+      "next_run_at": "2026-10-08T22:53:09.225905+11:00",
+      "last_run_at": "2026-10-08T19:53:09.225905+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -922,9 +922,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T16:50:09.772596+11:00",
-        "dispatched_at": "2026-10-08T16:50:57.138165+11:00",
-        "lateness_seconds": 47.4,
+        "scheduled_at": "2026-10-08T19:51:11.255452+11:00",
+        "dispatched_at": "2026-10-08T19:52:57.958847+11:00",
+        "lateness_seconds": 106.7,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -1026,15 +1026,15 @@
       "schedule_display": "every 220m",
       "repeat": {
         "times": null,
-        "completed": 196
+        "completed": 197
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-15T10:00:51.863995+10:00",
-      "next_run_at": "2026-10-08T19:15:58.907648+11:00",
-      "last_run_at": "2026-10-08T15:35:58.907648+11:00",
+      "next_run_at": "2026-10-08T22:56:59.591132+11:00",
+      "last_run_at": "2026-10-08T19:16:59.591132+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -1045,9 +1045,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T15:34:59.069824+11:00",
-        "dispatched_at": "2026-10-08T15:35:57.142022+11:00",
-        "lateness_seconds": 58.1,
+        "scheduled_at": "2026-10-08T19:15:58.907648+11:00",
+        "dispatched_at": "2026-10-08T19:16:57.883828+11:00",
+        "lateness_seconds": 59.0,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -1551,15 +1551,15 @@
       "schedule_display": "every 90m",
       "repeat": {
         "times": null,
-        "completed": 111
+        "completed": 112
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-30T12:47:26.633369+10:00",
-      "next_run_at": "2026-10-08T19:59:04.437190+11:00",
-      "last_run_at": "2026-10-08T18:29:04.437190+11:00",
+      "next_run_at": "2026-10-08T21:30:10.083201+11:00",
+      "last_run_at": "2026-10-08T20:00:10.083201+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -1570,9 +1570,9 @@
       "workdir": null,
       "fire_claim": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T18:28:09.854626+11:00",
-        "dispatched_at": "2026-10-08T18:28:57.125921+11:00",
-        "lateness_seconds": 47.3,
+        "scheduled_at": "2026-10-08T19:59:04.437190+11:00",
+        "dispatched_at": "2026-10-08T19:59:57.885131+11:00",
+        "lateness_seconds": 53.4,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -2197,22 +2197,26 @@
       },
       "deliver": "local",
       "created_at": "2026-09-19T14:35:05.590474+00:00",
-      "failure_streak": 0,
-      "last_status": "ok",
-      "last_error": null,
+      "failure_streak": 2,
+      "last_status": "error",
+      "last_error": "Script exited with code 1\nstdout:\n{\"active_alarms\": [{\"source\": \"wave21c-loop-stability-composite-alarm\", \"severity\": \"HIGH\", \"alarm\": true, \"msg\": \"reason=one or more stability checks failed\"}], \"checked_at\": \"2026-10-08T09:32:00.090414+00:00\", \"count\": 1}",
       "last_delivery_error": null,
       "fire_claim": null,
-      "next_run_at": "2026-10-08T18:57:59.544460+11:00",
+      "next_run_at": "2026-10-08T21:02:00.439646+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T18:26:59.219032+11:00",
-        "dispatched_at": "2026-10-08T18:27:57.129546+11:00",
-        "lateness_seconds": 57.9,
+        "scheduled_at": "2026-10-08T20:31:03.093364+11:00",
+        "dispatched_at": "2026-10-08T20:31:57.890739+11:00",
+        "lateness_seconds": 54.8,
         "kind": "on_time"
       },
-      "last_run_at": "2026-10-08T18:27:59.544460+11:00",
+      "last_run_at": "2026-10-08T20:32:00.439646+11:00",
       "timeout_seconds": 1440,
       "startup_jitter_seconds": 55,
-      "priority": 1
+      "priority": 1,
+      "last_failure": {
+        "at": "2026-10-08T20:32:00.439646+11:00",
+        "detail": "Script exited with code 1\nstdout:\n{\"active_alarms\": [{\"source\": \"wave21c-loop-stability-composite-alarm\", \"severity\": \"HIGH\", \"alarm\": true, \"msg\": \"reason=one or more stability checks failed\"}], \"checked_at\": \"2026-10-08T09:32:00.090414+00:00\", \"count\": 1}"
+      }
     },
     {
       "id": "d026ce426364",
@@ -2278,14 +2282,14 @@
       },
       "state": "scheduled",
       "created_at": "2026-09-22T15:29:09.530109+10:00",
-      "next_run_at": "2026-10-08T18:54:58.871453+11:00",
-      "last_run_at": "2026-10-08T18:39:58.871453+11:00",
+      "next_run_at": "2026-10-08T20:47:00.597059+11:00",
+      "last_run_at": "2026-10-08T20:32:00.597059+11:00",
       "last_status": "ok",
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T18:39:00.212929+11:00",
-        "dispatched_at": "2026-10-08T18:39:57.124522+11:00",
-        "lateness_seconds": 56.9,
+        "scheduled_at": "2026-10-08T20:31:01.264649+11:00",
+        "dispatched_at": "2026-10-08T20:31:57.890739+11:00",
+        "lateness_seconds": 56.6,
         "kind": "on_time"
       },
       "fire_claim": null,
@@ -2310,15 +2314,15 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-08T19:08:34.248082+11:00",
+      "next_run_at": "2026-10-08T21:12:52.704370+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T18:06:42.318612+11:00",
-        "dispatched_at": "2026-10-08T18:06:57.140379+11:00",
-        "lateness_seconds": 14.8,
+        "scheduled_at": "2026-10-08T20:09:43.282107+11:00",
+        "dispatched_at": "2026-10-08T20:09:57.884719+11:00",
+        "lateness_seconds": 14.6,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-10-08T18:08:34.248082+11:00",
+      "last_run_at": "2026-10-08T20:12:52.704370+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -2787,17 +2791,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-08T19:06:00.710336+11:00",
-      "last_run_at": "2026-10-08T18:06:00.710336+11:00",
+      "next_run_at": "2026-10-08T21:08:00.552645+11:00",
+      "last_run_at": "2026-10-08T20:08:00.552645+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T18:04:59.515688+11:00",
-        "dispatched_at": "2026-10-08T18:05:57.124262+11:00",
-        "lateness_seconds": 57.6,
+        "scheduled_at": "2026-10-08T20:07:00.946390+11:00",
+        "dispatched_at": "2026-10-08T20:07:57.884922+11:00",
+        "lateness_seconds": 56.9,
         "kind": "on_time"
       },
       "last_failure": {
@@ -2825,17 +2829,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-08T19:06:00.187581+11:00",
-      "last_run_at": "2026-10-08T18:06:00.187581+11:00",
+      "next_run_at": "2026-10-08T21:08:00.801676+11:00",
+      "last_run_at": "2026-10-08T20:08:00.801676+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T18:04:59.833242+11:00",
-        "dispatched_at": "2026-10-08T18:05:57.124262+11:00",
-        "lateness_seconds": 57.3,
+        "scheduled_at": "2026-10-08T20:07:00.461553+11:00",
+        "dispatched_at": "2026-10-08T20:07:57.884922+11:00",
+        "lateness_seconds": 57.4,
         "kind": "on_time"
       },
       "last_failure": {
@@ -2863,17 +2867,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-08T19:06:00.623233+11:00",
-      "last_run_at": "2026-10-08T18:06:00.623233+11:00",
+      "next_run_at": "2026-10-08T21:08:00.318853+11:00",
+      "last_run_at": "2026-10-08T20:08:00.318853+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T18:04:59.375656+11:00",
-        "dispatched_at": "2026-10-08T18:05:57.124262+11:00",
-        "lateness_seconds": 57.7,
+        "scheduled_at": "2026-10-08T20:07:00.655237+11:00",
+        "dispatched_at": "2026-10-08T20:07:57.884922+11:00",
+        "lateness_seconds": 57.2,
         "kind": "on_time"
       }
     },
@@ -2897,17 +2901,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-08T19:06:00.384046+11:00",
-      "last_run_at": "2026-10-08T18:06:00.384046+11:00",
+      "next_run_at": "2026-10-08T21:08:00.660271+11:00",
+      "last_run_at": "2026-10-08T20:08:00.660271+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T18:04:59.645305+11:00",
-        "dispatched_at": "2026-10-08T18:05:57.124262+11:00",
-        "lateness_seconds": 57.5,
+        "scheduled_at": "2026-10-08T20:07:00.851726+11:00",
+        "dispatched_at": "2026-10-08T20:07:57.884922+11:00",
+        "lateness_seconds": 57.0,
         "kind": "on_time"
       }
     },
@@ -2931,17 +2935,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-10-08T18:57:59.413975+11:00",
-      "last_run_at": "2026-10-08T18:27:59.413975+11:00",
+      "next_run_at": "2026-10-08T21:02:00.200740+11:00",
+      "last_run_at": "2026-10-08T20:32:00.200740+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T18:26:59.334953+11:00",
-        "dispatched_at": "2026-10-08T18:27:57.129546+11:00",
-        "lateness_seconds": 57.8,
+        "scheduled_at": "2026-10-08T20:31:03.377923+11:00",
+        "dispatched_at": "2026-10-08T20:31:57.890739+11:00",
+        "lateness_seconds": 54.5,
         "kind": "on_time"
       }
     },
@@ -2960,21 +2964,21 @@
         "memory"
       ],
       "created": "2026-10-07T08:52:07Z",
-      "next_run_at": "2026-10-08T19:53:11.936723+11:00",
+      "next_run_at": "2026-10-09T07:54:19.769626+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T07:52:57.124384+11:00",
-        "dispatched_at": "2026-10-08T07:52:57.133391+11:00",
-        "lateness_seconds": 0.0,
+        "scheduled_at": "2026-10-08T19:53:11.936723+11:00",
+        "dispatched_at": "2026-10-08T19:53:57.975119+11:00",
+        "lateness_seconds": 46.0,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-10-08T07:53:11.936723+11:00",
+      "last_run_at": "2026-10-08T19:54:19.769626+11:00",
       "last_status": "error",
-      "last_error": "**Data-collection script failed** — 1 of 10 tests failed.\n\n**Failing test:** `memory-eckart-young.py hi6=ok`\n\nAll other tests passed. The failure is isolated to the Eckart-Young memory module (likely the low-rank truncation / SVD-based compression component). No output or error message was captured from the failing script beyond the FAIL line.\n\n**Action needed:** Check `memory-eckart-young.py` for errors — likely a numerical issue, shape mismatch, or truncation rank boundary condition.",
-      "failure_streak": 1,
+      "last_error": "The data-collection script exited with code 1. One script failed:\n\n**FAIL: `memory-eckart-young.py`** (hi6=ok)\n\nAll other 11 scripts passed. The failure summary: `{\"failed\": 1, \"n\": 10}`.",
+      "failure_streak": 2,
       "last_failure": {
-        "at": "2026-10-08T07:53:11.936723+11:00",
-        "detail": "**Data-collection script failed** — 1 of 10 tests failed.\n\n**Failing test:** `memory-eckart-young.py hi6=ok`\n\nAll other tests passed. The failure is isolated to the Eckart-Young memory module (likely the low-rank truncation / SVD-based compression component). No output or error message was captured from the failing script beyond the FAIL line.\n\n**Action needed:** Check `memory-eckart-young.py` for errors — likely a numerical issue, shape mismatch, or truncation rank boundary condition."
+        "at": "2026-10-08T19:54:19.769626+11:00",
+        "detail": "The data-collection script exited with code 1. One script failed:\n\n**FAIL: `memory-eckart-young.py`** (hi6=ok)\n\nAll other 11 scripts passed. The failure summary: `{\"failed\": 1, \"n\": 10}`."
       },
       "last_delivery_error": null,
       "state": "scheduled"
@@ -2989,19 +2993,19 @@
       },
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/real-options-fanout-gate.py",
       "description": "Applies real-options theory to gate/defer subagent fan-out decisions. GAP-4 wiring fix.",
-      "next_run_at": "2026-10-08T19:16:59.111355+11:00",
+      "next_run_at": "2026-10-08T20:49:59.701318+11:00",
       "no_agent": true,
       "env": {
         "HERMES_HOME": "/var/home/rainbow/.hermes/profiles/fork"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-10-08T18:45:59.207694+11:00",
-        "dispatched_at": "2026-10-08T18:46:57.124997+11:00",
+        "scheduled_at": "2026-10-08T20:19:00.020995+11:00",
+        "dispatched_at": "2026-10-08T20:19:57.890511+11:00",
         "lateness_seconds": 57.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-10-08T18:46:59.111355+11:00",
+      "last_run_at": "2026-10-08T20:19:59.701318+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -3071,7 +3075,1847 @@
       "failure_streak": 0,
       "last_delivery_error": null,
       "state": "scheduled"
+    },
+    {
+      "id": "loop-pid-iss-wrapper-0001",
+      "name": "loop-pid-iss-wrapper",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/loop-pid-iss-wrapper.py",
+      "no_agent": true,
+      "description": "Composite Lyapunov+ISS+two-timescale stability check (Wave 21C GAP-C1)",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 30,
+        "display": "every 30m"
+      },
+      "schedule_display": "every 30m",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:16:13.307007+00:00",
+      "failure_streak": 2,
+      "last_status": "error",
+      "last_error": "Script exited with code 1\nstdout:\n{\"lyapunov_ok\": false, \"iss_ok\": true, \"two_timescale_ok\": true, \"overall_ok\": false, \"alarm\": true, \"output\": \"/var/home/rainbow/.hermes/profiles/fork/cache/loop-stability-composite.json\"}\nALARM: loop-stability-composite failed",
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-08T20:48:00.282737+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:17:00.493998+11:00",
+        "dispatched_at": "2026-10-08T20:17:57.890894+11:00",
+        "lateness_seconds": 57.4,
+        "kind": "on_time"
+      },
+      "last_run_at": "2026-10-08T20:18:00.282737+11:00",
+      "last_failure": {
+        "at": "2026-10-08T20:18:00.282737+11:00",
+        "detail": "Script exited with code 1\nstdout:\n{\"lyapunov_ok\": false, \"iss_ok\": true, \"two_timescale_ok\": true, \"overall_ok\": false, \"alarm\": true, \"output\": \"/var/home/rainbow/.hermes/profiles/fork/cache/loop-stability-composite.json\"}\nALARM: loop-stability-composite failed"
+      }
+    },
+    {
+      "id": "shadow-gate-sprt-0001",
+      "name": "shadow-gate-sprt",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/shadow-gate-sprt.py",
+      "no_agent": true,
+      "description": "Wald SPRT shadow promotion (alongside nightly gate) Wave 21C GAP-C2",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 8 * * *"
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:16:13.307025+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-09T08:00:00+11:00"
+    },
+    {
+      "id": "governance-conflict-detector-0001",
+      "name": "governance-conflict-detector",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/governance-conflict-detector.py",
+      "no_agent": true,
+      "description": "Multi-principal auth-gate vs hard-block conflict surface Wave 21C GAP-C3",
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 9 * * *"
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:16:13.307031+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-09T09:30:00+11:00"
+    },
+    {
+      "id": "governance-falsifiability-lint-0001",
+      "name": "governance-falsifiability-lint",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/governance-falsifiability-lint.py",
+      "no_agent": true,
+      "description": "Popper failure_observable linter for proposals Wave 21C GAP-C4",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 6 * * 2"
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:16:13.307035+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-13T06:00:00+11:00"
+    },
+    {
+      "id": "loop-model-comparison-0001",
+      "name": "loop-model-comparison",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/loop-model-comparison.py",
+      "no_agent": true,
+      "description": "Bayes factor AR(1) vs random-walk on PID error Wave 21C GAP-C6",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 120,
+        "display": "every 120m"
+      },
+      "schedule_display": "every 120m",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:16:13.307039+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-08T21:16:57.883828+11:00"
+    },
+    {
+      "id": "callgraph-taint-audit-0001",
+      "name": "callgraph-taint-audit",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/callgraph-taint-audit.py",
+      "no_agent": true,
+      "description": "Taint lattice audit of hermes-scripts sinks Wave 21C GAP-C7",
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 5 * * *"
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:16:13.307044+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-09T05:30:00+11:00"
+    },
+    {
+      "id": "nyquist-timescale-bridge-0001",
+      "name": "nyquist-timescale-bridge",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/nyquist-timescale-bridge.py",
+      "no_agent": true,
+      "description": "Nyquist vs two-timescale contradiction check Wave 21C GAP-C8",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 120,
+        "display": "every 120m"
+      },
+      "schedule_display": "every 120m",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:16:13.307047+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-08T21:16:57.883828+11:00"
+    },
+    {
+      "id": "loop-cusum-changepoint-0001",
+      "name": "loop-cusum-changepoint",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/loop-cusum-changepoint.py",
+      "no_agent": true,
+      "description": "Page CUSUM on PID error for gain invalidation Wave 21C GAP-C9",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 120,
+        "display": "every 120m"
+      },
+      "schedule_display": "every 120m",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:16:13.307051+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-08T21:16:57.883828+11:00"
+    },
+    {
+      "id": "wave21c-alarm-bridge-0001",
+      "name": "wave21c-alarm-bridge",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/wave21c-alarm-bridge.py",
+      "no_agent": true,
+      "description": "Re-emit 21C reports as *-alarm.json for aggregator (2h TTL)",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 30,
+        "display": "every 30m"
+      },
+      "schedule_display": "every 30m",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:26:19.286388+00:00",
+      "failure_streak": 0,
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-08T20:57:59.946624+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:27:03.238813+11:00",
+        "dispatched_at": "2026-10-08T20:27:57.885070+11:00",
+        "lateness_seconds": 54.6,
+        "kind": "on_time"
+      },
+      "last_run_at": "2026-10-08T20:27:59.946624+11:00"
+    },
+    {
+      "id": "sprt-falsifiability-handshake-0001",
+      "name": "sprt-falsifiability-handshake",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/sprt-falsifiability-handshake.py",
+      "no_agent": true,
+      "description": "SPRT PROMOTE requires failure_observable (Clarke/Popper) Wave 21D",
+      "schedule": {
+        "kind": "cron",
+        "expr": "15 8 * * *",
+        "display": "daily 08:15"
+      },
+      "schedule_display": "daily 08:15",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:26:19.286388+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-09T08:15:00+11:00"
+    },
+    {
+      "id": "governance-conflict-epistemic-0001",
+      "name": "governance-conflict-epistemic",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/governance-conflict-epistemic.py",
+      "no_agent": true,
+      "description": "TYPE_A/B epistemic regression Fagin/Shoham Wave 21D",
+      "schedule": {
+        "kind": "cron",
+        "expr": "45 9 * * *",
+        "display": "daily 09:45"
+      },
+      "schedule_display": "daily 09:45",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:26:19.286388+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-09T09:45:00+11:00"
+    },
+    {
+      "id": "pid-passivity-index-0001",
+      "name": "pid-passivity-index",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/pid-passivity-index.py",
+      "no_agent": true,
+      "description": "Khalil/Sontag passivity of PID supply rate Wave 21D",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 120,
+        "display": "every 120m"
+      },
+      "schedule_display": "every 120m",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:26:19.286388+00:00",
+      "failure_streak": 0,
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-08T21:57:03.003601+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T19:56:19.286408+11:00",
+        "dispatched_at": "2026-10-08T19:56:57.899571+11:00",
+        "lateness_seconds": 38.6,
+        "kind": "on_time"
+      },
+      "last_run_at": "2026-10-08T19:57:03.003601+11:00"
+    },
+    {
+      "id": "pid-circle-criterion-0001",
+      "name": "pid-circle-criterion",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/pid-circle-criterion.py",
+      "no_agent": true,
+      "description": "Khalil circle criterion saturation sector Wave 21D",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 120,
+        "display": "every 120m"
+      },
+      "schedule_display": "every 120m",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:26:19.286388+00:00",
+      "failure_streak": 0,
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-08T21:57:04.199397+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T19:56:19.286408+11:00",
+        "dispatched_at": "2026-10-08T19:56:57.899571+11:00",
+        "lateness_seconds": 38.6,
+        "kind": "on_time"
+      },
+      "last_run_at": "2026-10-08T19:57:04.199397+11:00"
+    },
+    {
+      "id": "ltl-promotion-invariant-0001",
+      "name": "ltl-promotion-invariant",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/ltl-promotion-invariant.py",
+      "no_agent": true,
+      "description": "Clarke G(PROMOTE -> FO) model check Wave 21D",
+      "schedule": {
+        "kind": "cron",
+        "expr": "20 8 * * *",
+        "display": "daily 08:20"
+      },
+      "schedule_display": "daily 08:20",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:26:19.286388+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-09T08:20:00+11:00"
+    },
+    {
+      "id": "loop-rollout-horizon-0001",
+      "name": "loop-rollout-horizon",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/loop-rollout-horizon.py",
+      "no_agent": true,
+      "description": "Bertsekas one-step rollout when PID misspecified Wave 21D",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 120,
+        "display": "every 120m"
+      },
+      "schedule_display": "every 120m",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:26:19.286388+00:00",
+      "failure_streak": 0,
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-08T21:57:04.838585+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T19:56:19.286408+11:00",
+        "dispatched_at": "2026-10-08T19:56:57.899571+11:00",
+        "lateness_seconds": 38.6,
+        "kind": "on_time"
+      },
+      "last_run_at": "2026-10-08T19:57:04.838585+11:00"
+    },
+    {
+      "id": "sprt-measurement-tamper-0001",
+      "name": "sprt-measurement-tamper",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/sprt-measurement-tamper.py",
+      "no_agent": true,
+      "description": "Hendrycks/Amodei SPRT measurement tampering Wave 21D",
+      "schedule": {
+        "kind": "cron",
+        "expr": "10 8 * * *",
+        "display": "daily 08:10"
+      },
+      "schedule_display": "daily 08:10",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:26:19.286388+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-09T08:10:00+11:00"
+    },
+    {
+      "id": "soares-halt-liveness-0001",
+      "name": "soares-halt-liveness",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/soares-halt-liveness.py",
+      "no_agent": true,
+      "description": "Soares corrigibility HALT reachable Wave 21D",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 120,
+        "display": "every 120m"
+      },
+      "schedule_display": "every 120m",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:26:19.286388+00:00",
+      "failure_streak": 0,
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-08T21:57:05.451889+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T19:56:19.286408+11:00",
+        "dispatched_at": "2026-10-08T19:56:57.899571+11:00",
+        "lateness_seconds": 38.6,
+        "kind": "on_time"
+      },
+      "last_run_at": "2026-10-08T19:57:05.451889+11:00"
+    },
+    {
+      "id": "cusum-gain-freeze-0001",
+      "name": "cusum-gain-freeze",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cusum-gain-freeze.py",
+      "no_agent": true,
+      "description": "Liberzon freeze PID gains after CUSUM Wave 21D",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 120,
+        "display": "every 120m"
+      },
+      "schedule_display": "every 120m",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:26:19.286388+00:00",
+      "failure_streak": 0,
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-08T21:57:05.210533+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T19:56:19.286408+11:00",
+        "dispatched_at": "2026-10-08T19:56:57.899571+11:00",
+        "lateness_seconds": 38.6,
+        "kind": "on_time"
+      },
+      "last_run_at": "2026-10-08T19:57:05.210533+11:00"
+    },
+    {
+      "id": "sprt-inner-outer-alignment-0001",
+      "name": "sprt-inner-outer-alignment",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/sprt-inner-outer-alignment.py",
+      "no_agent": true,
+      "description": "Hubinger mesa inner SPRT vs outer error_rate Wave 21D",
+      "schedule": {
+        "kind": "cron",
+        "expr": "25 8 * * *",
+        "display": "daily 08:25"
+      },
+      "schedule_display": "daily 08:25",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:26:19.286388+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-09T08:25:00+11:00"
+    },
+    {
+      "id": "iss-justification-gate-0001",
+      "name": "iss-justification-gate",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/iss-justification-gate.py",
+      "no_agent": true,
+      "description": "ISS small-gain justification via passivity/sector Wave 21D",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 30,
+        "display": "every 30m"
+      },
+      "schedule_display": "every 30m",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:26:19.286388+00:00",
+      "failure_streak": 0,
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-08T20:57:59.793186+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:27:05.336507+11:00",
+        "dispatched_at": "2026-10-08T20:27:57.885070+11:00",
+        "lateness_seconds": 52.5,
+        "kind": "on_time"
+      },
+      "last_run_at": "2026-10-08T20:27:59.793186+11:00"
+    },
+    {
+      "id": "wave21c-invariants-0001",
+      "name": "wave21c-invariants",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/wave21c-invariants.py",
+      "no_agent": true,
+      "description": "Nipkow property tests Wave 21C/21D",
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 6 * * 2",
+        "display": "weekly Tue 06:30"
+      },
+      "schedule_display": "weekly Tue 06:30",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:26:19.286388+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-13T06:30:00+11:00"
+    },
+    {
+      "id": "routing-pac-bayes-bound-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 7 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-pac-bayes-bound.py",
+      "no_agent": true,
+      "description": "Daily PAC-Bayes gen bound on skill router (Wave 21B R1)",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "routing-pac-bayes-bound",
+      "next_run_at": "2026-10-09T07:30:00+11:00"
+    },
+    {
+      "id": "routing-fano-bound-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "45 7 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-fano-bound.py",
+      "no_agent": true,
+      "description": "Daily Fano inequality floor on router error (Wave 21B R5)",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "routing-fano-bound",
+      "next_run_at": "2026-10-09T07:45:00+11:00"
+    },
+    {
+      "id": "routing-graph-bandit-update-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 8 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-graph-bandit-update.py",
+      "no_agent": true,
+      "description": "Daily lattice graph-bandit credit prop (Wave 21B R2)",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "routing-graph-bandit-update",
+      "next_run_at": "2026-10-09T08:30:00+11:00"
+    },
+    {
+      "id": "routing-exp3-adversarial-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 9 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-exp3-adversarial.py",
+      "no_agent": true,
+      "description": "Daily EXP3 adversarial mix vs BM25 (Wave 21B R3)",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "routing-exp3-adversarial",
+      "next_run_at": "2026-10-09T09:00:00+11:00"
+    },
+    {
+      "id": "routing-hamming-audit-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 6 * * 0"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-hamming-audit.py",
+      "no_agent": true,
+      "description": "Weekly Jaccard/Hamming skill-desc audit (Wave 21B R4)",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "timeout_seconds": 1800,
+      "priority": 4,
+      "name": "routing-hamming-audit",
+      "next_run_at": "2026-10-11T06:00:00+11:00"
+    },
+    {
+      "id": "routing-mobius-audit-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 7 * * 0"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-mobius-audit.py",
+      "no_agent": true,
+      "description": "Weekly Mobius BM25 inversion audit (Wave 21B R6)",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "timeout_seconds": 1800,
+      "priority": 4,
+      "name": "routing-mobius-audit",
+      "next_run_at": "2026-10-11T07:00:00+11:00"
+    },
+    {
+      "id": "skill-description-entropy-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 6 * * 1"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-description-entropy.py",
+      "no_agent": true,
+      "description": "Weekly char-entropy of skill descriptions (Wave 21B R7)",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "timeout_seconds": 1800,
+      "priority": 4,
+      "name": "skill-description-entropy",
+      "next_run_at": "2026-10-12T06:00:00+11:00"
+    },
+    {
+      "id": "sprt-truncation-gate-0001",
+      "name": "sprt-truncation-gate",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/sprt-truncation-gate.py",
+      "no_agent": true,
+      "description": "Wald truncated SPRT fail-closed Wave 21E",
+      "schedule": {
+        "kind": "cron",
+        "expr": "12 8 * * *",
+        "display": "daily 08:12"
+      },
+      "schedule_display": "daily 08:12",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:28:33.783220+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-09T08:12:00+11:00"
+    },
+    {
+      "id": "promotion-at-most-once-0001",
+      "name": "promotion-at-most-once",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/promotion-at-most-once.py",
+      "no_agent": true,
+      "description": "Lynch at-most-once SPRT PROMOTE Wave 21E",
+      "schedule": {
+        "kind": "cron",
+        "expr": "18 8 * * *",
+        "display": "daily 08:18"
+      },
+      "schedule_display": "daily 08:18",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:28:33.783220+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-09T08:18:00+11:00"
+    },
+    {
+      "id": "sprt-effective-decision-0001",
+      "name": "sprt-effective-decision",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/sprt-effective-decision.py",
+      "no_agent": true,
+      "description": "Compose SPRT+handshake+truncation+mesa+tamper Wave 21E",
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 8 * * *",
+        "display": "daily 08:30"
+      },
+      "schedule_display": "daily 08:30",
+      "enabled": true,
+      "state": "scheduled",
+      "profile": "fork",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "deliver": "local",
+      "created_at": "2026-10-08T08:29:24.592630+00:00",
+      "failure_streak": 0,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "fire_claim": null,
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "next_run_at": "2026-10-09T08:30:00+11:00"
+    },
+    {
+      "id": "routing-azuma-concentration-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "25 7 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-azuma-concentration.py",
+      "no_agent": true,
+      "description": "Daily Azuma tail on routing regret (Wave 21B wire)",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "routing-azuma-concentration",
+      "next_run_at": "2026-10-09T07:25:00+11:00"
+    },
+    {
+      "id": "routing-graph-independence-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "40 8 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-graph-independence.py",
+      "no_agent": true,
+      "description": "Daily independence number of overlap graph (Wave 21B wire)",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "routing-graph-independence",
+      "next_run_at": "2026-10-09T08:40:00+11:00"
+    },
+    {
+      "id": "routing-ips-offpolicy-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "18 9 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-ips-offpolicy.py",
+      "no_agent": true,
+      "description": "Daily IPS off-policy eval of routing (Wave 21B wire)",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "routing-ips-offpolicy",
+      "next_run_at": "2026-10-09T09:18:00+11:00"
+    },
+    {
+      "id": "routing-mutual-information-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "40 7 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-mutual-information.py",
+      "no_agent": true,
+      "description": "Daily I(S;Q) routing MI (Wave 21B wire)",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "routing-mutual-information",
+      "next_run_at": "2026-10-09T07:40:00+11:00"
+    },
+    {
+      "id": "routing-switching-detector-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "10 8 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-switching-detector.py",
+      "no_agent": true,
+      "description": "Daily routing switching-cost detector (Wave 21B wire)",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "routing-switching-detector",
+      "next_run_at": "2026-10-09T08:10:00+11:00"
+    },
+    {
+      "id": "routing-wald-sprt-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "55 8 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-wald-sprt.py",
+      "no_agent": true,
+      "description": "Daily Wald SPRT on skill success (Wave 21B wire)",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "routing-wald-sprt",
+      "next_run_at": "2026-10-09T08:55:00+11:00"
+    },
+    {
+      "id": "memory-sprt-commit-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/30 * * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-sprt-commit.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-08T21:00:00+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:30:00+11:00",
+        "dispatched_at": "2026-10-08T20:30:57.884874+11:00",
+        "lateness_seconds": 57.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-08T20:31:29.987176+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "memory-conductance-ttl-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "45 3 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-conductance-ttl.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T03:45:00+11:00"
+    },
+    {
+      "id": "memory-adaptive-rank-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "15 4 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-adaptive-rank.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T04:15:00+11:00"
+    },
+    {
+      "id": "context-channel-capacity-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/15 * * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/context-channel-capacity.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-08T20:45:00+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:30:00+11:00",
+        "dispatched_at": "2026-10-08T20:30:57.884874+11:00",
+        "lateness_seconds": 57.9,
+        "kind": "on_time"
+      },
+      "fire_claim": {
+        "at": "2026-10-08T20:32:01.405114+11:00",
+        "by": "localhost:449026:508b5c7f5ec3466cb0456468fd4beafa"
+      },
+      "last_run_at": "2026-10-08T20:17:22.002008+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "memory-ot-decay-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "45 4 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-ot-decay.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T04:45:00+11:00"
+    },
+    {
+      "id": "memory-fano-bound-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "16 4 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-fano-bound.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T04:16:00+11:00"
+    },
+    {
+      "id": "compaction-rd-converse-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/15 * * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/compaction-rd-converse.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-08T20:45:00+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:30:00+11:00",
+        "dispatched_at": "2026-10-08T20:30:57.884874+11:00",
+        "lateness_seconds": 57.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-08T20:31:14.219182+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "compaction-aep-typical-set-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/15 * * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/compaction-aep-typical-set.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-08T20:45:00+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:30:00+11:00",
+        "dispatched_at": "2026-10-08T20:30:57.884874+11:00",
+        "lateness_seconds": 57.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-08T20:31:24.490697+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "memory-haar-mra-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 5 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-haar-mra.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T05:00:00+11:00"
+    },
+    {
+      "id": "memory-hitting-time-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "15 5 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-hitting-time.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T05:15:00+11:00"
+    },
+    {
+      "id": "memory-jl-distortion-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 4 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-jl-distortion.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T04:30:00+11:00"
+    },
+    {
+      "id": "memory-renorm-counterterm-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 3 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-renorm-counterterm.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T03:00:00+11:00"
+    },
+    {
+      "id": "kl-curvature-memory-monitor-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 6 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/kl-curvature-memory-monitor.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T06:00:00+11:00"
+    },
+    {
+      "id": "wave21a-alarm-bridge-ev15",
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/15 * * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/wave21a-alarm-bridge.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-08T20:45:00+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:30:00+11:00",
+        "dispatched_at": "2026-10-08T20:30:57.884874+11:00",
+        "lateness_seconds": 57.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-08T20:31:16.746546+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "memory-ttl-floor-merge-0400",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 4 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-ttl-floor-merge.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T04:00:00+11:00"
+    },
+    {
+      "id": "memory-sanov-ld-ev30",
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/30 * * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-sanov-ld.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-08T21:00:00+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:30:00+11:00",
+        "dispatched_at": "2026-10-08T20:30:57.884874+11:00",
+        "lateness_seconds": 57.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-08T20:31:23.537240+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "memory-optional-stopping-ev30",
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/30 * * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-optional-stopping.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-08T21:00:00+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:30:00+11:00",
+        "dispatched_at": "2026-10-08T20:30:57.884874+11:00",
+        "lateness_seconds": 57.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-08T20:31:33.465371+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "compaction-chain-rule-mi-ev15",
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/15 * * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/compaction-chain-rule-mi.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-08T20:45:00+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:30:00+11:00",
+        "dispatched_at": "2026-10-08T20:30:57.884874+11:00",
+        "lateness_seconds": 57.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-08T20:31:22.312482+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "memory-dkw-ue-ev30",
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/30 * * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-dkw-ue.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-08T21:00:00+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:30:00+11:00",
+        "dispatched_at": "2026-10-08T20:30:57.884874+11:00",
+        "lateness_seconds": 57.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-08T20:31:31.224353+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "memory-displacement-conv-0450",
+      "schedule": {
+        "kind": "cron",
+        "expr": "50 4 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-displacement-convexity.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T04:50:00+11:00"
+    },
+    {
+      "id": "memory-bethe-free-energy-0500",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 5 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-bethe-free-energy.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T05:00:00+11:00"
+    },
+    {
+      "id": "memory-lp-dct-gate-ev30",
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/30 * * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-lp-dct-gate.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-08T21:00:00+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:30:00+11:00",
+        "dispatched_at": "2026-10-08T20:30:57.884874+11:00",
+        "lateness_seconds": 57.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-08T20:31:29.806730+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "memory-malliavin-ibp-0510",
+      "schedule": {
+        "kind": "cron",
+        "expr": "10 5 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-malliavin-ibp.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T05:10:00+11:00"
+    },
+    {
+      "id": "memory-kraft-code-0520",
+      "schedule": {
+        "kind": "cron",
+        "expr": "20 5 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-kraft-code.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T05:20:00+11:00"
+    },
+    {
+      "id": "memory-matrix-bernstein-0530",
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 5 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-matrix-bernstein.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T05:30:00+11:00"
+    },
+    {
+      "id": "memory-gelman-shrink-0540",
+      "schedule": {
+        "kind": "cron",
+        "expr": "40 5 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-gelman-shrink.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T05:40:00+11:00"
+    },
+    {
+      "id": "memory-log-ode-sig-0550",
+      "schedule": {
+        "kind": "cron",
+        "expr": "50 5 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-log-ode-sig.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T05:50:00+11:00"
+    },
+    {
+      "id": "memory-bits-back-0600",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 6 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-bits-back.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T06:00:00+11:00"
+    },
+    {
+      "id": "memory-portmanteau-ev30",
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/30 * * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-portmanteau.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-08T21:00:00+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:30:00+11:00",
+        "dispatched_at": "2026-10-08T20:30:57.884874+11:00",
+        "lateness_seconds": 57.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-08T20:31:21.532602+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
+    },
+    {
+      "id": "memory-heisenberg-tf-0610",
+      "schedule": {
+        "kind": "cron",
+        "expr": "10 6 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-heisenberg-tf.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T06:10:00+11:00"
+    },
+    {
+      "id": "routing-kl-ucb-0720",
+      "schedule": {
+        "kind": "cron",
+        "expr": "20 7 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-kl-ucb.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T07:20:00+11:00"
+    },
+    {
+      "id": "routing-rademacher-0735",
+      "schedule": {
+        "kind": "cron",
+        "expr": "35 7 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-rademacher-bound.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T07:35:00+11:00"
+    },
+    {
+      "id": "routing-prec-recall-0750",
+      "schedule": {
+        "kind": "cron",
+        "expr": "50 7 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-precision-recall.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T07:50:00+11:00"
+    },
+    {
+      "id": "routing-skill-markov-0755",
+      "schedule": {
+        "kind": "cron",
+        "expr": "55 7 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-skill-markov.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T07:55:00+11:00"
+    },
+    {
+      "id": "routing-belief-prop-0845",
+      "schedule": {
+        "kind": "cron",
+        "expr": "45 8 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-belief-propagation.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T08:45:00+11:00"
+    },
+    {
+      "id": "routing-exp4-ctx-0905",
+      "schedule": {
+        "kind": "cron",
+        "expr": "5 9 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-exp4-contextual.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T09:05:00+11:00"
+    },
+    {
+      "id": "routing-linucb-0910",
+      "schedule": {
+        "kind": "cron",
+        "expr": "10 9 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-linucb.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T09:10:00+11:00"
+    },
+    {
+      "id": "routing-tsallis-inf-0912",
+      "schedule": {
+        "kind": "cron",
+        "expr": "12 9 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-tsallis-inf.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T09:12:00+11:00"
+    },
+    {
+      "id": "routing-bool-infl-sun0630",
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 6 * * 0"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-boolean-influence.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-11T06:30:00+11:00"
+    },
+    {
+      "id": "routing-skill-perc-sun0645",
+      "schedule": {
+        "kind": "cron",
+        "expr": "45 6 * * 0"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-skill-percolation.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-11T06:45:00+11:00"
+    },
+    {
+      "id": "routing-mcdiarmid-sun0715",
+      "schedule": {
+        "kind": "cron",
+        "expr": "15 7 * * 0"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-mcdiarmid-bm25.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-11T07:15:00+11:00"
+    },
+    {
+      "id": "skill-comp-gf-mon0630",
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 6 * * 1"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-composition-gf.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-12T06:30:00+11:00"
+    },
+    {
+      "id": "routing-token-setcover-mon0640",
+      "schedule": {
+        "kind": "cron",
+        "expr": "40 6 * * 1"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-token-setcover.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-12T06:40:00+11:00"
+    },
+    {
+      "id": "memory-mixing-ttl-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 3 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/memory-mixing-ttl.py",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "timeout_seconds": 120,
+      "next_run_at": "2026-10-09T03:30:00+11:00"
+    },
+    {
+      "id": "routing-alarm-bridge-ev15",
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/15 * * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/routing-alarm-bridge.py",
+      "no_agent": true,
+      "description": "Promote routing JSON alarm flags to *-alarm.json (2h TTL refresh)",
+      "env": {
+        "HERMES_HOME": "/var/home/rainbow/.hermes",
+        "HERMES_PROFILE": "fork"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "timeout_seconds": 120,
+      "priority": 3,
+      "name": "routing-alarm-bridge",
+      "next_run_at": "2026-10-08T20:45:00+11:00",
+      "last_dispatch": {
+        "scheduled_at": "2026-10-08T20:30:00+11:00",
+        "dispatched_at": "2026-10-08T20:30:57.884874+11:00",
+        "lateness_seconds": 57.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-10-08T20:31:06.142623+11:00",
+      "last_status": "ok",
+      "last_error": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled"
     }
   ],
-  "updated_at": "2026-10-08T18:50:02.262607+11:00"
+  "updated_at": "2026-10-08T20:32:01.406236+11:00"
 }
