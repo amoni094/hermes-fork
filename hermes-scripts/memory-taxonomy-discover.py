@@ -59,12 +59,23 @@ def trigram_jaccard(a, b):
 
 
 def _intent_text(concept) -> str:
+    """Return semantic text for a concept: intent string + member text fallback.
+
+    When intent is a cluster ID like 'C7' (<= 4 chars), supplement with member
+    text snippets to produce usable trigrams for Jaccard comparison.
+    """
     if not isinstance(concept, dict):
         return ''
     v = concept.get('intent', '')
     if isinstance(v, list):
-        return ' '.join(str(x) for x in v)
-    return str(v or '')
+        intent_str = ' '.join(str(x) for x in v)
+    else:
+        intent_str = str(v or '')
+    if len(intent_str.strip()) <= 4:
+        members = concept.get('members', [])
+        member_text = ' '.join(str(m)[:60] for m in members[:5] if m)
+        intent_str = (intent_str + ' ' + member_text).strip()
+    return intent_str
 
 
 def _members(concept) -> set:

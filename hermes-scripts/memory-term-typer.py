@@ -21,8 +21,17 @@ import re
 import sys
 from datetime import datetime, timezone
 
-ASSIGN_THRESHOLD = 0.15
+ASSIGN_THRESHOLD = 0.6  # containment: 60% of term trigrams in concept text
 _TOKEN_RE = re.compile(r'[A-Za-z]{4,}')
+_STOPWORDS = frozenset({
+    'with', 'that', 'this', 'from', 'have', 'will', 'been', 'they', 'their',
+    'also', 'when', 'then', 'into', 'more', 'some', 'such', 'each', 'over',
+    'only', 'both', 'most', 'very', 'than', 'what', 'your', 'were', 'does',
+    'used', 'like', 'which', 'these', 'those', 'them', 'here', 'there',
+    'about', 'after', 'before', 'under', 'while', 'where', 'being', 'using',
+    'make', 'made', 'note', 'full', 'back', 'good', 'high', 'just', 'pass',
+    'fail', 'true', 'false', 'none', 'null', 'skip', 'next', 'last', 'data',
+})
 LATTICE_NAME = 'concept-lattice.json'
 OUTPUT_NAME = 'term-typer-output.json'
 ALARM_NAME = 'wave22ol-term-typer-alarm.json'
@@ -61,12 +70,26 @@ def trigram_jaccard(a, b):
 
 
 def _intent_text(concept) -> str:
+    """Return semantic text for a concept: intent string + member text fallback.
+
+    When intent is a short cluster ID like 'C7' (<= 4 chars), the trigrams
+    are too sparse to match anything meaningful.  Supplement with member text
+    so that real-lattice concepts (which use cluster IDs) still produce useful
+    Jaccard scores.
+    """
     if not isinstance(concept, dict):
         return ''
     v = concept.get('intent', '')
     if isinstance(v, list):
-        return ' '.join(str(x) for x in v)
-    return str(v or '')
+        intent_str = ' '.join(str(x) for x in v)
+    else:
+        intent_str = str(v or '')
+    # If intent is non-semantic (short cluster ID), augment with member snippets
+    if len(intent_str.strip()) <= 4:
+        members = concept.get('members', [])
+        member_text = ' '.join(str(m)[:60] for m in members[:5] if m)
+        intent_str = (intent_str + ' ' + member_text).strip()
+    return intent_str
 
 
 def load_lattice(path: Path) -> dict:
@@ -90,7 +113,8 @@ def load_lattice(path: Path) -> dict:
 
 
 def tokens_from_text(text: str) -> list:
-    return [m.group(0).lower() for m in _TOKEN_RE.finditer(text or '')]
+    return [m.group(0).lower() for m in _TOKEN_RE.finditer(text or '')
+            if m.group(0).lower() not in _STOPWORDS]
 
 
 def _parse_skill_md(text: str) -> list:
@@ -195,11 +219,16 @@ def type_terms(term_sources: dict, concepts: list) -> dict:
         best_score = 0.0
         tnorm = (term or '').lower()
         for intent in concept_intents:
-            score = trigram_jaccard(tnorm, (intent or '').lower())
-            if score > 1.0:
-                score = 1.0
-            if score < 0.0:
-                score = 0.0
+            inorm = (intent or '').lower()
+            # Containment: fraction of term's own trigrams that appear in intent text.
+            # Correct metric when term is short (4-10 chars) and intent text is long.
+            t_tri = trigrams(tnorm)
+            i_tri = trigrams(inorm)
+            if t_tri:
+                score = len(t_tri & i_tri) / len(t_tri)
+            else:
+                score = trigram_jaccard(tnorm, inorm)
+            score = max(0.0, min(1.0, score))
             if score > best_score:
                 best_score = score
                 best_intent = intent
