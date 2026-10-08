@@ -1111,7 +1111,47 @@ def _write_experience_cache(query: str, fused: list) -> None:
         print(f"[unified-recall] experience cache write failed: {e}", file=sys.stderr)
 
 
+def rrf_unnormalized(memories: list, query: str, k: int = RRF_K) -> float:
+    """Content-weighted RRF (McDiarmid test core). No max-normalisation."""
+    q = set(query.lower().split())
+    scored = []
+    for m in memories:
+        text = m if isinstance(m, str) else str(m.get("text", ""))
+        ov = len(q & set(text.lower().split()))
+        scored.append(ov)
+    scored.sort(reverse=True)
+    return sum(ov / (k + rank + 1) for rank, ov in enumerate(scored))
+
+
+def property_mcdiarmid(n: int = 12, trials: int = 40, seed: int = 0) -> dict:
+    """Lugosi/Vershynin bounded differences: |f(X)-f(X')| ≤ c when one memory changes.
+
+    Overlap per doc is ≤ |query tokens|; each rank term ≤ 1/(RRF_K+1).
+    Conservative c = |q| / (RRF_K+1) * 2 (swap can move two contributions).
+    """
+    import random as _rng_mod
+    rng = _rng_mod.Random(seed)
+    query = "user prefers dark mode python"
+    qn = len(query.split())
+    bound = (qn / (RRF_K + 1.0)) * 2.0
+    worst = 0.0
+    for _ in range(trials):
+        mems = [f"user prefers token{rng.randint(0, 30)} mode" for _ in range(n)]
+        i = rng.randrange(n)
+        alt = list(mems)
+        alt[i] = "unrelated zzzz qqq"
+        delta = abs(rrf_unnormalized(mems, query) - rrf_unnormalized(alt, query))
+        worst = max(worst, delta)
+        if delta > bound + 1e-12:
+            return {"ok": False, "delta": delta, "bound": bound}
+    return {"ok": True, "worst": worst, "bound": bound, "n": n, "trials": trials}
+
+
 def main():
+    if "--self-test" in sys.argv:
+        r = property_mcdiarmid()
+        print(("PASS" if r["ok"] else "FAIL") + " unified-recall mcdiarmid " + json.dumps(r))
+        sys.exit(0 if r["ok"] else 1)
     p = argparse.ArgumentParser(
         description="Unified Hindsight+Graphiti memory recall with tiered output",
         formatter_class=argparse.RawDescriptionHelpFormatter,

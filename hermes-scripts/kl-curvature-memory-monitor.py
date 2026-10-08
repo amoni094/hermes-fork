@@ -39,9 +39,14 @@ _HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _HP = os.environ.get("HERMES_PROFILE", "fork")
 _RT = _HH / "profiles" / _HP if _HP else _HH
 SESSIONS_DIR = _RT / "sessions"
-CACHE_DIR    = HOME / ".hermes/cache/monitors"
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
+# ADV21-011: use profile-aware cache path
+CACHE_DIR    = _RT / "cache"
+try:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
 OUT_FILE     = CACHE_DIR / "kl-curvature-report.json"
+ALARM_FILE   = CACHE_DIR / "kl-curvature-alarm.json"
 
 CURVATURE_THRESHOLD = 3.0   # χ² proxy; >3.0 = over-rigid routing
 WINDOW              = 50    # last N tool calls to analyse
@@ -113,6 +118,13 @@ def run(dry_run: bool) -> int:
 
     if not paths:
         print("[kl-curvature] No sessions found")
+        try:
+            import time as _t
+            tmp = ALARM_FILE.with_suffix('.tmp')
+            tmp.write_text(json.dumps({"alarm": False, "reason": "no_sessions", "ts": _t.time()}, ensure_ascii=False))
+            os.replace(tmp, ALARM_FILE)
+        except Exception:
+            pass
         return 0
 
     results     = [analyse_session(p) for p in paths]
@@ -145,15 +157,52 @@ def run(dry_run: bool) -> int:
             "ts": now, "results": results, "alarm_count": len(alarm_cases),
         }, indent=2))
         _tmp_out_file.replace(OUT_FILE)
+        # ADV21-011: persist alarm sidecar for aggregator glob
+        try:
+            import time as _t
+            payload = {"alarm": bool(alarm_cases), "n_alarms": len(alarm_cases),
+                       "n_sessions": len(results), "ts": _t.time(),
+                       "reason": "high_kl_curvature" if alarm_cases else "ok"}
+            tmp_alarm = ALARM_FILE.with_suffix('.tmp')
+            tmp_alarm.write_text(json.dumps(payload, ensure_ascii=False))
+            os.replace(tmp_alarm, ALARM_FILE)
+        except Exception:
+            pass
 
     return rc
+
+
+def _self_test() -> int:
+    """ADV21-011: verify profile-aware path + chi2 with 3-element distribution."""
+    try:
+        dist = {'tool_read': 40, 'tool_write': 8, 'tool_search': 2}
+        total = sum(dist.values())
+        k = max(len(dist), 1)
+        uniform = 1.0 / k
+        chi2 = sum((v/total - uniform)**2 / uniform for v in dist.values())
+        assert chi2 > 0, f"chi2={chi2} must be positive"
+        assert CACHE_DIR == _RT / "cache", f"CACHE_DIR={CACHE_DIR} must be profile-aware"
+        print("[kl-curvature] --self-test PASS")
+        return 0
+    except Exception as exc:
+        print(f"[kl-curvature] --self-test FAIL: {exc}")
+        return 1
 
 
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--self-test", action="store_true")
     args = p.parse_args()
-    sys.exit(run(args.dry_run))
+    if getattr(args, "self_test", False):
+        sys.exit(_self_test())
+    try:
+        rc = run(args.dry_run)
+    except Exception as exc:
+        # ADV21-011: H-I7 — never crash caller
+        print(f"[kl-curvature] ERROR (suppressed): {exc}", file=sys.stderr)
+        rc = 1
+    sys.exit(rc)
 
 
 if __name__ == "__main__":

@@ -459,7 +459,31 @@ def main() -> int:
         default=DEFAULT_TOP_FACTS,
         help=f"Max facts to pull from Hindsight (default {DEFAULT_TOP_FACTS})",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Skip Wave-18 VOI gate (DeGroot)",
+    )
     args = parser.parse_args()
+
+    # Wave 18: VOI gate — do not pay consolidation cost unless E[loss-drop] > cost.
+    if not args.dry_run and not args.force:
+        try:
+            import importlib.util as _ilu_v
+            from pathlib import Path as _Pv
+            _vp = _Pv(__file__).resolve().parent / "memory-voi-consolidation.py"
+            if _vp.exists():
+                _vs = _ilu_v.spec_from_file_location("memory_voi_consolidation", str(_vp))
+                if _vs and _vs.loader:
+                    _vm = _ilu_v.module_from_spec(_vs)
+                    _vs.loader.exec_module(_vm)
+                    _dec = _vm.voi_decision(_vm.load_type_counts())
+                    print(f"[l1-gmemory] VOI fire={_dec.get('fire')} voi={_dec.get('voi')} cost={_dec.get('cost')} reason={_dec.get('reason')}")
+                    if not _dec.get("fire"):
+                        print("[l1-gmemory] skipping live consolidation (VOI gate). Pass --force to override.")
+                        return 0
+        except Exception as _vexc:
+            print(f"[l1-gmemory] VOI gate skipped: {_vexc}")
 
     mode = "DRY RUN" if args.dry_run else "LIVE"
     print(f"[l1-gmemory] G-Memory Tier-3 consolidation run ({mode})")

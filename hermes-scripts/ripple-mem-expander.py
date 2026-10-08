@@ -32,6 +32,8 @@ from pathlib import Path
 
 # -- Profile-aware paths ------------------------------------------------------
 _HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+if _HH.name != ".hermes" and _HH.parent.name == "profiles":
+    _HH = _HH.parent.parent
 _HP = os.environ.get("HERMES_PROFILE", "")
 _RT = (_HH / "profiles" / _HP) if _HP else _HH
 _CACHE = _RT / "cache"
@@ -177,6 +179,21 @@ def ripple_expand(query: str, topk: int = 5) -> list[dict]:
     results.sort(key=lambda x: x["score"], reverse=True)
     results = results[:topk]
 
+    # Wave 18: order-2 signature of the expansion path (Hairer/Kidger). Fail-open.
+    sig_feat = None
+    try:
+        import importlib.util as _ilu_s
+        _spath = Path(__file__).resolve().parent / "memory-rough-signature.py"
+        if _spath.exists():
+            _ss = _ilu_s.spec_from_file_location("memory_rough_signature", str(_spath))
+            if _ss and _ss.loader:
+                _sm = _ilu_s.module_from_spec(_ss)
+                _ss.loader.exec_module(_sm)
+                evs = [{"ts": i, "tool": r["skill"]} for i, r in enumerate(results)]
+                sig_feat = _sm.flatten_sig(_sm.order2_signature(_sm.events_to_path(evs)))
+    except Exception:
+        sig_feat = None
+
     # Log recall
     log_entry = {
         "ts": datetime.now(timezone.utc).isoformat(),
@@ -185,6 +202,7 @@ def ripple_expand(query: str, topk: int = 5) -> list[dict]:
         "anchors": anchors[:5],
         "expanded_pool": len(visited),
         "results": [r["skill"] for r in results],
+        "signature_l1": (sig_feat[:3] if sig_feat else None),
     }
     try:
         with open(RECALL_LOG, "a") as f:

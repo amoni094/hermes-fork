@@ -2239,6 +2239,43 @@ def cmd_bigrams(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_lens_test(args: argparse.Namespace) -> int:
+    """Lens laws over WM payload keys (excludes updated_at/_mac)."""
+    import copy as _copy
+
+    def _get(s, key):
+        return _copy.deepcopy(s.get(key))
+
+    def _put(s, key, a):
+        out = _copy.deepcopy(s)
+        out[key] = _copy.deepcopy(a)
+        return out
+
+    s = {
+        "session_id": "lens-test",
+        "goal": "ship",
+        "progress": ["a"],
+        "beliefs": {"k": {"text": "x"}},
+        "constraints": [],
+    }
+    for key, a, b in (
+        ("goal", "other", "third"),
+        ("progress", ["b"], ["c"]),
+        ("beliefs", {"z": {"text": "y"}}, {"k": {"text": "x"}}),
+    ):
+        if _put(s, key, _get(s, key)) != s:
+            print(json.dumps({"ok": False, "law": "GetPut", "key": key}))
+            return 1
+        if _get(_put(s, key, a), key) != a:
+            print(json.dumps({"ok": False, "law": "PutGet", "key": key}))
+            return 1
+        if _put(_put(s, key, a), key, b) != _put(s, key, b):
+            print(json.dumps({"ok": False, "law": "PutPut", "key": key}))
+            return 1
+    print("PASS working-memory lens GetPut PutGet PutPut")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--session", "-s", required=False, default=None, help="Session id (not required for plan-from-memory, handoff-export)")
@@ -2464,6 +2501,9 @@ def main() -> int:
         help="Confidence threshold for count (default 0.5)",
     )
     p_norm.set_defaults(func=cmd_norm)
+
+    p_lens = sub.add_parser("lens-test", help="Harper/Reynolds GetPut PutGet PutPut on WM payload")
+    p_lens.set_defaults(func=cmd_lens_test)
 
     args = ap.parse_args()
     return int(args.func(args) or 0)

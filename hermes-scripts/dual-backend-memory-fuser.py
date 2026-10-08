@@ -110,6 +110,21 @@ def fuse(query: str) -> list[dict]:
         print(f"  {rank+1:<5} {best_id:<35} {best_rel:>6.3f} {best_nov:>6.3f} {best_fuse:>7.3f}")
 
     print(f"\nFused top-{len(selected)} results returned")
+    # Wave 18: coupling FOSD check on the two backend score lists (fail-open).
+    try:
+        import importlib.util as _ilu
+        _cpath = _SCRIPTS_DIR / "memory-coupling-merge.py"
+        if _cpath.exists():
+            _cs = _ilu.spec_from_file_location("memory_coupling_merge", str(_cpath))
+            if _cs and _cs.loader:
+                _cm = _ilu.module_from_spec(_cs)
+                _cs.loader.exec_module(_cm)
+                snap_a = [{"id": r["id"], "relevance": r["score"], "text": r["text"]} for r in pool_a]
+                snap_b = [{"id": r["id"], "relevance": r["score"], "text": r["text"]} for r in pool_b]
+                _m = _cm.merge_snapshots(snap_a, snap_b)
+                print(f"  coupling FOSD a={_m.get('fosd_a')} b={_m.get('fosd_b')} sinkhorn={_m.get('used_sinkhorn')}")
+    except Exception as _exc:
+        print(f"  coupling check skipped: {_exc}")
     return selected
 
 if __name__ == "__main__":
