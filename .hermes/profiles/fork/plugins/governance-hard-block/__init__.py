@@ -27,6 +27,7 @@ GUARANTEE: unapproved HIGH-risk writes are blocked; read tools fail-open;
 """
 from __future__ import annotations
 
+import ast
 import json
 import logging
 import os
@@ -36,6 +37,456 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# AST-based **-unpack write detector (Wave 57)
+# ---------------------------------------------------------------------------
+# Replaces the family of regex arms that matched open(**{'mode':'w',...}) etc.
+# AST parsing is immune to: CR/CRLF/FF whitespace, arbitrary key ordering,
+# 61+ spaces between key and colon, hash characters inside string values,
+# string prefix variants (r'w', u'w'), deeply nested parens around keys.
+# Documented misses (same as regex, unfixable statically):
+#   - **variable  (not a dict literal — returns False, fail-open)
+#   - chr(119) as mode value (runtime call, not Constant)
+#   - f-strings (JoinedStr node, not Constant)
+#   - b'w' bytes mode (Constant bytes, not str — TypeError at runtime anyway)
+# Falls back to _STARSTAR_REGEX_FALLBACK when ast.parse raises SyntaxError
+# (e.g. partial/truncated code snippets).
+
+_AST_WRITE_FUNCS: dict[str, frozenset[str]] = {
+    "open":      frozenset({"w", "a", "x", "r+", "w+", "a+", "x+"}),
+    "GzipFile":  frozenset({"w", "a", "x"}),
+    "ZipFile":   frozenset({"w", "x", "a"}),
+    "PyZipFile": frozenset({"w", "x", "a"}),
+    "TarFile":   frozenset({"w", "x", "a"}),
+    "BZ2File":   frozenset({"w", "a", "x"}),
+    "LZMAFile":  frozenset({"w", "a", "x"}),
+    "FileIO":    frozenset({"w", "a", "x", "r+", "w+"}),
+}
+_AST_DBM_WRITE: frozenset[str] = frozenset({"n", "c", "w"})
+_AST_ALL_WRITE_STARTS: frozenset[str] = frozenset({"w", "a", "x", "n", "c", "r+"})
+
+
+def _unwrap_to_dict(node: "ast.expr") -> "ast.Dict | None":
+    """Try to extract an ast.Dict from common wrapper expressions.
+
+    Fail-closed: when multiple dict candidates exist (BoolOp, IfExp),
+    returns the one that contains a write-mode key if any does, else
+    returns the first. This ensures a write-capable branch is never
+    shadowed by an earlier read/empty branch.
+
+    Handles (in order):
+    - NamedExpr (walrus): (d := {...}) → unwrap recursively
+    - ast.Dict: return directly
+    - BinOp with BitOr: {} | {'mode':'w',...} → merge both sides
+    - BoolOp (or/and): scan all values, prefer any with a write mode
+    - IfExp: check body AND orelse, prefer write-mode side
+    - Subscript with resolvable int index on List/Tuple: [d][0] or [-1]
+
+    Returns None when no dict literal can be statically extracted.
+    """
+    if node is None:
+        return None
+    # Peel NamedExpr layers: (a := (b := {...}))
+    while isinstance(node, ast.NamedExpr):
+        node = node.value
+    if isinstance(node, ast.Dict):
+        return node
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+        # {} | {'mode': 'w'} — merge both sides (right wins on conflict)
+        left = _unwrap_to_dict(node.left)
+        right = _unwrap_to_dict(node.right)
+        if left is None and right is None:
+            return None
+        merged_keys: list = []
+        merged_vals: list = []
+        for d in (left, right):
+            if d is not None:
+                merged_keys.extend(d.keys)
+                merged_vals.extend(d.values)
+        return ast.Dict(keys=merged_keys, values=merged_vals)
+    if isinstance(node, ast.BoolOp):
+        # (x or {'mode':'w',...}) / ({} or {'mode':'w',...}) / ({} and {write})
+        # Fail-closed: scan ALL values, prefer a write-mode dict over
+        # an earlier empty/read dict so that ({} or {write}) → write.
+        candidates = [_unwrap_to_dict(v) for v in node.values]
+        candidates = [c for c in candidates if c is not None]
+        if not candidates:
+            return None
+        # Prefer any candidate that has a write-mode key
+        for c in candidates:
+            kv = _extract_kv_from_dict(c)
+            if _dict_has_write_mode(kv):
+                return c
+        return candidates[0]
+    if isinstance(node, ast.IfExp):
+        # Fail-closed: check both body and orelse; prefer the write-mode side.
+        body_d = _unwrap_to_dict(node.body)
+        orelse_d = _unwrap_to_dict(node.orelse)
+        for d in (body_d, orelse_d):
+            if d is not None:
+                kv = _extract_kv_from_dict(d)
+                if _dict_has_write_mode(kv):
+                    return d
+        # Neither has a write mode; return whichever exists (prefer body)
+        return body_d if body_d is not None else orelse_d
+    if isinstance(node, ast.Subscript):
+        # [d][0], [d][-1], [d][0+0], [d][1-1] — resolve the index to a Python int,
+        # or fail-closed (scan all elements for write mode) when unresolvable.
+        idx_node = node.slice
+        # Peel walrus on the index itself
+        while isinstance(idx_node, ast.NamedExpr):
+            idx_node = idx_node.value
+        idx: "int | None" = _resolve_const_int(idx_node)
+        # Resolve the container — may itself be a Subscript chain or BoolOp/IfExp list
+        container = _unwrap_to_dict_seq(node.value)
+        if container is not None:
+            if idx is not None:
+                try:
+                    return _unwrap_to_dict(container[idx])
+                except IndexError:
+                    return None
+            else:
+                # Unresolvable index (BinOp/IfExp/BoolOp/nested-unary/Slice/Call):
+                # fail-closed — scan all elements, return first write-mode dict.
+                for elem in container:
+                    d = _unwrap_to_dict(elem)
+                    if d is not None:
+                        kv = _extract_kv_from_dict(d)
+                        if _dict_has_write_mode(kv):
+                            return d
+                return None
+        # Container may be an ast.Dict (dict literal subscript): {'k': {d}}['k']
+        dict_container = _unwrap_to_dict(node.value)
+        if dict_container is not None:
+            return _dict_subscript_lookup(dict_container, idx_node)
+        return None
+    return None
+
+
+def _resolve_const_int(node: "ast.expr") -> "int | None":
+    """Fold a constant integer expression: Constant, bool, UnaryOp +/-, BinOp on constants."""
+    if node is None:
+        return None
+    while isinstance(node, ast.NamedExpr):
+        node = node.value
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, bool)):
+        return int(node.value)
+    if isinstance(node, ast.UnaryOp):
+        operand = _resolve_const_int(node.operand)
+        if operand is None:
+            return None
+        if isinstance(node.op, ast.UAdd):
+            return operand
+        if isinstance(node.op, ast.USub):
+            return -operand
+        if isinstance(node.op, ast.Invert):
+            return ~operand
+    if isinstance(node, ast.BinOp):
+        left = _resolve_const_int(node.left)
+        right = _resolve_const_int(node.right)
+        if left is None or right is None:
+            return None
+        try:
+            if isinstance(node.op, ast.Add):   return left + right
+            if isinstance(node.op, ast.Sub):   return left - right
+            if isinstance(node.op, ast.Mult):  return left * right
+            if isinstance(node.op, ast.Mod) and right != 0:   return left % right
+            if isinstance(node.op, ast.LShift): return left << right
+            if isinstance(node.op, ast.RShift): return left >> right
+        except (OverflowError, ValueError):
+            pass
+    return None
+
+
+def _dict_subscript_lookup(d: "ast.Dict", key_node: "ast.expr") -> "ast.Dict | None":
+    """Look up key_node in a Dict literal and return _unwrap_to_dict of the matched value.
+
+    Supports Constant (str/int/bool) keys. When key is unresolvable, fail-closed:
+    scan all values for a write-mode dict.
+    """
+    # Try to resolve the key to a Python scalar
+    key_val: "object" = None
+    has_key = False
+    while isinstance(key_node, ast.NamedExpr):
+        key_node = key_node.value
+    if isinstance(key_node, ast.Constant):
+        key_val = key_node.value
+        has_key = True
+    if has_key:
+        # Pass 1: direct Constant-key match
+        for k, v in zip(d.keys, d.values):
+            if k is None:
+                continue
+            k_inner = k
+            while isinstance(k_inner, ast.NamedExpr):
+                k_inner = k_inner.value
+            if isinstance(k_inner, ast.Constant) and k_inner.value == key_val:
+                return _unwrap_to_dict(v)
+        # Pass 2: recurse into spread sub-dicts (None-keyed entries)
+        for k, v in zip(d.keys, d.values):
+            if k is None:
+                inner = _unwrap_to_dict(v)
+                if inner is not None:
+                    result = _dict_subscript_lookup(inner, key_node)
+                    if result is not None:
+                        return result
+        # Pass 3: key found nowhere — fall through to fail-closed value scan
+    # Unresolvable key: fail-closed, scan all values for write mode
+    for v in d.values:
+        candidate = _unwrap_to_dict(v)
+        if candidate is not None:
+            kv = _extract_kv_from_dict(candidate)
+            if _dict_has_write_mode(kv):
+                return candidate
+    return None
+
+
+def _unwrap_to_dict_seq(node: "ast.expr") -> "list | None":
+    """Return a Python list of AST nodes from a literal List or Tuple,
+    or through Subscript chains, BoolOp, and IfExp wrappers.
+
+    Fail-closed for BoolOp/IfExp: prefer the sequence arm that contains
+    a write-mode dict element when multiple arms exist.
+    """
+    if node is None:
+        return None
+    while isinstance(node, ast.NamedExpr):
+        node = node.value
+    if isinstance(node, (ast.List, ast.Tuple)):
+        # Flatten any Starred(*inner) elements: [*[d]] -> [d]
+        elts: list = []
+        for e in node.elts:
+            if isinstance(e, ast.Starred):
+                inner = _unwrap_to_dict_seq(e.value)
+                if inner is not None:
+                    elts.extend(inner)
+                else:
+                    elts.append(e)  # keep opaque starred as-is
+            else:
+                elts.append(e)
+        return elts
+    if isinstance(node, ast.BoolOp):
+        # ([{write}] or []) — scan all arms, prefer one with a write-mode element
+        seqs = [_unwrap_to_dict_seq(v) for v in node.values]
+        seqs = [s for s in seqs if s is not None]
+        if not seqs:
+            return None
+        for s in seqs:
+            for elem in s:
+                d = _unwrap_to_dict(elem)
+                if d is not None and _dict_has_write_mode(_extract_kv_from_dict(d)):
+                    return s
+        return seqs[0]
+    if isinstance(node, ast.IfExp):
+        # ([] if False else [{write}]) — check both arms, prefer write-mode
+        body_s = _unwrap_to_dict_seq(node.body)
+        orelse_s = _unwrap_to_dict_seq(node.orelse)
+        for s in (body_s, orelse_s):
+            if s is not None:
+                for elem in s:
+                    d = _unwrap_to_dict(elem)
+                    if d is not None and _dict_has_write_mode(_extract_kv_from_dict(d)):
+                        return s
+        return body_s if body_s is not None else orelse_s
+    if isinstance(node, ast.Subscript):
+        # Recurse: resolve inner container, then index into it, then
+        # treat the resulting element as a sequence if it's List/Tuple.
+        idx_node = node.slice
+        while isinstance(idx_node, ast.NamedExpr):
+            idx_node = idx_node.value
+        idx = _resolve_const_int(idx_node)
+        inner_seq = _unwrap_to_dict_seq(node.value)
+        if inner_seq is None:
+            return None
+        if idx is None:
+            # Unresolvable index (Slice, BinOp, IfExp, etc.) — return the
+            # whole inner sequence so the caller can fail-closed scan it.
+            return inner_seq
+        try:
+            elem = inner_seq[idx]
+        except IndexError:
+            return None
+        return _unwrap_to_dict_seq(elem)
+
+
+def _get_const_str(node: "ast.expr | None") -> "str | None":
+    """Return the string value if node is a constant str (or parenthesised str).
+
+    Unwraps NamedExpr (walrus operator) to its value, since
+    open(**{'mode': (m := 'w'), ...}) should be caught (W58-ADV-001 fix).
+    """
+    if node is None:
+        return None
+    # Unwrap walrus: (x := 'w') is NamedExpr whose .value is the actual expr
+    if isinstance(node, ast.NamedExpr):
+        return _get_const_str(node.value)
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    return None
+
+
+def _extract_kv_from_dict(d: ast.Dict) -> "dict[str, str]":
+    """Extract str->str pairs from a dict literal, recursing into spread sub-dicts.
+
+    Handles open(**{**{'mode': 'w'}, 'file': '...'}) by recursing when a None
+    key (i.e. **inner) references another ast.Dict literal (W57-ADV-001 fix).
+    """
+    kv: dict[str, str] = {}
+    for k, v in zip(d.keys, d.values):
+        if k is None:
+            # **inner spread — recurse if inner is a dict literal, or a
+            # NamedExpr wrapping one: open(**{**(m := {'mode': 'w'}), ...})
+            inner = _unwrap_to_dict(v)
+            if isinstance(inner, ast.Dict):
+                kv.update(_extract_kv_from_dict(inner))
+            continue
+        k_s = _get_const_str(k)
+        v_s = _get_const_str(v)
+        if k_s is not None and v_s is not None:
+            kv[k_s] = v_s
+    return kv
+
+
+def _dict_has_write_mode(kv: "dict[str, str]") -> bool:
+    """Return True if kv contains a write-mode 'mode' or 'flag' key."""
+    for key in ("mode", "flag"):
+        v = kv.get(key)
+        if v and any(v.startswith(m) for m in _AST_ALL_WRITE_STARTS):
+            return True
+    return False
+
+
+def _resolve_func_name(func: ast.expr) -> "tuple[str | None, bool, bool]":
+    """Return (func_name, is_dbm, is_opaque).
+
+    is_opaque=True when callee is a Call/Subscript/etc whose name cannot be
+    statically resolved — caller applies a catch-all mode/flag check.
+    Handles __call__ chains: (open.__call__)(**{...}) and
+    open.__call__.__call__(**{...}) (W57-ADV-002 fix).
+    """
+    if isinstance(func, ast.Name):
+        return func.id, False, False
+
+    if isinstance(func, ast.Attribute):
+        attr = func.attr
+
+        # __call__ dereference: walk up to find the real callable
+        if attr == "__call__":
+            val = func.value
+            while isinstance(val, ast.Attribute) and val.attr == "__call__":
+                val = val.value
+            if isinstance(val, ast.Name):
+                return val.id, False, False
+            # val is Attribute (e.g. open.__class__), Call, Subscript, etc.
+            # We cannot statically resolve the callee — treat as opaque.
+            # This catches: (open.__class__.__call__)(open, **{...}),
+            # type(open).__call__(**{...}), etc. (W58-ADV-002 fix).
+            return None, False, True
+
+        # Normal attribute: detect dbm chain for .open
+        if attr == "open":
+            val = func.value
+            chain: list[str] = []
+            while isinstance(val, ast.Attribute):
+                chain.append(val.attr)
+                val = val.value
+            if isinstance(val, ast.Name):
+                chain.append(val.id)
+            chain.reverse()
+            if chain and chain[0] == "dbm":
+                return attr, True, False
+
+        return attr, False, False
+
+    # Call, Subscript, IfExp, etc. — opaque callee
+    return None, False, True
+
+
+def _ast_has_starstar_write(code: str) -> bool:
+    """Return True if code contains a call like func(**{..., 'mode': '<write>', ...}).
+
+    Uses ast.parse so all Python whitespace/escape/prefix rules are handled by
+    the interpreter itself — no regex approximation needed.
+    Returns False on SyntaxError (caller falls back to _STARSTAR_REGEX_FALLBACK).
+
+    Catches:
+    - open(**{'mode': 'w', ...}), all 9 file-write families, dbm family
+    - CR/CRLF/FF/arbitrary whitespace between key and colon (parser normalises)
+    - r'w', u'w' string prefixes (Constant.value is 'w' after parsing)
+    - Deeply nested parens around dict keys (transparent in AST)
+    - Spread sub-dicts: open(**{**{'mode': 'w'}, ...}) (W57-ADV-001)
+    - __call__ chains: (open.__call__)(**{...}), open.__call__.__call__(**{...}) (W57-ADV-002)
+    - Opaque callees (Call/Subscript): getattr(open,'__call__')(**{...}) (W57-ADV-002)
+
+    Documented misses (unfixable statically):
+    - **variable (not ast.Dict)
+    - chr(119) / 'w'[0] as mode value (Call/Subscript, not Constant)
+    - f-strings (ast.JoinedStr, not Constant)
+    - b'w' bytes mode (Constant bytes, not str; TypeError at runtime anyway)
+    - 'mo'+'de' string concat as key (BinOp, not Constant)
+    """
+    try:
+        tree = ast.parse(code, mode="exec")
+    except SyntaxError:
+        return False
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        for kw in node.keywords:
+            if kw.arg is not None:
+                continue  # regular keyword arg, not **
+            # Unwrap NamedExpr: open(**(d := {'mode': 'w', ...})) — kw.value is
+            # NamedExpr whose .value is the actual dict (W59-ADV-001 variant fix).
+            # Recursive to handle: open(**(a := (b := {'mode': 'w', ...}))).
+            # Also unwraps BitOr, BoolOp, IfExp, Subscript wrappers (W60-ADV-001 fix).
+            kw_val = _unwrap_to_dict(kw.value)
+            if not isinstance(kw_val, ast.Dict):
+                continue  # **variable — documented miss
+
+            kv = _extract_kv_from_dict(kw_val)
+            if not kv:
+                continue
+
+            func_name, is_dbm, is_opaque = _resolve_func_name(node.func)
+
+            if is_opaque:
+                # Unknown callee (Call/Subscript/IfExp): catch-all on mode/flag
+                if _dict_has_write_mode(kv):
+                    return True
+                continue
+
+            if is_dbm:
+                v_s = kv.get("flag") or kv.get("mode")
+                if v_s and any(v_s.startswith(m) for m in _AST_DBM_WRITE):
+                    return True
+            elif func_name in _AST_WRITE_FUNCS:
+                v_s = kv.get("mode")
+                if v_s and any(v_s.startswith(m) for m in _AST_WRITE_FUNCS[func_name]):
+                    return True
+            elif func_name in ("type", "__call__", "callable"):
+                # Meta-callers: type.__call__(SomeClass, **{...}) is equivalent to
+                # constructing SomeClass with those kwargs. Treat as opaque catch-all
+                # rather than silently allowing (W58-ADV-002 fix).
+                if _dict_has_write_mode(kv):
+                    return True
+            # Other unknown named funcs — no catch-all (FP risk)
+
+    return False
+
+
+# Regex fallback for **-unpack detection: fires only when ast.parse fails
+# (SyntaxError on partial/truncated snippets). Intentionally simple — no cap
+# games, just anchored name + ** + mode keyword. Not used when AST succeeds.
+_STARSTAR_REGEX_FALLBACK = re.compile(
+    r"(?:open|GzipFile|ZipFile|PyZipFile|TarFile|BZ2File|LZMAFile|FileIO"
+    r"|io\.open|io\.FileIO|gzip\.open|gzip\.GzipFile|tarfile\.open"
+    r"|bz2\.BZ2File|lzma\.LZMAFile|zipfile\.ZipFile|zipfile\.PyZipFile"
+    r"|dbm\.(?:gnu|dumb|ndbm|sqlite3)?\.?open|dbm\.open)"
+    r"\s*\([\s\S]{0,2000}\*\*[\s\S]{0,200}"
+    r"(?:mode|flag)\s*[=:]\s*['\"][waxncr+]"
+)
 
 ISS_GAIN = 0.40
 EPS_DP = 0.0
@@ -477,6 +928,14 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
             )
     if tool_name == "execute_code":
         code_blob = chr(10).join(_string_values(args))
+        # AST-based **-unpack write detector (Wave 57): replaces all 9 regex arms.
+        # Injects a synthetic HR marker so the existing rename+HR-token gate fires.
+        _ast_starstar_hit = False
+        if "**" in code_blob:
+            _ast_starstar_hit = _ast_has_starstar_write(code_blob)
+            if not _ast_starstar_hit:
+                # SyntaxError fallback for partial/truncated snippets
+                _ast_starstar_hit = bool(_STARSTAR_REGEX_FALLBACK.search(code_blob))
         _HR_TOKENS = (
             "config.yaml", "config.yml",
             "/plugins/", "/agent/",           # absolute forms
@@ -492,7 +951,8 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
         # miss — we cannot safely distinguish write vs read from an arbitrary open() call without
         # parsing. has_open was removed because it caused FP on open('/plugins/x','r') reads.
         if hr_tokens_present and (
-            looks_like_rename_or_copy({"code": code_blob})
+            _ast_starstar_hit  # fast AST path: skip expensive regex when already confirmed
+            or looks_like_rename_or_copy({"code": code_blob})
             or _RENAME_PRIMITIVES.search(code_blob)
         ):
             # ADV-W10-002: do NOT call has_approved_proposal here. Obfuscated writes

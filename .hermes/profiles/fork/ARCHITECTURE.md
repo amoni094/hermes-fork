@@ -4,7 +4,7 @@ Patterns ported from Denuto (jesterG1979/hello_agent) + Hermes-native patterns.
 This is the authoritative single source of truth for how Hermes is structured,
 what rules are enforced, and what the invariants are.
 
-Last updated: 2026-10-07 Wave 18 (H-I8 hard block, ssl_guard, sheaf glue, causal DiD, I/O automata, Naur document, wiring audit)
+Last updated: 2026-10-08 Wave 19 (lm-polygraph UE integration: semantic density, perplexity proxy, blackbox scorer)
 
 ---
 
@@ -219,6 +219,14 @@ not enforced gates in the agent loop. Do NOT cite them as active enforcement:
   stuck-job-detector.py      - CTL/LTL safety: AG(running → EF(complete|failed)); queries executions.db for jobs stuck in 'running' > 2×timeout; writes stuck-job-alarms.jsonl
   callgraph-audit.py         - P1 interprocedural call-graph analysis (Nielson et al. §1-2); propagates exit-code lattice {ok,intentional_nonzero,error_propagator} across subprocess call chains; reports HERMES_HOME unvalidated paths (P2); writes callgraph-audit-report.json
   skill-router-index.py      - R1 Chernoff MIN_SAMPLES=30 guard in beta_posterior_mean(); R2 collision detection (fork priority); O2 incremental build (skip unchanged skills by mtime); BM25 TF-IDF + concept-lattice semantic fallback
+
+~/.hermes/hermes-scripts/ (UE / lm-polygraph Wave 19):
+  ue-blackbox-scorer.py      - Blackbox UE scoring: lexical sim, cluster count, hedge phrases, repetition
+  ue-semantic-graph.py       - Graph Laplacian UE: eigenvalue sum, degree, eccentricity, semantic clusters
+  ue-semantic-density.py     - SemanticDensity: claim density, unique claim ratio (Qiu et al. 2024)
+  ue-perplexity-proxy.py     - Compression-based perplexity proxy (Shannon/MDL; no logprobs needed)
+  ue-memory-gate.py          - UE-based gate before memory commits (extends RANSAC gate)
+  ue-calibration-bridge.py   - Bridge: UE scores -> calibration-log.jsonl for Platt-scaling pipeline
 
 ## Knowledge Corpus (theory-grounded skills — wave 3, 2026-09-22)
 
@@ -770,6 +778,20 @@ ACCEPTED (documented):
   Pass 3: exhaustive wiring audit JSON (this wave's primary deliverable).
 
 
+## Wave 19 Additions (2026-10-08) — lm-polygraph UE integration
+
+### Theoretical foundations (new subsystems)
+
+| Subsystem | Theorem / source | Hard-core invariant | Gate |
+|---|---|---|---|
+| UE blackbox scorer | Shannon entropy; Cover-Thomas AEP; lm-polygraph TACL-2025 | composite_ue ∈ [0,1]; DPI: UE estimate can't exceed raw logprob confidence | ue-blackbox-scorer.py --self-test |
+| UE semantic graph | Graph Laplacian eigenspectrum; Lin et al. 2023 (EigV/Deg/Ecc) | Eigenvalue sum >= 0; num_sem_sets >= 1 | ue-semantic-graph.py self-test |
+| UE semantic density | Qiu et al. 2024; Shannon source coding | semantic_density ∈ [0,1] | ue-semantic-density.py --self-test |
+| UE perplexity proxy | Shannon 1948; compression = entropy proxy (Li-Vitanyi MDL) | CCR > 0; ue_proxy ∈ [0,1] | ue-perplexity-proxy.py --self-test |
+| UE memory gate | Bayesian decision theory (Berger); RANSAC (Szeliski) | GATE_DENY on composite_ue > 0.75; no bypass on empty query | ue-memory-gate.py check |
+| UE calibration bridge | Platt scaling; Cover-Thomas chain rule | predicted_confidence = 1 - composite_ue; appended to calibration-log.jsonl | ue-calibration-bridge.py sync |
+
+
 ## Wave 19 — Open Gap Resolution + Adversarial Hardening (2026-10-07)
 
 ### Fixes applied:
@@ -793,3 +815,45 @@ ACCEPTED (documented):
 ### Wiring audit clean:
 - 68 cron jobs: 0 missing scripts, 0 compile errors, null-script jobs wired; doob-strata-decompose-0001 added Wave 21
 - 10 plugins: all compile, H-I7 enforced, no invalid hooks, no LLM calls in pre-hooks
+
+## Wave 20 Additions (2026-10-08) — Reasoning skill operationalisation + UE integration
+
+### New scripts
+
+| Script | Theoretical basis | Gate / Invariant |
+|---|---|---|
+| reasoning-ue-integrator.py | Garrabrant Thm 4.3/4.9; Fagin S5 K/B/C; Pearl causal ladder Rung 1/2/3; Hubinger deceptive alignment Sec 4; Amodei 5 safety categories | reasoning_risk_score in [0,1]; recommended_action in {PASS,SLOW_CHANNEL,REGENERATE,DENY_MEMORY,WARN_USER} |
+| epistemic-state-tracker.py | Fagin/Halpern/Moses/Vardi (1995) S5 modal logic; epistemic regression logging; exponential decay (Ebbinghaus half-life) | K requires tool-verified evidence; C requires Condorcet=1.0; decay only on B-type; regression always logged |
+| causal-memory-annotator.py | Pearl causal ladder (Rung 1/2/3); Shpitser & Pearl (2006) do-calculus completeness; confound detection via backdoor criterion | Rung2 UE penalty +0.15; Rung3 +0.25; confound +0.20; tighter gate: R2 WARN>0.40, R3 WARN>0.30 |
+
+### Fork-profile wrappers added
+
+- profiles/fork/scripts/reasoning-ue-integrator.py
+- profiles/fork/scripts/epistemic-state-tracker.py
+- profiles/fork/scripts/causal-memory-annotator.py
+
+### Reasoning skill predicate table
+
+| Skill | Key theorem/result | Hermes predicate | Action |
+|---|---|---|---|
+| garrabrant-logical-induction | Thm 4.3 Calibration; Thm 4.9 Unbiasedness | prob language + no calib-log entry | ue-calibration-bridge.py sync; annotate 'CALIBRATING' |
+| fagin-reasoning-about-knowledge | S5 K axiom (K→truth); epistemic regression | K/B/C type per assertion | epistemic-state-tracker.py update; C requires Condorcet=1.0 |
+| pearl-causality | Do-calculus completeness; causal ladder rungs | Rung2/3 + composite_ue > 0.4 | causal-memory-annotator.py; tighter UE gate |
+| hubinger-mesa-optimization | Deceptive alignment Sec 4; pseudo-alignment Sec 3.1 | verbalization>0.8 AND ue>0.5 | DECEPTIVE_ALIGNMENT_SIGNAL; DENY_MEMORY; N=3 regen |
+| soares-agent-foundations | Corrigibility Sec 3; utility indifference; LDT | persistent action without instruction | HALT; surface; corrigibility_risk gate |
+| hutter-aixi | AIXI Thm 5.32; MDL/Solomonoff; CCR as MDL proxy | CCR for complexity; maximin under UE>0.5 | prefer lower-CCR; conservative under uncertainty |
+| amodei-concrete-ai-safety | 5 accident categories (Sec 3-7) | irreversible+UE>0.3; CCR>0.7; dark>10 calls | confirmation; HARD BLOCK if UE>0.6; domain-shift warning |
+| ji-alignment-survey | RLHF; scalable oversight; distributional robustness | MESA_SIGNAL; CCR>0.7; dark>10 calls | regen; calibration sync; slow channel |
+| ngo-alignment-dl | Double descent; grokking (Power 2022); ICL as Bayes | L2+high-UE; sudden B->K upgrade | N=3 consistency; tool-verify K-upgrade; ICL novelty gate |
+| critch-ai-research-considerations | Prepotence (ARCHES Sec 2-3); corrigibility spectrum | irreversible+UE>0.5; reasoning_risk>0.5 | HARD BLOCK; log prepotence-log.jsonl |
+
+### Wave 20 hard-core invariants
+
+- reasoning_risk_score in [0,1]; weights sum to 1.0 (Garrabrant 0.15 + Mesa 0.35 + Causal 0.20 + DomainShift 0.15 + RewardHack 0.15)
+- K epistemic type requires tool-verified evidence or evidence string containing 'tool:' (no silent K promotion)
+- C epistemic type requires Condorcet=1.0 from consistency-scores.jsonl (no bypass)
+- Epistemic regression (K->B, C->B) always logged to cache/epistemic-regressions.jsonl (never silent)
+- Rung 2/3 causal claims: tighter UE gate than factual claims (R2: WARN 0.40 DENY 0.60; R3: WARN 0.30 DENY 0.50)
+- DECEPTIVE_ALIGNMENT_SIGNAL always results in DENY_MEMORY + N=3 regen request
+- Prepotence HARD BLOCK: irreversible + (UE>0.5 OR reasoning_risk>0.5) -> block unconditionally
+- All 10 reasoning skills now have: concrete thresholds, specific script invocations, theorem citations
