@@ -5,8 +5,11 @@ Pipeline per transcript:
   2. Generate (or load cached) recall questions from the region that will be
      summarized away under the CURRENT policy (the most conservative boundary:
      anything the current policy summarizes is fair game for every policy).
-  3. For each policy: compress, then answer each question with ONLY the
-     compressed context, using a single LLM call per question.
+  3. For each policy: compress, then answer each question from the
+     compressed context. ``+recovery`` searches the intra-prefix discard set.
+     ``+recovery_full`` / ``--full-lineage`` searches the reconstructed lineage
+     (production session_search). Retrieval is hybrid BM25+cosine RRF, with a
+     second hop when the first search is empty or very short.
   4. Judge answers against gold with an LLM judge (sees gold; answerer
      does not).
   5. Write per-policy results JSON for report.py.
@@ -109,17 +112,146 @@ HEAD_HIT_CHARS = 5000  # ledger at position 0, then ~1-2K summary prefix
 OUTPUT_TOKENS_PER_RECALL_POINT_TARGET = 1200
 
 
-def keyword_search(archive: list, query: str, top_k: int = 4, excerpt_chars: int = 2500) -> str:
-    """Simulate session_search over the archived (compacted-away) region.
+_TERM_RE = re.compile(r"[A-Za-z0-9_#./-]{3,}")
+_RRF_K = 60
+# Cap for ArchiveIndex to avoid OOM on very large full-lineage corpora.
+# At ~150 chars/message average, 200K messages ~ 30M chars ~ 7.5M tokens.
+_ARCHIVE_INDEX_MSG_CAP = 200_000
+_ARCHIVE_INDEX_CHAR_CAP = 30_000_000  # 30 MB of text
 
-    Uses an in-memory SQLite FTS5 index with BM25 ranking — the same engine
-    production session_search runs on — so the sim's retrieval quality
-    matches what a live agent gets. Falls back to term-frequency scoring if
-    FTS5 is unavailable.
+
+class ArchiveIndex:
+    """Reusable hybrid BM25 + cosine TF-IDF index over a message list.
+
+    Built once per policy arm so a large lineage is not re-indexed per question.
+    When the corpus exceeds _ARCHIVE_INDEX_MSG_CAP or _ARCHIVE_INDEX_CHAR_CAP
+    the corpus is tail-truncated (most recent messages kept) before indexing.
+    """
+
+    def __init__(self, corpus: list):
+        import sqlite3 as _sq
+
+        # Tail-truncate to avoid OOM on 7.6M-token lineages.
+        rows_raw = [
+            (i, m.get("role") or "", m["content"])
+            for i, m in enumerate(corpus)
+            if isinstance(m.get("content"), str) and len(m["content"]) >= 20
+        ]
+        if len(rows_raw) > _ARCHIVE_INDEX_MSG_CAP:
+            rows_raw = rows_raw[-_ARCHIVE_INDEX_MSG_CAP:]
+        total_chars = sum(len(c) for _, _, c in rows_raw)
+        if total_chars > _ARCHIVE_INDEX_CHAR_CAP:
+            # Drop oldest messages until under cap.
+            while rows_raw and total_chars > _ARCHIVE_INDEX_CHAR_CAP:
+                _, _, c = rows_raw.pop(0)
+                total_chars -= len(c)
+        self.rows = rows_raw
+        self._by_idx: dict[int, tuple[str, str]] = {i: (r, c) for i, r, c in self.rows}
+        self._db = None
+        self._snips: dict[int, str] = {}
+        try:
+            db = _sq.connect(":memory:")
+            db.execute(
+                "CREATE VIRTUAL TABLE arch USING fts5(content, role UNINDEXED, idx UNINDEXED)"
+            )
+            db.executemany(
+                "INSERT INTO arch (content, role, idx) VALUES (?, ?, ?)",
+                [(c, r, i) for i, r, c in self.rows],
+            )
+            self._db = db
+        except _sq.OperationalError:
+            self._db = None
+
+    def search(self, query: str, top_k: int = 6, excerpt_chars: int = 2500) -> str:
+        """Hybrid BM25 + cosine RRF search; returns formatted excerpts."""
+        terms = [t.lower() for t in _TERM_RE.findall(query)]
+        if not terms:
+            return "(no results)"
+
+        bm25_order: list[int] = []
+        snips: dict[int, str] = {}
+        if self._db is not None:
+            fts_query = " OR ".join('"' + t.replace('"', "") + '"' for t in terms)
+            try:
+                cur = self._db.execute(
+                    "SELECT idx, snippet(arch, 0, '', '', ' … ', 40) AS snip "
+                    "FROM arch WHERE arch MATCH ? ORDER BY bm25(arch) LIMIT 50",
+                    (fts_query,),
+                )
+                for idx, snip in cur.fetchall():
+                    bm25_order.append(idx)
+                    snips[idx] = snip or ""
+            except Exception:
+                pass
+        if not bm25_order:
+            # FTS5 unavailable or no hits — term-frequency fallback.
+            scored = []
+            for i, _r, c in self.rows:
+                lc = c.lower()
+                score = sum(lc.count(t) for t in terms) / (1 + len(c) / 4000)
+                if score > 0:
+                    scored.append((score, i))
+            scored.sort(key=lambda x: -x[0])
+            bm25_order = [i for _s, i in scored[:50]]
+
+        cosine_order: list[int] = []
+        try:
+            import numpy as np
+            n_terms = len(terms)
+            mat = np.zeros((len(self.rows), n_terms), dtype=np.float64)
+            for d, (_i, _r, c) in enumerate(self.rows):
+                lc = c.lower()
+                for t_i, t in enumerate(terms):
+                    if t in lc:
+                        mat[d, t_i] = lc.count(t)
+            qv = np.ones(n_terms, dtype=np.float64)
+            qn = float(np.linalg.norm(qv)) or 1.0
+            dn = np.linalg.norm(mat, axis=1)
+            dn = np.where(dn == 0.0, 1.0, dn)
+            cos = (mat @ qv) / (dn * qn)
+            order = np.argsort(-cos)
+            cosine_order = [
+                self.rows[int(d)][0] for d in order if cos[int(d)] > 0
+            ][:50]
+        except ImportError:
+            pass
+
+        if cosine_order:
+            scores: dict[int, float] = {}
+            for rank, idx in enumerate(bm25_order, start=1):
+                scores[idx] = scores.get(idx, 0.0) + 1.0 / (_RRF_K + rank)
+            for rank, idx in enumerate(cosine_order, start=1):
+                scores[idx] = scores.get(idx, 0.0) + 1.0 / (_RRF_K + rank)
+            ordered = [i for i, _ in sorted(scores.items(), key=lambda x: -x[1])][:top_k]
+        else:
+            ordered = bm25_order[:top_k]
+
+        hits = []
+        for idx in ordered:
+            pair = self._by_idx.get(idx)
+            if not pair:
+                continue
+            role, content = pair
+            lc = content.lower()
+            first = min((lc.find(t) for t in terms if lc.find(t) >= 0), default=0)
+            start = max(0, first - excerpt_chars // 4)
+            snip = snips.get(idx, "")
+            head = f"--- result (message #{idx}, role={role}) ---\n"
+            if snip:
+                head += f"[match: {snip[:200]}]\n"
+            hits.append(head + content[start:start + excerpt_chars])
+        return "\n\n".join(hits) if hits else "(no results)"
+
+
+def keyword_search(archive: list, query: str, top_k: int = 6, excerpt_chars: int = 2500) -> str:
+    """Simulate session_search over an archive (prefix discard set or full lineage).
+
+    BM25 via in-memory FTS5, fused with cosine over query-term count vectors
+    (numpy; skipped if numpy is missing) using reciprocal rank fusion.
     """
     import sqlite3 as _sq
 
-    terms = [t.lower() for t in re.findall(r"[A-Za-z0-9_#./-]{3,}", query)]
+    terms = [t.lower() for t in _TERM_RE.findall(query)]
     if not terms:
         return "(no results)"
     rows = [
@@ -127,7 +259,27 @@ def keyword_search(archive: list, query: str, top_k: int = 4, excerpt_chars: int
         for i, m in enumerate(archive)
         if isinstance(m.get("content"), str) and len(m["content"]) >= 20
     ]
-    hits = []
+
+    def _excerpts(ordered_idx: list[int], snips: dict[int, str] | None = None) -> str:
+        hits = []
+        by_idx = {i: (r, c) for i, r, c in rows}
+        for idx in ordered_idx:
+            pair = by_idx.get(idx)
+            if not pair:
+                continue
+            role, content = pair
+            lc = content.lower()
+            first = min((lc.find(t) for t in terms if lc.find(t) >= 0), default=0)
+            start = max(0, first - excerpt_chars // 4)
+            snip = (snips or {}).get(idx, "")
+            head = f"--- result (message #{idx}, role={role}) ---\n"
+            if snip:
+                head += f"[match: {snip[:200]}]\n"
+            hits.append(head + content[start:start + excerpt_chars])
+        return "\n\n".join(hits) if hits else "(no results)"
+
+    bm25_order: list[int] = []
+    snips: dict[int, str] = {}
     try:
         db = _sq.connect(":memory:")
         db.execute("CREATE VIRTUAL TABLE arch USING fts5(content, role UNINDEXED, idx UNINDEXED)")
@@ -135,43 +287,60 @@ def keyword_search(archive: list, query: str, top_k: int = 4, excerpt_chars: int
             "INSERT INTO arch (content, role, idx) VALUES (?, ?, ?)",
             [(c, r, i) for i, r, c in rows],
         )
-        fts_query = " OR ".join(
-            '"' + t.replace('"', "") + '"' for t in terms
-        )
+        fts_query = " OR ".join('"' + t.replace('"', "") + '"' for t in terms)
         cur = db.execute(
-            "SELECT idx, role, content, bm25(arch) AS rank, "
-            "snippet(arch, 0, '', '', ' … ', 40) AS snip "
-            "FROM arch WHERE arch MATCH ? ORDER BY rank LIMIT ?",
-            (fts_query, top_k),
+            "SELECT idx, snippet(arch, 0, '', '', ' … ', 40) AS snip "
+            "FROM arch WHERE arch MATCH ? ORDER BY bm25(arch) LIMIT 50",
+            (fts_query,),
         )
-        for idx, role, content, rank, snip in cur.fetchall():
-            lc = content.lower()
-            first = min((lc.find(t) for t in terms if lc.find(t) >= 0), default=0)
-            start = max(0, first - excerpt_chars // 4)
-            hits.append(
-                f"--- result (message #{idx}, role={role}) ---\n"
-                f"[match: {snip[:200]}]\n"
-                + content[start:start + excerpt_chars]
-            )
+        for idx, snip in cur.fetchall():
+            bm25_order.append(idx)
+            snips[idx] = snip or ""
         db.close()
     except _sq.OperationalError:
-        # FTS5 unavailable — degrade to term-frequency scoring.
         scored = []
         for i, r, c in rows:
             lc = c.lower()
             score = sum(lc.count(t) for t in terms) / (1 + len(c) / 4000)
             if score > 0:
-                scored.append((score, i, r, c))
+                scored.append((score, i))
         scored.sort(key=lambda x: -x[0])
-        for score, i, r, c in scored[:top_k]:
+        bm25_order = [i for _s, i in scored[:50]]
+
+    cosine_order: list[int] = []
+    try:
+        import numpy as np
+    except ImportError:
+        np = None
+    if np is not None and rows:
+        # Term-document matrix over query terms only; cosine of L2-normalised counts.
+        n_terms = len(terms)
+        mat = np.zeros((len(rows), n_terms), dtype=np.float64)
+        for d, (_i, _r, c) in enumerate(rows):
             lc = c.lower()
-            first = min((lc.find(t) for t in terms if lc.find(t) >= 0), default=0)
-            start = max(0, first - excerpt_chars // 4)
-            hits.append(
-                f"--- result (message #{i}, role={r}) ---\n"
-                + c[start:start + excerpt_chars]
-            )
-    return "\n\n".join(hits) if hits else "(no results)"
+            for t_i, t in enumerate(terms):
+                if t in lc:
+                    mat[d, t_i] = lc.count(t)
+        qv = np.ones(n_terms, dtype=np.float64)
+        qn = np.linalg.norm(qv)
+        dn = np.linalg.norm(mat, axis=1)
+        dn = np.where(dn == 0.0, 1.0, dn)
+        cos = (mat @ qv) / (dn * (qn or 1.0))
+        order = np.argsort(-cos)
+        cosine_order = [
+            rows[int(d)][0] for d in order if cos[int(d)] > 0
+        ][:50]
+
+    if cosine_order:
+        scores: dict[int, float] = {}
+        for rank, idx in enumerate(bm25_order, start=1):
+            scores[idx] = scores.get(idx, 0.0) + 1.0 / (_RRF_K + rank)
+        for rank, idx in enumerate(cosine_order, start=1):
+            scores[idx] = scores.get(idx, 0.0) + 1.0 / (_RRF_K + rank)
+        ordered = [i for i, _ in sorted(scores.items(), key=lambda x: -x[1])][:top_k]
+    else:
+        ordered = bm25_order[:top_k]
+    return _excerpts(ordered, snips)
 
 
 EVAL_USAGE = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0}
@@ -203,7 +372,7 @@ def _extract_json(text: str):
     if m:
         text = m.group(1)
     start = min([i for i in (text.find("["), text.find("{")) if i >= 0], default=0)
-    return json.loads(text[start:])
+    return json.JSONDecoder().raw_decode(text[start:])[0]
 
 
 def serialize_for_exam(messages, char_cap: int = 600_000) -> str:
@@ -418,9 +587,20 @@ def generate_questions(messages, n: int, cache_path: Path) -> list:
     import agent.context_compressor as cc
 
     region = summarized_region(cc, messages)
-    text = serialize_for_exam(region)
+    # 80k chars (~20k tok) keeps exam-gen inside aux context; head+tail still spans the region.
+    text = serialize_for_exam(region, char_cap=80_000)
     raw = _call(QUESTION_PROMPT.format(n=n, transcript=text), max_tokens=8000)
-    questions = _extract_json(raw)[:n]
+    try:
+        parsed = _extract_json(raw)
+    except Exception:
+        logger.warning("question JSON parse failed; raw head=%r", (raw or "")[:400])
+        raise
+    if isinstance(parsed, dict):
+        parsed = parsed.get("questions") or parsed.get("items") or parsed.get("data") or [parsed]
+    if not isinstance(parsed, list):
+        logger.warning("question JSON was %s; raw head=%r", type(parsed).__name__, (raw or "")[:400])
+        raise ValueError(f"questions JSON was {type(parsed).__name__}, not a list")
+    questions = parsed[:n]
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps(questions, indent=1), encoding="utf-8")
     return questions
@@ -463,7 +643,8 @@ def classifier_decision_from_compressor(comp) -> dict:
     }
 
 
-def policy_label_for_arm(name: str, spec: dict, comp, with_recovery: bool = False) -> str:
+def policy_label_for_arm(name: str, spec: dict, comp, with_recovery: bool = False,
+                        recovery_full: bool = False) -> str:
     """Scorecard policy name; classifier arms include the detected profile."""
     label = name
     if (spec.get("attrs") or {}).get("use_classifier"):
@@ -473,53 +654,13 @@ def policy_label_for_arm(name: str, spec: dict, comp, with_recovery: bool = Fals
             profile = hint.get("compression_profile")
         if profile:
             label = f"{name}({profile})"
-    if with_recovery:
+    if recovery_full:
+        label = f"{label}+recovery_full"
+    elif with_recovery:
         label = f"{label}+recovery"
     return label
 
 
-def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
-               with_recovery: bool = False) -> dict:
-    from agent.context_compressor import ContextCompressor
-
-    before = copy.deepcopy(messages)
-    # Keep a pristine copy of the original messages so that archive computation
-    # and before_tokens always reflect unmodified history (F13).
-    _original = copy.deepcopy(messages)
-
-    # Telegraphic pre-pass: compact tool_result messages before the context
-    # compressor sees them, reducing context size entering the compressor.
-    if spec.get("pre_telegraphic"):
-        import importlib.util as _ilu
-        _lt_path = REPO_ROOT / "plugins" / "user" / "lambda-tuner" / "complexity.py"
-        _spec = _ilu.spec_from_file_location("lambda_tuner_complexity", _lt_path)
-        if _spec is not None and _spec.loader is not None:
-            _lt = _ilu.module_from_spec(_spec)
-            _spec.loader.exec_module(_lt)  # type: ignore[union-attr]
-            _tc = _lt.TelegraphicCompressor()
-            def _apply_telegraphic(m: dict) -> dict:
-                role = m.get("role", "")
-                content = m.get("content")
-                # Only compress string tool-result content (F3: guard against None/list).
-                if isinstance(content, str) and _tc.should_compress(role, content):
-                    return {**m, "content": _tc.compress(content)}
-                return m
-            before = [_apply_telegraphic(m) for m in before]
-    comp = apply_policy(ContextCompressor(model=EVAL_MODEL, quiet_mode=True), spec)
-    for key, value in (spec.get("ctor") or {}).items():
-        setattr(comp, key, value)
-    _apply_fork_runtime_attrs(comp, spec)
-    # Classifier-routed arm: invoke session classifier on the message window so the
-    # compressor self-selects the best fork profile before compression.
-    if (spec.get("attrs") or {}).get("use_classifier"):
-        try:
-            comp._maybe_route_session_profile(messages)
-        except Exception as exc:
-            logger.warning("eval runner: scoring suppressed: %s", exc)
-    classifier_decision = classifier_decision_from_compressor(comp)
-    t0 = time.time()
-    # Use `before` (which may be telegraphic-preprocessed) as the input.
-    compressed = comp.compress(copy.deepcopy(before), current_tokens=total_tokens(before), force=True)
 _PRICES: dict = {}
 
 
@@ -622,12 +763,19 @@ def _compress_with_policy(spec: dict, messages) -> tuple:
 
 
 def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
-               with_recovery: bool = False) -> dict:
+               with_recovery: bool = False, full_lineage=None) -> dict:
     before = copy.deepcopy(messages)
+    _original = before
     t0 = time.time()
     compressed, comp, compaction_cost = _compress_with_policy(spec, messages)
     elapsed = time.time() - t0
-    label = f"{name}+recovery" if with_recovery else name
+    recovery_full = bool(full_lineage is not None)
+    if recovery_full:
+        label = f"{name}+recovery_full"
+    elif with_recovery:
+        label = f"{name}+recovery"
+    else:
+        label = name
     if compressed is None:
         summary = {"policy": label, "before_tokens": total_tokens(before), "after_tokens": None,
                    "recall_pct": None, "compress_seconds": round(elapsed, 1),
@@ -649,11 +797,19 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
         m for m in _original
         if isinstance(m.get("content"), str) and (m.get("content") or "")[:200] not in surviving
     ]
+    # Production session_search indexes the whole DB, not just the compaction
+    # discard set. When full_lineage is provided, search that instead.
+    # Build the ArchiveIndex once per arm (not once per question) — avoids
+    # rebuilding the FTS5 table and numpy matrix on every keyword_search call.
+    _search_corpus = full_lineage if full_lineage is not None else archive
+    _index = ArchiveIndex(_search_corpus) if with_recovery else None
 
     context_text = serialize_for_exam(compressed, char_cap=700_000)
     results = []
     for qa in questions:
-        if with_recovery:
+        hops = 0
+        queries = []
+        if with_recovery and _index is not None:
             # The summary (session log, verbatim user msgs, recovery footer) sits
             # near the FRONT of the serialized context; give the query writer
             # that portion plus the recent tail so it can mine anchor
@@ -665,7 +821,21 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
                 ),
                 max_tokens=100,
             ).strip().strip('"')
-            search_results = keyword_search(archive, query)
+            queries.append(query)
+            search_results = _index.search(query)
+            hops = 1
+            if search_results == "(no results)" or len(search_results) < 200:
+                hop_ctx = (search_results or "")[:500]
+                query = _call(
+                    SEARCH_QUERY_PROMPT.format(
+                        context_hint=hint + "\n\nFIRST_SEARCH_SNIPPETS:\n" + hop_ctx,
+                        question=qa["q"],
+                    ),
+                    max_tokens=100,
+                ).strip().strip('"')
+                queries.append(query)
+                search_results = _index.search(query)
+                hops = 2
             answer = _call(
                 ANSWER_WITH_RECOVERY_PROMPT.format(
                     context=context_text,
@@ -674,6 +844,7 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
                 ),
                 max_tokens=400,
             )
+            query = " || ".join(queries)
         else:
             query = None
             answer = _call(ANSWER_PROMPT.format(context=context_text, question=qa["q"]), max_tokens=400)
@@ -683,9 +854,12 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
         except Exception as exc:
             logger.warning("eval runner: scoring suppressed: %s", exc)
             verdict = {"score": 0, "why": f"judge parse failure: {verdict_raw[:100]}"}
-        entry = {"q": qa["q"], "gold": qa["gold"], "answer": answer, **verdict}
+        entry = {"q": qa["q"], "gold": qa["gold"], "answer": answer, **verdict,
+                 "recovery_hops": None, "recovery_corpus": None}
         if query is not None:
             entry["search_query"] = query
+            entry["recovery_hops"] = hops
+            entry["recovery_corpus"] = "full_lineage" if recovery_full else "prefix_archive"
         _annotate_result_entry(entry, qa)
         results.append(entry)
 
@@ -693,9 +867,11 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
     recall_pct, n_primary, by_difficulty, by_signal_type, _primary = (
         score_by_signal_and_difficulty(results, questions)
     )
-    label = policy_label_for_arm(name, spec, comp, with_recovery=with_recovery)
+    label = policy_label_for_arm(name, spec, comp, with_recovery=with_recovery,
+                                 recovery_full=recovery_full)
     summary_head = extract_compacted_summary_head(compressed)
     hit_rate = compute_head_hit_rate(questions, summary_head)
+    classifier_decision = classifier_decision_from_compressor(comp)
     summary = {
         "policy": label,
         "before_tokens": total_tokens(_original),
@@ -767,10 +943,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--transcript", required=True)
     ap.add_argument("--cap-tokens", type=int, default=500_000)
-    ap.add_argument("--policies", default="current,tail25k,codex_style")
-    ap.add_argument("--questions", type=int, default=30)
     ap.add_argument("--policies", default="current+recovery",
-                    help="comma-separated arms; <name>+recovery = production path (summary + one session_search round-trip). Bare <name> is closed-book, opt-in only.")
+                    help="comma-separated arms; <name>+recovery = prefix archive; "
+                         "<name>+recovery_full = full lineage (or pass --full-lineage). "
+                         "Bare <name> is closed-book, opt-in only.")
+    ap.add_argument("--full-lineage", default=None,
+                    help="JSON transcript of the full reconstructed lineage for the "
+                         "session_search sim (production model). Used by +recovery_full "
+                         "and, when set, by every +recovery arm.")
     ap.add_argument("--questions", type=int, default=15)
     ap.add_argument("--out", required=True)
     ap.add_argument("--also-uncompacted", action="store_true")
@@ -808,16 +988,33 @@ def main():
         summaries.append(ctl)
         print(json.dumps(ctl, indent=1))
 
-    for name in args.policies.split(","):
-        name = name.strip()
-        if not name:
-            continue
-        with_recovery = name.endswith("+recovery")
-        base = name[:-len("+recovery")] if with_recovery else name
+    policy_names = [n.strip() for n in args.policies.split(",") if n.strip()]
+    need_full = bool(args.full_lineage) or any(n.endswith("+recovery_full") for n in policy_names)
+    full_lineage_msgs = None
+    if args.full_lineage:
+        full_lineage_msgs = load_transcript(args.full_lineage, cap_tokens=None)
+    elif need_full:
+        full_lineage_msgs = load_transcript(args.transcript, cap_tokens=None)
+    if full_lineage_msgs is not None:
+        print(f"full lineage loaded: {len(full_lineage_msgs)} msgs (~{total_tokens(full_lineage_msgs)} tok)")
+
+    for name in policy_names:
+        recovery_full = name.endswith("+recovery_full")
+        with_recovery = recovery_full or name.endswith("+recovery")
+        if recovery_full:
+            base = name[:-len("+recovery_full")]
+        elif with_recovery:
+            base = name[:-len("+recovery")]
+        else:
+            base = name
         if base not in POLICIES:
             print(f"unknown policy {base}, skipping"); continue
+        use_full = with_recovery and full_lineage_msgs is not None and (
+            recovery_full or bool(args.full_lineage)
+        )
         s = run_policy(base, POLICIES[base], messages, questions, out_dir,
-                       with_recovery=with_recovery)
+                       with_recovery=with_recovery,
+                       full_lineage=full_lineage_msgs if use_full else None)
         summaries.append(s)
         print(json.dumps(s, indent=1))
 
