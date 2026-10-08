@@ -101,6 +101,7 @@ _RENAME_PRIMITIVES = re.compile(
     r"|(?:\.extract(?:all)?|extractall|unpack_archive)\s*\("  # ADV-W17SAT-006 archive extract
     r"|fileinput\.(?:input|FileInput)\s*\((?:[^()]|\((?:[^()]|\((?:[^()]|\([^)]*\))*\))*\))*(?:inplace\s*=\s*(?!\s*(?:False|0(?![\d.])|None|'')\s*[,)#])|\*\*\s*(?:\{|(?:dict|vars|locals|globals)\s*\())"  # ADV-W17SAT-008+W22-001+003+004 fileinput keyword
     r"|fileinput\.(?:input|FileInput)\s*\((?:[^(),]|\((?:[^()]|\((?:[^()]|\([^)]*\))*\))*\))+,\s*(?!\s*(?:[a-zA-Z_]\w*\s*=|(?:False|0(?![\d.])|None|'')\s*[,)#]))"  # ADV-W22-002 fileinput positional inplace
+    r"|fileinput\.(?:input|FileInput)\s*\([^)]*mode\s*=\s*[bBfFrRuU]{0,2}[\x27\x22](?:w|a|x|wb|ab|xb|r\+|w\+|a\+)[\x27\x22]"  # ADV-W36-004 fileinput mode=write/append/create without inplace
     r"|partial\s*\(\s*(?:open|io\.open|io\.FileIO|builtins\.open|(?:pathlib\.)?Path\.(?:write_text|write_bytes|open|replace|rename|touch|symlink_to|hardlink_to|unlink))\b"  # ADV-W17SAT-010 partial(open,...)
     r"|partial\s*\(\s*(?:os\.(?:system|popen|replace|exec\w+|symlink|link|remove|unlink|truncate)|subprocess\.(?:run|call|Popen|check_output|check_call)|shutil\.(?:copy|copy2|move|copyfile|unpack_archive|copytree|rmtree))\b"  # ADV-W20-003 partial(os.system|subprocess.run|shutil.*)
     r"|\.(?:rename|touch|replace|unlink)\s*\("  # ADV-W16-002+W17-007 instance Path.rename/touch
@@ -122,6 +123,9 @@ _RENAME_PRIMITIVES = re.compile(
     r"|(?:\[open\]\s*\[[^\]]*\]|\(open,?\s*\)\s*\[[^\]]*\])\s*\("  # ADV-W26-002 [open][-1]/[open][N]/(open,)[N]
     r"|\(\s*(?:os|subprocess|shutil|posix)\s*\.\s*(?:system|popen|remove|unlink|truncate|rename|replace|link|symlink|exec\w+|spawn\w+|run|call|Popen|move|copy|copy2|rmtree|mknod|openat|unlinkat|open)\s*\)\s*\("  # ADV-W32-007 W34-001 W35-001 W35-007 paren-wrap incl open + inner ws
     r"|\[\s*(?:os|subprocess|shutil|posix)\s*\.\s*(?:system|popen|remove|unlink|truncate|rename|replace|link|symlink|exec\w+|spawn\w+|run|call|Popen|move|copy|copy2|rmtree|mknod|openat|unlinkat|open)\s*\]\s*\[[^\]]*\]\s*\("  # ADV-W33-001 W34-001 W34-005 W35-001 list-wrap incl open + inner ws
+    r"|\(\s*(?:gzip|builtins|io|bz2|lzma|codecs|wave|tarfile)\s*\.\s*open\s*\)\s*\("  # ADV-W36-001 paren-wrap module.open (gzip.open, builtins.open, io.open, tarfile.open, bz2.open etc.)
+    r"|\[\s*(?:gzip|builtins|io|bz2|lzma|codecs|wave|tarfile)\s*\.\s*open\s*\]\s*\[[^\]]*\]\s*\("  # ADV-W36-001 list-wrap module.open
+    r"|\(\s*(?:Path\s*\([^)]{0,200}\)|pathlib\s*\.\s*Path\s*\([^)]{0,200}\)|[a-zA-Z_]\w*(?:[/\\][^\s)]{1,80})?)\s*\.\s*open\s*\)\s*\("  # ADV-W36-006 paren-wrap of path_expr.open method (path.open)('w')
     r"|\bopen\.__call__\s*\("  # ADV-W26-003 open.__call__()
     r"|operator\.call\s*\(\s*(?:builtins\.)?open\b"  # ADV-W26-003 operator.call(open,...)
     r"|tempfile\.(?:NamedTemporaryFile|mkstemp|mktemp|mkdtemp|TemporaryDirectory)\s*\([^)]*(?:dir\s*=|\*\*\s*(?:\{[^}]*[\x27\x22]dir[\x27\x22]|dict\s*\([^)]*dir\s*=))"  # ADV-W26-008 W27-010 tempfile dir= or **{dir:}
@@ -151,13 +155,14 @@ _RENAME_PRIMITIVES = re.compile(
     r"|sys\s*\.\s*modules\s*(?:\[[^\]]*\]|\.\s*(?:get|pop|setdefault)\s*\([^)]*\))\s*(?:\.\s*\w+)?\s*\.[\s]*(?:open|remove|unlink|truncate|rename|replace|link|symlink|system|popen|exec\w+|spawn\w+|run|call|check_call|check_output|Popen|move|copy|copy2|rmtree|copytree|write_text|write_bytes|FileIO|mknod|connect|BZ2File|LZMAFile|GzipFile)\s*\("  # ADV-W32-003 W33-002 W34-003 W35-003 sys.modules + optional submodule hop (dbm.gnu.open)
     r"|posix\s*\.[\s]*(?:system|popen|remove|unlink|truncate|rename|replace|link|symlink|exec\w+|spawn\w+|openat|unlinkat|open|mknod)\s*\("  # ADV-W32-004 W33-004 posix.system/remove/mknod
     r"|sqlite3\s*\.\s*connect\s*\("  # ADV-W32-010 sqlite3.connect creates file
-    r"|shelve\s*\.\s*open\s*\("  # ADV-W32-010 shelve.open creates file
+    r"|\bshelve\s*\.\s*open\s*\("  # ADV-W32-010 shelve.open creates file
+    r"|\bshelve\s*\.\s*DbfilenameShelf\s*\("  # ADV-W36-007 shelve.DbfilenameShelf direct constructor creates shelf file
     r"|(?:bz2\s*\.\s*BZ2File|lzma\s*\.\s*LZMAFile)\s*\([^)]*[\x27\x22][wxa]"  # ADV-W32-010 W33-006 bz2/lzma write-mode incl dot-whitespace
     r"|dbm\s*\.\s*open\s*\([^)]*[\x27\x22][ncrw]"  # ADV-W32-010 dbm.open create/write modes
-    r"|dbm\s*\.\s*(?:gnu|dumb|ndbm)\s*\.\s*open\s*\([^)]*[\x27\x22][ncrw]"  # ADV-W33-005 dbm.gnu.open/dbm.dumb.open create bypass
+    r"|dbm\s*\.\s*(?:gnu|dumb|ndbm|sqlite3)\s*\.\s*open\s*\([^)]*[\x27\x22][ncrw]"  # ADV-W33-005 W36-002 dbm.gnu.open/dbm.dumb.open/dbm.sqlite3.open create bypass
     r"|\bos\s*\.\s*mknod\s*\("  # ADV-W32-010 os.mknod creates file
-    r"|\(\s*(?:sqlite3\s*\.\s*connect|shelve\s*\.\s*open|bz2\s*\.\s*BZ2File|lzma\s*\.\s*LZMAFile|gzip\s*\.\s*GzipFile|dbm\s*\.\s*open|dbm\s*\.\s*(?:gnu|dumb|ndbm)\s*\.\s*open)\s*\)\s*\("  # ADV-W34-002 W35-002 W35-005 paren-wrap constructors incl dbm.gnu.open + gzip.GzipFile
-    r"|\[\s*(?:sqlite3\s*\.\s*connect|shelve\s*\.\s*open|bz2\s*\.\s*BZ2File|lzma\s*\.\s*LZMAFile|gzip\s*\.\s*GzipFile|dbm\s*\.\s*open|dbm\s*\.\s*(?:gnu|dumb|ndbm)\s*\.\s*open)\s*\]\s*\[[^\]]*\]\s*\("  # ADV-W34-002 W35-002 W35-005 list-wrap constructors incl dbm.gnu.open + gzip.GzipFile
+    r"|\(\s*(?:sqlite3\s*\.\s*connect|shelve\s*\.\s*open|shelve\s*\.\s*DbfilenameShelf|bz2\s*\.\s*BZ2File|lzma\s*\.\s*LZMAFile|gzip\s*\.\s*GzipFile|zipfile\s*\.\s*ZipFile|tarfile\s*\.\s*TarFile|dbm\s*\.\s*open|dbm\s*\.\s*(?:gnu|dumb|ndbm|sqlite3)\s*\.\s*open)\s*\)\s*\("  # ADV-W34-002 W35-002 W35-005 W36-002 W36-005 W36-007 paren-wrap constructors + shelve.DbfilenameShelf + zipfile.ZipFile + tarfile.TarFile
+    r"|\[\s*(?:sqlite3\s*\.\s*connect|shelve\s*\.\s*open|shelve\s*\.\s*DbfilenameShelf|bz2\s*\.\s*BZ2File|lzma\s*\.\s*LZMAFile|gzip\s*\.\s*GzipFile|zipfile\s*\.\s*ZipFile|tarfile\s*\.\s*TarFile|dbm\s*\.\s*open|dbm\s*\.\s*(?:gnu|dumb|ndbm|sqlite3)\s*\.\s*open)\s*\]\s*\[[^\]]*\]\s*\("  # ADV-W34-002 W35-002 W35-005 W36-002 W36-005 W36-007 list-wrap constructors + shelve.DbfilenameShelf + zipfile.ZipFile + tarfile.TarFile
 )
 
 _BOOTSTRAP_DIR: Optional[Path] = None  # resolved lazily (ADV-004)
