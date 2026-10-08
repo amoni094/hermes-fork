@@ -97,10 +97,10 @@ _RENAME_PRIMITIVES = re.compile(
     r"|getattr\s*\(\s*(?:object\s*=|name\s*=\s*[bBfFrRuU]{0,2}['\"][^'\"]*(?:write_text|write_bytes|open|replace|rename|unlink|truncate|link|copytree|run|execve|remove|mknod|Popen|connect|BZ2File|LZMAFile|GzipFile|ZipFile|TarFile|DbfilenameShelf|PyZipFile|FileIO)[^'\"]*[\'\"]{1,3})"  # ADV-W24-008 W38-001 W39-001 getattr keyword/object= form + W37 names + ws after =
     r"|getattr\s*\(\s*\*\s*[\[(]"  # ADV-W24-008 getattr star-unpack (*[list] or *(tuple))
     r"|getattr\s*\(\s*\**\s*\(*\s*(?:\{[^}]*\b(?:name|__name__)\s*['\"]?\s*[=:]\s*[bBfFrRuU]{0,2}['\"](?:write_text|write_bytes|open|replace|rename|unlink|truncate|link|copytree|run|execve|remove|mknod|Popen|connect|BZ2File|LZMAFile|GzipFile|ZipFile|TarFile|DbfilenameShelf|PyZipFile|FileIO)|dict\s*\([^)]*\bname\s*=\s*[bBfFrRuU]{0,2}['\"](?:write_text|write_bytes|open|replace|rename|unlink|truncate|link|copytree|run|execve|remove|mknod|Popen|connect|BZ2File|LZMAFile|GzipFile|ZipFile|TarFile|DbfilenameShelf|PyZipFile|FileIO))"  # ADV-W39-002 W40-003 W42-001 W43 getattr(**{...}) / getattr(**(...dict...)) any paren-wrap depth
-    r"|io\.FileIO\s*\([^\n]*,[\s\S]{0,20}(?:[\x27\x22][^\x27\x22]*[wax+]|chr\s*\()"  # ADV-W24-001+004 W42-002 W43 W45 io.FileIO positional (cross-newline comma gap)
+    r"|io\.FileIO\s*\([ \t\n]?[^\n]*,[\s\S]{0,20}(?:[\x27\x22][^\x27\x22]*[wax+]|chr\s*\()"  # ADV-W24-001+004 W42-002 W43 W45 W46 io.FileIO positional (cross-newline comma gap, newline-after-( absorber)
     r"|io\.FileIO\s*\([^\n]*\bmode\s*=\s*(?:[^\n]*[wax+]|chr\s*\()"  # ADV-W24-001+004 W42-002 W43 io.FileIO mode= flat
     r"|io\.FileIO\s*\([^)]*\*\*\s*(?:\{[^}]*mode[^}]*[wax+]|dict\s*\([^)]*mode\s*=)"  # ADV-W24-005 io.FileIO dict-unpack mode
-    r"|io\.open\s*\([^\n]*,[\s\S]{0,20}['\"'][awx]"  # ADV-W16-007 io.open write-mode (cross-newline comma gap, W17-004)
+    r"|io\.open\s*\([ \t\n]?[^\n]*,[\s\S]{0,20}['\"'][awx]"  # ADV-W16-007 io.open write-mode (cross-newline comma gap, W17-004, W46 newline-after-( absorber)
     r"|operator\.(?:attrgetter|methodcaller)\s*\("  # ADV-W16-009 operator bypass
     r"|(?:\.extract(?:all)?|extractall|unpack_archive)\s*\("  # ADV-W17SAT-006 archive extract
     r"|fileinput\s*\.\s*(?:input|FileInput)\s*\((?:[^()]|\((?:[^()]|\((?:[^()]|\([^)]*\))*\))*\))*(?:inplace\s*=\s*(?!\s*(?:False|0(?![\d.])|None|'')\s*[,)#])|\*\*\s*(?:\{|(?:dict|vars|locals|globals)\s*\())"  # ADV-W17SAT-008+W22-001+003+004 W38-003 fileinput keyword (dot-ws)
@@ -118,9 +118,10 @@ _RENAME_PRIMITIVES = re.compile(
     r"|os\.exec[vle]\w*\s*\("  # ADV-W16-003 os.execv/execve/execl*
     r"|os\.(?:spawn[levpa]*|posix_spawn[p]?)\s*\("  # ADV-W25-008 W26-005 os.spawnl/spawnle/spawnv/spawnlp/posix_spawn
     r"|pty\.spawn\s*\("  # ADV-W25-008 pty.spawn write-capable
-    r"|zipfile\s*\.\s*(?:ZipFile|PyZipFile|Path)\s*\([^\n]*,[\s\S]{0,20}[\x27\x22][wxa][\x27\x22]"  # ADV-W25-009 W26-006 W38-007 W39-007 W40-002 W43 W45 ZipFile/PyZipFile [wxa] positional (cross-newline comma gap)
-    r"|zipfile\s*\.\s*(?:ZipFile|PyZipFile|Path)\s*\([^\n]*mode\s*=[\s\S]{0,20}[\x27\x22][wxa]"  # ADV-W26-006 W38-007 W39-007 W40-002 W43 W45 ZipFile/PyZipFile mode= keyword (cross-newline)
-    r"|gzip\s*\.\s*(?:open|GzipFile)\s*\([^\n]*,[\s\S]{0,20}[\x27\x22][wax]b?t?[\x27\x22]"  # ADV-W25-009 W26-007 W38-006 W39-003 W40-002 W43 W45 gzip write/exclusive modes (cross-newline comma gap)
+    r"|zipfile\s*\.\s*(?:ZipFile|PyZipFile|Path)\s*\([ \t\n]?[^\n]*,[\s\S]{0,20}[\x27\x22][wxa][\x27\x22]"  # ADV-W25-009 W26-006 W38-007 W39-007 W40-002 W43 W45 W46 ZipFile/PyZipFile [wxa] positional (cross-newline comma gap, newline-after-( absorber)
+    r"|zipfile\s*\.\s*(?:ZipFile|PyZipFile|Path)\s*\([ \t\n]?[^\n]*mode\s*=[\s\S]{0,20}[\x27\x22][wxa]"  # ADV-W26-006 W38-007 W39-007 W40-002 W43 W45 W46 ZipFile/PyZipFile mode= keyword (cross-newline, newline-after-( absorber)
+    r"|gzip\s*\.\s*(?:open|GzipFile)\s*\([ \t\n]?[^\n]*,[\s\S]{0,20}[\x27\x22][wax]b?t?[\x27\x22]"  # ADV-W25-009 W26-007 W38-006 W39-003 W40-002 W43 W45 W46 gzip write/exclusive modes (cross-newline comma gap, newline-after-( absorber)
+    r"|gzip\s*\.\s*(?:open|GzipFile)\s*\([ \t\n]?[^\n]*mode\s*=[\s\S]{0,20}[\x27\x22][wax]b?t?[\x27\x22]"  # ADV-W45-002 W46 gzip mode= keyword (mode-first kwargs fix)
     r"|urllib\.request\.(?:urlretrieve|URLopener|FancyURLopener)\b"  # ADV-W25-009 W26-015 W27-008
     r"|\bbuiltins\.open\s*\("  # ADV-W26-001 builtins.open(...)
     r"|__builtins__\s*(?:\[|\b(?:get)\b|\.).*\bopen\b"  # ADV-W26-001 __builtins__[open]/get/attr
@@ -150,7 +151,8 @@ _RENAME_PRIMITIVES = re.compile(
     r"|\.open\s*\(\s*\*[\[(]"  # ADV-W27-006 .open(*['w'])/.open(*('w',)) star-unpack
     r"|zipfile\s*\.\s*(?:ZipFile|PyZipFile|Path)\s*\([^)]*\*[\[(][^)]*[wxa]"  # ADV-W27-007 W38-007 W38-003 ZipFile/PyZipFile *[w] star-unpack (dot-ws)
     r"|zipfile\s*\.\s*(?:ZipFile|PyZipFile|Path)\s*\([^)]*\*\*\s*(?:\{[^}]*mode[^}]*[wxa]|dict\s*\([^)]*mode\s*=)"  # ADV-W27-007 W38-007 W38-003 ZipFile/PyZipFile **{mode:w} (dot-ws)
-    r"|tarfile\s*\.\s*(?:open|TarFile|TarFile\s*\.\s*open)\s*\([^\n]*,[\s\S]{0,20}[\x27\x22][wxa][^)]*\)"  # ADV-W27-009 W38-002 W38-003 W39-004 W40-002 W43 W45 tarfile write-mode (cross-newline comma gap)
+    r"|tarfile\s*\.\s*(?:open|TarFile|TarFile\s*\.\s*open)\s*\([ \t\n]?[^\n]*,[\s\S]{0,20}[\x27\x22][wxa][^)]*\)"  # ADV-W27-009 W38-002 W38-003 W39-004 W40-002 W43 W45 W46 tarfile write-mode (cross-newline comma gap, newline-after-( absorber)
+    r"|tarfile\s*\.\s*(?:open|TarFile|TarFile\s*\.\s*open)\s*\([ \t\n]?[^\n]*mode\s*=[\s\S]{0,20}[\x27\x22][wxa]"  # ADV-W45-002 W46 tarfile mode= keyword (mode-first kwargs fix)
     r"|\.subprocess_(?:exec|shell)\s*\("  # ADV-W27-011 asyncio loop.subprocess_exec/shell
     r"|\bopen\s*\([^)]{0,300}mode\s*=\s*[\[(][^\])]*[wax+]"  # ADV-W28-003 W29-002 open(mode=['w'][0]) kw-subscript incl r+
     r"|\.open\s*\(\s*[\[(][^\])]*[wax+]"  # ADV-W28-003 W29-002 Path.open(['w'][0]) positional-subscript incl r+
@@ -164,9 +166,12 @@ _RENAME_PRIMITIVES = re.compile(
     r"|sqlite3\s*\.\s*connect\s*\("  # ADV-W32-010 sqlite3.connect creates file
     r"|\bshelve\s*\.\s*open\s*\("  # ADV-W32-010 shelve.open creates file
     r"|\bshelve\s*\.\s*DbfilenameShelf\s*\("  # ADV-W36-007 shelve.DbfilenameShelf direct constructor creates shelf file
-    r"|(?:bz2\s*\.\s*BZ2File|lzma\s*\.\s*LZMAFile)\s*\([^\n]*,[\s\S]{0,20}[\x27\x22][wxa]"  # ADV-W32-010 W33-006 W39-006 W40-002 W43 W45 bz2/lzma write-mode (cross-newline comma gap)
-    r"|dbm\s*\.\s*open\s*\([^\n]*,[\s\S]{0,20}[\x27\x22][ncw]"  # ADV-W32-010 W40-001 W43 W45 dbm.open create/write modes (cross-newline comma gap; r=read excluded)
-    r"|dbm\s*\.\s*(?:gnu|dumb|ndbm|sqlite3)\s*\.\s*open\s*\([^\n]*,[\s\S]{0,20}[\x27\x22][ncw]"  # ADV-W33-005 W36-002 W40-001 W43 W45 dbm.gnu/dumb/ndbm/sqlite3.open (cross-newline comma gap; r=read excluded)
+    r"|(?:bz2\s*\.\s*BZ2File|lzma\s*\.\s*LZMAFile)\s*\([ \t\n]?[^\n]*,[\s\S]{0,20}[\x27\x22][wxa]"  # ADV-W32-010 W33-006 W39-006 W40-002 W43 W45 W46 bz2/lzma write-mode (cross-newline comma gap, newline-after-( absorber)
+    r"|(?:bz2\s*\.\s*BZ2File|lzma\s*\.\s*LZMAFile)\s*\([ \t\n]?[^\n]*mode\s*=[\s\S]{0,20}[\x27\x22][wxa]"  # ADV-W45-002 W46 bz2/lzma mode= keyword (mode-first kwargs fix)
+    r"|dbm\s*\.\s*open\s*\([ \t\n]?[^\n]*,[\s\S]{0,20}[\x27\x22][ncw]"  # ADV-W32-010 W40-001 W43 W45 W46 dbm.open create/write modes (cross-newline comma gap, newline-after-( absorber; r=read excluded)
+    r"|dbm\s*\.\s*open\s*\([ \t\n]?[^\n]*flag\s*=[\s\S]{0,20}[\x27\x22][ncw]"  # ADV-W45-002 W46 dbm.open flag= keyword (mode-first kwargs fix; r=read excluded)
+    r"|dbm\s*\.\s*(?:gnu|dumb|ndbm|sqlite3)\s*\.\s*open\s*\([ \t\n]?[^\n]*,[\s\S]{0,20}[\x27\x22][ncw]"  # ADV-W33-005 W36-002 W40-001 W43 W45 W46 dbm.gnu/dumb/ndbm/sqlite3.open (cross-newline comma gap, newline-after-( absorber; r=read excluded)
+    r"|dbm\s*\.\s*(?:gnu|dumb|ndbm|sqlite3)\s*\.\s*open\s*\([ \t\n]?[^\n]*flag\s*=[\s\S]{0,20}[\x27\x22][ncw]"  # ADV-W45-002 W46 dbm.gnu/dumb/ndbm/sqlite3.open flag= keyword (mode-first kwargs fix; r=read excluded)
     r"|\bos\s*\.\s*mknod\s*\("  # ADV-W32-010 os.mknod creates file
     r"|\(\s*(?:sqlite3\s*\.\s*connect|shelve\s*\.\s*open|shelve\s*\.\s*DbfilenameShelf|bz2\s*\.\s*BZ2File|lzma\s*\.\s*LZMAFile|gzip\s*\.\s*GzipFile|zipfile\s*\.\s*(?:ZipFile|PyZipFile)|tarfile\s*\.\s*(?:TarFile|TarFile\s*\.\s*open)|dbm\s*\.\s*open|dbm\s*\.\s*(?:gnu|dumb|ndbm|sqlite3)\s*\.\s*open)\s*\)\s*\("  # ADV-W34-002 W35-002 W35-005 W36-002 W36-005 W36-007 W38-007 W38-008 paren-wrap constructors + PyZipFile + TarFile.open classmethod
     r"|\[\s*(?:sqlite3\s*\.\s*connect|shelve\s*\.\s*open|shelve\s*\.\s*DbfilenameShelf|bz2\s*\.\s*BZ2File|lzma\s*\.\s*LZMAFile|gzip\s*\.\s*GzipFile|zipfile\s*\.\s*(?:ZipFile|PyZipFile)|tarfile\s*\.\s*(?:TarFile|TarFile\s*\.\s*open)|dbm\s*\.\s*open|dbm\s*\.\s*(?:gnu|dumb|ndbm|sqlite3)\s*\.\s*open)\s*\]\s*\[[^\]]*\]\s*\("  # ADV-W34-002 W35-002 W35-005 W36-002 W36-005 W36-007 W38-007 W38-008 list-wrap constructors + PyZipFile + TarFile.open classmethod
