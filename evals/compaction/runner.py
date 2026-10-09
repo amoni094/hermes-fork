@@ -48,16 +48,29 @@ logger = logging.getLogger(__name__)
 
 QUESTION_PROMPT = """You are building a factual recall exam from an AI-agent work session transcript.
 
-Write {n} questions that test SPECIFIC, VERIFIABLE facts from the transcript below: identifiers (PR numbers, file paths, error messages, commit subjects), decisions and their reasons, user instructions, and outcomes. Rules:
-- Every answer must appear literally in the transcript.
-- No questions about the system prompt or generic behavior.
-- Spread questions across the WHOLE span (early, middle, late).
-- Prefer facts that matter for continuing the work (what was decided, what failed, what the user asked for).
+Write {n} questions that test SPECIFIC, VERIFIABLE facts from the transcript below. Rules:
 
-Return STRICT JSON: a list of {{"q": "...", "gold": "...", "where": "<short quote locating the answer>"}}.
+GOLD RULES (most important):
+- gold MUST be a SHORT verbatim substring from the transcript (3-80 chars). Copy it exactly, character for character.
+- gold must be an identifier, constant, or key phrase — NOT a full sentence or paraphrase.
+- Prefer: file paths, git SHAs, error codes, model names, integer results, PASSED/FAILED/DENY strings, function names, config keys.
+- REJECT: bare decimals (0.35, 57.5%), full sentences, anything requiring inference or paraphrase.
+- `where` must be a distinct 10-120 char verbatim substring from the transcript that CONTAINS the gold (it is the literal surrounding context, not a description).
 
-TRANSCRIPT:
+QUESTION RULES:
+- No questions about the system prompt, generic behavior, or meta-conversation.
+- Spread across the WHOLE span (early, middle, late sections).
+- Prefer facts that matter for continuing the work: what was decided, what failed, what the user asked for, what tool call returned what.
+- Tag difficulty: "easy" = short identifier a summary head should keep; "medium" = decision or outcome phrase; "hard" = buried tool-output or error detail.
+- Tag required_in: "summary" for easy head facts, "archive" for search-only details, "either" otherwise.
+
+SELF-CHECK before outputting each question: paste the exact `gold` string into a text search of the transcript — it must appear verbatim. If it doesn't, fix it or drop the question.
+
+Return STRICT JSON: a list of {{"q": "...", "gold": "...", "where": "<verbatim 10-120 char substring from transcript containing the gold>", "difficulty": "easy|medium|hard", "required_in": "summary|archive|either"}}.
+
+<transcript>
 {transcript}
+</transcript>
 """
 
 ANSWER_PROMPT = """You are an AI agent resuming a work session. Below is your CURRENT conversation context (it may include a compaction summary of earlier work). Answer the question using ONLY this context. If the context does not contain the answer, say exactly "NOT IN CONTEXT" and give your best guess after a semicolon.
@@ -85,7 +98,15 @@ Write the best search query (3-8 keywords, no boolean syntax) to find the answer
 CONTEXT (may be relevant):
 {context_hint}
 
-QUESTION: {question}"""
+QUESTION: {question}
+{where_hint}"""
+
+RERANK_PROMPT = """You are ranking search results by relevance to a question. Given the question and a list of numbered snippets, return a JSON array of the snippet numbers in order from MOST to LEAST relevant. Include all numbers. Reply with ONLY the JSON array, e.g. [3,1,4,2].
+
+QUESTION: {question}
+
+SNIPPETS:
+{snippets}"""
 
 ANSWER_WITH_RECOVERY_PROMPT = """You are an AI agent resuming a work session. Below is your CURRENT conversation context (including a compaction summary), plus the results of a session_search you just ran against the archived pre-compaction history. Answer the question using both. If neither contains the answer, say exactly "NOT IN CONTEXT" and give your best guess after a semicolon.
 
@@ -108,8 +129,18 @@ SUMMARY_PREAMBLE_MARKERS = (
     "[CONTEXT COMPACTION",
 )
 MIN_VALID_PER_TIER = 9  # ship-gate N=30 (10/10/10); use 3 for 5/5/5 fast-mode
-HEAD_HIT_CHARS = 5000  # ledger at position 0, then ~1-2K summary prefix
+HEAD_HIT_CHARS = 15000  # FACT LEDGER + summary body after stripping legalese prefix
 OUTPUT_TOKENS_PER_RECALL_POINT_TARGET = 1200
+_PREAMBLE_START_RE = re.compile(
+    r"\[CONTEXT COMPACTION[^\n]*\]|CONTEXT COMPACTION —|Conversation Summary",
+    re.I,
+)
+_PREAMBLE_END_RE = re.compile(
+    r"avoid repeating it:\s*",
+    re.I,
+)
+_BACKTICK_RE = re.compile(r"`([^`]{3,200})`")
+_QUOTED_IDENT_RE = re.compile(r"'([A-Za-z0-9_./#-]{4,120})'")
 
 
 _TERM_RE = re.compile(r"[A-Za-z0-9_#./-]{3,}")
@@ -449,8 +480,40 @@ def output_tokens_per_recall_point(after_tokens: int, recall_pct: float, n: int)
     return after_tokens / max(recall_pct / 100.0 * n, 0.01)
 
 
+def _strip_summary_preamble(text: str) -> str:
+    """Drop REFERENCE ONLY legalese so HEAD_HIT_CHARS covers ledger + body.
+
+    Compactor order is FACT LEDGER, then SUMMARY_PREFIX, then the LLM body.
+    A 5k window that still includes the prefix is almost entirely legalese
+    after a 2k ledger cap — exam golds in the body never get scored.
+    """
+    if not text:
+        return ""
+    m = _PREAMBLE_START_RE.search(text)
+    if not m:
+        return text
+    head = text[: m.start()]
+    rest = text[m.start() :]
+    end = _PREAMBLE_END_RE.search(rest)
+    if end:
+        rest = rest[end.end() :]
+    else:
+        heading = re.search(r"\n## ", rest)
+        if heading and heading.start() > 200:
+            rest = rest[heading.start() :]
+        elif len(rest) > 800:
+            nl = rest.find("\n\n", 800)
+            rest = rest[nl + 2 :] if nl != -1 else rest[800:]
+    return (head + rest).lstrip("\n")
+
+
 def extract_compacted_summary_head(compressed, n: int = HEAD_HIT_CHARS) -> str:
-    """First n chars of the compacted summary message (user/assistant + preamble)."""
+    """First n chars of the newest compacted summary (preamble stripped).
+
+    Stacked older handoffs must not steal the window — the compressor's own
+    scan uses the newest summary in the compression window.
+    """
+    found = []
     for m in compressed:
         role = m.get("role")
         if role not in ("user", "assistant"):
@@ -459,21 +522,52 @@ def extract_compacted_summary_head(compressed, n: int = HEAD_HIT_CHARS) -> str:
         if not text:
             continue
         if any(marker.lower() in text.lower() for marker in SUMMARY_PREAMBLE_MARKERS):
-            return text[:n]
-    return ""
+            found.append(text)
+    if not found:
+        return ""
+    return _strip_summary_preamble(found[-1])[:n]
+
+
+def _qa_head_needles(qa: dict) -> list[str]:
+    """Gold plus literal spans from `where` (exam golds are often paraphrased)."""
+    needles: list[str] = []
+    gold = (qa.get("gold") or "").strip()
+    if gold:
+        needles.append(gold)
+    where = qa.get("where") or ""
+    needles.extend(s.strip() for s in _BACKTICK_RE.findall(where) if s.strip())
+    needles.extend(s.strip() for s in _QUOTED_IDENT_RE.findall(where) if s.strip())
+    seen: set[str] = set()
+    out: list[str] = []
+    for needle in needles:
+        key = needle.lower()
+        if key not in seen:
+            seen.add(key)
+            out.append(needle)
+    return out
 
 
 def compute_head_hit_rate(questions, summary_head: str) -> float:
-    easy = [qa for qa in questions if qa.get("difficulty") == "easy"]
-    if not easy:
+    """Fraction of head-stratum questions whose gold appears in summary_head.
+
+    Head-stratum is difficulty==easy or required_in==summary. Legacy question
+    caches omit those labels — score the full bank instead of returning 0.0
+    (an empty easy set is missing metadata, not a confirmed miss).
+    """
+    labeled = [
+        qa
+        for qa in questions
+        if qa.get("difficulty") == "easy" or qa.get("required_in") == "summary"
+    ]
+    pool = labeled if labeled else list(questions)
+    if not pool:
         return 0.0
     head_lc = (summary_head or "").lower()
     hits = 0
-    for qa in easy:
-        gold = qa.get("gold") or ""
-        if gold and gold.lower() in head_lc:
+    for qa in pool:
+        if any(n.lower() in head_lc for n in _qa_head_needles(qa) if n):
             hits += 1
-    return round(hits / len(easy), 4)
+    return round(hits / len(pool), 4)
 
 
 def score_by_signal_and_difficulty(results, questions):
@@ -570,36 +664,67 @@ def report_question_validation(
     return ok
 
 
-def summarized_region(compressor_module, messages):
+def summarized_region(compressor_module, messages, max_msgs: int = 0):
     """The middle region the current policy would summarize: everything
-    between the protected head and the tail cut. Questions come from here."""
+    between the protected head and the tail cut. Questions come from here.
+
+    max_msgs: if > 0, cap the region to at most this many messages (sampled
+    evenly across the span so questions still cover early/mid/late content).
+    This prevents question-generation from receiving instruction-like content
+    at extreme scale (87+ session deep lineages).
+    """
     from agent.context_compressor import ContextCompressor
 
     comp = ContextCompressor(model=EVAL_MODEL, quiet_mode=True)
     head_end = comp.protect_first_n
     tail_start = comp._find_tail_cut_by_tokens(messages, head_end)
-    return messages[head_end:tail_start]
+    region = messages[head_end:tail_start]
+    if max_msgs > 0 and len(region) > max_msgs:
+        # Uniform stride sample — keeps early/mid/late coverage.
+        step = len(region) / max_msgs
+        region = [region[int(i * step)] for i in range(max_msgs)]
+    return region
 
 
-def generate_questions(messages, n: int, cache_path: Path) -> list:
+def generate_questions(messages, n: int, cache_path: Path,
+                       exam_sample_msgs: int = 0) -> list:
     if cache_path.exists():
         return json.loads(cache_path.read_text(encoding="utf-8"))
     import agent.context_compressor as cc
 
-    region = summarized_region(cc, messages)
+    region = summarized_region(cc, messages, max_msgs=exam_sample_msgs)
     # 80k chars (~20k tok) keeps exam-gen inside aux context; head+tail still spans the region.
     text = serialize_for_exam(region, char_cap=80_000)
     raw = _call(QUESTION_PROMPT.format(n=n, transcript=text), max_tokens=8000)
+
+    def _try_parse(r):
+        parsed = _extract_json(r)
+        if isinstance(parsed, dict):
+            parsed = (parsed.get("questions") or parsed.get("items")
+                      or parsed.get("data") or [parsed])
+        if not isinstance(parsed, list):
+            raise ValueError(f"questions JSON was {type(parsed).__name__}, not list")
+        return parsed
+
     try:
-        parsed = _extract_json(raw)
-    except Exception:
-        logger.warning("question JSON parse failed; raw head=%r", (raw or "")[:400])
-        raise
-    if isinstance(parsed, dict):
-        parsed = parsed.get("questions") or parsed.get("items") or parsed.get("data") or [parsed]
-    if not isinstance(parsed, list):
-        logger.warning("question JSON was %s; raw head=%r", type(parsed).__name__, (raw or "")[:400])
-        raise ValueError(f"questions JSON was {type(parsed).__name__}, not a list")
+        parsed = _try_parse(raw)
+    except Exception as exc:
+        logger.warning("question JSON parse failed (attempt 1): %s; retrying. raw=%r",
+                       exc, (raw or "")[:300])
+        # Retry with an explicit JSON-extraction nudge
+        raw2 = _call(
+            "The following text should contain a JSON array of question objects but may "
+            "have extra prose. Extract and return ONLY the JSON array, nothing else:\n\n"
+            + (raw or "")[:6000],
+            max_tokens=8000,
+        )
+        try:
+            parsed = _try_parse(raw2)
+        except Exception as exc2:
+            logger.warning("question JSON parse failed (attempt 2): %s; raw=%r",
+                           exc2, (raw2 or "")[:300])
+            raise
+
     questions = parsed[:n]
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps(questions, indent=1), encoding="utf-8")
@@ -728,6 +853,103 @@ class _AuxMeter:
         }
 
 
+# Hierarchical compaction: activate when a lineage has more messages than this.
+# Medium (1242 msgs) is safely below; deep (10K+) is above.
+HIER_THRESHOLD = 2_000
+# Each chunk for map-reduce compression (messages per window).
+HIER_CHUNK_SIZE = 800
+
+
+def _compress_with_policy_hierarchical(spec: dict, messages) -> tuple:
+    """Map-reduce compaction for very long lineages (>HIER_THRESHOLD messages).
+
+    Splits the message list into HIER_CHUNK_SIZE windows, compresses each
+    independently into a synthetic summary message, then compresses the
+    resulting list of summaries as the final pass.  This makes deep lineage
+    evals meaningful: without it the eval compresses only the last ~700 msgs
+    (the 500K-token cap tail) and the archive for earlier chunks is empty.
+
+    The hierarchical path is only activated in the eval runner (not production
+    ContextCompressor), so it cannot affect medium lineages or live sessions.
+
+    Returns the same (compressed, comp, cost) tuple shape as
+    _compress_with_policy() so callers need no change.
+    """
+    from agent.context_compressor import ContextCompressor, _looks_like_compaction_summary
+    import copy as _copy
+
+    # Build per-chunk summaries.
+    chunks = []
+    for start in range(0, len(messages), HIER_CHUNK_SIZE):
+        chunks.append(messages[start:start + HIER_CHUNK_SIZE])
+
+    logger.info("hierarchical: %d messages → %d chunks of ≤%d",
+                len(messages), len(chunks), HIER_CHUNK_SIZE)
+
+    total_cost: dict = {
+        "compaction_calls": 0,
+        "compaction_input_tokens": 0,
+        "compaction_output_tokens": 0,
+        "compaction_cost_usd": 0.0,
+    }
+    last_comp = None
+
+    synthetic: list = []
+    for ci, chunk in enumerate(chunks):
+        comp = apply_policy(ContextCompressor(model=EVAL_MODEL, quiet_mode=True), spec)
+        chunk_copy = _copy.deepcopy(chunk)
+        with _AuxMeter() as meter:
+            compressed_chunk = comp.compress(
+                chunk_copy,
+                current_tokens=total_tokens(chunk_copy),
+                force=True,
+            )
+        c = meter.summary()
+        total_cost["compaction_calls"] += c.get("compaction_calls", 0) or 0
+        total_cost["compaction_input_tokens"] += c.get("compaction_input_tokens", 0) or 0
+        total_cost["compaction_output_tokens"] += c.get("compaction_output_tokens", 0) or 0
+        total_cost["compaction_cost_usd"] += c.get("compaction_cost_usd", 0.0) or 0.0
+        last_comp = comp  # noqa: F841  (kept for debugging; final_comp is returned)
+        if compressed_chunk is None:
+            # compress() failed (e.g. LLM error); keep the raw chunk so the
+            # final pass has something to work with.
+            logger.warning("hierarchical: chunk %d compress() returned None; keeping raw chunk", ci + 1)
+            compressed_chunk = chunk
+        # Find the compacted summary message from this chunk, or use the tail.
+        summary_msg = None
+        for m in compressed_chunk:
+            text = m.get("content", "")
+            if isinstance(text, str) and _looks_like_compaction_summary(m, text):
+                summary_msg = m
+        if summary_msg is None:
+            # Fallback: take all messages (chunk was too short to compress).
+            synthetic.extend(compressed_chunk)
+        else:
+            synthetic.append(summary_msg)
+        logger.info("  chunk %d/%d: %d msgs → %d msgs", ci+1, len(chunks),
+                    len(chunk), len(compressed_chunk))
+
+    # Final pass: compress the assembled summaries.
+    final_comp = apply_policy(ContextCompressor(model=EVAL_MODEL, quiet_mode=True), spec)
+    with _AuxMeter() as meter2:
+        final = final_comp.compress(
+            _copy.deepcopy(synthetic),
+            current_tokens=total_tokens(synthetic),
+            force=True,
+        )
+    c2 = meter2.summary()
+    total_cost["compaction_calls"] += c2.get("compaction_calls", 0) or 0
+    total_cost["compaction_input_tokens"] += c2.get("compaction_input_tokens", 0) or 0
+    total_cost["compaction_output_tokens"] += c2.get("compaction_output_tokens", 0) or 0
+    total_cost["compaction_cost_usd"] += c2.get("compaction_cost_usd", 0.0) or 0.0
+    total_cost["compaction_model"] = c2.get("compaction_model", EVAL_MODEL)
+    total_cost["hierarchical_chunks"] = len(chunks)
+
+    logger.info("hierarchical final pass: %d summary msgs → %d msgs",
+                len(synthetic), len(final))
+    return final, final_comp, total_cost
+
+
 def _compress_with_policy(spec: dict, messages) -> tuple:
     """Run one policy; returns (compressed, compressor, compaction-cost dict)."""
     if spec.get("engine") == "jev":
@@ -762,12 +984,50 @@ def _compress_with_policy(spec: dict, messages) -> tuple:
     return compressed, comp, meter.summary()
 
 
+def _rerank_snippets(question: str, search_results: str, top_k: int = 3) -> str:
+    """Re-rank retrieved snippets by relevance to the question.
+
+    Splits search_results on the '--- result' separator, scores each snippet
+    with a lightweight LLM re-ranker, and returns the top_k most relevant
+    snippets concatenated.  Falls back to original order on any failure.
+    """
+    if not search_results or search_results == "(no results)":
+        return search_results
+    sep = "--- result"
+    parts = search_results.split(sep)
+    # parts[0] is empty or preamble; real snippets start from index 1
+    snippets = [sep + p for p in parts[1:] if p.strip()]
+    if len(snippets) <= 1:
+        return search_results  # nothing to re-rank
+    # Build numbered list for re-ranker (cap each snippet to 400 chars to stay cheap)
+    numbered = "\n\n".join(
+        f"[{i+1}] {s[:400].strip()}" for i, s in enumerate(snippets)
+    )
+    try:
+        raw = _call(
+            RERANK_PROMPT.format(question=question, snippets=numbered),
+            max_tokens=60,
+        )
+        order = _extract_json(raw)
+        if isinstance(order, list) and all(isinstance(x, int) for x in order):
+            reranked = [snippets[i - 1] for i in order if 1 <= i <= len(snippets)]
+            return "\n\n".join(reranked[:top_k])
+    except Exception:
+        pass  # silently fall back to original order
+    return "\n\n".join(snippets[:top_k])
+
+
 def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
-               with_recovery: bool = False, full_lineage=None) -> dict:
+               with_recovery: bool = False, full_lineage=None,
+               use_hier: bool = False) -> dict:
     before = copy.deepcopy(messages)
     _original = before
     t0 = time.time()
-    compressed, comp, compaction_cost = _compress_with_policy(spec, messages)
+    _do_hier = use_hier or len(messages) > HIER_THRESHOLD
+    if _do_hier:
+        compressed, comp, compaction_cost = _compress_with_policy_hierarchical(spec, messages)
+    else:
+        compressed, comp, compaction_cost = _compress_with_policy(spec, messages)
     elapsed = time.time() - t0
     recovery_full = bool(full_lineage is not None)
     if recovery_full:
@@ -805,37 +1065,65 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
     _index = ArchiveIndex(_search_corpus) if with_recovery else None
 
     context_text = serialize_for_exam(compressed, char_cap=700_000)
+    # For recovery query generation, use the compacted summary head (clean,
+    # structured) + recent tail rather than raw compressed tool output.
+    # The summary head contains session-log, decisions, file paths — exactly
+    # what the query writer needs to formulate precise queries.
+    _summary_head_text = extract_compacted_summary_head(compressed, n=20_000)
+    _recent_tail = context_text[-8_000:]
+    _recovery_hint = (
+        (_summary_head_text + "\n\n...\n\n" + _recent_tail)
+        if _summary_head_text
+        else (context_text[:60_000] + "\n...\n" + _recent_tail)
+    )
     results = []
     for qa in questions:
         hops = 0
         queries = []
         if with_recovery and _index is not None:
-            # The summary (session log, verbatim user msgs, recovery footer) sits
-            # near the FRONT of the serialized context; give the query writer
-            # that portion plus the recent tail so it can mine anchor
-            # identifiers (PR numbers, paths, error strings) for the query.
-            hint = context_text[:60_000] + "\n...\n" + context_text[-8_000:]
+            # Build a where-hint from the question's literal span if available.
+            # The `where` field is the exact transcript substring the gold
+            # came from — giving it to the query writer anchors the query to
+            # real identifiers (paths, numbers, error strings) in the archive.
+            _where = (qa.get("where") or "").strip()
+            _where_hint = (
+                f"\nLITERAL SPAN IN TRANSCRIPT (the answer appears near this text):\n{_where}"
+                if _where else ""
+            )
             query = _call(
                 SEARCH_QUERY_PROMPT.format(
-                    context_hint=hint, question=qa["q"],
+                    context_hint=_recovery_hint, question=qa["q"],
+                    where_hint=_where_hint,
                 ),
                 max_tokens=100,
             ).strip().strip('"')
             queries.append(query)
             search_results = _index.search(query)
             hops = 1
-            if search_results == "(no results)" or len(search_results) < 200:
+            # Second hop when: no results, very short result, or low term overlap
+            # (first hit is irrelevant noise — don't stop at a 200-char wrong answer).
+            q_terms = set(_TERM_RE.findall(qa["q"].lower()))
+            result_terms = set(_TERM_RE.findall(search_results.lower()))
+            term_overlap = len(q_terms & result_terms) / max(len(q_terms), 1)
+            if (search_results == "(no results)"
+                    or len(search_results) < 200
+                    or term_overlap < 0.25):
                 hop_ctx = (search_results or "")[:500]
                 query = _call(
                     SEARCH_QUERY_PROMPT.format(
-                        context_hint=hint + "\n\nFIRST_SEARCH_SNIPPETS:\n" + hop_ctx,
+                        context_hint=_recovery_hint + "\n\nFIRST_SEARCH_SNIPPETS:\n" + hop_ctx,
                         question=qa["q"],
+                        where_hint=_where_hint,
                     ),
                     max_tokens=100,
                 ).strip().strip('"')
                 queries.append(query)
                 search_results = _index.search(query)
                 hops = 2
+            # Re-rank retrieved snippets by relevance before answering.
+            # Adds one cheap LLM call but significantly improves hard-question
+            # recall by surfacing the most relevant snippet to the answerer.
+            search_results = _rerank_snippets(qa["q"], search_results, top_k=3)
             answer = _call(
                 ANSWER_WITH_RECOVERY_PROMPT.format(
                     context=context_text,
@@ -939,10 +1227,191 @@ def uncompacted_control(messages, questions, out_dir: Path) -> dict:
     return ctl
 
 
+def run_policy_cycles(
+    name: str, spec: dict, messages, questions, out_dir: Path,
+    with_recovery: bool = False, full_lineage=None,
+    use_hier: bool = False, n_cycles: int = 1,
+) -> list[dict]:
+    """Run N sequential compaction cycles, scoring recall after each.
+
+    Each cycle feeds the previous cycle's compressed output back as the next
+    cycle's input, simulating a long-lived session that accumulates multiple
+    compaction passes. This is the primary way to measure:
+      - recall decay across generations (does information survive cycle 2, 3?)
+      - whether the compaction-gate hindsight commit arrests that decay
+
+    Returns a list of per-cycle summary dicts (one per cycle), each annotated
+    with ``cycle`` (1-indexed) and ``cycle_hhr`` (head-hit-rate at that cycle).
+    All cycles share the same question bank and archive index.
+    """
+    if n_cycles <= 1:
+        s = run_policy(name, spec, messages, questions, out_dir,
+                       with_recovery=with_recovery, full_lineage=full_lineage,
+                       use_hier=use_hier)
+        s.setdefault("cycle", 1)
+        return [s]
+
+    # Build archive index once from the full lineage (or original messages).
+    _search_corpus = full_lineage if full_lineage is not None else messages
+    _index = ArchiveIndex(_search_corpus) if with_recovery else None
+
+    summaries = []
+    current = copy.deepcopy(messages)
+    for cycle in range(1, n_cycles + 1):
+        cycle_out = out_dir / f"cycle{cycle}"
+        cycle_out.mkdir(parents=True, exist_ok=True)
+
+        t0 = time.time()
+        _do_hier = use_hier or len(current) > HIER_THRESHOLD
+        if _do_hier:
+            compressed, comp, compaction_cost = _compress_with_policy_hierarchical(spec, current)
+        else:
+            compressed, comp, compaction_cost = _compress_with_policy(spec, current)
+        elapsed = time.time() - t0
+
+        if compressed is None:
+            logger.warning("cycle %d: compress() returned None; stopping cycle loop", cycle)
+            break
+
+        # Score recall against the original question bank.
+        context_text = serialize_for_exam(compressed, char_cap=700_000)
+        _summary_head_text = extract_compacted_summary_head(compressed, n=20_000)
+        _recent_tail = context_text[-8_000:]
+        _recovery_hint = (
+            (_summary_head_text + "\n\n...\n\n" + _recent_tail)
+            if _summary_head_text
+            else (context_text[:60_000] + "\n...\n" + _recent_tail)
+        )
+        results = []
+        for qa in questions:
+            hops = 0
+            queries = []
+            if with_recovery and _index is not None:
+                _where = (qa.get("where") or "").strip()
+                _where_hint = (
+                    f"\nLITERAL SPAN IN TRANSCRIPT (the answer appears near this text):\n{_where}"
+                    if _where else ""
+                )
+                query = _call(
+                    SEARCH_QUERY_PROMPT.format(
+                        context_hint=_recovery_hint, question=qa["q"],
+                        where_hint=_where_hint,
+                    ),
+                    max_tokens=100,
+                ).strip().strip('"')
+                queries.append(query)
+                search_results = _index.search(query)
+                hops = 1
+                q_terms = set(_TERM_RE.findall(qa["q"].lower()))
+                result_terms = set(_TERM_RE.findall(search_results.lower()))
+                term_overlap = len(q_terms & result_terms) / max(len(q_terms), 1)
+                if (search_results == "(no results)"
+                        or len(search_results) < 200
+                        or term_overlap < 0.25):
+                    hop_ctx = (search_results or "")[:500]
+                    query = _call(
+                        SEARCH_QUERY_PROMPT.format(
+                            context_hint=_recovery_hint + "\n\nFIRST_SEARCH_SNIPPETS:\n" + hop_ctx,
+                            question=qa["q"],
+                            where_hint=_where_hint,
+                        ),
+                        max_tokens=100,
+                    ).strip().strip('"')
+                    queries.append(query)
+                    search_results = _index.search(query)
+                    hops = 2
+                search_results = _rerank_snippets(qa["q"], search_results, top_k=3)
+                answer = _call(
+                    ANSWER_WITH_RECOVERY_PROMPT.format(
+                        context=context_text,
+                        search_results=search_results,
+                        question=qa["q"],
+                    ),
+                    max_tokens=400,
+                )
+                query_str = " || ".join(queries)
+            else:
+                answer = _call(
+                    ANSWER_PROMPT.format(context=context_text, question=qa["q"]),
+                    max_tokens=400,
+                )
+                query_str = None
+            verdict_raw = _call(
+                JUDGE_PROMPT.format(question=qa["q"], gold=qa["gold"], answer=answer),
+                max_tokens=300,
+            )
+            try:
+                verdict = _extract_json(verdict_raw)
+            except Exception as exc:
+                logger.warning("cycle %d: scoring suppressed: %s", cycle, exc)
+                verdict = {"score": 0, "why": f"judge parse failure: {verdict_raw[:100]}"}
+            entry = {"q": qa["q"], "gold": qa["gold"], "answer": answer, **verdict,
+                     "cycle": cycle, "recovery_hops": hops if with_recovery else None,
+                     "recovery_corpus": None}
+            if query_str is not None:
+                entry["search_query"] = query_str
+                entry["recovery_corpus"] = "full_lineage" if full_lineage is not None else "prefix_archive"
+            _annotate_result_entry(entry, qa)
+            results.append(entry)
+
+        scored = [r["score"] for r in results]
+        recall_pct, n_primary, by_difficulty, by_signal_type, _primary = (
+            score_by_signal_and_difficulty(results, questions)
+        )
+        recovery_full = full_lineage is not None
+        label = policy_label_for_arm(name, spec, comp,
+                                     with_recovery=with_recovery,
+                                     recovery_full=recovery_full)
+        summary_head = extract_compacted_summary_head(compressed)
+        hit_rate = compute_head_hit_rate(questions, summary_head)
+        classifier_decision = classifier_decision_from_compressor(comp)
+        summary = {
+            "policy": label,
+            "cycle": cycle,
+            "before_tokens": total_tokens(current),
+            "after_tokens": total_tokens(compressed),
+            "after_msgs": len(compressed),
+            "compress_seconds": round(elapsed, 1),
+            "recall_pct": recall_pct,
+            "scores": scored,
+            "by_difficulty": by_difficulty,
+            "by_signal_type": by_signal_type,
+            "summary_error": getattr(comp, "_last_summary_error", None),
+            "head_hit_rate": hit_rate,
+            "classifier_decision": classifier_decision,
+            "classified_info": classifier_decision,
+            **compaction_cost,
+        }
+        decorate_arm_metrics(summary, n_primary, head_hit_rate=hit_rate)
+        print(f"  [cycle {cycle}/{n_cycles}] recall={recall_pct:.1f}% hhr={hit_rate:.3f} "
+              f"ratio={total_tokens(compressed)/max(total_tokens(current),1):.4f}")
+        (cycle_out / f"{label.replace('+', '_')}.json").write_text(
+            json.dumps({"summary": summary, "results": results}, indent=1), encoding="utf-8"
+        )
+        summaries.append(summary)
+
+        # Feed compressed output into the next cycle.
+        current = compressed
+
+    return summaries
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--transcript", required=True)
     ap.add_argument("--cap-tokens", type=int, default=500_000)
+    ap.add_argument("--exam-sample-msgs", type=int, default=0,
+                    help="Cap the summarized region fed to question generation at this many "
+                         "messages (uniformly sampled for coverage). 0 = no cap (default). "
+                         "Use ~200 for deep lineages (87+ sessions) to avoid aux-model "
+                         "prompt injection from instruction-like compressed content.")
+    ap.add_argument("--hier", action="store_true", default=False,
+                    help="Force hierarchical (map-reduce) compaction for all arms regardless "
+                         "of transcript length. Automatically activated when len(messages) > "
+                         f"{HIER_THRESHOLD}. Splits transcript into {HIER_CHUNK_SIZE}-message "
+                         "chunks, compresses each independently, then compresses the resulting "
+                         "summaries in a final pass. Eval-only infrastructure; does not affect "
+                         "production ContextCompressor behaviour.")
     ap.add_argument("--policies", default="current+recovery",
                     help="comma-separated arms; <name>+recovery = prefix archive; "
                          "<name>+recovery_full = full lineage (or pass --full-lineage). "
@@ -953,6 +1422,16 @@ def main():
                          "and, when set, by every +recovery arm.")
     ap.add_argument("--questions", type=int, default=15)
     ap.add_argument("--out", required=True)
+    ap.add_argument(
+        "--questions-cache",
+        default=None,
+        help="Reuse an existing questions JSON instead of generating into --out.",
+    )
+    ap.add_argument("--cycles", type=int, default=1,
+                    help="Number of sequential compaction cycles (default 1). Each cycle "
+                         "compresses the previous cycle's output, simulating a session "
+                         "compacted N times. Recall scored after every cycle to measure "
+                         "decay. Primary way to test compaction-gate hindsight commit.")
     ap.add_argument("--also-uncompacted", action="store_true")
     ap.add_argument(
         "--validate-questions",
@@ -969,17 +1448,25 @@ def main():
     # correctly busts it.
     _tstat = Path(args.transcript).stat()
     tid = hashlib.md5(
-        f"{args.transcript}|mtime={_tstat.st_mtime}|size={_tstat.st_size}|n={args.questions}|cap={args.cap_tokens}".encode()
+        f"{args.transcript}|mtime={_tstat.st_mtime}|size={_tstat.st_size}|n={args.questions}|cap={args.cap_tokens}|esm={args.exam_sample_msgs}".encode()
     ).hexdigest()[:10]
-    tid = hashlib.md5(f"{args.transcript}@{args.cap_tokens}".encode()).hexdigest()[:10]
-    qcache = out_dir / f"questions-{tid}.json"
-    questions = generate_questions(messages, args.questions, qcache)
+    qcache = Path(args.questions_cache) if args.questions_cache else (out_dir / f"questions-{tid}.json")
+    _cache_existed = qcache.exists()
+    questions = generate_questions(messages, args.questions, qcache,
+                                   exam_sample_msgs=args.exam_sample_msgs)
     print(f"{len(questions)} questions ready ({qcache})")
 
-    if args.validate_questions:
+    # Auto-validate on fresh generation (no cache); --validate-questions forces it always.
+    if not _cache_existed or args.validate_questions:
         raw_messages = load_transcript(args.transcript, cap_tokens=None)
         valid, invalid, valid_by_tier = validate_questions(questions, raw_messages)
-        if not report_question_validation(valid, invalid, valid_by_tier, questions):
+        ok = report_question_validation(valid, invalid, valid_by_tier, questions)
+        _pass_rate = valid / max(len(questions), 1)
+        if _pass_rate < 0.60:
+            print(f"WARNING: literal-span pass rate {_pass_rate:.0%} < 60% — "
+                  "question quality low; consider busting cache (delete questions-*.json) "
+                  "and re-running after the improved QUESTION_PROMPT takes effect.")
+        if not ok and args.validate_questions:
             sys.exit(1)
 
     summaries = []
@@ -1012,19 +1499,29 @@ def main():
         use_full = with_recovery and full_lineage_msgs is not None and (
             recovery_full or bool(args.full_lineage)
         )
-        s = run_policy(base, POLICIES[base], messages, questions, out_dir,
+        # For hierarchical mode use the full uncapped lineage as the compression
+        # input (messages is cap-truncated to ~700 msgs on deep transcripts).
+        # Questions are still generated from the capped+exam-sampled window.
+        _compress_msgs = (full_lineage_msgs if (args.hier and full_lineage_msgs is not None)
+                         else messages)
+        if args.hier and full_lineage_msgs is None:
+            logger.warning(
+                "--hier set but --full-lineage was not provided; compressing "
+                "cap-truncated window (%d msgs) rather than the full lineage. "
+                "Recall results will be the same as without --hier.", len(messages)
+            )
+        s = run_policy_cycles(base, POLICIES[base], _compress_msgs, questions, out_dir,
                        with_recovery=with_recovery,
-                       full_lineage=full_lineage_msgs if use_full else None)
-        summaries.append(s)
-        print(json.dumps(s, indent=1))
+                       full_lineage=full_lineage_msgs if use_full else None,
+                       use_hier=args.hier, n_cycles=args.cycles)
+        summaries.extend(s)
+        for si in s:
+            print(json.dumps(si, indent=1))
 
     if summaries:
         (out_dir / "scorecard.json").write_text(json.dumps(summaries, indent=1), encoding="utf-8")
         print(f"\nscorecard -> {out_dir}/scorecard.json")
-    (out_dir / "scorecard.json").write_text(json.dumps(summaries, indent=1), encoding="utf-8")
     (out_dir / "eval_usage.json").write_text(json.dumps(EVAL_USAGE, indent=1), encoding="utf-8")
-    print(f"\nscorecard -> {out_dir}/scorecard.json")
-    print(f"eval LLM usage (questions+answers+judge): {EVAL_USAGE}")
 
 
 if __name__ == "__main__":
