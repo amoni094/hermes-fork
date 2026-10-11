@@ -72,13 +72,14 @@ def _kl_categorical(q: list, p: list) -> float:
     return max(0.0, kl)
 
 
-def compute_bound(beta_state: dict, delta: float = DELTA) -> dict:
+def compute_bound(beta_state: dict, delta: float = DELTA, m_override=None) -> dict:
     names = sorted(beta_state.keys()) if isinstance(beta_state, dict) else []
     n = len(names)
     if n == 0:
         return {
             'n_skills': 0,
             'm': 0,
+            'm_source': 'events' if m_override is not None else 'obs_sum',
             'emp_error': 0.5,
             'kl_qp': 0.0,
             'gen_error_bound': 1.0,
@@ -100,7 +101,11 @@ def compute_bound(beta_state: dict, delta: float = DELTA) -> dict:
         b = max(b, EPS)
         means.append(a / (a + b))
         obs.append(max(0.0, a + b - 2.0))
+    m_source = 'obs_sum'
     m = max(1.0, sum(obs))
+    if m_override is not None:
+        m = max(1.0, float(m_override))
+        m_source = 'events'
     s = sum(means) or float(n)
     q = [x / s for x in means]
     p = [1.0 / n] * n
@@ -118,6 +123,7 @@ def compute_bound(beta_state: dict, delta: float = DELTA) -> dict:
     return {
         'n_skills': n,
         'm': int(m) if m == int(m) else m,
+        'm_source': m_source,
         'delta': delta,
         'emp_error': round(emp_error, 6),
         'kl_qp': round(kl, 6),
@@ -140,9 +146,32 @@ def run(cache: Path | None = None) -> dict:
     beta = _load_json(beta_path, {})
     if not isinstance(beta, dict):
         beta = {}
-    result = compute_bound(beta)
+    n_events = 0
+    events_candidates = [
+        cache / 'routing-events.jsonl',
+        Path('/var/home/rainbow/.hermes/profiles/fork/cache/routing-events.jsonl'),
+    ]
+    seen_events = set()
+    for events_path in events_candidates:
+        key = str(events_path)
+        if key in seen_events:
+            continue
+        seen_events.add(key)
+        if not events_path.is_file():
+            continue
+        try:
+            n_events = sum(1 for line in events_path.read_text(encoding='utf-8').splitlines() if line.strip())
+            if n_events >= 1:
+                break
+        except OSError:
+            continue
+    if n_events >= 1:
+        result = compute_bound(beta, m_override=n_events)
+    else:
+        result = compute_bound(beta)
     result['ts'] = time.time()
     result['source'] = str(beta_path)
+    result['n_events'] = n_events
     try:
         _atomic_write_json(cache / 'routing-pac-bayes.json', result)
     except Exception:
@@ -193,8 +222,19 @@ def self_test() -> dict:
         st = {f's{i}': {'alpha': 2.0, 'beta': 2.0} for i in range(5)}
         r = compute_bound(st)
         assert r['kl_qp'] < 1e-9
+        assert r.get('m_source') == 'obs_sum'
     except Exception as e:
         failures.append(f'uniform-kl: {e}')
+    # 6. m_override uses event count, not obs_sum
+    try:
+        st = {'a': {'alpha': 9.0, 'beta': 1.0}, 'b': {'alpha': 1.0, 'beta': 9.0}}
+        r = compute_bound(st, m_override=42)
+        assert r['m'] == 42
+        assert r.get('m_source') == 'events'
+        r0 = compute_bound(st)
+        assert r0.get('m_source') == 'obs_sum'
+    except Exception as e:
+        failures.append(f'm-override: {e}')
     return {'self_test': 'PASS' if not failures else 'FAIL', 'n_failures': len(failures), 'failures': failures}
 
 

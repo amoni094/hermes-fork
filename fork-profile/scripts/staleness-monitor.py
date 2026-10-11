@@ -10,6 +10,8 @@ Monitored files and their max-stale thresholds:
   - calibration-log.jsonl: 48h (gate-audit / threshold-updater reads it)
   - skill-beta-state.json: 24h (bandit posteriors must be updated regularly)
   - routing-regret-log.jsonl: 48h (FTRL vs uniform comparison)
+  - msprt-shadow-gate.json: 26h (mSPRT gate calibration)
+  - block-bootstrap-sprt.json: 48h (SPRT A_boot calibration)
 """
 from __future__ import annotations
 import os
@@ -31,29 +33,39 @@ if not _hermes_base.is_dir():
 ALARM_PATH = _hermes_root / "cache" / "staleness-alarms.jsonl"
 CACHE_DIR = _hermes_root / "cache"
 
+# (filename, max_age_hours, label)
 MONITORED = [
-    ("routing-calibration.jsonl", 48 * 3600),
-    ("calibration-log.jsonl",     48 * 3600),
-    ("skill-beta-state.json",     24 * 3600),
-    ("routing-regret-log.jsonl",  48 * 3600),
+    ("routing-calibration.jsonl", 48, "routing calibration"),
+    ("calibration-log.jsonl",     48, "gate-audit / threshold-updater"),
+    ("skill-beta-state.json",     24, "bandit posteriors"),
+    ("routing-regret-log.jsonl",  48, "FTRL vs uniform"),
+    ("msprt-shadow-gate.json",    26, "msprt gate calibration"),
+    ("block-bootstrap-sprt.json", 48, "SPRT A_boot calibration"),
 ]
 
 def main():
     now = time.time()
     alarms = []
     ok = []
-    for fname, max_age_s in MONITORED:
+    for fname, max_age_h, label in MONITORED:
+        max_age_s = max_age_h * 3600
         fpath = CACHE_DIR / fname
         if not fpath.exists():
-            age_str = "MISSING"
-            alarms.append({"file": fname, "issue": "missing", "max_age_h": max_age_s / 3600})
+            alarms.append({
+                "file": fname, "issue": "missing",
+                "max_age_h": max_age_h, "label": label,
+            })
         else:
             age_s = now - fpath.stat().st_mtime
             age_h = age_s / 3600
             if age_s > max_age_s:
-                alarms.append({"file": fname, "issue": "stale", "age_h": round(age_h, 1), "max_age_h": max_age_s / 3600})
+                alarms.append({
+                    "file": fname, "issue": "stale",
+                    "age_h": round(age_h, 1), "max_age_h": max_age_h,
+                    "label": label,
+                })
             else:
-                ok.append(f"{fname} ({age_h:.1f}h old)")
+                ok.append(f"{fname} ({age_h:.1f}h old, {label})")
 
     for entry in ok:
         print(f"[OK] {entry}")

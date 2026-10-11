@@ -13,13 +13,33 @@ Output: compact per-section report with section number, type tag, status
         (STALE / ACTIVE / UNKNOWN), and reason.
 """
 
+import json
+import math
 import os
 import re
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timezone
+from pathlib import Path
 
 MEMORY_PATH = os.path.expanduser("~/.hermes/memories/MEMORY.md")
 STALE_DAYS = 30
+REF_FREQUENT_MIN = 2
+_hermes_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hermes_profile = os.environ.get("HERMES_PROFILE", "")
+_hermes_root = (
+    (_hermes_base / "profiles" / _hermes_profile)
+    if _hermes_profile and "profiles" not in str(_hermes_base)
+    else _hermes_base
+)
+CACHE = _hermes_root / "cache"
+STOPWORDS = {
+    "that", "this", "with", "from", "have", "been", "were", "they", "them",
+    "then", "than", "also", "into", "over", "only", "some", "such", "when",
+    "what", "which", "while", "where", "your", "about", "after", "before",
+    "using", "used", "must", "should", "would", "could", "there", "their",
+    "hermes", "none", "true", "false", "null", "path", "file", "files",
+}
+TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_\-]{3,}")
 
 # Month name → number (for "Month YYYY" pattern)
 MONTH_MAP = {
@@ -91,7 +111,42 @@ def extract_paths(text: str) -> list[str]:
     return paths
 
 
-def classify_section(idx: int, section: str) -> dict:
+def key_terms(section: str, n: int = 10) -> list:
+    counts = {}
+    for tok in TOKEN_RE.findall(section or ""):
+        low = tok.lower()
+        if low in STOPWORDS or low.isdigit():
+            continue
+        counts[low] = counts.get(low, 0) + 1
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return [w for w, _ in ranked[:n]]
+
+
+def load_reference_corpus() -> str:
+    """Session-history proxy: top-level JSON files under profile cache."""
+    cache_dir = _hermes_root / "cache"
+    parts = []
+    try:
+        for p in sorted(cache_dir.glob("*.json")):
+            try:
+                parts.append(p.read_text(encoding="utf-8", errors="ignore"))
+            except OSError:
+                continue
+    except OSError:
+        return ""
+    return "\n".join(parts).lower()
+
+
+def count_references(section: str, corpus: str) -> int:
+    if not corpus:
+        return 0
+    total = 0
+    for t in key_terms(section):
+        total += corpus.count(t)
+    return total
+
+
+def classify_section(idx: int, section: str, corpus: str = "") -> dict:
     """Return a dict describing staleness status for one section."""
     tag_match = RE_TAG.match(section)
     tag = tag_match.group(1) if tag_match else None
@@ -99,6 +154,8 @@ def classify_section(idx: int, section: str) -> dict:
     today = date.today()
     status = "UNKNOWN"
     reasons: list[str] = []
+    ref_freq = count_references(section, corpus)
+    recommended_ttl = int(STALE_DAYS * (1.0 + math.log(1.0 + ref_freq)))
 
     # ── Date staleness check ──────────────────────────────────────────────
     dates = extract_dates(section)
@@ -106,14 +163,16 @@ def classify_section(idx: int, section: str) -> dict:
         oldest = min(dates)
         newest = max(dates)
         age_days = (today - newest).days
-        if age_days > STALE_DAYS:
+        if age_days > recommended_ttl:
             status = "STALE"
             reasons.append(
-                f"newest date {newest} is {age_days}d old (>{STALE_DAYS}d threshold)"
+                f"newest date {newest} is {age_days}d old (>Bayesian TTL {recommended_ttl}d, refs={ref_freq})"
             )
         else:
             status = "ACTIVE"
-            reasons.append(f"newest date {newest} is {age_days}d old")
+            reasons.append(
+                f"newest date {newest} is {age_days}d old (Bayesian TTL {recommended_ttl}d, refs={ref_freq})"
+            )
     else:
         reasons.append("no dates found")
 
@@ -140,12 +199,26 @@ def classify_section(idx: int, section: str) -> dict:
     if status == "UNKNOWN" and not paths and not dates:
         pass  # UNKNOWN stays
 
+    # Berger: a frequently referenced undated fact is stable, not unknown.
+    if status == "UNKNOWN" and ref_freq >= REF_FREQUENT_MIN:
+        status = "ACTIVE"
+        reasons.append(
+            "no dates but reference_frequency=%d (>=%d) => ACTIVE"
+            % (ref_freq, REF_FREQUENT_MIN)
+        )
+
+    first = (section.splitlines()[0].strip() if section else "")[:120]
     return {
         "section": idx + 1,
         "tag": tag or "(none)",
         "status": status,
         "reasons": reasons,
         "preview": section[:80].replace("\n", " "),
+        "reference_frequency": ref_freq,
+        "recommended_ttl_days": recommended_ttl,
+        "key": first or f"section-{idx + 1}",
+        "title": first or f"section-{idx + 1}",
+        "name": tag or first or f"section-{idx + 1}",
     }
 
 
@@ -162,32 +235,41 @@ def main():
         print("No sections found in MEMORY.md.")
         return
 
+    corpus = load_reference_corpus()
     today = date.today()
     print(f"Hermes memory staleness report — {today}  (threshold: {STALE_DAYS} days)")
     print(f"File: {MEMORY_PATH}")
     print(f"Sections found: {len(sections)}")
     print("─" * 70)
 
-    for sec in sections:
-        result = classify_section(sections.index(sec), sec)
+    classified = [classify_section(i, sec, corpus) for i, sec in enumerate(sections)]
+    for result in classified:
         tag_col = f"[{result['tag']}]" if result["tag"] != "(none)" else "(untagged)"
         reason_str = "; ".join(result["reasons"])
         status_icon = {"STALE": "⚠ STALE", "ACTIVE": "✓ ACTIVE", "UNKNOWN": "? UNKNOWN"}[
             result["status"]
         ]
         print(
-            f"§{result['section']:02d}  {tag_col:<14}  {status_icon:<12}  {reason_str}"
+            f"§{result['section']:02d}  {tag_col:<14}  {status_icon:<12}  refs={result['reference_frequency']:<4}  ttl={result['recommended_ttl_days']}d  {reason_str}"
         )
         print(f"     preview: {result['preview']!r}")
         print()
 
-    stale_count = sum(1 for s in sections if classify_section(sections.index(s), s)["status"] == "STALE")
-    active_count = sum(1 for s in sections if classify_section(sections.index(s), s)["status"] == "ACTIVE")
+    stale_count = sum(1 for r in classified if r["status"] == "STALE")
+    active_count = sum(1 for r in classified if r["status"] == "ACTIVE")
     unknown_count = len(sections) - stale_count - active_count
     print("─" * 70)
     print(f"Summary: {active_count} ACTIVE  |  {stale_count} STALE  |  {unknown_count} UNKNOWN")
     if stale_count:
         print("Action: review STALE sections — update facts, correct paths, or evict.")
+
+    CACHE.mkdir(parents=True, exist_ok=True)
+    out_path = CACHE / "memory-staleness.json"
+    out_path.write_text(json.dumps({
+        "sections": classified,
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }, indent=2))
+    print(f"Wrote {out_path}")
 
 
 if __name__ == "__main__":

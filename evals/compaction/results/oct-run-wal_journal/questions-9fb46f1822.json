@@ -1,0 +1,77 @@
+[
+ {
+  "q": "What was the exact SyntaxError message produced when the audit script was first written?",
+  "gold": "SyntaxError: f-string: single '}' is not allowed (line 156, column 77)",
+  "where": "lint output: {\"status\": \"error\", \"output\": \"SyntaxError: f-string: single '}' is not allowed (line 156, column 77)\"}"
+ },
+ {
+  "q": "What is the resolved file path of the advanced audit script being worked on?",
+  "gold": "/var/home/rainbow/.hermes/profiles/fork/cache/scratch/w56_adv_audit.py",
+  "where": "\"resolved_path\": \"/var/home/rainbow/.hermes/profiles/fork/cache/scratch/w56_adv_audit.py\""
+ },
+ {
+  "q": "What was the original problematic line (test case '2k 5 parens') that caused the f-string SyntaxError, and what replaced it?",
+  "gold": "# 2k constructed below without nested f-brace hell",
+  "where": "diff: \"-rec(\\\"2k 5 parens\\\", ...\\n-# fix 2k construction\\n+# 2k constructed below without nested f-brace hell\""
+ },
+ {
+  "q": "What is the maximum number of nested parentheses around a dict key that the checker is expected to block (i.e., the last 'True' expected result for the 2k paren tests)?",
+  "gold": "60",
+  "where": "rec(\"2k 60 parens\", ... True) vs rec(\"2k 61 parens\", ... None)"
+ },
+ {
+  "q": "At what number of space-hash-newline repetitions (2fg KEY_JUNK) does the checker stop blocking (first None result)?",
+  "gold": "30",
+  "where": "ALLOW? 2fg KEY_JUNK space-hash-nl x30 gate=None ms=0.102"
+ },
+ {
+  "q": "What is the total number of test cases run in the audit, and how many were non-OK?",
+  "gold": "total 174 non-ok 0",
+  "where": "===== NON-OK =====\ntotal 174 non-ok 0"
+ },
+ {
+  "q": "What is the expected result (block/allow) for the test case 'W50 ALLOW bare **d'?",
+  "gold": "False",
+  "where": "rec(\"W50 ALLOW bare **d\", \"d={'mode':'w','file':'plugins/evil.py'}; open(**d)\", False)"
+ },
+ {
+  "q": "What is the exact boundary (number of spaces before colon) at which the checker transitions from blocking to not blocking for the '2m spaces' tests?",
+  "gold": "61",
+  "where": "OK blk=True gate=block 2m spaces x60 before colon / OK blk=False gate=None 2m spaces x61 before colon"
+ },
+ {
+  "q": "What gate value does the test '2e gzip 2000-char filename then mode' produce?",
+  "gold": "gate=None",
+  "where": "OK             blk=True  gate=None        0.00ms  2e gzip 2000-char filename then mode"
+ },
+ {
+  "q": "What is the documented reason why b'w' bytes mode is a miss in _ast_has_starstar_write?",
+  "gold": "b'w' bytes mode (Constant bytes, not str; TypeError at runtime anyway)",
+  "where": "Documented misses (unfixable statically): ... - b'w' bytes mode (Constant bytes, not str; TypeError at runtime anyway)"
+ },
+ {
+  "q": "Which W-number fix is credited for handling spread sub-dicts like open(**{**{'mode': 'w'}, ...})?",
+  "gold": "W57-ADV-001",
+  "where": "- Spread sub-dicts: open(**{**{'mode': 'w'}, ...}) (W57-ADV-001)"
+ },
+ {
+  "q": "What does _dict_subscript_lookup do when the key cannot be resolved (Pass 3 / unresolvable key)?",
+  "gold": "fail-closed, scan all values for write mode",
+  "where": "# Pass 3: key found nowhere \u2014 fall through to fail-closed value scan\n    # Unresolvable key: fail-closed, scan all values for write mode"
+ },
+ {
+  "q": "What is the CMT pad spaces threshold (number of spaces) at which the checker stops blocking?",
+  "gold": "2000",
+  "where": "OK blk=True gate=block CMT pad spaces x1999 then mode / OK blk=False gate=None CMT pad spaces x2000 then mode"
+ },
+ {
+  "q": "What fix tag is associated with handling opaque callees like getattr(open,'__call__')(**{...})?",
+  "gold": "W57-ADV-002",
+  "where": "- Opaque callees (Call/Subscript): getattr(open,'__call__')(**{...}) (W57-ADV-002)"
+ },
+ {
+  "q": "What is the file size (in bytes) of the audit script after the successful patch that fixed the SyntaxError?",
+  "gold": "15437",
+  "where": "\"file_size\": 15437 (in the read-file tool response after the successful diff)"
+ }
+]

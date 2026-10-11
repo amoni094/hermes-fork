@@ -43,6 +43,36 @@ SIGMA = 1.0
 A = math.log((1.0 - BETA) / ALPHA)  # log(19)
 B = math.log(BETA / (1.0 - ALPHA))  # log(1/19)
 ERROR_RATE_VETO = 0.10
+N_MIN_POWER = 50
+A_BOOT_TTL_HOURS = 48
+CAL_PATH = _hermes_root / 'cache' / 'block-bootstrap-sprt.json'
+
+
+def _load_a_boot() -> tuple[float | None, bool]:
+    """Load block-bootstrap A. Missing/stale/too-low calibration => None (fail-closed)."""
+    a_wald = math.log((1.0 - BETA) / ALPHA)
+    try:
+        import time
+        data = json.loads(CAL_PATH.read_text(encoding='utf-8'))
+        age_h = (time.time() - CAL_PATH.stat().st_mtime) / 3600
+        if age_h > A_BOOT_TTL_HOURS:
+            return None, False
+        cal = data.get('calibration') if isinstance(data.get('calibration'), dict) else data
+        if not isinstance(cal, dict):
+            cal = data if isinstance(data, dict) else {}
+        raw = cal.get('A_boot', data.get('A_boot') if isinstance(data, dict) else None)
+        if raw is None:
+            return None, False
+        a_boot = float(raw)
+        if a_boot >= a_wald:
+            return a_boot, True
+        return None, False
+    except Exception:
+        return None, False
+
+
+a_effective: float | None = None
+boot_calibrated = False
 
 
 def _atomic_write(path: Path, data: dict) -> None:
@@ -59,12 +89,13 @@ def llr_increment(x: float, mu0: float = MU0, mu1: float = MU1, sigma: float = S
 
 
 def sprt_decision(scores: list[float], alpha: float = ALPHA, beta: float = BETA,
-                  mu0: float = MU0, mu1: float = MU1) -> dict:
-    a = math.log((1.0 - beta) / alpha)
+                  mu0: float = MU0, mu1: float = MU1, a_override=None) -> dict:
+    a = a_override if a_override is not None else math.log((1-beta)/alpha)
     b = math.log(beta / (1.0 - alpha))
     llr = 0.0
     n = 0
     decision = 'CONTINUE'
+    reason = 'sprt'
     for x in scores:
         llr += llr_increment(float(x), mu0=mu0, mu1=mu1)
         n += 1
@@ -74,6 +105,10 @@ def sprt_decision(scores: list[float], alpha: float = ALPHA, beta: float = BETA,
         if llr < b:
             decision = 'REJECT'
             break
+    # ADV-013: power floor uses available sample size, not Wald stopping time.
+    if decision == 'PROMOTE' and len(scores) < N_MIN_POWER:
+        decision = 'CONTINUE'
+        reason = 'n_below_power_floor'
     return {
         'decision': decision,
         'llr': llr,
@@ -82,6 +117,7 @@ def sprt_decision(scores: list[float], alpha: float = ALPHA, beta: float = BETA,
         'A': a,
         'B': b,
         'mean': (sum(scores) / len(scores)) if scores else None,
+        'reason': reason,
     }
 
 
@@ -200,43 +236,86 @@ def evaluate_groups(rows: list[dict]) -> list[dict]:
             ef = extract_error_flag(rec)
             if ef is not None:
                 err_flags.append(1.0 if ef else 0.0)
-        sprt = sprt_decision(scores)
-        error_rate = (sum(err_flags) / len(err_flags)) if err_flags else None
+        sprt = sprt_decision(scores, a_override=a_effective)
+        numeric_rates: list[float] = []
+        for rec in recs:
+            if 'error_rate' not in rec or rec.get('error_rate') is None:
+                continue
+            try:
+                numeric_rates.append(float(rec['error_rate']))
+            except (TypeError, ValueError):
+                continue
+        if numeric_rates:
+            error_rate: float | None = sum(numeric_rates) / len(numeric_rates)
+        elif err_flags:
+            error_rate = sum(err_flags) / len(err_flags)
+        else:
+            error_rate = None
+        error_rate_unknown = error_rate is None
+        if error_rate_unknown:
+            error_rate = 0.0
         decision = sprt['decision']
         veto = False
-        if decision == 'PROMOTE' and error_rate is not None and error_rate >= ERROR_RATE_VETO:
+        # ADV2-001/006: never PROMOTE on high or unknown error rate.
+        if decision == 'PROMOTE' and (error_rate_unknown or (error_rate is not None and error_rate >= ERROR_RATE_VETO)):
             decision = 'CONTINUE'
             veto = True
-        out.append({
-            'flag': flag,
-            'decision': decision,
-            'error_rate_veto': veto,
-            'error_rate': error_rate,
-            **sprt,
-            'n_records': len(recs),
-        })
+        # ADV2-001: unpack SPRT first; local decision/veto always win.
+        result = {**sprt}
+        result['flag'] = flag
+        result['decision'] = decision
+        result['error_rate_veto'] = veto
+        result['error_rate'] = error_rate
+        result['error_rate_unknown'] = error_rate_unknown
+        result['n_records'] = len(recs)
+        if error_rate_unknown:
+            result['note'] = 'error_rate_unknown'
+        out.append(result)
     return out
 
 
 def run() -> dict:
+    global a_effective, boot_calibrated
+    a_effective, boot_calibrated = _load_a_boot()
+    calibration_missing = a_effective is None
     try:  # ADV21-022: H-I7 wrap — never crash cron caller
         rows = load_telemetry()
     except Exception:
         rows = []
-    try:
-        decisions = evaluate_groups(rows)
-    except Exception:
+    if calibration_missing:
+        groups: dict[str, list[dict]] = {}
+        for rec in rows:
+            groups.setdefault(extract_flag(rec), []).append(rec)
         decisions = []
+        for flag, recs in sorted(groups.items()):
+            decisions.append({
+                'flag': flag,
+                'decision': 'HOLD',
+                'reason': 'calibration_missing',
+                'n_records': len(recs),
+                'n': len(recs),
+                'error_rate_veto': False,
+                'error_rate': None,
+            })
+    else:
+        try:
+            decisions = evaluate_groups(rows)
+        except Exception:
+            decisions = []
     summary = {
         'ts': datetime.now(timezone.utc).isoformat(),
         'theorem': 'Wald Sequential Analysis SPRT; alpha=beta=0.05; N(3,1) vs N(4,1)',
         'A': A,
+        'A_effective': a_effective,
+        'boot_calibrated': boot_calibrated,
+        'calibration_missing': calibration_missing,
         'B': B,
         'n_records': len(rows),
         'n_flags': len(decisions),
         'n_promote': sum(1 for d in decisions if d['decision'] == 'PROMOTE'),
         'n_reject': sum(1 for d in decisions if d['decision'] == 'REJECT'),
         'n_continue': sum(1 for d in decisions if d['decision'] == 'CONTINUE'),
+        'n_hold': sum(1 for d in decisions if d['decision'] == 'HOLD'),
         'decisions': decisions,
     }
     try:
@@ -264,8 +343,17 @@ def self_test() -> int:
     inc0 = llr_increment(3.0)
     if abs(inc0 - (-0.5)) > 1e-9:
         failures.append(f'llr_increment(3)={inc0} expected -0.5')
-    # PROMOTE: many 4.5 scores. increment=1.0 each; A~2.94 => 4 samples
+    # ADV-013: n=10 (and n=9) high scores must CONTINUE, not PROMOTE
     d = sprt_decision([4.5] * 10)
+    if d['decision'] != 'CONTINUE':
+        failures.append(f'n=10 expected CONTINUE got {d}')
+    if d.get('reason') != 'n_below_power_floor':
+        failures.append(f'n=10 reason {d.get("reason")}')
+    d9 = sprt_decision([4.5] * 9)
+    if d9['decision'] != 'CONTINUE':
+        failures.append(f'n=9 expected CONTINUE got {d9}')
+    # PROMOTE only after power floor: 50 high scores
+    d = sprt_decision([4.5] * 50)
     if d['decision'] != 'PROMOTE':
         failures.append(f'expected PROMOTE got {d}')
     # REJECT: many 2.0 scores. increment=-1.5; |B|~2.94 => 2 samples
@@ -283,10 +371,60 @@ def self_test() -> int:
         # high scores would promote, but errors should veto
         if ev and ev[0]['decision'] == 'PROMOTE':
             failures.append('error_rate veto failed to block PROMOTE')
+    # ADV2-001: error_rate=0.15 must clobber SPRT PROMOTE (n>=N_MIN_POWER).
+    recs_001 = [{'flag': 'adv2001', 'mean_score': 5.0, 'error_rate': 0.15} for _ in range(50)]
+    ev001 = evaluate_groups(recs_001)
+    if not ev001:
+        failures.append('ADV2-001 evaluate_groups empty')
+    else:
+        if ev001[0]['decision'] != 'CONTINUE':
+            failures.append(f'ADV2-001 expected CONTINUE got {ev001[0]["decision"]}')
+        if not ev001[0].get('error_rate_veto'):
+            failures.append('ADV2-001 error_rate_veto not set')
+        if ev001[0].get('decision') == ev001[0].get('reason') == 'sprt' and ev001[0]['decision'] == 'PROMOTE':
+            failures.append('ADV2-001 **sprt overwrote veto')
+    # ADV2-006: missing error fields -> CONTINUE + error_rate_unknown
+    recs_006 = [{'flag': 'adv2006', 'mean_score': 5.0} for _ in range(50)]
+    ev006 = evaluate_groups(recs_006)
+    if not ev006:
+        failures.append('ADV2-006 evaluate_groups empty')
+    else:
+        if ev006[0]['decision'] != 'CONTINUE':
+            failures.append(f'ADV2-006 expected CONTINUE got {ev006[0]["decision"]}')
+        if ev006[0].get('error_rate_unknown') is not True:
+            failures.append(f'ADV2-006 error_rate_unknown={ev006[0].get("error_rate_unknown")}')
+        if ev006[0].get('note') != 'error_rate_unknown':
+            failures.append(f'ADV2-006 note={ev006[0].get("note")}')
+    a_eff, _boot = _load_a_boot()
+    a_wald = math.log((1.0 - BETA) / ALPHA)
+    if a_eff is not None and a_eff < a_wald:
+        failures.append(f'A_effective={a_eff} < A_wald={a_wald} (never lowers threshold)')
+    # ADV-003: missing calibration file => all HOLD, calibration_missing=True
+    global CAL_PATH, OUT_PATH
+    orig_cal, orig_out = CAL_PATH, OUT_PATH
+    try:
+        import tempfile
+        td = Path(tempfile.mkdtemp())
+        CAL_PATH = td / 'missing-block-bootstrap-sprt.json'
+        OUT_PATH = td / 'shadow-sprt-decisions.json'
+        a_miss, boot_miss = _load_a_boot()
+        if a_miss is not None or boot_miss:
+            failures.append(f'missing-cal-load: a={a_miss} boot={boot_miss}')
+        out_miss = run()
+        if not out_miss.get('calibration_missing'):
+            failures.append('calibration_missing not True')
+        if any(d.get('decision') != 'HOLD' for d in (out_miss.get('decisions') or [])):
+            failures.append(f'expected all HOLD got {out_miss.get("decisions")}')
+        if out_miss.get('n_promote'):
+            failures.append('calibration_missing still promoted')
+    except Exception as exc:
+        failures.append(f'calibration_missing test raised: {exc}')
+    finally:
+        CAL_PATH, OUT_PATH = orig_cal, orig_out
     if failures:
         print(json.dumps({'self_test': 'FAIL', 'failures': failures}))
         return 1
-    print(json.dumps({'self_test': 'PASS', 'A': A, 'B': B}))
+    print(json.dumps({'self_test': 'PASS', 'A': A, 'B': B, 'A_effective': a_eff, 'boot_calibrated': _boot}))
     return 0
 
 

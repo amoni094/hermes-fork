@@ -1,0 +1,170 @@
+{
+ "summary": {
+  "policy": "current",
+  "before_tokens": 499929,
+  "after_tokens": 37480,
+  "after_msgs": 95,
+  "compress_seconds": 52.4,
+  "recall_pct": 40.0,
+  "scores": [
+   0,
+   1,
+   1,
+   1,
+   1,
+   1,
+   0,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   0,
+   1
+  ],
+  "by_difficulty": {},
+  "by_signal_type": {
+   "TOKEN_NEUTRAL": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_SENSITIVE": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_EFFICIENT_SIGNAL": {
+    "recall_pct": 40.0,
+    "n": 15
+   }
+  },
+  "summary_error": null,
+  "head_hit_rate": 0.0,
+  "classifier_decision": {
+   "session_type": "code",
+   "confidence": 1.0,
+   "compression_profile": "fork_mixed"
+  },
+  "classified_info": {
+   "session_type": "code",
+   "confidence": 1.0,
+   "compression_profile": "fork_mixed"
+  },
+  "compaction_calls": 1,
+  "compaction_input_tokens": 62357,
+  "compaction_output_tokens": 4187,
+  "compaction_model": "claude-haiku-4-5",
+  "compaction_cost_usd": null,
+  "ratio": 0.074971,
+  "combined": 5.335422,
+  "ci_width": 44.4,
+  "output_tokens_per_recall_point": 6246.7
+ },
+ "results": [
+  {
+   "q": "What governance hard-block rule prevented the initial execute_code attempt, and which two advisory codes were cited?",
+   "gold": "ADV-025 encode gate. Dynamic destinations cannot be approved \u2014 rewrite without encoding (ADV-024/ADV-W10-002).",
+   "answer": "NOT IN CONTEXT; Based on the context, the initial write_file to callgraph-taint-audit.py failed with `[governance-hard-block] DENY: unapproved HIGH-risk write to '.hermes/profiles/fo...` (message truncated), suggesting a rule against writing to fork profile paths without approval. The two advisory codes appear to be related to governance conflict detection and falsifiability linting (governance-conflict-detector.py and governance-falsifiability-lint.py are listed as Wave 21C scripts), though the exact codes are not fully visible in the truncated error message.",
+   "score": 0,
+   "why": "The answer states 'NOT IN CONTEXT' but then provides a guess about write_file and fork profile paths, which does not match the gold answer about 'ADV-025 encode gate' and 'Dynamic destinations cannot be approved' with codes ADV-024/ADV-W10-002. The guessed governance rule and advisory codes are entirely different from the gold standard, making this factually incorrect."
+  },
+  {
+   "q": "What file path triggered the governance hard-block on the write_file tool call?",
+   "gold": ".hermes/profiles/fork/config.yaml",
+   "answer": "NOT IN CONTEXT; based on the context summary, a write to `.hermes/profiles/fork/...` (likely a profile-specific config or script) was blocked by governance-hard-block with \"unapproved HIGH-risk write\" but the exact path was truncated in the log output.",
+   "score": 1,
+   "why": "The answer correctly identifies the directory path (.hermes/profiles/fork/) and acknowledges that a governance hard-block occurred on a write_file call, but explicitly states the exact filename was truncated/not visible in context. The gold answer specifies the complete path as .hermes/profiles/fork/config.yaml. The answer demonstrates correct reasoning about what information was available while making a reasonable inference, which qualifies as 'hedged-but-right' - the respondent found the right answer structure but couldn't confirm the exact filename from the provided context."
+  },
+  {
+   "q": "What hard-core rule (H-code) prohibits unapproved writes to config.yaml, plugins/*.py, and agent/*.py?",
+   "gold": "H-I8",
+   "answer": "NOT IN CONTEXT; The governance-hard-block denial message in the context shows that writes to `.hermes/profiles/fo...` (truncated) were blocked by a governance rule, but the specific H-code rule name and its rationale are not fully documented in the provided context. Based on the pattern, it appears to be a safety constraint preventing modification of core agent infrastructure that could compromise the agent's integrity or allow unauthorized capability escalation, but the exact rule definition is not visible here.",
+   "score": 1,
+   "why": "The answer correctly identifies that the specific H-code is not in the provided context and appropriately hedges with 'NOT IN CONTEXT'. However, it does not provide a guess for the answer. According to the scoring rubric, a guess that matches the gold answer (H-I8) would score 1. The answer demonstrates understanding of the rule's purpose (preventing unauthorized writes to core infrastructure) but fails to attempt an answer, which would have been the path to a score of 1."
+  },
+  {
+   "q": "What is the resolved path of the callgraph-taint-audit.py file after it was successfully written?",
+   "gold": "/var/home/rainbow/.hermes/hermes-scripts/callgraph-taint-audit.py",
+   "answer": "NOT IN CONTEXT; based on the context, callgraph-taint-audit.py was written to `/var/home/rainbow/.hermes/hermes-scripts/callgraph-taint-audit.py` (319 lines), as shown in the initial FACT LEDGER entry, but the exact resolved canonical path after the write operation is not explicitly stated in the session logs.",
+   "score": 1,
+   "why": "The answer correctly identifies the path `/var/home/rainbow/.hermes/hermes-scripts/callgraph-taint-audit.py` which matches the gold answer, but hedges with 'NOT IN CONTEXT' and adds unnecessary caveats about 'resolved canonical path' and 'exact resolved path after write operation.' The core answer is right, but the hedging and qualification prevent a full score of 2."
+  },
+  {
+   "q": "What theorem and output file are associated with the counterfactual-tool-gate.py script (gap C5) in the ARCHITECTURE.md Wave 21C table?",
+   "gold": "Pearl Rung 3 deletion; Amodei cat.3 | on-demand JSON",
+   "answer": "NOT IN CONTEXT; Based on the naming pattern and Wave 21C focus (loop governance, ISS, counterfactual reasoning), counterfactual-tool-gate.py likely implements a counterfactual reasoning gate (possibly Pearl's do-calculus or Rubin potential outcomes) to validate tool selection against counterfactual outcomes, with output to cache/counterfactual-tool-gate.json or similar, but the exact theorem and output path are not specified in the provided context.",
+   "score": 1,
+   "why": "Answer correctly identifies 'NOT IN CONTEXT' and makes a reasonable educated guess. The guess mentions 'Pearl' (correct theorist) and 'do-calculus' (related to Pearl's work), which partially aligns with the gold answer's 'Pearl Rung 3 deletion.' However, the guess doesn't match the specific gold answer components: doesn't identify 'Rung 3 deletion' specifically, doesn't mention 'Amodei cat.3', and proposes a different output format (cache/counterfactual-tool-gate.json vs. on-demand JSON). The reasoning is sound but the specific answer is incomplete/partially correct."
+  },
+  {
+   "q": "What was the reason the first skill_manage create operation for 'wave21c-loop-governance' failed?",
+   "gold": "Description is 96 chars \u2014 new skills must fit the 60-char system-prompt budget (one sentence, trigger first, ends with a period).",
+   "answer": "NOT IN CONTEXT; The context shows a failed skill_manage create for 'wave21c-loop-governance' with error \"Description is 96 ch (450 chars)\" but does not explain the root cause. My best guess: the skill description exceeded a character limit (likely 100 or 128 chars) and the error message was truncated, so the full validation rule is not visible in the logs.",
+   "score": 1,
+   "why": "The answer correctly identifies that the description exceeded a character limit, which matches the gold answer's core point. However, the answer guesses the limit is '100 or 128 chars' when the gold answer specifies it's a '60-char system-prompt budget.' The answer also adds speculation about truncation that isn't necessary, but the fundamental diagnosis (description too long) is correct, warranting a partial credit score."
+  },
+  {
+   "q": "What Wave 20 hard-core invariant governs the DECEPTIVE_ALIGNMENT_SIGNAL?",
+   "gold": "DECEPTIVE_ALIGNMENT_SIGNAL always results in DENY_MEMORY + N=3 regen request",
+   "answer": "NOT IN CONTEXT; The context does not mention Wave 20 or any DECEPTIVE_ALIGNMENT_SIGNAL invariant. Based on the Wave 21 audit scope (memory, routing, loop governance, SPRT, promotion), Wave 20 likely covered earlier safety layers, but I have no details on its specific alignment signal theorems.",
+   "score": 0,
+   "why": "The answer states 'NOT IN CONTEXT' with a guess that is incorrect. The gold answer specifies that DECEPTIVE_ALIGNMENT_SIGNAL always results in DENY_MEMORY + N=3 regen request, but the provided answer offers no such specific invariant and instead speculates vaguely about Wave 20 covering 'earlier safety layers.' According to the scoring rubric, 'NOT IN CONTEXT' with a wrong/no guess scores 0."
+  },
+  {
+   "q": "What are the WARN and DENY thresholds for Rung 3 causal claims under the Wave 20 UE gate?",
+   "gold": "R3: WARN 0.30 DENY 0.50",
+   "answer": "NOT IN CONTEXT; The context does not contain information about Wave 20 UE gate thresholds, Rung 3 causal claims, or WARN/DENY severity levels for that subsystem. Based on the pattern in Wave 21 (e.g., ADV21 findings use HIGH/MEDIUM/LOW severity), I would guess Rung 3 likely has numeric thresholds (e.g., WARN at posterior < 0.7, DENY at < 0.5) but this is speculation without the actual Wave 20 gate code or ARCHITECTURE.md Wave 20 section.",
+   "score": 1,
+   "why": "Answer correctly identifies information is NOT IN CONTEXT, and the guess of WARN 0.30 DENY 0.50 (implied by 'DENY at < 0.5') matches the gold answer for the DENY threshold. The WARN guess of 'posterior < 0.7' is directionally reasonable but not precisely 0.30. Partial credit for correct NOT IN CONTEXT acknowledgment plus a substantially correct guess on at least one threshold."
+  },
+  {
+   "q": "What WARN_RATIO threshold triggers an alarm in impact-regularizer-gate.py?",
+   "gold": "0.5",
+   "answer": "NOT IN CONTEXT; based on the code I read, impact-regularizer-gate.py computes a regularization penalty ratio and alarms if the ratio exceeds a threshold (likely around 0.5\u20130.7 based on typical gate patterns), but the exact WARN_RATIO constant was not visible in the sections I inspected. The script's --self-test would reveal it.",
+   "score": 1,
+   "why": "The answer correctly identifies 0.5 as the likely threshold (within the guessed range of 0.5-0.7) and acknowledges uncertainty about not seeing the exact constant. This is a hedged-but-right response that demonstrates understanding while admitting context limitations. The guess of 0.5 matches the gold answer, qualifying for a score of 1 per the rubric."
+  },
+  {
+   "q": "What ADV code in loop-cusum-changepoint.py requires loading a frozen baseline to avoid lookahead bias?",
+   "gold": "ADV21-018",
+   "answer": "NOT IN CONTEXT; The context shows loop-cusum-changepoint.py loads `loop-cusum-baseline.json` to get a frozen `mu0` (mean) from a prior window, preventing the current run from using the full series mean (which would include future data relative to the detection point). This implements Wald's sequential analysis principle: the null hypothesis threshold must be set before observing the test data.",
+   "score": 1,
+   "why": "The answer correctly identifies the conceptual reason why a frozen baseline is needed (to avoid lookahead bias and implement Wald's sequential analysis principle) and references the correct file (loop-cusum-baseline.json). However, it explicitly states 'NOT IN CONTEXT' rather than providing the specific ADV code (ADV21-018) that the question asks for. The technical explanation is accurate and demonstrates understanding, but fails to deliver the direct answer requested."
+  },
+  {
+   "q": "What is the cron schedule for the routing-pac-bayes-bound-0001 job?",
+   "gold": "30 7 * * *",
+   "answer": "NOT IN CONTEXT; based on the audit output, routing-pac-bayes-bound-0001 should be scheduled daily at 7:30am (as specified in the Wave 21B gap definition), but the actual cron entry in jobs.json was not shown in the tool outputs above. The audit focused on alarm-bridge and duplicate routing jobs, so the pac-bayes schedule itself was not explicitly verified in this session.",
+   "score": 1,
+   "why": "The answer correctly identifies the cron schedule as 7:30am daily (30 7 * * *), which matches the gold answer. However, it's hedged with 'NOT IN CONTEXT' and relies on inference from Wave 21B gap definition rather than direct verification from the provided context. Since the core factual answer (30 7 * * *) is correct despite the hedging and lack of direct source verification, this qualifies as 'partially correct or hedged-but-right'."
+  },
+  {
+   "q": "How many scripts passed and how many failed in the final broad self-test run (PASS/FAIL summary)?",
+   "gold": "PASS 22 FAIL 0",
+   "answer": "NOT IN CONTEXT; Based on the wave 2 JSON output above, **23 scripts PASSED --self-test, 0 FAILED**. This includes all flagged scripts (memory-fano-bound, compaction-rd-converse, compaction-aep-typical-set, memory-sprt-commit, routing-azuma, routing-pac-bayes, routing-fano, routing-exp3, routing-ips, routing-alarm-bridge, kl-curvature-memory-monitor, impact-regularizer-gate, iss-justification-gate, context-channel-capacity, memory-conductance-ttl, memory-ot-decay, memory-jl-distortion, loop-cusum-changepoint, memory-signature-rerank, wave21c-invariants, shadow-gate-sprt, wave21a-alarm-bridge, wave21c-alarm-bridge).",
+   "score": 1,
+   "why": "Answer is marked NOT IN CONTEXT but provides a specific guess of 23 PASSED, 0 FAILED. Gold answer is 22 PASSED, 0 FAILED. The FAIL count matches (0), but PASS count is off by 1 (23 vs 22). Since the answer hedges with NOT IN CONTEXT but makes a substantive guess that is partially correct (fails on one metric), this scores 1."
+  },
+  {
+   "q": "What set of forbidden third-party imports does wave21c-invariants.py check for in all Wave 21C scripts?",
+   "gold": "{'numpy', 'scipy', 'pandas', 'sklearn', 'torch', 'requests', 'yaml'}",
+   "answer": "NOT IN CONTEXT; Based on the code I read, wave21c-invariants.py performs a callgraph audit (via callgraph-taint-audit.py) to detect forbidden imports like `torch`, `tensorflow`, `requests`, `subprocess`, `pickle` in Wave 21C loop/governance scripts, flagging them as hard-core violations if found.",
+   "score": 1,
+   "why": "The answer is marked 'NOT IN CONTEXT' but provides a guess. The guess includes some correct items from the gold set (torch, requests) but also includes incorrect items (tensorflow, subprocess, pickle) that aren't in the gold set, and misses several gold items (numpy, scipy, pandas, sklearn, yaml). The answer is partially correct but contains significant errors in the forbidden imports list."
+  },
+  {
+   "q": "What is the cron schedule for the 'governance-falsifiability-lint-0001' job?",
+   "gold": "0 6 * * 2",
+   "answer": "NOT IN CONTEXT; based on the session log, governance-falsifiability-lint-0001 was one of the duplicate cron entries dropped in Wave 1 (it appeared in the list of jobs to remove alongside other governance scripts that were firing simultaneously). The exact schedule before removal is not shown in the visible context, but it was likely a morning slot (07:00\u201309:00 range based on the pattern of other governance jobs mentioned).",
+   "score": 0,
+   "why": "The answer correctly identifies that the job information is not in context, but the guess provided (morning slot 07:00-09:00) does not match the gold answer of '0 6 * * 2' (6 AM on Tuesdays). The guess is factually incorrect."
+  },
+  {
+   "q": "Why was the 'patch loop-pid.py' task skipped?",
+   "gold": "Hermes-owned at ~/.hermes/scripts/; wrapper used (GAP-C1)",
+   "answer": "NOT IN CONTEXT; loop-pid.py was not mentioned in the audit findings or wiring issues. The recursive audit focused on Wave 21 scripts (21A memory/compression, 21B routing, 21C loop governance, 21D recursive, 21E SPRT) and their alarm wiring; loop-pid.py itself was not flagged as having hard-core violations, safety issues, or wiring gaps that required patching.",
+   "score": 1,
+   "why": "Answer correctly identifies that loop-pid.py was not in the provided context and makes a reasonable inference about why it might have been skipped (not flagged in audit findings). However, the gold answer indicates the actual reason was that it's Hermes-owned at ~/.hermes/scripts/ with a wrapper used (GAP-C1), which is a specific technical detail the answer doesn't capture. The hedged guess is directionally reasonable but misses the precise factual basis."
+  }
+ ]
+}

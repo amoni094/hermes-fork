@@ -142,8 +142,106 @@ def get_injection_tier(recent_tool_errors: int) -> str:
 # Hindsight retrieval
 # ---------------------------------------------------------------------------
 
+def _hindsight_episodes_path() -> Path:
+    """Profile-aware local JSONL used when Hindsight REST is down."""
+    home = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+    profile = os.environ.get("HERMES_PROFILE", "")
+    if profile and "profiles" not in str(home):
+        p = home / "profiles" / profile / "cache" / "hindsight-episodes.jsonl"
+        return p
+    fork_p = home / "profiles" / "fork" / "cache" / "hindsight-episodes.jsonl"
+    if fork_p.exists():
+        return fork_p
+    return home / "cache" / "hindsight-episodes.jsonl"
+
+
+def _local_hindsight_fallback(query: str, limit: int = 20) -> list:
+    """Lexical fallback over cache/hindsight-episodes.jsonl."""
+    path = _hindsight_episodes_path()
+    if not path.exists():
+        return []
+    query_tokens = query.lower().split()
+    denom = len(query_tokens or ["x"])
+    scored = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                episode = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(episode, dict):
+                continue
+            text = str(episode.get("text", ""))
+            score = len(set(query_tokens) & set(text.lower().split())) / denom
+            scored.append({
+                "text": text.strip(),
+                "score": float(score),
+                "source": "local_fallback",
+                "_raw_rank": 0,
+            })
+    except OSError:
+        return []
+    scored.sort(key=lambda x: -x["score"])
+    for rank, item in enumerate(scored[:limit]):
+        item["_raw_rank"] = rank
+    return scored[:limit]
+
+
+def _overlay_local_fallback(query: str, fused: list, top: int) -> list:
+    """Prepend local JSONL hits so VikingRAG cache / REST cannot hide planted needles."""
+    fb = _local_hindsight_fallback(query, top)
+    if not fb:
+        return fused or []
+    seen = set()
+    out = []
+    for item in fb:
+        text = (item.get("text") or "").strip()
+        key = text[:240]
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        score = float(item.get("score") or 0.0)
+        out.append({
+            "text": text,
+            "_full_text": text,
+            "source": "local_fallback",
+            "sources": ["local_fallback"],
+            "score": score,
+            "rrf_score": score,
+            "path": [{"source": "local_fallback", "rank": item.get("_raw_rank", 0), "rrf": score}],
+        })
+    for item in fused or []:
+        text = (item.get("text") or item.get("_full_text") or "").strip()
+        key = text[:240]
+        if key in seen:
+            continue
+        seen.add(key)
+        if "_full_text" not in item:
+            item = dict(item)
+            item["_full_text"] = text
+        out.append(item)
+    return out[:top]
+
+
+def _stamp_local_fallback(results: list, used: bool) -> list:
+    """Attach local_fallback_used to each Hindsight result dict."""
+    out = []
+    for item in results or []:
+        row = dict(item)
+        row["local_fallback_used"] = bool(used)
+        out.append(row)
+    return out
+
+
 def hindsight_search(query: str, limit: int = 20) -> tuple[list[dict], bool]:
-    """Query Hindsight vector store. Returns (results, had_error)."""
+    """Query Hindsight vector store. Returns (results, had_error).
+
+    Local JSONL fallback runs only when REST errors or returns no hits.
+    Unconditional prepend previously masked Hindsight quality (ADV-008).
+    """
     try:
         url = f"{HINDSIGHT_BASE}/v1/default/banks/{HINDSIGHT_BANK}/memories/recall"
         payload = json.dumps({"query": query, "top_k": limit}).encode()
@@ -166,9 +264,18 @@ def hindsight_search(query: str, limit: int = 20) -> tuple[list[dict], bool]:
                     "source": "hindsight",
                     "_raw_rank": rank,
                 })
-        return results, False
+        used = False
+        if not results:
+            fallback = _local_hindsight_fallback(query, limit)
+            if fallback:
+                results = list(fallback)
+                used = True
+        return _stamp_local_fallback(results, used), False
     except Exception as e:
         print(f"[unified-recall] Hindsight error: {e}", file=sys.stderr)
+        fallback = _local_hindsight_fallback(query, limit)
+        if fallback:
+            return _stamp_local_fallback(fallback, True), False
         return [], True
 
 
@@ -763,6 +870,9 @@ def recall(
         return []
 
     fused = fuse_results(h_results + pending, g_results, query, top=top, min_score=min_score)
+    # Overlay local JSONL only when Hindsight is not in the retrieval chain (ADV-008).
+    if "hindsight" not in source_set:
+        fused = _overlay_local_fallback(query, fused, top)
 
     # F-57 invalidation guard: remove any item whose memory_status == 'invalidated'.
     # Fail-open: wrapped in try/except so recall is never blocked by this filter.
@@ -1201,7 +1311,7 @@ Examples:
     # VikingRAG experience-edge cache check (arXiv:2609.11390)
     _cached = _check_experience_cache(args.query)
     if _cached is not None:
-        fused = _cached
+        fused = _overlay_local_fallback(args.query, _cached, top)
         fused = counterfactual_prefilter(args.query, fused)
         record_query_access(fused)
         _write_experience_cache(args.query, fused)
@@ -1239,6 +1349,8 @@ Examples:
         sys.exit(3)
 
     fused = fuse_results(h_results + pending, g_results, args.query, top=top, min_score=args.min_score)
+    if args.graphiti_only:
+        fused = _overlay_local_fallback(args.query, fused, top)
     fused = counterfactual_prefilter(args.query, fused)  # R3: remove near-duplicate low-ranked candidates
     record_query_access(fused)
     _write_experience_cache(args.query, fused)  # VikingRAG experience-edge cache (arXiv:2609.11390)

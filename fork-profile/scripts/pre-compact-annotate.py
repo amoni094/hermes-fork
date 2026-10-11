@@ -253,6 +253,20 @@ def main() -> None:
             f"Suggested: /compact {focus}"
         )
 
+        # Keep AEP/MI/advisor from reporting zeros (Wave 22 data-bridge). Fail-open (H-I7).
+        try:
+            import subprocess
+            def _hermes_root():
+                base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+                if base.name != ".hermes" and base.parent.name == "profiles":
+                    return base.parent.parent
+                return base
+            _bridge = _hermes_root() / "hermes-scripts" / "eval-compaction-data-bridge.py"
+            if _bridge.exists():
+                subprocess.run([sys.executable, str(_bridge)], capture_output=True, timeout=10)
+        except Exception:
+            pass
+
         # Append rd-compaction-advisor advisory
         try:
             import subprocess as _sp
@@ -260,9 +274,21 @@ def main() -> None:
             # Use input_tokens + cache tokens as best estimate; fall back to 80000
             _sid, _inp, _cache, _mcfg = row
             _current_tokens = max((_inp or 0) + (_cache or 0), 80000)
+            _adv_script = None
+            for _cand in (
+                Path(__file__).parent / "rd-compaction-advisor.py",
+                Path.home() / ".hermes" / "scripts" / "rd-compaction-advisor.py",
+                Path.home() / ".hermes" / "profiles" / "fork" / "scripts" / "rd-compaction-advisor.py",
+            ):
+                if _cand.exists():
+                    _adv_script = _cand
+                    break
+            if _adv_script is None:
+                raise FileNotFoundError("rd-compaction-advisor.py")
             _adv_result = _sp.run(
-                [_sys.executable, str(Path(__file__).parent / "rd-compaction-advisor.py"),
-                 "--current-tokens", str(_current_tokens)],
+                [_sys.executable, str(_adv_script),
+                 "--current-tokens", str(_current_tokens),
+                 "--focus", str(focus)[:2000]],
                 capture_output=True, text=True, timeout=10,
             )
             if _adv_result.returncode == 0 and _adv_result.stdout.strip():
@@ -271,8 +297,10 @@ def main() -> None:
                 _focus = _adv.get("focus_topic_prefix", "")
                 annotation += (
                     f"\nCompaction advisory: aggressiveness={_agg:.2f}, "
-                    f"focus={_focus} (rd-compaction-advisor)"
+                    f"focus={_focus} (rd-compaction-advisor; wired to pre_compress)"
                 )
+                if (_adv.get("dpi") or {}).get("dpi_violation"):
+                    annotation += "\nDPI FLAG: do not drop annotated focus tokens."
         except Exception:
             pass  # advisory is best-effort; never block annotation output
 

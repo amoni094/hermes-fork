@@ -195,6 +195,20 @@ def main() -> None:
             f"Suggested: /compact {focus}"
         )
 
+        # Keep AEP/MI/advisor from reporting zeros (Wave 22 data-bridge). Fail-open (H-I7).
+        try:
+            import subprocess
+            def _hermes_root():
+                base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+                if base.name != ".hermes" and base.parent.name == "profiles":
+                    return base.parent.parent
+                return base
+            _bridge = _hermes_root() / "hermes-scripts" / "eval-compaction-data-bridge.py"
+            if _bridge.exists():
+                subprocess.run([sys.executable, str(_bridge)], capture_output=True, timeout=10)
+        except Exception:
+            pass
+
         # Append rd-compaction-advisor advisory
         try:
             import subprocess as _sp

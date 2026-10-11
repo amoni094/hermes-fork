@@ -105,7 +105,13 @@ def compute(h_xy: float | None = None, alphabet: int | None = None) -> dict:
         ch = load_channel()
         if h_xy is None:
             if "h_x_given_y" in ch:
-                h_xy = float(ch["h_x_given_y"])
+                h_xy_total = float(ch["h_x_given_y"])
+                # ADV21-001 (direct-read path): h_x_given_y is total bits over the whole
+                # context; normalize to bits/byte so Fano with |A|=256 is well-formed.
+                # Without normalization, 7016 total bits → Pe_weak = (7016-1)/8 ≈ 876 → 1.0
+                # which is a spurious alarm for any context >256 bytes.
+                n_bytes = max(1, int(ch.get("n_pre_bytes") or (h_xy_total / 8.0) or 1))
+                h_xy = h_xy_total / n_bytes
             else:
                 h_pre_total = float(ch.get("h_pre") or 0.0)
                 mi = float(ch.get("mutual_info_proxy") or 0.0)

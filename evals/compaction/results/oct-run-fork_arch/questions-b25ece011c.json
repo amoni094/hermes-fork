@@ -1,0 +1,77 @@
+[
+ {
+  "q": "What governance hard-block rule prevented the initial execute_code attempt, and which two advisory codes were cited?",
+  "gold": "ADV-025 encode gate. Dynamic destinations cannot be approved \u2014 rewrite without encoding (ADV-024/ADV-W10-002).",
+  "where": "[governance-hard-block] DENY: execute_code contains rename/copy primitive with high-risk token and was already approved by ADV-025 encode gate."
+ },
+ {
+  "q": "What file path triggered the governance hard-block on the write_file tool call?",
+  "gold": ".hermes/profiles/fork/config.yaml",
+  "where": "DENY: unapproved HIGH-risk write to '.hermes/profiles/fork/config.yaml' via write_file."
+ },
+ {
+  "q": "What hard-core rule (H-code) prohibits unapproved writes to config.yaml, plugins/*.py, and agent/*.py?",
+  "gold": "H-I8",
+  "where": "Hard core H-I8: no unapproved writes to config.yaml, plugins/*.py, agent/*.py."
+ },
+ {
+  "q": "What is the resolved path of the callgraph-taint-audit.py file after it was successfully written?",
+  "gold": "/var/home/rainbow/.hermes/hermes-scripts/callgraph-taint-audit.py",
+  "where": "\"resolved_path\": \"/var/home/rainbow/.hermes/hermes-scripts/callgraph-taint-audit.py\""
+ },
+ {
+  "q": "What theorem and output file are associated with the counterfactual-tool-gate.py script (gap C5) in the ARCHITECTURE.md Wave 21C table?",
+  "gold": "Pearl Rung 3 deletion; Amodei cat.3 | on-demand JSON",
+  "where": "| counterfactual-tool-gate.py | C5 | Pearl Rung 3 deletion; Amodei cat.3 | on-demand JSON |"
+ },
+ {
+  "q": "What was the reason the first skill_manage create operation for 'wave21c-loop-governance' failed?",
+  "gold": "Description is 96 chars \u2014 new skills must fit the 60-char system-prompt budget (one sentence, trigger first, ends with a period).",
+  "where": "\"error\": \"operations[0] (create on 'wave21c-loop-governance') failed: Description is 96 chars \u2014 new skills must fit the 60-char system-prompt budget\""
+ },
+ {
+  "q": "What Wave 20 hard-core invariant governs the DECEPTIVE_ALIGNMENT_SIGNAL?",
+  "gold": "DECEPTIVE_ALIGNMENT_SIGNAL always results in DENY_MEMORY + N=3 regen request",
+  "where": "- DECEPTIVE_ALIGNMENT_SIGNAL always results in DENY_MEMORY + N=3 regen request"
+ },
+ {
+  "q": "What are the WARN and DENY thresholds for Rung 3 causal claims under the Wave 20 UE gate?",
+  "gold": "R3: WARN 0.30 DENY 0.50",
+  "where": "Rung 2/3 causal claims: tighter UE gate than factual claims (R2: WARN 0.40 DENY 0.60; R3: WARN 0.30 DENY 0.50)"
+ },
+ {
+  "q": "What WARN_RATIO threshold triggers an alarm in impact-regularizer-gate.py?",
+  "gold": "0.5",
+  "where": "WARN_RATIO = 0.5"
+ },
+ {
+  "q": "What ADV code in loop-cusum-changepoint.py requires loading a frozen baseline to avoid lookahead bias?",
+  "gold": "ADV21-018",
+  "where": "# ADV21-018: load frozen baseline from prior window to avoid lookahead bias"
+ },
+ {
+  "q": "What is the cron schedule for the routing-pac-bayes-bound-0001 job?",
+  "gold": "30 7 * * *",
+  "where": "\"expr\": \"30 7 * * *\" ... \"id\": \"routing-pac-bayes-bound-0001\""
+ },
+ {
+  "q": "How many scripts passed and how many failed in the final broad self-test run (PASS/FAIL summary)?",
+  "gold": "PASS 22 FAIL 0",
+  "where": "==== SUMMARY ==== PASS 22 FAIL 0"
+ },
+ {
+  "q": "What set of forbidden third-party imports does wave21c-invariants.py check for in all Wave 21C scripts?",
+  "gold": "{'numpy', 'scipy', 'pandas', 'sklearn', 'torch', 'requests', 'yaml'}",
+  "where": "FORBIDDEN = {'numpy', 'scipy', 'pandas', 'sklearn', 'torch', 'requests', 'yaml'}"
+ },
+ {
+  "q": "What is the cron schedule for the 'governance-falsifiability-lint-0001' job?",
+  "gold": "0 6 * * 2",
+  "where": "{\"id\": \"governance-falsifiability-lint-0001\", \"schedule\": \"0 6 * * 2\", \"script\": \"profiles/fork/scripts/governance-falsifiability-lint.py\"}"
+ },
+ {
+  "q": "Why was the 'patch loop-pid.py' task skipped?",
+  "gold": "Hermes-owned at ~/.hermes/scripts/; wrapper used (GAP-C1)",
+  "where": "{\"name\": \"patch loop-pid.py\", \"reason\": \"Hermes-owned at ~/.hermes/scripts/; wrapper used (GAP-C1)\"}"
+ }
+]

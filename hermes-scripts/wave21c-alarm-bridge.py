@@ -70,11 +70,38 @@ def _load(name: str) -> dict:
 
 def _is_alarm(name: str, data: dict, key) -> tuple[bool, str]:
     if not data:
-        return False, 'missing report'
+        return True, 'missing report'
     if name == 'shadow-sprt-decisions.json':
-        # SPRT CONTINUE is not an alarm; REJECT is informational; veto is
-        n_veto = sum(1 for d in data.get('decisions') or [] if d.get('error_rate_veto'))
-        return n_veto > 0, f'error_rate_veto n={n_veto}'
+        decisions = data.get('decisions') or []
+        n_veto = sum(1 for d in decisions if d.get('error_rate_veto'))
+        if n_veto > 0:
+            return True, f'error_rate_veto n={n_veto}'
+        n_promote = sum(1 for d in decisions if d.get('decision') == 'PROMOTE')
+        if n_promote > 0:
+            # ADV-017: raw PROMOTE is an alarm unless a fresh effective file
+            # shows the promotion was already vetted to zero effective PROMOTEs.
+            eff_path = CACHE / 'effective-shadow-decisions.json'
+            sha_path = CACHE / 'shadow-sprt-decisions.json'
+            try:
+                eff_fresh = eff_path.exists() and (
+                    eff_path.stat().st_mtime >= sha_path.stat().st_mtime - 60
+                )
+            except OSError:
+                eff_fresh = False
+            if eff_fresh:
+                try:
+                    eff = json.loads(eff_path.read_text())
+                    n_eff = sum(
+                        1 for d in (eff.get('decisions') or [])
+                        if d.get('decision') == 'PROMOTE'
+                    )
+                except (OSError, json.JSONDecodeError, TypeError):
+                    return True, 'unvetted_promote_raw'
+                if n_eff > 0:
+                    return True, 'unvetted_promote_effective'
+                return False, f'raw_promote n={n_promote} effective_ok'
+            return True, 'unvetted_promote_raw'
+        return False, 'ok'
     if name == 'governance-conflict-summary.json':
         n = int(data.get('n_conflicts') or 0)
         return n > 0, f'n_conflicts={n}'
@@ -134,19 +161,34 @@ def run() -> dict:
 
 
 def self_test() -> int:
+    import tempfile
+    global CACHE
     failures = []
-    a, msg = _is_alarm('loop-stability-composite.json', {'alarm': True, 'alarm_reason': 'x'}, 'alarm')
-    if not a:
-        failures.append('composite alarm')
-    a, _ = _is_alarm('governance-conflict-summary.json', {'n_conflicts': 2}, None)
-    if not a:
-        failures.append('conflicts')
-    a, _ = _is_alarm('loop-model-comparison.json', {'recommendation': 'keep_pid'}, None)
-    if a:
-        failures.append('keep_pid should not alarm')
-    a, _ = _is_alarm('shadow-sprt-decisions.json', {'decisions': [{'error_rate_veto': True}]}, None)
-    if not a:
-        failures.append('veto should alarm')
+    old_cache = CACHE
+    CACHE = Path(tempfile.mkdtemp())
+    try:
+        a, msg = _is_alarm('loop-stability-composite.json', {'alarm': True, 'alarm_reason': 'x'}, 'alarm')
+        if not a:
+            failures.append('composite alarm')
+        a, _ = _is_alarm('governance-conflict-summary.json', {'n_conflicts': 2}, None)
+        if not a:
+            failures.append('conflicts')
+        a, _ = _is_alarm('loop-model-comparison.json', {'recommendation': 'keep_pid'}, None)
+        if a:
+            failures.append('keep_pid should not alarm')
+        a, _ = _is_alarm('shadow-sprt-decisions.json', {'decisions': [{'error_rate_veto': True}]}, None)
+        if not a:
+            failures.append('veto should alarm')
+        a, msg = _is_alarm('shadow-sprt-decisions.json', {'decisions': [{'decision': 'PROMOTE'}]}, None)
+        if not a:
+            failures.append('raw PROMOTE should alarm')
+        if a and 'unvetted_promote' not in msg:
+            failures.append(f'raw PROMOTE msg={msg}')
+        a, msg = _is_alarm('loop-stability-composite.json', {}, 'alarm')
+        if not a:
+            failures.append('missing report should alarm')
+    finally:
+        CACHE = old_cache
     if failures:
         print(json.dumps({'self_test': 'FAIL', 'failures': failures}))
         return 1

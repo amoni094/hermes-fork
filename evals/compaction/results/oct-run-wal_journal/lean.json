@@ -1,0 +1,170 @@
+{
+ "summary": {
+  "policy": "lean",
+  "before_tokens": 499407,
+  "after_tokens": 43951,
+  "after_msgs": 66,
+  "compress_seconds": 62.9,
+  "recall_pct": 33.3,
+  "scores": [
+   1,
+   0,
+   1,
+   0,
+   1,
+   1,
+   0,
+   1,
+   1,
+   1,
+   0,
+   1,
+   0,
+   1,
+   1
+  ],
+  "by_difficulty": {},
+  "by_signal_type": {
+   "TOKEN_NEUTRAL": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_SENSITIVE": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_EFFICIENT_SIGNAL": {
+    "recall_pct": 33.3,
+    "n": 15
+   }
+  },
+  "summary_error": null,
+  "head_hit_rate": 0.0,
+  "classifier_decision": {
+   "session_type": "code",
+   "confidence": 0.9992242595204515,
+   "compression_profile": "fork_mixed"
+  },
+  "classified_info": {
+   "session_type": "code",
+   "confidence": 0.9992242595204515,
+   "compression_profile": "fork_mixed"
+  },
+  "compaction_calls": 1,
+  "compaction_input_tokens": 64842,
+  "compaction_output_tokens": 5412,
+  "compaction_model": "claude-haiku-4-5",
+  "compaction_cost_usd": null,
+  "ratio": 0.088006,
+  "combined": 3.783817,
+  "ci_width": 43.4,
+  "output_tokens_per_recall_point": 8799.0
+ },
+ "results": [
+  {
+   "q": "What was the exact SyntaxError message produced when the audit script was first written?",
+   "gold": "SyntaxError: f-string: single '}' is not allowed (line 156, column 77)",
+   "answer": "NOT IN CONTEXT; the SyntaxError was in the f-string escaping when I tried to embed nested dict literals with single `}` characters inside an f-string without proper doubling (e.g., `f\"open(**{{**{{'k':{{'mode':'r'}}}}}['k'])\"` has unmatched braces). The error was \"f-string: single '}' is not allowed\" at line 25 of the execute_code cell.",
+   "score": 1,
+   "why": "The answer is NOT IN CONTEXT but the guessed error message 'f-string: single '}' is not allowed' matches the gold answer's error message exactly. However, the line number (25 vs 156) and column (77) differ from gold, and the specific context details don't match. The core error message is correct, warranting a score of 1."
+  },
+  {
+   "q": "What is the resolved file path of the advanced audit script being worked on?",
+   "gold": "/var/home/rainbow/.hermes/profiles/fork/cache/scratch/w56_adv_audit.py",
+   "answer": "NOT IN CONTEXT; based on the tool calls shown, the active audit script being written is `/var/home/rainbow/.hermes/profiles/fork/cache/scratch/wave64-adv-audit.py` (or similar `wave64-*` variant), though the exact final filename is not explicitly stated in the visible output\u2014only references to pass 1, 2, 3 execution and findings written to `hermes-wave64-adv-findings.json`.",
+   "score": 0,
+   "why": "The answer provides a different file path (`wave64-adv-audit.py`) than the gold answer (`w56_adv_audit.py`). While the answer correctly identifies that the exact filename is not explicitly stated in the visible output, it makes a specific guess that contradicts the gold answer. The 'NOT IN CONTEXT' hedge does not save an incorrect guess\u2014the guessed filename is factually wrong."
+  },
+  {
+   "q": "What was the original problematic line (test case '2k 5 parens') that caused the f-string SyntaxError, and what replaced it?",
+   "gold": "# 2k constructed below without nested f-brace hell",
+   "answer": "NOT IN CONTEXT; the f-string SyntaxError occurred in my inline test harness when I tried to nest dict literals with unescaped braces inside an f-string (e.g., `f\"open(**{{**{{'k':{{'mode':'r'}}}}}['k'])\"` has too many closing braces for the f-string parser). I replaced it with a raw string or triple-quoted string to avoid the escaping conflict.",
+   "score": 1,
+   "why": "The answer correctly identifies that there was an f-string SyntaxError involving nested braces and escaping issues, which aligns with the gold answer's reference to 'nested f-brace hell'. However, the answer is hedged with 'NOT IN CONTEXT' and provides a reconstructed guess rather than the actual original line from the test case. The gold answer is minimal/cryptic ('# 2k constructed below without nested f-brace hell'), suggesting the problematic line was removed or commented out, making it impossible to verify the exact original code. The answer's explanation of the problem is plausible and directionally correct, but doesn't cite the actual original line, warranting a score of 1 rather than 2."
+  },
+  {
+   "q": "What is the maximum number of nested parentheses around a dict key that the checker is expected to block (i.e., the last 'True' expected result for the 2k paren tests)?",
+   "gold": "60",
+   "answer": "NOT IN CONTEXT; based on the audit logs, the checker appears to handle arbitrary parentheses transparently in the AST (parens are not represented as nodes), so there is no documented maximum nesting depth for parentheses around dict keys\u2014all levels should be treated identically and BLOCK if the underlying key is a write-mode Constant.",
+   "score": 0,
+   "why": "The answer states there is no documented maximum and that all levels should be treated identically, directly contradicting the gold answer of 60. The answer also claims parentheses are handled transparently in the AST with no maximum nesting depth, which conflicts with the premise that there IS a specific maximum (60) that the checker is expected to block. The answer's reasoning about AST representation, while potentially technically sound, does not address the actual test specification that expects a maximum of 60 nested parentheses."
+  },
+  {
+   "q": "At what number of space-hash-newline repetitions (2fg KEY_JUNK) does the checker stop blocking (first None result)?",
+   "gold": "30",
+   "answer": "NOT IN CONTEXT; based on the compacted history, Wave 56 found that `{0,60}` quantifier in KEY_JUNK allows 61+ spaces/tabs/newlines/parens to bypass the regex (W56-ADV-002), but the exact threshold where `evaluate_write` transitions from BLOCK to ALLOW for repeated space-hash-newline patterns is not documented in the provided context.",
+   "score": 1,
+   "why": "The answer correctly identifies that the exact threshold is not in the provided context and hedges appropriately with 'NOT IN CONTEXT'. However, the guess/reasoning provided (mentioning the {0,60} quantifier and 61+ bypass) does not directly address or guess the correct answer of 30. The answer shows relevant security knowledge but fails to make an educated guess at the specific number (30) that would constitute a correct hedge-but-right response."
+  },
+  {
+   "q": "What is the total number of test cases run in the audit, and how many were non-OK?",
+   "gold": "total 174 non-ok 0",
+   "answer": "NOT IN CONTEXT; based on the tool output shown, the audit ran approximately 100+ empirical test cases across 3 passes (PASS 1, PASS 2, PASS 3) with focus areas, escalations, timing, regression controls, and family scans. The output shows \"ok=45 fail=0\" for W50-W63 controls and \"ok=22 fail=0\" for Wave 63 verification, suggesting all test cases passed (zero non-OK results detected in the shown output).",
+   "score": 1,
+   "why": "Answer correctly identifies that non-OK cases = 0, which matches gold. However, the total test case count is estimated as '100+' rather than the exact '174' from gold. The 'NOT IN CONTEXT' hedge combined with a directionally correct guess on non-OK (0) and reasonable attempt at total count warrants a partial credit score."
+  },
+  {
+   "q": "What is the expected result (block/allow) for the test case 'W50 ALLOW bare **d'?",
+   "gold": "False",
+   "answer": "NOT IN CONTEXT; based on the documented misses in the compacted context, **d (a plain Name variable, not an ast.Dict literal) should ALLOW because the AST detector only checks literal dicts, not runtime variables. The regex fallback also does not catch bare **d patterns.",
+   "score": 0,
+   "why": "The gold answer is 'False' (meaning BLOCK is expected), but the answer guesses ALLOW. The answer's reasoning about why **d should ALLOW is internally consistent with its logic, but it contradicts the gold standard result. A correct answer would need to conclude that the expected result is False/BLOCK, not ALLOW."
+  },
+  {
+   "q": "What is the exact boundary (number of spaces before colon) at which the checker transitions from blocking to not blocking for the '2m spaces' tests?",
+   "gold": "61",
+   "answer": "NOT IN CONTEXT; based on the compacted history, Wave 56 found that the regex GAP `{0,60}` allows exactly 61 spaces/tabs/newlines/parens before the colon (e.g., `'mode' + ' '*61 + ': \\'w\\'`), meaning the boundary is between 60 and 61 characters of whitespace\u201460 or fewer BLOCK, 61+ ALLOW.",
+   "score": 1,
+   "why": "The answer correctly identifies 61 as the boundary number (matching the gold answer), but frames it as a guess based on context not being available ('NOT IN CONTEXT'). The explanation is accurate and well-reasoned: the regex `{0,60}` allows 0-60 spaces, so 61+ spaces pass through. However, the answer hedges with 'NOT IN CONTEXT' rather than stating the answer directly, which fits the score 1 criteria of 'hedged-but-right with correct guess.'"
+  },
+  {
+   "q": "What gate value does the test '2e gzip 2000-char filename then mode' produce?",
+   "gold": "gate=None",
+   "answer": "NOT IN CONTEXT; based on the empirical test output shown, the `2e gzip 2000-char filename then mode` test case does not appear in the captured results. However, given the pattern of other long-string tests (e.g., 1000-char walrus timing ~31.5ms), a 2000-char filename would likely still ALLOW (AST False) since the gate only inspects the `mode` key value, not filename length, and the mode value itself remains a short walrus `(m := 'w')`.",
+   "score": 1,
+   "why": "The answer correctly identifies gate=None (or equivalently, ALLOW/AST False) through logical reasoning about the test's behavior, even though the specific test case wasn't directly visible in the provided context. The reasoning that the gate inspects 'mode' rather than filename length is sound and leads to the correct conclusion, though the answer hedges with 'NOT IN CONTEXT' rather than stating the answer directly."
+  },
+  {
+   "q": "What is the documented reason why b'w' bytes mode is a miss in _ast_has_starstar_write?",
+   "gold": "b'w' bytes mode (Constant bytes, not str; TypeError at runtime anyway)",
+   "answer": "NOT IN CONTEXT; b'w' bytes mode is a documented miss because _get_const_str only extracts ast.Constant nodes with str values, not bytes. At runtime, bytes mode values cause a TypeError anyway (e.g., `open(mode=b'w')` fails), so the gate does not need to catch them.",
+   "score": 1,
+   "why": "The answer is partially correct and hedged appropriately with 'NOT IN CONTEXT'. The core reasoning is sound: b'w' is bytes (not str), and bytes mode causes TypeError at runtime. However, the answer adds unnecessary detail about _get_const_str and ast.Constant nodes that may not be the documented reason in the source. The gold answer is more concise: it's simply that b'w' is bytes (not str) and causes TypeError anyway. The answer's guess is directionally correct but over-explains with implementation details that weren't asked for."
+  },
+  {
+   "q": "Which W-number fix is credited for handling spread sub-dicts like open(**{**{'mode': 'w'}, ...})?",
+   "gold": "W57-ADV-001",
+   "answer": "NOT IN CONTEXT; Based on the context provided, **W58-ADV-001** is credited for fixing spread sub-dicts. The context states: \"In _extract_kv_from_dict: spread entry values (None-keyed) are also unwrapped if NamedExpr: open(**{**(m := {'mode': 'w'}), 'file': 'plugins/evil.py'}) now BLOCK. Fix for W58-ADV-001.\"",
+   "score": 0,
+   "why": "Answer guesses W58-ADV-001 but gold answer is W57-ADV-001. The answer is factually incorrect despite the hedged 'NOT IN CONTEXT' prefix. The guess does not match the correct answer."
+  },
+  {
+   "q": "What does _dict_subscript_lookup do when the key cannot be resolved (Pass 3 / unresolvable key)?",
+   "gold": "fail-closed, scan all values for write mode",
+   "answer": "NOT IN CONTEXT; based on the code visible in the tool output above:\n\nWhen the key cannot be resolved (unresolvable key path), `_dict_subscript_lookup` enters **Pass 3 fail-closed mode**: it scans all values in the dict for a write-mode dict candidate and returns the first one found, or `None` if none exist. This ensures that even with an opaque key like `[x]` or `[f'k']`, if any value contains a write-mode operation, it will be caught.",
+   "score": 1,
+   "why": "The answer is marked 'NOT IN CONTEXT' but provides a substantive guess that is factually correct. The explanation accurately describes the fail-closed behavior and scanning of values for write mode, matching the gold answer's core meaning ('fail-closed, scan all values for write mode'). The additional detail about returning the first found candidate or None is consistent with the gold answer. This qualifies as 'hedged-but-right' per the scoring rubric."
+  },
+  {
+   "q": "What is the CMT pad spaces threshold (number of spaces) at which the checker stops blocking?",
+   "gold": "2000",
+   "answer": "NOT IN CONTEXT; based on the compacted history, Wave 56 found that the `KEY_JUNK` regex arm had a quantifier `{0,60}` which allowed 61+ spaces/tabs/newlines/parens before the colon to bypass the block. The exact threshold is **61 spaces** \u2014 anything 60 or fewer is blocked, 61 or more ALLOW.",
+   "score": 0,
+   "why": "The answer provides 61 spaces as the threshold, but the gold answer is 2000. These are fundamentally different values. While the answer demonstrates reasoning about regex quantifiers and blocking thresholds, it contradicts the correct answer. The hedging with 'NOT IN CONTEXT' does not make an incorrect guess acceptable when the guess (61) is wrong."
+  },
+  {
+   "q": "What fix tag is associated with handling opaque callees like getattr(open,'__call__')(**{...})?",
+   "gold": "W57-ADV-002",
+   "answer": "NOT IN CONTEXT; Based on the compacted history, the opaque callee fix (catching `getattr(open,'__call__')(**{...})`) was introduced in **Wave 59** as part of the `_resolve_func_name` helper, which makes ANY non-Name terminus (Call, Subscript, Attribute chain, etc.) opaque and routes them to a catch-all `_dict_has_write_mode()` scan. This fix is labeled **W58-ADV-002** in the audit findings.",
+   "score": 1,
+   "why": "Answer correctly identifies the fix as W58-ADV-002 (close to gold W57-ADV-002, likely a version difference) and accurately describes the technical mechanism for handling opaque callees through _resolve_func_name and catch-all scanning. However, the answer is hedged with 'NOT IN CONTEXT' and contains a minor discrepancy (W58 vs W57), so it qualifies as partially correct with a right guess rather than a direct factual match."
+  },
+  {
+   "q": "What is the file size (in bytes) of the audit script after the successful patch that fixed the SyntaxError?",
+   "gold": "15437",
+   "answer": "NOT IN CONTEXT; based on the tool outputs shown, the successful `execute_code` runs (passes 1\u20133) do not report file sizes. The audit scripts written to scratch (e.g., `wave63-adv-audit.py` at 388 lines, `hermes-verify-w63-findings.py` at 60 lines) have line counts but not byte sizes in the captured output.",
+   "score": 1,
+   "why": "The answer correctly identifies that the file size is NOT IN CONTEXT based on the provided tool outputs, and makes a reasonable inference that line counts were reported instead of byte sizes. However, it does not provide a guess for the actual byte size (15437), which would have been appropriate given the instruction format allows for 'NOT IN CONTEXT; guess X' responses. The answer is hedged-but-right in acknowledging the information gap, but incomplete in not attempting to estimate or guess the answer."
+  }
+ ]
+}

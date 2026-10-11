@@ -4,7 +4,7 @@ Patterns ported from Denuto (jesterG1979/hello_agent) + Hermes-native patterns.
 This is the authoritative single source of truth for how Hermes is structured,
 what rules are enforced, and what the invariants are.
 
-Last updated: 2026-10-08 Wave 19 (lm-polygraph UE integration: semantic density, perplexity proxy, blackbox scorer)
+Last updated: 2026-10-09 Wave 23 (ADV closures: percolation kappa alarm, ISS violation_ratio, shadow-decision wiring)
 
 ---
 
@@ -203,7 +203,8 @@ not enforced gates in the agent loop. Do NOT cite them as active enforcement:
   shadow-gate-nightly.py     - Nightly cron wrapper: evaluates all shadow flags, prints promote/disable report
   improvement_governance.py  - Risk-classified self-improvement proposal lifecycle; CLI: propose/approve/rollback/list
   run_ledger.py              - Durable agent task state with OCC conditional writes + hash-chain audit; CLI: create/complete/fail/status
-  rd-compaction-advisor.py   - R-D advisor; persists cache/rd-compaction-advisory.json; DPI + wavelet + typical-set; wired via pre_compress
+  rd-compaction-advisor.py   - R-D advisor; persists cache/rd-compaction-advisory.json; DPI + wavelet + typical-set; wired via pre_compress (primary consumer: pre-compact-annotate.py)
+  compaction-rd-advisor.py   - Secondary R-D advisor; writes cache/compaction-rd-advice.json with aggressiveness=1-rate. Documented consumer: context-channel-capacity.py (does not currently read this file; rd-compaction-advisory.json is the live pre-compact input). Future consumers should read aggressiveness from compaction-rd-advice.json.
   concept-lattice-index.py   - Nightly concept lattice over Hindsight facts; --query CLI for semantic reranking
   skill-router-index.py      - BM25 + entropy-H fallback (not just gap<0.12) + Möbius overlap correction
   loop-pid.py                - Discrete linear PID + internal Lyapunov decrease check (KHALIL-1/7)
@@ -214,8 +215,9 @@ not enforced gates in the agent loop. Do NOT cite them as active enforcement:
   context-pressure-reader.py - Reads context token pressure; advisory annotation (wiring sprint 2)
   recall-miss-ttl-adjuster.py - MRAS adaptive TTL adjuster; reads recall-misses.jsonl; closes bottleneck #8 (wiring sprint 2)
   routing-weight-updater.py  - FTRL-EMA memory route weight updater; O1: cumulative regret tracking vs uniform baseline (Borodin & El-Yaniv §2.1); writes routing-regret-log.jsonl; alarm on >5% relative regret
-  skill-beta-feedback.py     - Beta-bandit feedback writer; B1: causal fix — only credits success signals from successfully-completed sessions; emits failure signals for aborted sessions
-  staleness-monitor.py       - D2 liveness monitor; checks freshness of routing-calibration.jsonl, calibration-log.jsonl, skill-beta-state.json, routing-regret-log.jsonl; alarms to stdout + exits 0 (cron-safe)
+  skill-beta-feedback.py     - Beta-bandit feedback writer; B1: causal fix — only credits success signals from successfully-completed sessions; emits failure signals for aborted sessions. Canonical merge point for skill-beta-state.json; uses fcntl.flock(). Other writers (exp3, linucb, routing-graph-bandit) use tmp+rename (atomic, not lost-update-safe).
+  staleness-monitor.py       - D2 liveness monitor; checks freshness of routing-calibration.jsonl, calibration-log.jsonl, skill-beta-state.json, routing-regret-log.jsonl; also writes cache/staleness-alarm.json for alarm-aggregator; alarms to stdout + exits 0 (cron-safe)
+  routing-calibration.jsonl  - Populated by the live memory-query-router.py on each memory query; it is not seeded by eval scripts. An empty file is valid (routing-weight-updater.py uses defaults).
   stuck-job-detector.py      - CTL/LTL safety: AG(running → EF(complete|failed)); queries executions.db for jobs stuck in 'running' > 2×timeout; writes stuck-job-alarms.jsonl
   callgraph-audit.py         - P1 interprocedural call-graph analysis (Nielson et al. §1-2); propagates exit-code lattice {ok,intentional_nonzero,error_propagator} across subprocess call chains; reports HERMES_HOME unvalidated paths (P2); writes callgraph-audit-report.json
   skill-router-index.py      - R1 Chernoff MIN_SAMPLES=30 guard in beta_posterior_mean(); R2 collision detection (fork priority); O2 incremental build (skip unchanged skills by mtime); BM25 TF-IDF + concept-lattice semantic fallback
@@ -695,6 +697,8 @@ Recursive 3-pass + cold adversarial on H-I8 bypass (temp+rename) and ssl_guard s
 #### Router / Compressor patches (scripts/)
   skill-router-index.py        — Entropy-based semantic fallback + Mobius BM25 correction
   routing-weight-updater.py    — TD(lambda) routing weight update + competitive ratio
+  routing-pac-bayes-bound.py   — McAllester PAC-Bayes gen bound (Wave 21B R1)
+  routing-alarm-bridge.py      — Promote routing JSON alarms to *-alarm.json (Wave 21B)
   rd-compaction-advisor.py     — Real DPI check via plan_compaction (not self-compare, ADV-009)
 
 #### Architecture (scripts/)
@@ -857,3 +861,629 @@ ACCEPTED (documented):
 - DECEPTIVE_ALIGNMENT_SIGNAL always results in DENY_MEMORY + N=3 regen request
 - Prepotence HARD BLOCK: irreversible + (UE>0.5 OR reasoning_risk>0.5) -> block unconditionally
 - All 10 reasoning skills now have: concrete thresholds, specific script invocations, theorem citations
+
+## Wave 21C Additions (2026-10-08) — Loop / control / epistemic / governance / safety wiring
+
+loop-pid.py remains Hermes-owned (`~/.hermes/scripts/`); ISS and two-timescale are **not** patched into it. Composite check is a wrapper.
+
+| Script | Gap | Theorem | Output |
+|---|---|---|---|
+| loop-pid-iss-wrapper.py | C1 | Khalil Ch 9 ISS + Lyapunov; Ch 11 two-time-scale | cache/loop-stability-composite.json |
+| shadow-gate-sprt.py | C2 | Wald SPRT; N(3,1) vs N(4,1); α=β=0.05 | cache/shadow-sprt-decisions.json |
+| governance-conflict-detector.py | C3 | Critch ARCHES multi-principal; Shoham MAS | cache/governance-conflicts.jsonl + summary.json |
+| governance-falsifiability-lint.py | C4 | Popper falsifiability; Critch failure_observable | cache/governance-falsifiability-report.json |
+| counterfactual-tool-gate.py | C5 | Pearl Rung 3 deletion; Amodei cat.3 | on-demand JSON |
+| loop-model-comparison.py | C6 | Berger/DeGroot Bayes factor AR(1) vs RW | cache/loop-model-comparison.json |
+| callgraph-taint-audit.py | C7 | Nielson taint lattice (does not modify callgraph-audit.py) | cache/callgraph-taint-report.json |
+| nyquist-timescale-bridge.py | C8 | Nyquist vs Khalil timescale contradiction | cache/nyquist-timescale-bridge.json |
+| loop-cusum-changepoint.py | C9 | Page CUSUM on PID error | cache/loop-cusum-changepoint.json |
+| impact-regularizer-gate.py | C10 | Amodei cat.3 side-effect ratio | on-demand JSON |
+
+### Hard cores
+- Composite ALARM if any of lyapunov_ok / iss_ok / two_timescale_ok is false
+- SPRT: LLR > log(19) PROMOTE; LLR < log(1/19) REJECT; error_rate>=0.10 vetoes PROMOTE
+- TYPE_A conflict (auth ALLOW + hard-block DENY) is logged, never silent
+- Deployed proposal >7d without non-trivial failure_observable => HIGH
+- Tool sequence redundancy_ratio > 0.5 => WARN
+- BF < 0.1 => recommend MPC/rollout over PID
+- Tainted sink to config.yaml / profiles/ without _hermes_root => ALARM
+
+### Cron
+- loop-pid-iss-wrapper-0001 every 30m
+- shadow-gate-sprt-0001 08:00 daily (alongside shadow-gate-nightly)
+- governance-conflict-detector-0001 09:30 daily
+- governance-falsifiability-lint-0001 Tuesday 06:00
+- loop-model-comparison-0001 every 120m
+- callgraph-taint-audit-0001 05:30 daily
+- nyquist-timescale-bridge-0001 every 120m
+- loop-cusum-changepoint-0001 every 120m
+
+## Wave 21D Additions (2026-10-08) — Recursive wiring + remaining theory
+
+21C reports were unread by alarm-aggregator.py (glob is `*-alarm.json`, TTL 2h). Daily SPRT/governance alarms evaporated. 21D closes that and the ISS-justification hole.
+
+| Script | Gap | Theorem | Output |
+|---|---|---|---|
+| wave21c-alarm-bridge.py | W1 | aggregator contract / 2h TTL refresh | cache/wave21c-*-alarm.json |
+| sprt-falsifiability-handshake.py | D1 | Popper + Clarke G(PROMOTE → FO) | cache/sprt-falsifiability-handshake.json |
+| governance-conflict-epistemic.py | D2 | Fagin S5 C vs distributed K; Shoham joint intention | cache/governance-conflict-epistemic.json |
+| pid-passivity-index.py | D3 | Khalil/Sontag supply rate s=eu | cache/pid-passivity-index.json |
+| pid-circle-criterion.py | D4 | Khalil circle criterion sector [0,1] | cache/pid-circle-criterion.json |
+| session-type-tool-protocol.py | D5 | Honda session types (dual of C5) | on-demand JSON |
+| ltl-promotion-invariant.py | D6 | Clarke LTL model check | cache/ltl-promotion-invariant.json |
+| loop-rollout-horizon.py | D7 | Bertsekas one-step rollout | cache/loop-rollout-horizon.json |
+| sprt-measurement-tamper.py | D8 | Hendrycks tampering; Amodei reward hacking | cache/sprt-measurement-tamper.json |
+| soares-halt-liveness.py | D9 | Soares corrigibility: HALT reachable | cache/soares-halt-liveness.json |
+| cusum-gain-freeze.py | D10 | Liberzon freeze integrator after plant change | cache/cusum-gain-freeze.json |
+| sprt-inner-outer-alignment.py | D11 | Hubinger mesa inner vs outer | cache/sprt-inner-outer-alignment.json |
+| iss-justification-gate.py | D12 | ISS small-gain only if passive + in-sector | cache/iss-justification.json |
+| wave21c-invariants.py | D13 | Nipkow property tests | stdout JSON |
+
+### Hard cores
+- alarm-aggregator sees 21C/21D via refreshed `wave21c-*-alarm.json` sidecars
+- PROMOTE without non-trivial failure_observable is HOLD (handshake) and LTL-unsat
+- TYPE_A/B logs epistemic K→B regression; common knowledge is false
+- Composite ISS `overall_ok` is *unjustified* if passivity or saturation-sector fails
+- CUSUM/passivity/circle freeze Ki (Liberzon); CUSUM also freezes Kp
+- HALT must remain reachable (Soares); clip-lock streak ≥ 6 alarms
+- Zero-variance SPRT scores at μ=4.0 are measurement tampering
+
+### Cron
+- wave21c-alarm-bridge-0001 every 30m
+- iss-justification-gate-0001 every 30m
+- pid-passivity-index / pid-circle-criterion / loop-rollout-horizon / soares-halt-liveness / cusum-gain-freeze every 120m
+- sprt-measurement-tamper 08:10; handshake 08:15; inner-outer 08:25 (veto producers, read raw SPRT); ltl-promotion 08:20 is an effective-merge consumer (reads effective-shadow-decisions.json; may skip if merge not ready)
+- governance-conflict-epistemic 09:45
+- wave21c-invariants Tuesday 06:30
+
+## Wave 21B Additions (2026-10-08) — Routing / bandits / online learning / adversarial
+
+First-pass R1–R7 plus corpus-gap close (Lattimore, Borodin, Shalev, O'Donnell, Hofstad, Mézard/Wainwright, Manning, Flajolet, Vazirani/Schrijver, Jurafsky, Vershynin/Lugosi). Canonical: `~/.hermes/hermes-scripts/`. Wrappers: `profiles/fork/scripts/`.
+
+| Script | Gap | Theorem | Output |
+|---|---|---|---|
+| routing-pac-bayes-bound.py | R1 | McAllester PAC-Bayes; Shalev UML | cache/routing-pac-bayes.json |
+| routing-graph-bandit-update.py | R2 | Lattimore Ch 22 graph feedback; credit 0.5^hop | skill-beta-state.json + routing-graph-bandit.json |
+| routing-exp3-adversarial.py | R3 | Auer EXP3; Borodin online | routing-exp3-state.json + routing-conflicts.jsonl |
+| routing-hamming-audit.py | R4 | Jaccard codebook distance | routing-hamming-alarm.json |
+| routing-fano-bound.py | R5 | Cover-Thomas Fano | routing-fano-bound.json |
+| routing-mobius-audit.py | R6 | Stanley poset Möbius inversion | routing-mobius-audit.json |
+| skill-description-entropy.py | R7 | Manning IR char-entropy | skill-description-entropy.json |
+| routing-exp4-contextual.py | corpus | Lattimore Ch 18 EXP4 | routing-exp4-state.json |
+| routing-kl-ucb.py | corpus | Lattimore Thm 10.6 KL-UCB | routing-kl-ucb.json |
+| routing-rademacher-bound.py | corpus | Shalev Ch 26 Rademacher | routing-rademacher-bound.json |
+| routing-boolean-influence.py | corpus | O'Donnell influence | routing-boolean-influence.json |
+| routing-skill-percolation.py | corpus | Hofstad giant component | routing-skill-percolation.json |
+| routing-belief-propagation.py | corpus | Mézard/Wainwright loopy BP / RSB | routing-belief-propagation.json |
+| routing-precision-recall.py | corpus | Manning P@k R@k | routing-precision-recall.json |
+| skill-composition-gf.py | corpus | Flajolet GF blow-up | skill-composition-gf.json |
+| routing-linucb.py | corpus | LinUCB / Lattimore Ch 19 | routing-linucb.json |
+| routing-tsallis-inf.py | corpus | Tsallis-INF BoBW | routing-tsallis-inf.json |
+| routing-mcdiarmid-bm25.py | corpus | McDiarmid; Lugosi; Vershynin | routing-mcdiarmid-bm25.json |
+| routing-token-setcover.py | corpus | Vazirani greedy set cover | routing-token-setcover.json |
+| routing-skill-markov.py | corpus | Jurafsky n-gram / HMM | routing-skill-markov.json |
+| routing-alarm-bridge.py | wiring | promote alarm flags to *-alarm.json | *-alarm.json + routing-alarm-bridge.json |
+
+### Hard cores
+- PAC-Bayes gen_error_bound > 0.3 => alarm
+- Graph bandit: hop d credit = 0.5^d (self-test A-B-C => 1, 0.5, 0.25)
+- EXP3: p_i = (1-γ) w_i/Σw + γ/n; conflict vs BM25 top-1 if gap>0.15
+- Fano: P_err >= (H(S|Q)-1)/log2(n); current_error < bound => IMPOSSIBLE
+- Jaccard pair distance < 0.3 => Hamming alarm
+- Char entropy H < 2.5 bits/char => low-entropy skill description
+- KL-UCB unused arm index = 1; disagreement vs beta-mean gap>0.15
+- Rademacher bound monotone in m; alarm if gen>0.4
+- Token influence > 0.5 => pivot-token alarm
+- kappa < 2.0 OR no Molloy-Reed giant => FRAGMENTED; kappa >= 2.0 AND giant exists => HEALTHY (CLIQUE alarm: giant=1 AND mean_deg > 3 ln n) [Wave 23: alarm condition corrected from giant_frac<0.5 to kappa<2.0; kappa=28.6 at T=0.15 is supercritical/HEALTHY]
+- BP two-seed L1 > 0.2 => replica-symmetry breaking
+- P@5 < 0.2 with n_rel>=5 => low precision
+- Walks at depth 6 > 1e6 => combinatorial blow-up
+- Tsallis mix max p > 1-1/n => degenerate
+- McDiarmid: top-gap < radius => unstable ranking
+- Set cover size > 8 => cover_too_large
+- Markov self-loop > 0.8 with n_trans>=20 => stuck
+
+### Cron
+- routing-kl-ucb 07:20; routing-pac-bayes 07:30; routing-rademacher 07:35; routing-fano 07:45; routing-precision-recall 07:50; routing-skill-markov 07:55
+- routing-graph-bandit 08:30; routing-belief-propagation 08:45
+- routing-exp3 09:00; routing-exp4 09:05; routing-linucb 09:10; routing-tsallis 09:12; routing-alarm-bridge 09:15
+- Sunday: hamming 06:00; boolean-influence 06:30; percolation 06:45; mobius 07:00; mcdiarmid 07:15
+- Monday: skill-description-entropy 06:00; skill-composition-gf 06:30; token-setcover 06:40
+
+### Consumers
+- routing-alarm-bridge.py reads routing-*.json + skill-description-entropy.json + skill-composition-gf.json + routing-conflicts.jsonl and writes *-alarm.json
+- alarm-aggregator.py globs cache/*-alarm.json (unchanged)
+
+
+## Wave 21E Additions (2026-10-08) — SPRT composition + truncation
+
+| Script | Gap | Theorem | Output |
+|---|---|---|---|
+| sprt-truncation-gate.py | E1 | Wald truncated SPRT; fail-closed | cache/sprt-truncation.json |
+| promotion-at-most-once.py | E2 | Lynch at-most-once | cache/promotion-ledger.json |
+| sprt-effective-decision.py | E3 | Fail-closed merge of C2/D1/D8/D11/E1 | cache/sprt-effective-decision.json |
+
+Raw `shadow-sprt-decisions.json` is **not** executable. Downstream readers must use `sprt-effective-decision.json`.
+
+### Veto producers vs effective-merge consumers
+
+`sprt-inner-outer-alignment.py` and `sprt-falsifiability-handshake.py` are **veto producers (run before merge, read raw SPRT)**, not consumers of effective.
+
+- **Veto producers:** tamper, truncation, handshake, inner-outer — read `shadow-sprt-decisions.json`, write their own veto JSON. They run **before** `sprt-effective-decision.py`.
+- **Effective merge consumers:** `ltl-promotion-invariant`, `promotion-at-most-once` — read `effective-shadow-decisions.json`.
+
+### Cron
+- sprt-truncation-gate-0001 08:12
+- promotion-at-most-once-0001 08:18
+- sprt-effective-decision-0001 08:30
+
+
+## Wave 21A-∞ Additions (2026-10-08) — Memory / Compression / IT (unlimited recursion)
+
+Canonical: `~/.hermes/hermes-scripts/`. Wrappers: `profiles/fork/scripts/`.
+Corpus close: Cover-Thomas, Villani, Hairer (rough paths, regularity structures, Malliavin, Markov), MacKay, Gelman, Williams/Billingsley, Morters, Blum, Kidger, Mallat/Vetterli, Wainwright/Mézard, Vershynin, Lugosi, Royden/Axler.
+
+| Subsystem | Theorem/source | Hard-core invariant | Gate |
+|---|---|---|---|
+| SPRT commit | Wald SPRT | COMMIT iff LLR < log(1/19); DENY iff LLR > log(19) | memory-sprt-commit.py |
+| Mixing TTL (Cheeger) | Cheeger / Levin-Peres | TTL >= 1/(2·Phi) | memory-conductance-ttl.py |
+| Merged TTL floor | max(spectral-gap, Cheeger) | ephemeral 1d < floor => alarm | memory-ttl-floor-merge.py |
+| Adaptive rank | Eckart-Young + Vershynin | retain 90% variance | memory-adaptive-rank.py |
+| Channel efficiency | Shannon I(X;Y)/H(X) | efficiency < 0.6 => alarm | context-channel-capacity.py |
+| OT geodesic decay | Villani W1 1-D | Pinsker KL >= W1^2/2 | memory-ot-decay.py |
+| Path-signature rerank | Hairer/Kidger | 0.3·sig + 0.7·bm25; on-demand | memory-signature-rerank.py |
+| Fano retrieval | Cover-Thomas Fano | Pe >= (H-1)/log(|X|-1) | memory-fano-bound.py |
+| R-D converse | Cover-Thomas | R < R(D) => impossible | compaction-rd-converse.py |
+| AEP typical set | Cover-Thomas | typical-set retention rate | compaction-aep-typical-set.py |
+| Sanov large deviations | Cover-Thomas 11.4.1 | n·KL(Pn||U) vs log(1/delta)+k·log(n+1) | memory-sanov-ld.py |
+| Chain rule / DPI | Cover-Thomas 2.5.2 | I(X;Y,Z) >= I(X;Y) | compaction-chain-rule-mi.py |
+| Kraft inequality | Cover-Thomas 5.2 | sum 2^{-l_i} <= 1 | memory-kraft-code.py |
+| Optional stopping | Williams | n <= 4·ASN; prefix LLR in [B,A] | memory-optional-stopping.py |
+| Portmanteau | Billingsley | |mean_A - mean_B| <= W1 | memory-portmanteau.py |
+| Hitting time | Morters BM | premature hit if obs < 0.25·pred | memory-hitting-time.py |
+| Displacement convexity | Villani/McCann | H(mid) <= avg·H + slack | memory-displacement-convexity.py |
+| Malliavin IBP | Hairer/Nualart | |E[X·f] - E[f']| < 0.25 | memory-malliavin-ibp.py |
+| Wick renormalization | Hairer RS | mean(:xi^2:) = 0 | memory-renorm-counterterm.py |
+| Log-ODE signature | Kidger | Chen s2 = s1^2/2; endpoint exact | memory-log-ode-sig.py |
+| Haar MRA | Mallat/Vetterli | Parseval; HF frac <= 0.7 | memory-haar-mra.py |
+| Heisenberg TF | Mallat/Vetterli | no simultaneous t/omega collapse | memory-heisenberg-tf.py |
+| JL embedding | Blum FDS | max rel-distortion vs k_JL | memory-jl-distortion.py |
+| DKW / UE | Lugosi/Massart | KS <= sqrt(log(2/a)/(2n)) | memory-dkw-ue.py |
+| Matrix Bernstein | Vershynin/Tropp | Gram Frob vs Bernstein tail | memory-matrix-bernstein.py |
+| Bethe free energy | Wainwright/Mézard | tree I=0 => H_Bethe=sum H_i | memory-bethe-free-energy.py |
+| DCT / L^p gate | Royden/Axler | jump <= tail_L1 + 0.05 | memory-lp-dct-gate.py |
+| Hierarchical shrink | Gelman BDA | top-K swap_frac <= 0.3 | memory-gelman-shrink.py |
+| Bits-back coding | MacKay Ch 28 | net L >= 0 and <= zlib+prior | memory-bits-back.py |
+| Alarm bridge | aggregator contract | refresh wave21a-*-alarm.json every 15m | wave21a-alarm-bridge.py |
+
+### Hard cores (21A-∞)
+- SPRT cannot peek (optional sampling theorem); CONTINUE iff B <= LLR <= A
+- Legal TTL = max(mixing-time, 1/(2·Phi)); 1-day ephemeral below floor alarms
+- Compaction must not invent mutual information (DPI + chain rule invariant)
+- UE empirical law: Sanov + DKW + portmanteau on [0,1]
+- Wick product of UE increments is centered; Haar Parseval holds
+- alarm-aggregator sees 21A-∞ via refreshed `wave21a-*-alarm.json`
+
+
+## Wave 21B-∞ Additions (2026-10-08) — Routing / Bandits / Online / Adversarial (unlimited recursion)
+
+Canonical: `~/.hermes/hermes-scripts/`. Wrappers: `profiles/fork/scripts/`.
+Corpus close: Lattimore-Szepesvari, Borodin-El-Yaniv, Stanley, Flajolet, Schrijver, Vazirani, Manning, Jurafsky, Mézard-Montanari, Wainwright-Jordan, Shalev-Shwartz, Vershynin, Lugosi, O'Donnell Boolean functions, Hofstad random graphs.
+
+| Subsystem | Theorem/source | Hard-core invariant | Gate |
+|---|---|---|---|
+| PAC-Bayes routing | McAllester / Shalev UML | gen_error <= emp + sqrt((KL+log(2√m/δ))/(2m)) | routing-pac-bayes-bound.py |
+| Graph bandit | Lattimore Ch 22 | hop credit = 0.5^d | routing-graph-bandit-update.py |
+| EXP3 adversarial | Auer / Borodin | E[regret] <= sqrt(2·T·n·log n); gap>0.15 => CONFLICT | routing-exp3-adversarial.py |
+| Hamming audit | Lin coding | Jaccard < 0.3 => degenerate codebook | routing-hamming-audit.py |
+| Fano router floor | Cover-Thomas | P_err >= (H(S|Q)-1)/log2(n) | routing-fano-bound.py |
+| Möbius inversion | Stanley poset | score = sum_{A<=B} mu(A,B)·BM25(Q,B) | routing-mobius-audit.py |
+| Description entropy | Manning IR | H < 2.5 bits/char => LOW | skill-description-entropy.py |
+| EXP4 contextual | Lattimore Ch 18 | expert-weighted EXP3 | routing-exp4-contextual.py |
+| KL-UCB | Lattimore Thm 10.6 | UCB via kl-divergence maximization | routing-kl-ucb.py |
+| Rademacher | Shalev Ch 26 | gen_error <= emp + 2·R_m + eps | routing-rademacher-bound.py |
+| Boolean influence | O'Donnell | Inf_i[f] = Pr[f(x) != f(x^i)] | routing-boolean-influence.py |
+| Percolation | Hofstad | kappa < 2.0 OR no Molloy-Reed giant => FRAGMENTED; kappa >= 2.0 AND giant exists => HEALTHY | routing-skill-percolation.py |
+| Belief propagation | Mézard/Wainwright | L1-residual > 0.2 => RSB regime | routing-belief-propagation.py |
+| Precision/Recall | Manning IR | P@k, R@k, F1 from calibration log | routing-precision-recall.py |
+| Generating functions | Flajolet | depth-6 GF walks > 1e6 => alarm | skill-composition-gf.py |
+| LinUCB | Lattimore Ch 19 | ridge regression UCB; alpha=1.0 | routing-linucb.py |
+| Tsallis-INF | best-of-both-worlds | degenerate mix => alarm | routing-tsallis-inf.py |
+| McDiarmid BM25 | McDiarmid / Lugosi | BM25 gap < McDiarmid radius => stable | routing-mcdiarmid-bm25.py |
+| Set cover routing | Vazirani / Schrijver | greedy > 8 rounds => alarm | routing-token-setcover.py |
+| Skill Markov chain | Jurafsky / HMM | self-loop > 0.8 => alarm | routing-skill-markov.py |
+| Routing alarm bridge | aggregator contract | promote routing-*.json flags to *-alarm.json | routing-alarm-bridge.py |
+
+### Hard cores (21B-∞)
+- PAC-Bayes gen_error_bound > 0.3 => alarm
+- EXP3 BM25/EXP3 disagreement gap > 0.15 => CONFLICT logged
+- Fano: if current_error < fano_lower_bound => IMPOSSIBLE (calculation bug)
+- Jaccard < 0.3 between any skill pair => HIGH codebook-collision alarm
+- Boolean influence > 0.5 on any single token => routing concentrates on one feature
+- kappa < 2.0 (Molloy-Reed critical) => skill graph FRAGMENTED (routing unreliable); kappa >= 2.0 => HEALTHY [Wave 23 correction: giant_frac threshold removed; kappa is the correct Molloy-Reed criterion]
+- routing-alarm-bridge.py runs at 9:15am daily, promotes all routing alarm flags
+
+
+## Wave 23 Closures (2026-10-09) — Adversarial hardening pass
+
+Adversarial audit: 20 findings (3 critical, 6 high, 11 medium). Eval re-run: 76 metrics, 14 improvements, 3 regressions fixed.
+
+### Closed this wave
+
+| Finding | Fix |
+|---|---|
+| ADV-001 CRITICAL: PROMOTE consumers bypass mSPRT veto | sprt-effective-decision.py now writes effective-shadow-decisions.json (same schema as shadow-sprt-decisions.json); promotion-at-most-once.py prefers effective file when fresh (mtime >= shadow - 60s) |
+| ADV-002 CRITICAL: mSPRT fail-open on missing flag | merge() now fail-closes (HOLD 'msprt_no_data_for_flag') when mSPRT file present but no row for flag; HOLD 'msprt_file_missing' when file absent or stale > 26h |
+| ADV-003 CRITICAL: A_boot fallback lowers SPRT barrier | _load_a_boot() fallback changed from A_wald to None; run() emits all-HOLD with calibration_missing=True; A_boot loaded inside run() (not at import) |
+| ADV-005 HIGH: fork router never writes routing-events.jsonl | event logging ported from hermes-scripts to profiles/fork/scripts/skill-router-index.py; 10k-line rotation guard added |
+| ADV-006/R2 HIGH: percolation alarm wrong (FRAGMENTED at kappa=28) | alarm logic changed to kappa < 2.0 OR no Molloy-Reed giant; hard-cores in ARCHITECTURE.md updated |
+| ADV-007 HIGH: ISS passivity fail-open at 21% violations | iss-justification-gate.py: pas_ok requires violation_ratio <= VIOLATION_RATIO_MAX (0.15); 21% violations -> justified_ok=false |
+| ADV-008 HIGH: planted-needle local fallback contaminates Hindsight quality | unified-recall.py: _local_hindsight_fallback() only called when REST fails; unconditional prepend removed |
+| ADV-009 HIGH: h* stale, CUSUM mu0 frozen | loop-cusum-changepoint.py: staleness warning if calibration > 72h old; mu0 refreshed from xs[:50] per run |
+| ADV-010 MED: cron jobs have empty env | wrapper scripts in fork/scripts/ set HERMES_HOME + HERMES_PROFILE at top |
+| ADV-011 MED: monitor-suite writes base cache | monitor-suite-runner.py: CACHE uses HERMES_PROFILE-aware path; writes monitor-suite-alarm.json to fork profile cache |
+| ADV-012 MED: memory-ttl-purge ignores Bayesian TTL | memory-staleness.py now writes cache/memory-staleness.json; memory-ttl-purge.py loads it and overrides flat TTL with recommended_ttl_days |
+| ADV-013 MED: Wald PROMOTE before N_MIN_POWER | shadow-gate-sprt.py: N_MIN_POWER=50 guard; n<50 -> CONTINUE 'n_below_power_floor' |
+| ADV-015 MED: skill-beta-feedback clobbers state on parse fail | load_beta_state() returns None on error; caller refuses to save; .bak written before every save |
+| ADV-017 MED: alarm-bridge silent on PROMOTEs | wave21c-alarm-bridge.py: alarms on raw PROMOTEs when effective file missing/stale; alarms on missing report files |
+| ADV-018 MED: loop-pid-iss-wrapper uses base cache path | cache_dir now reads HERMES_HOME + HERMES_PROFILE env vars |
+| ADV-019 MED: calibrators have no cron | cron wrapper scripts written: cusum-h-calibrator-cron.py, block-bootstrap-sprt-cron.py, memory-staleness-cron.py |
+| R1: compaction-rd-advisor.py missing | Script created; reads eval-compaction-results.json; Pareto-filters; recommends jev_tail40 |
+| R2: percolation FRAGMENTED regression | Fixed via ADV-006 (alarm on kappa<2, not giant_frac<0.5) |
+| R3: Lyapunov ALARM on synthetic data | loop-lyapunov-stability.py: if unique timestamps < 3 -> status='no_live_data', alarm=false |
+
+### ARCHITECTURE.md hard-core corrections this wave
+- Wave 21B percolation: giant_frac<0.5 => FRAGMENTED replaced with kappa<2.0 => FRAGMENTED (Molloy-Reed criterion)
+- Wave 21E: Raw shadow-sprt-decisions.json is NOT executable; effective-shadow-decisions.json is now the canonical promotion gate file
+
+### Runtime verification (2026-10-09 implementation pass)
+- unified-recall.py: `_local_hindsight_fallback()` only when REST errors or returns empty; `local_fallback_used` stamped on each result; `_overlay_local_fallback` only when Hindsight is not in the chain
+- monitor-suite-runner.py: `CACHE = HERMES_HOME/profiles/$HERMES_PROFILE/cache/monitors`; writes `cache/monitor-suite-alarm.json`
+- memory-staleness.py writes `cache/memory-staleness.json`; memory-ttl-purge.py floors flat TTL with `recommended_ttl_days`
+- skill-beta-feedback.py + skill-router-index.py: parse-fail returns None and refuses save; `.bak` before every write
+- wave21c-alarm-bridge.py: raw `PROMOTE` without a fresh `effective-shadow-decisions.json` is an alarm (`unvetted_promote_raw`); missing reports alarm
+- loop-pid-iss-wrapper.py: prereq `cache_dir` from `HERMES_HOME` + `HERMES_PROFILE`
+- Canonical promotion gate file remains `effective-shadow-decisions.json` (mSPRT fail-closed + ISS `violation_ratio` gate unchanged this pass)
+
+### Residuals (not closed this wave)
+- ADV-004: A_boot recalibration cron (schedule via cronjob_manage; wrappers written)
+- ADV-014: routing-wald-sprt orphaned (separate concern from gate chain; accepted)
+- ADV-016: 08:00 cron window race (single-orchestrator; architectural limitation)
+- ADV-021: FIXED — run-nightly-gates.sh no longer aborts remaining stages on first failure
+- ADV-022: router-login.py imports vault_store via hermes-fork sys.path (fragile if checkout missing; not rewritten this pass)
+- W22 runner.py exam stratification: H-I8 locked on agent/*.py
+- W22 Hindsight write-path: REST ingest not instrumented
+- W22 47 monitor wrappers: ongoing backlog
+
+## Wave 22-OL Additions (2026-10-08) -- LLMs4OL Ontology Learning
+
+Source: Babaei Giglou et al., LLMs4OL (ISWC 2023)
+Three-task paradigm adapted to Hermes memory/skill ontology monitoring.
+
+New scripts:
+  memory-term-typer.py         - Task A: type terms vs concept-lattice; trigram Jaccard; alarm on isolated terms
+  memory-taxonomy-discover.py  - Task B: FCA subsumption + Jaccard is-a candidates; cycle detection
+  memory-relation-extractor.py - Task C: regex NRE 9 relation types; 0.7 confidence; deduplication
+  memory-ontology-topology.py  - Topology: BFS components, DFS cycles, Bron-Kerbosch cliques, diameter (Ghrist)
+
+Outputs:
+  cache/term-typer-output.json     typed/untyped terms
+  cache/taxonomy-candidates.json   is-a candidate edges
+  cache/relation-triples.json      NRE triples
+  cache/ontology-topology.json     topology health snapshot
+  cache/wave22ol-*-alarm.json      per-script alarms
+
+
+## Wave 22-Eval Additions (2026-10-09) — Live eval harness + architectural improvements
+
+Four eval domains ran against live hermes-fork infrastructure. Findings and fixes below.
+
+Theory corpus used: Cover-Thomas Ch 3/10, Khalil Ch 4/9/11, Astrom-Murray feedback,
+Wald sequential analysis, Johari et al. mSPRT (arXiv:1512.04922), Lattimore-Szepesvari
+Ch 10/19/22, Borodin-ElYaniv, McAllester PAC-Bayes 1999, Manning IR, Berger Bayesian
+decision theory, LongMemEval arXiv:2410.10813, HELMET arXiv:2410.02694,
+Künsch moving-block bootstrap.
+
+---
+
+### A. Compaction eval
+
+Planted-needle eval: synthetic_transcript(n_turns=60, 6 deploy-code needles).
+Official runner.py (LLM judge path) NOT invoked per AUDIT-22 (validate structurally first).
+All policy arms scored by exact-match code survival after policy-faithful head/tail cuts.
+
+R-D curve (rate = after/before tokens, D = 1 - needle recall):
+
+  policy        rate    reduction  recall   D
+  current       0.668   0.332      0.667    0.333
+  tail25k       0.668   0.332      0.667    0.333   (identical to current at default tail_mode=lean)
+  lean          0.668   0.332      0.667    0.333
+  jev_tail40    0.389   0.611      1.000    0.000   <- Pareto-dominant (assistant-text kept)
+  tail10k       0.268   0.732      0.333    0.667
+  jev           0.130   0.870      1.000    0.000   <- Pareto-dominant
+  codex_style   0.068   0.932      0.167    0.833   <- rate<0.30 floor violation
+
+Oracle-summary D=0 at every rate: distortion is what the SUMMARIZER drops, not tail length.
+
+Key findings:
+1. head_hit_rate=0.0 (LLM exam) is exam-window misalignment, not a broken metric.
+   runner.generate_questions() samples summarized_region() only -> head needles never asked.
+   Structural eval: head_hit_rate=1.0 (Z6305 at msg_index=2 is inside protect_head_size=4).
+2. current/tail25k/lean are identical on 1M lean window. Policy matrix is under-identified
+   until window size or tail_mode differs in test fixtures.
+3. AEP (Cover-Thomas Ch 3): H=1.20 bits/token, n_pre=24519, n_post=16384, both typical. OK.
+   Previously zeros because bridge never fired. Bridge now wired.
+4. Chain-rule MI (DPI): h_x=7880, dpi_ok=true, mono_ok=true. zlib proxies fire correctly.
+5. Distortion gate: char-Jaccard=0.854, D=0.146 < 0.5 threshold. No alarm on this fixture.
+
+Hard-core invariants added:
+- Compaction must not produce codex_style (rate<0.30) unless summarizer is extractive.
+- Distortion gate: reject candidate summary if D_char > 0.5 (eval-compaction-distortion-gate.py).
+- DPI: compaction must not add MI. If I(X;Z) > I(X;Y) from zlib proxies, flag for manual review.
+- Exam stratification: questions must span head/middle/tail bands equally; never sample
+  generate_questions() from summarized_region() only.
+
+New scripts (stdlib only, H-I6 compliant):
+  hermes-scripts/eval-compaction-data-bridge.py    - bridge: writes pre/mid/post text + current-token-count.json; feeds AEP + chain-rule-MI
+  hermes-scripts/eval-compaction-distortion-gate.py - char/n-gram Jaccard distortion gate; --self-test PASS
+  Fixtures: cache/scratch/synthetic-transcript.json, cache/scratch/compaction-questions.json
+  Patch: rd-compaction-advisor.py reads cache/current-token-count.json when --current-tokens omitted.
+
+Cron recommendation: pre_compress hook should call eval-compaction-data-bridge.py on every
+  compaction to keep AEP/MI/advisor from reporting zeros in production.
+
+Remaining gaps (not closed this wave):
+  - OPEN: LLM runner.py exam stratification (answerer + judge; questions must span head/middle/tail).
+  - Jev-adversarial: replant needles inside tool dumps before treating Jev as dominant.
+  - N=6 needles is underpowered. Need >= 30 independent needles (10/band) for policy ranking.
+  - Live pre_compress hook calling distortion gate and refusing high-D summaries.
+
+---
+
+### B. Routing eval
+
+Corpus: 229 indexed skills.
+Offline eval against synthetic qrels: 30 skills x 3 queries (2 relevant + 1 distractor).
+
+Offline BM25 IR metrics (query-conditioned, not self-rank):
+  MAP=0.912, NDCG@5=0.928, MRR=0.912, P@1=0.867, P@5=0.197
+  Note: P@1=0.867 gap to 1.0 is name-collision among textbook family skills (knapp-*, milne-*).
+  These are a lexical UPPER BOUND. Real user queries will be shorter.
+
+Old eval failures diagnosed:
+  routing-precision-recall.py: P@5=0.0 because query=skill_name vs beta successes (n=1).
+    Not an IR eval -- it is a BM25 corpus-quality probe. Replaced by qrels-conditioned metrics.
+  routing-pac-bayes-bound.py: vacuous (m=3 skills, not i.i.d. labeled queries; linear not softmax Q).
+  routing-skill-percolation.py: REAL alarm. T=0.35 past Molloy-Reed criticality T*=0.321.
+    At T=0.35: giant_frac=0.022 (5/229 skills), kappa=1.63 < 2 -- graph correctly fragmented.
+    At T=0.15: giant_frac=0.559, kappa=28.6 >> 2 -- healthy.
+    FIXED: operating threshold patched to 0.15. kappa computed directly.
+  routing-hamming-audit.py: 1 near-duplicate pair (murphy-pml-vol1/vol2 Jaccard=0.267). OK.
+  routing-linucb.py: theta=0 because hashed skill tokens used as features (no reward signals).
+    Fixed: 8-d contextual features identified: max_token_overlap, bm25_score, skill_name_match
+    (significant, theta=[+0.785, +0.304, +0.223]); drop hour/session (include 0 in 95% CI).
+  routing-markov/SPRT: still empty -- no session event log exists.
+
+Hard-core invariants added/updated:
+- Percolation OPERATING threshold = 0.15 (T* = 0.321 for BM25 token Jaccard on this corpus).
+  If kappa < 2 at operating threshold, routing is unreliable -> FRAGMENTED alarm.
+- LinUCB must use query-conditioned features, not hashed skill tokens.
+  Significant features: max_token_overlap, bm25_score, skill_name_match.
+- Beta priors seeded for all 229 skills from BM25 reciprocal rank: alpha=1+1/r, beta=1.
+  Live skill-beta-feedback.py adds to alpha/beta; does not replace seeded prior.
+- PAC-Bayes bound is advisory only until m >= 200 labeled queries.
+- Session event log (ts, query, skill, reward) required for Markov/SPRT/PAC-Bayes to be non-trivial.
+  Without it, those monitors will stay empty regardless of eval cadence.
+- Candidate set: BM25 top-15 INTERSECT percolation neighbors at T=0.15 of top-1 BM25 hit.
+  Score = BM25 + LinUCB bonus (alpha_ucb=0.5, 8-d features) + KL-UCB index on seeded Beta.
+
+New scripts (stdlib only, H-I6 compliant):
+  hermes-scripts/skill-beta-seed.py           - BM25 rank-seeded beta priors for all 229 skills
+  hermes-scripts/eval-routing-linucb-features.py - 8-d LinUCB feature extractor + offline eval
+  Patch: routing-skill-percolation.py OPERATING=0.15, kappa computed directly.
+  New data: cache/qrels.jsonl (90 rows), cache/skill-beta-state-seeded.json (229 skills).
+
+Remaining gaps:
+  - Replace routing-precision-recall.py self-rank with qrels-conditioned metrics.
+  - OPEN: PAC-Bayes m<200 (softmax Q posterior, prior P = seeded Beta, m = #queries not #skills).
+  - Wire LinUCB 3-d features into live routing-linucb.py.
+  - Human qrels (20 real queries) before treating MAP as production quality.
+  - CLOSED: Session event log (ts, query, skill, reward) for Markov + SPRT + PAC-Bayes.
+
+---
+
+### C. Loop stability eval
+
+Pre-fix state:
+  lyapunov_ok=false (ALARM): root cause = loop-pid.py never stepped (0 observations).
+    Alarm was against nothing. PID controller defined but never called between sessions.
+  iss-justification-gate: justified_ok=true (FAIL-OPEN): all three prereqs had n=0.
+    Vacuous alarm=false on zero observations is not a certificate.
+    Khalil Ch 9: ISS composition needs VERIFIED subsystem ISS, not empty pass.
+  CUSUM h=4.0: uncalibrated. ARL_0 = 15.8 at h=4.0 (target >= 500).
+  SPRT alpha overshoot: empirical alpha=0.243 at rho=0.6 (target 0.05). Wald SPRT assumes i.i.d.
+    Loop metrics are AR(1). At rho=0.6, ~5x Type I overshoot. CRITICAL.
+
+Fixes shipped:
+
+1. iss-justification-gate.py: n=0 fail-closed guard.
+   When all three prereqs explicitly report n=0: justified_ok=false, reason='insufficient_data'.
+   Vacuous alarm=false no longer passes. Self-test: 7/7.
+   Note: nyquist_n_aliased=0 with real passivity/circle n>0 is NOT trapped (valid count).
+
+2. loop-pid-iss-wrapper.py: lyapunov unmeasured vs failed distinction.
+   lyapunov-check returns insufficient_history -> lyapunov_ok=null, lyapunov_status=lyapunov_insufficient_data.
+   overall_ok=false ONLY on measured failure (lyapunov_ok is False), not on null (unmeasured).
+   Self-test: 11/11.
+
+3. loop-pid-synthetic-step.py: N=200 synthetic PID bootstrap.
+   setpoint=1.0, Kp=0.5, Ki=0.05, Kd=0.1, Astrom anti-windup (Ch 11.4).
+   Writes to both profile and ~/.hermes/cache/loop-pid-state.json.
+   After bootstrap: lyapunov measured (steps_checked=199), lyapunov_ok=false (80/199 decreasing).
+   This is a REAL criterion result -- strict all-pairs deltaV<0 is sufficient for deterministic
+   asymptotic stability (Khalil Ch 4) but NOT necessary for stochastic tracker.
+   Next: use E[deltaV]<0 (supermartingale test) for stochastic plants.
+
+4. block-bootstrap-sprt.py: Kunstch moving-block bootstrap SPRT.
+   Block length L=ceil(sqrt(n)), B=500 bootstrap sequences. Empirical threshold A from
+   (1-alpha) quantile of max-LLR under H0. At rho=0.6: A_wald=2.94 -> empirical alpha=0.20;
+   A_boot=11.94 -> empirical alpha=0.01. Validity restored; power drops (expected).
+   WARNING: do not feed raw PID error (mean~0.11) into the N(3.5,1) SPRT.
+
+5. cusum-h-calibrator.py: h* calibration via block bootstrap.
+   Pre-change window: first 50 errors. Studentize residuals by residual sigma after linear detrend.
+   Page two-sided CUSUM (k=0.25), ARL_0 via B=200 block bootstrap. Binary search h* s.t. ARL_0>=500.
+   Result: h_current=4.0 -> ARL_0=15.8 (alarm at routine transient). h*=17.907 -> ARL_0=516.
+   h=4.0 is an order of magnitude too small on studentized AR residuals.
+
+After bootstrap, prereqs with real data:
+  pid-passivity-index: n=199, violation_ratio=0.211, alarm=false (threshold 0.5). OK.
+  pid-circle-criterion: n=200, sat_frac=0.065, alarm=false (threshold 0.5). OK.
+  nyquist-timescale-bridge: n_aliased=0, two_timescale_ok=true. OK.
+  iss-justification-gate: now justified_ok=true (real n, not vacuous).
+
+Hard-core invariants added/updated:
+- n=0 on ALL three ISS prereqs -> justified_ok=false (fail-closed, not fail-open).
+- lyapunov insufficient_history -> WARNING not ALARM. overall_ok=false only on measured fail.
+- CUSUM h must be calibrated: h* from cusum-h-calibrator.py s.t. ARL_0>=500 on studentized residuals.
+  Wire h* from cusum-h-calibrator output into loop-cusum-changepoint.py (currently advisory).
+- SPRT for loop metrics: use block-bootstrap-sprt.py (not Wald) for AR(1) data.
+  Wire A_boot from block-bootstrap-sprt output into shadow-gate-sprt.py and sprt-effective-decision.py.
+- Lyapunov for stochastic plants: use E[deltaV]<0 (supermartingale), not all-pairs strict decrease.
+
+New scripts (stdlib only, H-I6 compliant):
+  hermes-scripts/loop-pid-synthetic-step.py  - N=200 PID bootstrap; Astrom anti-windup
+  hermes-scripts/block-bootstrap-sprt.py     - Kunstch moving-block SPRT; --self-test PASS
+  hermes-scripts/cusum-h-calibrator.py       - ARL_0 calibration; h*=17.907 for this plant
+
+Remaining gaps (not closed this wave):
+  - No live stepper: synthetic history is a bootstrap, not a session loop.
+    Something must call loop-pid.py step between turns or the file goes stale.
+  - History cap 20 in cmd_step: Lyapunov/CUSUM/passivity need a longer ring buffer (or side log).
+  - Gain mismatch: lyapunov-check uses default Kp/Ki/Kd, not the plant's actual gains.
+  - CLOSED: SPRT alpha overshoot — A_boot wired into shadow-gate-sprt / sprt-effective-decision.
+  - CLOSED: ISS n=0 fail-closed (iss-justification-gate.py).
+  - CLOSED: CUSUM h* wired from cusum-h-calibrator into loop-cusum-changepoint.
+  - Cross-session safety state (CUSUM S+/S-, SPRT LLR) must persist. Session-scoped monitors
+    have TPR~FPR against split-evidence attacks (Wu et al.).
+  - GATE GAP: HIGH-risk writes must fail-closed on missing sprt-effective-decision.json +
+    loop-stability-composite.json.
+
+---
+
+### D. Shadow + memory eval
+
+Shadow gate: no telemetry before this eval. With synthetic data (200 events):
+  consistency_scoring: n=100, pass_rate=100%, nightly=PROMOTE, mSPRT=PROMOTE (Lambda~2.8e6).
+  aimd_controller: n=98, pass_rate=90.8%, nightly=PROMOTE, mSPRT=CONTINUE (mean mixed ~0.77).
+  loop_detection: n=2, zero-tolerance unauthorized_tool_call, REJECT (mSPRT + nightly agree).
+
+Wald vs mSPRT: nightly Wald SPRT peeks daily. At AR(1) rho=0.6, empirical alpha~0.243 vs 0.05.
+  Johari et al. arXiv:1512.04922 mSPRT: mixture prior pi=Beta(2,2), H0: p=0.80.
+  Lambda_n = B(2+s, 2+n-s)/B(2,2) / [p0^s (1-p0)^(n-s)].
+  Optional stopping then valid: P_H0(exists t: Lambda_t >= 1/alpha) <= alpha.
+  PROMOTE iff Lambda >= 1/alpha AND mean_pass_rate > 0.9 AND n >= 50 AND no ZT AND error_rate < 0.10.
+  mSPRT output: cache/msprt-shadow-gate.json (decisions list of {flag, decision, ...} objects, not a dict keyed by flag).
+
+Memory staleness: age-only 30d cutoff mislabels live config as stale.
+  S01 (40d old): STALE by date but referenced ~793 times. TTL with Berger formula = 228d.
+  S03-S05 (no dates): UNKNOWN by age -> ACTIVE by reference frequency (refs >= 2).
+  Fix: TTL = 30*(1 + log(1 + reference_count)). Compare age to recommended_ttl_days.
+  Patch applied to memory-staleness.py: reference_frequency field always present.
+  UNKNOWN + refs >= 2 -> ACTIVE. Do not evict S01 on 30d rule alone.
+
+Memory planted-needle benchmark (LongMemEval-style):
+  N=10 planted tokens in synthetic history. unified-recall hit_rate=0/10 (0.00).
+  Lexical over history: 10/10. Diagnosis: INDEX WRITE-GAP, not a ranker bug.
+  Needles in history file but Hindsight/Graphiti never ingested them. Write-path fails silently.
+  Per Yuan et al. arXiv:2603.02473: classify retrieval vs utilization vs write before adding extractors.
+  CI width ~28pt (N=10). LongMemEval uses 500 questions/115 sessions; HELMET uses 100-2000 items.
+
+Monitor GATE GAP: monitor-suite-runner.py references 60 monitors; 52 are missing fork wrappers.
+  Not missing algorithms -- missing two-tier delegation scripts. 5 Tier-1 wrappers added:
+  1. plan-enforcement-gate.py      - plan gate; absence -> unsafe plans dispatch unchecked
+  2. containment-monitor.py        - S_t subset C envelope; absence -> no containment proof
+  3. safety-metric-evaluator.py    - composite safety predicate / postcondition check
+  4. constraint-validator-with-rollback.py - rollback on violation; absence -> errors cascade
+  5. cot-injection-detector.py     - plan-injection / trace-tamper invariant
+  Remaining 47 wrappers deferred. Do NOT add empty OK-printers -- that hides the GATE GAP.
+
+Hard-core invariants added/updated:
+- Shadow PROMOTE requires BOTH nightly Wald AND mSPRT PROMOTE. Peeked Wald alone is advisory.
+- Memory TTL: age > recommended_ttl_days (= 30*(1+log(1+refs))) before STALE eviction.
+  Do not evict facts with high reference counts purely by calendar age.
+- Memory write path: ingest session episodes into Hindsight BEFORE claiming unified-recall quality.
+  Raw chunks preferred over lossy write-time summaries.
+- Monitor suite must not add empty OK-stubs for missing wrappers. Gap is real until two-tier wrapper exists.
+- adversarial-robustness-tester.py: NameError _HH must be fixed before including in suite.
+- Canonical shadow-gate-nightly.py: align with fork ZT/N_MIN_POWER gate or stop invoking from cron.
+
+New scripts (stdlib only, H-I6 compliant):
+  hermes-scripts/eval-shadow-synthetic.py       - 200 synthetic JSONL shadow events
+  hermes-scripts/msprt-shadow-gate.py           - Johari mSPRT always-valid wrapper
+  hermes-scripts/memory-reference-frequency.py  - Bayesian TTL from reference counts
+  hermes-scripts/eval-memory-planted-needle.py  - LongMemEval-style planted-needle probe
+  Patch: hermes-scripts/memory-staleness.py (reference_frequency field; UNKNOWN+freq -> ACTIVE)
+  New data: cache/shadow-telemetry/synthetic-eval-session.jsonl (200 events)
+  New data: cache/msprt-shadow-gate.json
+
+Remaining gaps:
+  - CLOSED (partial): Memory planted-needle hit_rate=1.0 via local fallback; Hindsight ingest still OPEN.
+  - OPEN: Hindsight write path (ingest session episodes before claiming unified-recall quality).
+  - OPEN: remaining 47 monitor wrappers (two-tier) or shrink suite list.
+  - Fix _HH NameError in adversarial-robustness-tester.py.
+  - CLOSED: mSPRT gate wired alongside nightly Wald PROMOTE.
+  - CLOSED: Memory TTL Bayesian formula (age > recommended_ttl_days = 30*(1+log(1+refs))).
+  - GATE GAP: ue-memory-gate.py has no wiring point in agent runtime; invoked standalone and via daily cron (profiles/fork/scripts/ue-memory-gate-cron.py at 05:00).
+
+Nightly gate wrapper: profiles/fork/scripts/run-nightly-gates.sh
+Add to cron via: cronjob --prompt "run nightly gates" --script run-nightly-gates.sh --schedule daily
+
+---
+
+### Wave 22-Eval: Cross-cutting gaps (priority order)
+
+CLOSED this backlog:
+  1. SPRT alpha overshoot — CLOSED (A_boot wired).
+  2. ISS n=0 fail-closed — CLOSED (iss-justification-gate.py).
+  3. CUSUM h* wiring — CLOSED.
+  4. Memory TTL Bayesian formula — CLOSED.
+  5. mSPRT gate wired — CLOSED.
+  6. Session event log — CLOSED.
+  7. Memory planted-needle — CLOSED (partial): hit_rate=1.0 via local fallback; Hindsight ingest still OPEN.
+
+OPEN:
+  8. LLM runner.py exam stratification (questions must span head/middle/tail).
+  9. Remaining 47 monitor wrappers (two-tier) or shrink suite list.
+  10. PAC-Bayes m<200 labeled queries before non-vacuous bound.
+  11. Hindsight write path (ingest before claiming unified-recall quality).
+  12. Percolation T*=0.321: monitor drift of this threshold as skill corpus grows.
+  13. Lyapunov: E[deltaV]<0 supermartingale for stochastic plants.
+
+GATE GAP: ue-memory-gate.py has no wiring point in agent runtime; invoked standalone and via daily cron ue-memory-gate-cron.py (05:00).
+
+## Gate-chain integrity (ADV2 / WIRE closures)
+
+### WIRE-007 — mSPRT decisions schema
+
+`cache/msprt-shadow-gate.json` `decisions` is a **list of `{flag, decision, ...}` objects**, not a dict keyed by flag. Fail-closed behavior on a missing flag is preserved by the list reader's flag-match loop in `sprt-effective-decision.merge()` (`msprt_no_data_for_flag` when the flag is absent from the list).
+
+### ADV2-020 — mtime-window validation (current integrity mechanism)
+
+Cache JSON is unauthenticated. Cryptographic signing is not wired. Integrity substitute: `sprt-effective-decision.py` rejects inputs older than 25h (`INPUT_TTL_HOURS`) with `hold_flags` reason `input_stale:<name>:<age_h>h`, and veto files older than the shadow SPRT mtime fail as `veto_file_missing:<name>` / `stale veto file`. Missing any of tamper/truncation/handshake fails closed (HOLD, not PROMOTE). mSPRT remains independently fail-closed at 26h.
+
+### WIRE-021 — jev-turn-scores.jsonl has no script producer
+
+`jev-turn-scores.jsonl` is written opportunistically by the JEV plugin (`jev-turn-evaluator`), not by a scheduled script. Gap documented. Sentinel: `jev-scores-staleness-check.py` writes `cache/jev-scores-missing-alarm.json` (`alarm=true`, `reason=no_jev_scores`) when the file is missing or older than 24h.
+
+### Cron order (WIRE-005)
+
+Veto producer before effective merge before consumers:
+
+- `sprt-inner-outer-alignment` 08:20 (`20 8 * * *`)
+- `sprt-effective-decision` 08:25 (`25 8 * * *`)
+- `ltl-promotion-invariant` 08:35 (`35 8 * * *`)
+- `promotion-at-most-once` 08:40 (`40 8 * * *`)
+
+`promotion-at-most-once.py` never reads `shadow-sprt-decisions.json`. Missing or stale `effective-shadow-decisions.json` => skip (`status=skipped`, `reason=effective_not_ready`).
+

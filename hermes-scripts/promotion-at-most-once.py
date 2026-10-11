@@ -16,6 +16,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+import time
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
 _hermes_profile = os.environ.get('HERMES_PROFILE', '')
@@ -61,12 +62,59 @@ def check(decisions: list[dict], ledger: dict) -> tuple[dict, dict]:
 
 
 def run() -> dict:
+    EFFECTIVE = CACHE / 'effective-shadow-decisions.json'
+    SHADOW = CACHE / 'shadow-sprt-decisions.json'
+    ts = datetime.now(timezone.utc).isoformat()
+    # WIRE-004: never fall back to raw SPRT. Skip if effective is missing or older than shadow.
+    if not EFFECTIVE.exists():
+        report = {
+            'status': 'skipped',
+            'reason': 'effective_not_ready',
+            'ts': ts,
+            'alarm': False,
+            'n_new': 0,
+            'n_dup': 0,
+        }
+        try:
+            _atomic_write(OUT, report)
+            report['output'] = str(OUT)
+        except OSError as exc:
+            report['write_error'] = str(exc)
+        return report
+    if SHADOW.exists() and EFFECTIVE.stat().st_mtime < SHADOW.stat().st_mtime:
+        report = {
+            'status': 'skipped',
+            'reason': 'effective_not_ready',
+            'ts': ts,
+            'alarm': False,
+            'n_new': 0,
+            'n_dup': 0,
+        }
+        try:
+            _atomic_write(OUT, report)
+            report['output'] = str(OUT)
+        except OSError as exc:
+            report['write_error'] = str(exc)
+        return report
     decisions = []
     try:
-        obj = json.loads((CACHE / 'shadow-sprt-decisions.json').read_text())
-        decisions = list(obj.get('decisions') or [])
+        decisions_raw = json.loads(EFFECTIVE.read_text())
+        decisions = list(decisions_raw.get('decisions') or []) if isinstance(decisions_raw, dict) else []
     except (OSError, json.JSONDecodeError):
-        pass
+        report = {
+            'status': 'skipped',
+            'reason': 'effective_not_ready',
+            'ts': ts,
+            'alarm': False,
+            'n_new': 0,
+            'n_dup': 0,
+        }
+        try:
+            _atomic_write(OUT, report)
+            report['output'] = str(OUT)
+        except OSError as exc:
+            report['write_error'] = str(exc)
+        return report
     ledger = {}
     try:
         ledger = json.loads(LEDGER.read_text())
@@ -75,7 +123,8 @@ def run() -> dict:
     except (OSError, json.JSONDecodeError):
         ledger = {}
     report, new_ledger = check(decisions, ledger)
-    report['ts'] = datetime.now(timezone.utc).isoformat()
+    report['ts'] = ts
+    report['status'] = 'ok'
     try:
         _atomic_write(LEDGER, new_ledger)
         _atomic_write(OUT, report)
@@ -86,6 +135,7 @@ def run() -> dict:
 
 
 def self_test() -> int:
+    import tempfile
     failures = []
     r, led = check([{'decision': 'PROMOTE', 'flag': 'a'}], {'promoted': {}})
     if r['alarm'] or r['n_new'] != 1:
@@ -96,6 +146,30 @@ def self_test() -> int:
     r3, _ = check([{'decision': 'PROMOTE', 'flag': 'x'}, {'decision': 'PROMOTE', 'flag': 'x'}], {'promoted': {}})
     if not r3['alarm']:
         failures.append('intra-batch dup')
+    global CACHE, LEDGER, OUT
+    orig = (CACHE, LEDGER, OUT)
+    try:
+        td = Path(tempfile.mkdtemp())
+        CACHE = td
+        LEDGER = td / 'promotion-ledger.json'
+        OUT = td / 'promotion-at-most-once.json'
+        skipped = run()
+        if skipped.get('status') != 'skipped' or skipped.get('reason') != 'effective_not_ready':
+            failures.append(f'WIRE-004 missing effective: {skipped}')
+        if LEDGER.exists():
+            failures.append('WIRE-004 skip wrote ledger')
+        # stale effective (mtime < shadow) also skips; never reads shadow content
+        shadow = td / 'shadow-sprt-decisions.json'
+        shadow.write_text(json.dumps({'decisions': [{'flag': 'raw', 'decision': 'PROMOTE'}]}), encoding='utf-8')
+        eff = td / 'effective-shadow-decisions.json'
+        eff.write_text(json.dumps({'decisions': [{'flag': 'eff', 'decision': 'PROMOTE'}]}), encoding='utf-8')
+        os.utime(eff, (time.time() - 120, time.time() - 120))
+        os.utime(shadow, (time.time(), time.time()))
+        stale = run()
+        if stale.get('status') != 'skipped' or stale.get('reason') != 'effective_not_ready':
+            failures.append(f'WIRE-004 stale effective: {stale}')
+    finally:
+        CACHE, LEDGER, OUT = orig
     if failures:
         print(json.dumps({'self_test': 'FAIL', 'failures': failures}))
         return 1
@@ -110,8 +184,12 @@ def main(argv=None) -> int:
     if args.self_test:
         return self_test()
     out = run()
+    if out.get('status') == 'skipped':
+        print(json.dumps({k: out.get(k) for k in ('status', 'reason', 'output')}))
+        return 0
     print(json.dumps({k: out.get(k) for k in ('n_new', 'n_dup', 'alarm', 'output')}))
-    return 1 if out.get('alarm') else 0
+    # Alarm is a successful write of business-logic state; cron last_status=ok (ADV2-017).
+    return 1 if out.get('write_error') else 0
 
 
 if __name__ == '__main__':

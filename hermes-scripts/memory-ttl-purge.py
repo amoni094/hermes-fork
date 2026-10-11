@@ -38,6 +38,13 @@ import re
 import os
 
 _HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_HERMES_PROFILE = os.environ.get("HERMES_PROFILE", "")
+_HERMES_ROOT = (
+    (_HERMES_HOME / "profiles" / _HERMES_PROFILE)
+    if _HERMES_PROFILE and "profiles" not in str(_HERMES_HOME)
+    else _HERMES_HOME
+)
+CACHE = _HERMES_ROOT / "cache"
 FACTS_DIR = _HERMES_HOME / "memory-facts"
 LIFECYCLE_DB = FACTS_DIR / "lifecycle.db"
 STAGING_PATH = FACTS_DIR / "staging.md"
@@ -120,10 +127,45 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def load_expired(conn: sqlite3.Connection) -> list[dict]:
+def _load_staleness_ttls() -> dict:
+    """Load Bayesian recommended_ttl_days from memory-staleness.json (ADV-012)."""
+    staleness_path = CACHE / "memory-staleness.json"
+    staleness_by_key = {}
+    if staleness_path.exists():
+        try:
+            st = json.loads(staleness_path.read_text())
+            for sec in st.get("sections", []):
+                key = sec.get("key") or sec.get("title") or sec.get("name")
+                if key and "recommended_ttl_days" in sec:
+                    staleness_by_key[str(key)] = sec["recommended_ttl_days"]
+        except Exception:
+            pass
+    return staleness_by_key
+
+
+def _bayesian_ttl_floor(ttl: timedelta, entry_key: str, fact_text: str, staleness_by_key: dict) -> tuple[timedelta, bool]:
+    """Floor flat-policy TTL by Bayesian recommended_ttl_days when a key matches."""
+    recommended = staleness_by_key.get(entry_key)
+    if recommended is None and fact_text:
+        for key, days in staleness_by_key.items():
+            if key and key in fact_text:
+                recommended = days
+                break
+    if recommended is None:
+        return ttl, False
+    try:
+        days = float(recommended)
+    except (TypeError, ValueError):
+        return ttl, False
+    return max(ttl, timedelta(days=days)), True
+
+
+def load_expired(conn: sqlite3.Connection) -> tuple[list[dict], int]:
     """Return lifecycle.db rows that are due for purge."""
     now = now_utc().isoformat()
     expired = []
+    staleness_by_key = _load_staleness_ttls()
+    n_bayesian_applied = 0
 
     # 1. Archived (superseded) facts older than grace period
     rows = conn.execute(
@@ -189,6 +231,10 @@ def load_expired(conn: sqlite3.Connection) -> list[dict]:
         except Exception:
             pass
         ttl = ttl + _echo_ttl_extension(access_count)
+        entry_key = fact_text[:120] if fact_text else (r[0] or fact_type)
+        ttl, bayesian_hit = _bayesian_ttl_floor(ttl, entry_key, fact_text, staleness_by_key)
+        if bayesian_hit:
+            n_bayesian_applied += 1
         if now_utc() - valid_from > ttl:
             expired.append({
                 "memory_id": r[0], "fact_type": r[1], "status": r[2],
@@ -223,10 +269,11 @@ def load_expired(conn: sqlite3.Connection) -> list[dict]:
             })
 
     # Never delete constraint-class rows; freshness check warns only.
-    return [
+    filtered = [
         e for e in expired
         if (e.get("fact_type") or "").lower() not in CONSTRAINT_FACT_TYPES
     ]
+    return filtered, n_bayesian_applied
 
 
 def _recent_session_ids(conn: sqlite3.Connection, n: int) -> set[str]:
@@ -457,11 +504,13 @@ def main():
         print(f"[memory-ttl-purge] mixing-ttl check skipped: {_mix_exc}", file=sys.stderr)
 
     with sqlite3.connect(str(LIFECYCLE_DB)) as conn:
-        expired = load_expired(conn)
+        expired, n_bayesian_applied = load_expired(conn)
         # Freshness warn runs on every purge, including when no volatiles expired.
         stale_constraints = check_constraint_freshness(
             conn, max_age_days=CONSTRAINT_MAX_AGE_DAYS
         )
+
+    print(f"Bayesian TTL applied for {n_bayesian_applied} entries")
 
     if stale_constraints:
         print(f"[memory-ttl-purge] Stale constraints found: {len(stale_constraints)}")

@@ -1,0 +1,246 @@
+[
+ {
+  "policy": "current+recovery",
+  "before_tokens": 497435,
+  "after_tokens": 30675,
+  "after_msgs": 98,
+  "compress_seconds": 59.4,
+  "recall_pct": 53.3,
+  "scores": [
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   2
+  ],
+  "by_difficulty": {},
+  "by_signal_type": {
+   "TOKEN_NEUTRAL": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_SENSITIVE": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_EFFICIENT_SIGNAL": {
+    "recall_pct": 53.3,
+    "n": 15
+   }
+  },
+  "summary_error": null,
+  "head_hit_rate": 0.0,
+  "classifier_decision": {
+   "session_type": "code",
+   "confidence": 0.9788461538461539,
+   "compression_profile": "fork_mixed"
+  },
+  "classified_info": {
+   "session_type": "code",
+   "confidence": 0.9788461538461539,
+   "compression_profile": "fork_mixed"
+  },
+  "compaction_calls": 1,
+  "compaction_input_tokens": 58273,
+  "compaction_output_tokens": 5062,
+  "compaction_model": "claude-haiku-4-5",
+  "compaction_cost_usd": null,
+  "ratio": 0.061666,
+  "combined": 8.643288,
+  "ci_width": 44.9,
+  "output_tokens_per_recall_point": 3836.8
+ },
+ {
+  "policy": "lean+recovery",
+  "before_tokens": 497435,
+  "after_tokens": 31337,
+  "after_msgs": 98,
+  "compress_seconds": 59.1,
+  "recall_pct": 50.0,
+  "scores": [
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1
+  ],
+  "by_difficulty": {},
+  "by_signal_type": {
+   "TOKEN_NEUTRAL": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_SENSITIVE": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_EFFICIENT_SIGNAL": {
+    "recall_pct": 50.0,
+    "n": 15
+   }
+  },
+  "summary_error": null,
+  "head_hit_rate": 0.0,
+  "classifier_decision": {
+   "session_type": "code",
+   "confidence": 0.9788461538461539,
+   "compression_profile": "fork_mixed"
+  },
+  "classified_info": {
+   "session_type": "code",
+   "confidence": 0.9788461538461539,
+   "compression_profile": "fork_mixed"
+  },
+  "compaction_calls": 1,
+  "compaction_input_tokens": 58273,
+  "compaction_output_tokens": 5414,
+  "compaction_model": "claude-haiku-4-5",
+  "compaction_cost_usd": null,
+  "ratio": 0.062997,
+  "combined": 7.936864,
+  "ci_width": 45.0,
+  "output_tokens_per_recall_point": 4178.3
+ },
+ {
+  "policy": "current",
+  "before_tokens": 497435,
+  "after_tokens": 31213,
+  "after_msgs": 98,
+  "compress_seconds": 57.0,
+  "recall_pct": 40.0,
+  "scores": [
+   0,
+   1,
+   1,
+   1,
+   0,
+   1,
+   1,
+   1,
+   1,
+   0,
+   1,
+   1,
+   1,
+   1,
+   1
+  ],
+  "by_difficulty": {},
+  "by_signal_type": {
+   "TOKEN_NEUTRAL": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_SENSITIVE": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_EFFICIENT_SIGNAL": {
+    "recall_pct": 40.0,
+    "n": 15
+   }
+  },
+  "summary_error": null,
+  "head_hit_rate": 0.0,
+  "classifier_decision": {
+   "session_type": "code",
+   "confidence": 0.9788461538461539,
+   "compression_profile": "fork_mixed"
+  },
+  "classified_info": {
+   "session_type": "code",
+   "confidence": 0.9788461538461539,
+   "compression_profile": "fork_mixed"
+  },
+  "compaction_calls": 1,
+  "compaction_input_tokens": 58273,
+  "compaction_output_tokens": 5055,
+  "compaction_model": "claude-haiku-4-5",
+  "compaction_cost_usd": null,
+  "ratio": 0.062748,
+  "combined": 6.374716,
+  "ci_width": 44.4,
+  "output_tokens_per_recall_point": 5202.2
+ },
+ {
+  "policy": "lean",
+  "before_tokens": 497435,
+  "after_tokens": 30856,
+  "after_msgs": 98,
+  "compress_seconds": 53.4,
+  "recall_pct": 40.0,
+  "scores": [
+   0,
+   1,
+   1,
+   1,
+   0,
+   1,
+   1,
+   1,
+   1,
+   0,
+   1,
+   1,
+   1,
+   1,
+   1
+  ],
+  "by_difficulty": {},
+  "by_signal_type": {
+   "TOKEN_NEUTRAL": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_SENSITIVE": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_EFFICIENT_SIGNAL": {
+    "recall_pct": 40.0,
+    "n": 15
+   }
+  },
+  "summary_error": null,
+  "head_hit_rate": 0.0,
+  "classifier_decision": {
+   "session_type": "code",
+   "confidence": 0.9788461538461539,
+   "compression_profile": "fork_mixed"
+  },
+  "classified_info": {
+   "session_type": "code",
+   "confidence": 0.9788461538461539,
+   "compression_profile": "fork_mixed"
+  },
+  "compaction_calls": 1,
+  "compaction_input_tokens": 58273,
+  "compaction_output_tokens": 4573,
+  "compaction_model": "claude-haiku-4-5",
+  "compaction_cost_usd": null,
+  "ratio": 0.06203,
+  "combined": 6.44847,
+  "ci_width": 44.4,
+  "output_tokens_per_recall_point": 5142.7
+ }
+]

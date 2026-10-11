@@ -1,0 +1,77 @@
+[
+ {
+  "q": "What is the ISBN of Robert Ghrist's 'Elementary Applied Topology' book?",
+  "gold": "978-1502880857",
+  "where": "First web search result, description: 'ISBN 978-1502880857, Sept. 2014'"
+ },
+ {
+  "q": "In what year was Eduardo D. Sontag's 'Mathematical Control Theory' published by Springer?",
+  "gold": "1998",
+  "where": "Second web search result, title and description: 'Second Edition, Springer, New York, 1998'"
+ },
+ {
+  "q": "What is the ISBN-13 for Christopher Bishop's 'Pattern Recognition and Machine Learning'?",
+  "gold": "978-0387-31073-2",
+  "where": "Third web search result, PDF page: 'ISBN-13: 978-0387-31073-2'"
+ },
+ {
+  "q": "How many pages does Christopher Bishop's 'Pattern Recognition and Machine Learning' have?",
+  "gold": "738",
+  "where": "Third web search result, description: 'This hard cover book has 738 pages in full colour'"
+ },
+ {
+  "q": "What backend error occurred in the first web search call?",
+  "gold": "ddgs package is not installed \u2014 run `pip install ddgs`",
+  "where": "First web search result, backend_error field: 'Configured backend 'ddgs' failed this call (ddgs package is not installed \u2014 run `pip install ddgs`)'"
+ },
+ {
+  "q": "Who are the four editors of 'Algorithmic Game Theory' published by Cambridge University Press?",
+  "gold": "Noam Nisan, Tim Roughgarden, Eva Tardos, and Vijay V. Vazirani",
+  "where": "Fourth web search result, frontmatter: 'Edited by Noam Nisan, Tim Roughgarden, Eva Tardos and Vijay V. Vazirani'"
+ },
+ {
+  "q": "What is the ISBN-10 for Sontag's 'Mathematical Control Theory' Second Edition?",
+  "gold": "0-387-984895",
+  "where": "Second web search result, description: 'ISBN 0-387-984895'"
+ },
+ {
+  "q": "How many graded exercises are in Christopher Bishop's 'Pattern Recognition and Machine Learning'?",
+  "gold": "431",
+  "where": "Third web search result, description: 'and there are 431 graded exercises'"
+ },
+ {
+  "q": "What is the arXiv identifier and date for the 'Logical Induction' paper?",
+  "gold": "arXiv:1609.03543v5 [cs.AI] 7 Dec 2020",
+  "where": "Logical Induction paper header: 'arXiv:1609.03543v5 [cs.AI] 7 Dec 2020'"
+ },
+ {
+  "q": "Who are the five authors of the 'Logical Induction' paper?",
+  "gold": "Scott Garrabrant, Tsvi Benson-Tilsen, Andrew Critch, Nate Soares, and Jessica Taylor",
+  "where": "Logical Induction paper: 'Scott Garrabrant, Tsvi Benson-Tilsen, Andrew Critch, Nate Soares, and Jessica Taylor'"
+ },
+ {
+  "q": "What institution do the authors of 'Logical Induction' belong to?",
+  "gold": "Machine Intelligence Research Institute",
+  "where": "Logical Induction paper: 'Machine Intelligence Research Institute'"
+ },
+ {
+  "q": "What is the arXiv identifier for the 'Concrete Problems in AI Safety' paper?",
+  "gold": "arXiv:1606.06565v2 [cs.AI] 25 Jul 2016",
+  "where": "Concrete Problems in AI Safety paper header: 'arXiv:1606.06565v2 [cs.AI] 25 Jul 2016'"
+ },
+ {
+  "q": "How many concrete safety problems are discussed in the 'Concrete Problems in AI Safety' paper?",
+  "gold": "five",
+  "where": "Concrete Problems in AI Safety paper, abstract: 'We present a list of five practical research problems related to accident risk'"
+ },
+ {
+  "q": "What are the five concrete safety problems listed in the 'Concrete Problems in AI Safety' paper?",
+  "gold": "avoiding side effects, avoiding reward hacking, scalable supervision, safe exploration, and distributional shift",
+  "where": "Concrete Problems in AI Safety paper, abstract: 'categorized according to whether the problem originates from having the wrong objective function (\"avoiding side effects\" and \"avoiding reward hacking\"), an objective function that is too expensive to evaluate frequently (\"scalable supervision\"), or undesirable behavior during the learning process (\"safe exploration\" and \"distributional shift\")'"
+ },
+ {
+  "q": "What is the publication year of 'Algorithmic Game Theory' edited by Nisan, Roughgarden, Tardos, and Vazirani?",
+  "gold": "2007",
+  "where": "Fourth web search result, Cambridge University Press frontmatter: 'Print publication year: 2007'"
+ }
+]

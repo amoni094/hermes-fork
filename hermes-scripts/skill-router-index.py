@@ -369,32 +369,43 @@ def cosine(vec1: dict, vec2: dict) -> float:
 
 
 def scan_skills() -> list[dict]:
-    skills = []
-    for skill_md_path in sorted(SKILLS_ROOT.rglob("SKILL.md")):
-        try:
-            text = skill_md_path.read_text(errors="replace")
-            fm = parse_frontmatter(text)
-            if not fm.get("name"):
-                continue
-            name = fm["name"]
-            description = fm.get("description", "")
-            triggers = fm.get("triggers", [])
-            combined = " ".join([name, description] + triggers)
-            tokens = tokenize(combined)
-            skills.append({
-                "name": name,
-                "description": description[:200],
-                "triggers": triggers,
-                "path": str(skill_md_path.relative_to(SKILLS_ROOT)),
-                "tokens": tokens,
-            })
-        except Exception as e:
-            print(f"WARN: skipping {skill_md_path}: {e}", file=sys.stderr)
-    return skills
+    """Scan profile skills and base ~/.hermes/skills. Last-write wins on name."""
+    skills_by_name: dict[str, dict] = {}
+    # Base first, then profile so last-write wins = profile overlay.
+    roots = [_hermes_base_sri / "skills", _hermes_root_sri / "skills"]
+    seen: set[str] = set()
+    for root in roots:
+        key = str(root.resolve()) if root.exists() else str(root)
+        if key in seen:
+            continue
+        seen.add(key)
+        if not root.exists():
+            continue
+        for skill_md_path in sorted(root.rglob("SKILL.md")):
+            try:
+                text = skill_md_path.read_text(errors="replace")
+                fm = parse_frontmatter(text)
+                if not fm.get("name"):
+                    continue
+                name = fm["name"]
+                description = fm.get("description", "")
+                triggers = fm.get("triggers", [])
+                combined = " ".join([name, description] + triggers)
+                tokens = tokenize(combined)
+                skills_by_name[name] = {
+                    "name": name,
+                    "description": description[:200],
+                    "triggers": triggers,
+                    "path": str(skill_md_path.relative_to(root)),
+                    "tokens": tokens,
+                }
+            except Exception as e:
+                print(f"WARN: skipping {skill_md_path}: {e}", file=sys.stderr)
+    return list(skills_by_name.values())
 
 
 def cmd_build():
-    print(f"Scanning {SKILLS_ROOT} ...")
+    print(f"Scanning {SKILLS_ROOT} and {_hermes_base_sri / 'skills'} ...")
     skills = scan_skills()
     print(f"Found {len(skills)} skills with valid frontmatter.")
 
@@ -624,6 +635,22 @@ def route(query_text: str, top: int = 5) -> list[dict]:
             else:
                 results = [{"ensemble_suggestions": ensemble_suggestions, "score": 0.0,
                             "name": "", "description": "", "category": ""}]
+
+    # Emit routing event for Markov/SPRT/PAC-Bayes monitors
+    try:
+        _evt_log = _hermes_root_sri / 'cache' / 'routing-events.jsonl'
+        _evt_log.parent.mkdir(parents=True, exist_ok=True)
+        _evt = json.dumps({
+            'ts': datetime.now(timezone.utc).isoformat(),
+            'query_len': len(query_text.split()),
+            'top_skill': results[0]['name'] if results else None,
+            'top_score': results[0]['score'] if results else None,
+            'n_results': len(results),
+        }) + '\n'
+        with open(_evt_log, 'a', encoding='utf-8') as _fh:
+            _fh.write(_evt)
+    except Exception:
+        pass  # fail-open: routing event log is advisory
 
     return results
 
