@@ -32,19 +32,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from evals.compaction.fixtures import (  # noqa: E402
+from evals.compaction.fixtures import (
     estimate_tokens,
     load_transcript,
     total_tokens,
 )
-from evals.compaction.policies import (  # noqa: E402
-    EVAL_MODEL,
-    FORK_RUNTIME_ATTRS,
-    POLICIES,
-    apply_policy,
-)
-
-logger = logging.getLogger(__name__)
+from evals.compaction.policies import EVAL_MODEL, POLICIES, apply_policy
 
 QUESTION_PROMPT = """You are building a factual recall exam from an AI-agent work session transcript.
 
@@ -399,7 +392,7 @@ def _call(prompt: str, max_tokens: int = 2000) -> str:
 
 
 def _extract_json(text: str):
-    m = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
+    m = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
     if m:
         text = m.group(1)
     start = min([i for i in (text.find("["), text.find("{")) if i >= 0], default=0)
@@ -1471,7 +1464,27 @@ def main():
 
     summaries = []
     if args.also_uncompacted:
-        ctl = uncompacted_control(messages, questions, out_dir)
+        # control: no compression at all — answer from the full transcript
+        context_text = serialize_for_exam(messages, char_cap=900_000)
+        results = []
+        for qa in questions:
+            answer = _call(ANSWER_PROMPT.format(context=context_text, question=qa["q"]), max_tokens=400)
+            verdict_raw = _call(JUDGE_PROMPT.format(question=qa["q"], gold=qa["gold"], answer=answer), max_tokens=300)
+            try:
+                verdict = _extract_json(verdict_raw)
+            except Exception:
+                verdict = {"score": 0, "why": "judge parse failure"}
+            results.append({"q": qa["q"], **verdict, "answer": answer})
+        scored = [r["score"] for r in results]
+        ctl = {
+            "policy": "uncompacted_control",
+            "before_tokens": total_tokens(messages),
+            "after_tokens": total_tokens(messages),
+            "recall_pct": round(100 * sum(scored) / (2 * len(scored)), 1),
+            "scores": scored,
+        }
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "uncompacted_control.json").write_text(json.dumps({"summary": ctl, "results": results}, indent=1), encoding="utf-8")
         summaries.append(ctl)
         print(json.dumps(ctl, indent=1))
 
