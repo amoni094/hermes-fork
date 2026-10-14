@@ -11,6 +11,7 @@ import math
 import sqlite3
 import re
 import time
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -572,7 +573,7 @@ def salvage_grown_transcript(
     # MemForest EventTree: prune by event-type priority order (tool_result lowest, user never).
     # apply_partition_prune_order returns indices sorted cheapest-to-lose first, respecting
     # protect_last_n (don't prune the most recent 10 messages).
-    priority_prune_indices = set(apply_partition_prune_order(out, protect_last_n=10))
+    _priority_prune_indices = set(apply_partition_prune_order(out, protect_last_n=10))
     tool_indices = [i for i, msg in enumerate(out) if isinstance(msg, dict) and msg.get("role") == "tool"]
     keep_tools = set(tool_indices[-_SALVAGE_KEEP_RECENT_TOOLS:])
     for index, msg in enumerate(out):
@@ -2151,6 +2152,116 @@ Describe agent/tool work only as completed actions, state, or historical work.]"
 }
 
 
+class EntropyEstimator:
+    """Sliding-window unigram Shannon entropy estimator (stdlib only).
+
+    Empirical entropy rate ``H = -sum p log2 p`` over whitespace-split tokens
+    in recent turns. Used as a rate-distortion proxy: higher H means denser
+    information, so compression should retain more (lower threshold_percent).
+
+    AEP floor: a history of n tokens at rate H needs about nH bits to represent
+    faithfully — ``min_retain_tokens(budget_bits)`` returns that n.
+
+    Update is O(tokens in the new turn) with a running Counter; query is
+    O(|vocab in window|), typically ~1000. Fail-open: public methods never raise.
+    """
+
+    def __init__(self, window_turns: int = 32) -> None:
+        self.window_turns = max(1, int(window_turns))
+        self._turn_token_lists: list[list[str]] = []
+        self._counts: Counter = Counter()
+        self._total_tokens = 0
+        self._turns_seen = 0
+        self._checkpoints: dict = {}
+
+    @staticmethod
+    def _tokenize(text: str) -> list[str]:
+        if not text:
+            return []
+        return str(text).split()
+
+    def reset(self) -> None:
+        try:
+            self._turn_token_lists.clear()
+            self._counts.clear()
+            self._total_tokens = 0
+            self._turns_seen = 0
+        except Exception:
+            return
+
+    def update(self, text: str) -> None:
+        """Ingest one turn. O(tokens in turn); evicts the oldest turn when full."""
+        try:
+            tokens = self._tokenize(text)
+            self._turn_token_lists.append(tokens)
+            if tokens:
+                self._counts.update(tokens)
+                self._total_tokens += len(tokens)
+            self._turns_seen += 1
+            while len(self._turn_token_lists) > self.window_turns:
+                old = self._turn_token_lists.pop(0)
+                if old:
+                    self._counts.subtract(old)
+                    self._total_tokens -= len(old)
+                    stale = [key for key, count in self._counts.items() if count <= 0]
+                    for key in stale:
+                        del self._counts[key]
+            self._total_tokens = max(self._total_tokens, 0)
+        except Exception:
+            return
+
+    def entropy_rate(self) -> float:
+        """Empirical Shannon entropy in bits per token. 0.0 when empty."""
+        try:
+            total = self._total_tokens
+            if total <= 0:
+                return 0.0
+            entropy = 0.0
+            for count in self._counts.values():
+                if count <= 0:
+                    continue
+                p = count / total
+                entropy -= p * math.log2(p)
+            return float(entropy)
+        except Exception:
+            return 0.0
+
+    def min_retain_tokens(self, budget_bits: float) -> int:
+        """AEP retain floor: smallest n such that n * H >= budget_bits."""
+        try:
+            h = self.entropy_rate()
+            budget = float(budget_bits)
+            if h <= 0.0 or budget <= 0.0:
+                return 0
+            return max(0, math.ceil(budget / h))
+        except Exception:
+            return 0
+
+    def checkpoint(self, name: str, clock: int) -> None:
+        """Store a named ChronoMem clock. Fail-open."""
+        try:
+            self._checkpoints[str(name)] = int(clock)
+        except Exception:
+            return
+
+    def since_checkpoint(self, name: str, current_clock: int) -> int:
+        """Turns since a named checkpoint, or -1 if unknown. Fail-open."""
+        try:
+            stored = self._checkpoints.get(str(name))
+            if stored is None:
+                return -1
+            return int(current_clock) - int(stored)
+        except Exception:
+            return -1
+
+    def entropy_delta_since(self, last_h: float) -> float:
+        """Absolute change in entropy rate since *last_h*. Fail-open."""
+        try:
+            return abs(self.entropy_rate() - float(last_h))
+        except Exception:
+            return 0.0
+
+
 class ContextCompressor(
     SummaryDispatchMixin, PreLlmSkipMixin, CompressionTelemetryMixin, MicroCompactionMixin, ContextEngine,
 ):
@@ -2976,7 +3087,7 @@ class ContextCompressor(
         self._last_compress_entropy: float = 0.0
         self._last_compress_clock: int = 0
         self._importance_scorer = MessageImportanceScorer()
-        self._last_scored_messages: List[Dict[str, Any]] = []
+        self._last_scored_messages: list[dict[str, Any]] = []
         self._active_compression_profile: str | None = None
         self._profile_source: str | None = None
         self._session_type: str | None = None
@@ -3204,7 +3315,7 @@ class ContextCompressor(
     def last_complexity_score(self, value: float | None) -> None:
         self._last_complexity_score = value
 
-    def _maybe_route_session_profile(self, messages: List[Dict[str, Any]]) -> None:
+    def _maybe_route_session_profile(self, messages: list[dict[str, Any]]) -> None:
         """Apply fork compression policy from a heuristic session-type classifier.
 
         Skipped when the profile was set with ``_source='explicit'``. Fail-open:
@@ -3301,7 +3412,7 @@ class ContextCompressor(
         except Exception:
             return 0.7
 
-    def rr_score(self, role: str, content: str, msg: Optional[Dict[str, Any]] = None) -> float:
+    def rr_score(self, role: str, content: str, msg: Optional[dict[str, Any]] = None) -> float:
         """Retention score: importance + zlib uniqueness + causal/noise tag prior. Fail-open."""
         try:
             scorer = getattr(self, "_importance_scorer", None)
@@ -3320,7 +3431,7 @@ class ContextCompressor(
     def importance_scores(self, history: list) -> list:
         """Score each message dict with ``role`` / ``content`` keys. Fail-open."""
         try:
-            out: List[float] = []
+            out: list[float] = []
             for msg in history or []:
                 if isinstance(msg, dict):
                     out.append(self.score_message(msg.get("role") or "", msg.get("content")))
@@ -3357,7 +3468,7 @@ class ContextCompressor(
             protect_first = max(0, int(getattr(self, "protect_first_n", 0) or 0))
             protect_last = max(0, int(protect_last_n or 0))
             last_start = max(0, n - protect_last)
-            candidates: List[tuple] = []
+            candidates: list[tuple] = []
             for i, msg in enumerate(messages):
                 if i < protect_first or i >= last_start:
                     continue
@@ -3377,7 +3488,7 @@ class ContextCompressor(
                 candidates.append((noise_rank, score, i, tag))
             candidates.sort(key=lambda item: (item[0], item[1], item[2]))
             evict: set[int] = set()
-            truncated: Dict[int, str] = {}
+            truncated: dict[int, str] = {}
             tokens_pruned = 0
             for _noise_rank, _score, i, tag in candidates:
                 if tokens_pruned >= int(target_prune_tokens):
@@ -3409,9 +3520,9 @@ class ContextCompressor(
         except Exception:
             return messages, 0
 
-    def _extract_fact_ledger(self, turns_to_summarize: List[Dict[str, Any]]) -> str:
+    def _extract_fact_ledger(self, turns_to_summarize: list[dict[str, Any]]) -> str:
         """Harvest named facts from compacted turns and format a head ledger. Deduped, capped."""
-        facts: List[str] = []
+        facts: list[str] = []
         seen: set[str] = set()
 
         def _add(item: str) -> None:
@@ -3459,7 +3570,7 @@ class ContextCompressor(
         if not facts:
             return ""
         # ~1500 tokens ≈ 6000 chars
-        lines: List[str] = []
+        lines: list[str] = []
         used = 0
         budget_chars = 6000
         for fact in facts:
@@ -3472,7 +3583,7 @@ class ContextCompressor(
             return ""
         return "FACT LEDGER\n" + "\n".join(lines)
 
-    def _prepend_fact_ledger(self, summary: str, turns_to_summarize: List[Dict[str, Any]]) -> str:
+    def _prepend_fact_ledger(self, summary: str, turns_to_summarize: list[dict[str, Any]]) -> str:
         """Put the fact ledger at the summary head so named facts survive Lost-in-the-Middle.
 
         Order-invariant: if a compaction prefix is already attached, strip it, prepend
@@ -3513,7 +3624,7 @@ class ContextCompressor(
             return "CHEAP"
         return "EXPENSIVE"
 
-    def _feed_messages_for_entropy(self, messages: List[Dict[str, Any]] | None) -> None:
+    def _feed_messages_for_entropy(self, messages: list[dict[str, Any]] | None) -> None:
         """Ingest newly appended history messages into the estimator. Fail-open."""
         try:
             if not messages:
@@ -3537,7 +3648,7 @@ class ContextCompressor(
             return
 
     def on_turn_complete(
-        self, messages: List[Dict[str, Any]], usage: Optional[Dict[str, Any]] = None, **kwargs: Any
+        self, messages: list[dict[str, Any]], usage: Optional[dict[str, Any]] = None, **kwargs: Any
     ) -> None:
         """Keep the entropy estimator current as turns land in history."""
         try:
@@ -3551,7 +3662,7 @@ class ContextCompressor(
         """Structured pre-compress log (CatchBench: capture earliest info state)."""
         try:
             estimator = getattr(self, "_entropy_estimator", None)
-            payload: Dict[str, Any] = {
+            payload: dict[str, Any] = {
                 "session_id": getattr(self, "_session_id", "") or "",
                 "turn_count": int(getattr(estimator, "_turns_seen", 0) or 0) if estimator is not None else 0,
                 "context_tokens": int(
@@ -3569,7 +3680,7 @@ class ContextCompressor(
                 hist = messages[-20:] if messages else getattr(self, "_last_scored_messages", None)
                 scores = self.importance_scores(hist or [])
                 payload["avg_importance"] = (sum(scores) / len(scores)) if scores else 0.0
-                rr_vals: List[float] = []
+                rr_vals: list[float] = []
                 for m in hist or []:
                     if isinstance(m, dict):
                         rr_vals.append(self.rr_score(str(m.get("role") or ""), str(m.get("content", "") or "")))
