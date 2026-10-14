@@ -3133,14 +3133,22 @@ def _fast_forward_missed_recurring(d: _DueJob, grace: int) -> bool:
     if not new_next:
         return False
     d.scan.persist(d.job["id"], next_run_at=new_next)
-    if (_instant_after(_ensure_aware(datetime.fromisoformat(new_next)), d.scan.now)
-            and not _cron_config_number("catch_up_missed", True, lambda value: value is not False)):
-        logger.info(
-            "Job '%s' missed its scheduled time (%s, grace=%ds). "
-            "Skipping missed occurrence because cron.catch_up_missed is false; next run: %s",
-            d.label, d.next_run, grace, new_next)
-        d.scan.on_saved.append(lambda job=d.job: record_cron_missed(job))
-        return True
+    if _instant_after(_ensure_aware(datetime.fromisoformat(new_next)), d.scan.now):
+        # Skip catch-up when globally disabled OR when the job fires more than once per 3 hours
+        # (frequent jobs — every N minutes, hourly, etc. — don't need makeup runs; infrequent
+        # nightly/daily jobs do).  3 h = 10 800 s matches the grace ceiling (2 h) with headroom.
+        _CATCHUP_MIN_CADENCE_SECONDS = 10_800
+        _cadence = _schedule_cadence_seconds(d.schedule)
+        _frequent = _cadence is not None and _cadence < _CATCHUP_MIN_CADENCE_SECONDS
+        _disabled = not _cron_config_number("catch_up_missed", True, lambda value: value is not False)
+        if _disabled or _frequent:
+            _reason = "frequent schedule" if _frequent and not _disabled else "cron.catch_up_missed is false"
+            logger.info(
+                "Job '%s' missed its scheduled time (%s, grace=%ds). "
+                "Skipping missed occurrence because %s; next run: %s",
+                d.label, d.next_run, grace, _reason, new_next)
+            d.scan.on_saved.append(lambda job=d.job: record_cron_missed(job))
+            return True
     logger.info(
         "Job '%s' missed its scheduled time (%s, grace=%ds). "
         "Running now; next run provisionally set to: %s (re-anchored on completion)",

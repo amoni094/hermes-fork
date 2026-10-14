@@ -70,7 +70,8 @@ def parse_description(text: str) -> str:
         line = raw.rstrip()
         if line.startswith('description:'):
             rest = line.split(':', 1)[1].strip().strip('"').strip("'")
-            if rest:
+            # YAML block scalar indicators (>, |, >-, |-, >+, |+) are not content
+            if rest and rest.rstrip('-+') not in ('>', '|'):
                 desc.append(rest)
                 in_desc = False
             else:

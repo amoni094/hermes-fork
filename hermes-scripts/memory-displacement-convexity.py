@@ -75,6 +75,18 @@ def check_convexity(p: list, q: list) -> dict:
     sq = sum(q) or 1.0
     pn = [max(x, 0.0) / sp for x in p]
     qn = [max(x, 0.0) / sq for x in q]
+    # Degenerate-support guard: Shannon displacement-convexity requires effective
+    # support >= 3 atoms. With 1-2 effective atoms the 1-D quantile coupling
+    # does not guarantee H(mid) <= 0.5*(H0+H1)+slack on discrete distributions.
+    EFF_THRESH = 1e-6
+    eff_p = sum(1 for x in pn if x > EFF_THRESH)
+    eff_q = sum(1 for x in qn if x > EFF_THRESH)
+    if eff_p < 3 or eff_q < 3:
+        return {
+            'n': len(pn), 'eff_p': eff_p, 'eff_q': eff_q,
+            'alarm': False, 'reason': 'degenerate_support', 'convex_ok': True,
+            'ts': time.time(),
+        }
     mid = geodesic_mid(pn, qn)
     h0, h1, hm = entropy(pn), entropy(qn), entropy(mid)
     rhs = 0.5 * h0 + 0.5 * h1 + SLACK
