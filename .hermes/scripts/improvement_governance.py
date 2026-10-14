@@ -49,11 +49,17 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Literal
 
-DEFAULT_LEDGER = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "logs" / "improvement-proposals.jsonl"
-# Profile-aware rate-state persistence path
 _base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _profile = os.environ.get('HERMES_PROFILE', '')
-_root = (_base / 'profiles' / _profile) if _profile else _base
+# De-nest guard: if HERMES_HOME already contains profiles/<profile>, don't add another level.
+# Mirrors the pattern in alarm-aggregator.py to avoid profiles/fork/profiles/fork paths.
+_root = (
+    (_base / 'profiles' / _profile)
+    if (_profile and 'profiles' not in str(_base))
+    else _base
+)
+# Ledger always lives at the profile root (not nested further with profiles/).
+DEFAULT_LEDGER = _root / "logs" / "improvement-proposals.jsonl"
 _RATE_STATE_PATH = _root / 'cache' / 'governance-rate-state.json'
 
 
@@ -162,6 +168,29 @@ def _causal_effect_estimate(target: str, description: str, evidence: list) -> fl
     return round(min(base + quant_bonus + target_bonus, 1.0), 4)
 
 
+def _default_failure_observable(change_type: str, target: str, description: str) -> str:
+    """Generate a default failure_observable for Popper/Critch falsifiability.
+
+    Every proposal needs a non-trivial (>20 char) observable. If the caller
+    does not supply one, derive a generic but specific one from the change context.
+    Callers should override this with domain-specific observables when possible.
+    """
+    # NOTE: This generates a default template FO. Callers should override with a specific,
+    # measurable failure observable (named metric + comparator + threshold) to avoid WARN.
+    ct = (change_type or '').lower()
+    if ct in ('skill_body', 'skill', 'skill_create'):
+        return f"Skill '{target}' causes regressions in eval suite or produces incorrect outputs on 3+ test cases within 30 days."
+    elif ct in ('code', 'code_change', 'script', 'plugin'):
+        return f"Script/plugin '{target}' raises unhandled exception or breaks a downstream monitor within 14 days of deployment."
+    elif ct in ('config', 'config_change', 'yaml', 'setting'):
+        return f"Config change to '{target}' causes alarm rate to increase >20% vs baseline in the 7-day post-deploy window."
+    elif ct in ('cron', 'cron_job'):
+        return f"Cron job '{target}' fails to produce expected output or writes stale data for 2+ consecutive runs."
+    else:
+        d_snippet = (description or '')[:60].rstrip()
+        return f"Change '{target}' ({d_snippet}) produces measurable regression in quality or stability metrics within 14 days."
+
+
 def propose_improvement(
     change_type: str,
     target: str,
@@ -169,6 +198,7 @@ def propose_improvement(
     session_id: str,
     evidence: list,
     ledger=None,
+    failure_observable: str | None = None,
 ) -> dict:
     """
     Create a new proposal and append to the ledger (JSONL, append-only).
@@ -176,6 +206,7 @@ def propose_improvement(
     """
     risk = classify_change_risk(change_type, target)  # type: ignore[arg-type]
     causal_effect = _causal_effect_estimate(target, description, evidence)
+    fo = failure_observable or _default_failure_observable(change_type, target, description)
     proposal = {
         "id": _proposal_id(session_id, change_type, target),
         "state": "pending_review",
@@ -189,7 +220,9 @@ def propose_improvement(
         "reviewers": [],
         "evidence": evidence,
         "causal_effect_estimate": causal_effect,  # arXiv:2609.24112
+        "failure_observable": fo,
     }
+    proposal['fo_is_template'] = (failure_observable is None)  # True if we generated the default
     _append_to_ledger(proposal, ledger)
     return proposal
 
