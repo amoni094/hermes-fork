@@ -2262,6 +2262,117 @@ class EntropyEstimator:
             return 0.0
 
 
+class MessageImportanceScorer:
+    """Gallager-style importance: tool results and long reasoning beat ack turns."""
+
+    LOW_ACK_RE = re.compile(
+        r"^\s*(ok|sure|got it|continue|go ahead|yes|no|thanks|thank you|good|great|next|done)\.?\s*$",
+        re.IGNORECASE,
+    )
+
+    def score(self, role: str, content: str) -> float:
+        if role == "tool" or (isinstance(content, str) and "tool_result" in content[:50]):
+            return 1.0
+        if role == "assistant" and isinstance(content, str) and len(content) > 200:
+            return 0.85
+        if role == "user" and isinstance(content, str) and self.LOW_ACK_RE.match(content):
+            return 0.1
+        if role == "user" and isinstance(content, str) and len(content) < 30:
+            return 0.4
+        return 0.7
+
+    def compressibility(self, content: str) -> float:
+        """zlib ratio as a Kolmogorov-complexity proxy. Lower = more compressible.
+
+        Returns a value in ``[0.0, 1.0]``. Fail-open to ``0.5``.
+        """
+        try:
+            import zlib
+            text = "" if content is None else str(content)
+            ratio = len(zlib.compress(text.encode("utf-8", errors="ignore"))) / max(len(text), 1)
+            return max(0.0, min(1.0, float(ratio)))
+        except Exception:
+            return 0.5
+
+
+def _message_text_for_entropy(msg: Any) -> str:
+    """Best-effort plaintext from a chat message. Fail-open to empty string."""
+    try:
+        if not isinstance(msg, dict):
+            return ""
+        content = msg.get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for part in content:
+                if isinstance(part, str):
+                    parts.append(part)
+                elif isinstance(part, dict):
+                    text = part.get("text")
+                    if isinstance(text, str):
+                        parts.append(text)
+            return " ".join(parts)
+        return ""
+    except Exception:
+        return ""
+
+
+_CAUSAL_TOOLS = frozenset({
+    "execute_code", "write_file", "patch", "terminal", "delegate_task", "web_extract",
+})
+_NOISE_TOOLS = frozenset({"read_file", "search_files", "web_search", "skill_view"})
+_CHEAP_REACQ_TOOLS = frozenset({
+    "read_file", "search_files", "web_extract", "skill_view", "web_search",
+})
+_CAUSAL_VERBS = (
+    "decided", "fixed", "conclusion", "finding", "result:", "error:", "FAILED", "PASSED",
+)
+_STRUCTURAL_MARKERS = ("path:", "config:", "constraint:", "plan:", "```", "def ", "class ")
+_TAG_PRIOR = {"CAUSAL": 1.0, "STRUCTURAL": 0.6, "NEUTRAL": 0.5, "NOISE": 0.1}
+_REACQ_EXPENSIVE_MARKERS = ("FAILED", "error:", "fixed")
+_REACQ_NUM4_RE = re.compile(r"\b\d{4,}\b")
+_FACT_PATH_RE = re.compile(r"/[\w./\-]+\.(?:py|yaml|yml|json)")
+_FACT_ARXIV_RE = re.compile(r"\d{4}\.\d{4,5}")
+_FACT_MODEL_RE = re.compile(r"(?:haiku|sonnet|grok|mistral|claude)[\w.-]*", re.IGNORECASE)
+_FACT_NUM_RE = re.compile(r"\b\d{3,6}\b")  # 3+ digits; window check requires adjacent word
+_FACT_SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
+_FACT_NAMED_MARKERS = ("result:", "found:", "fixed:", "error:", "PASSED", "FAILED",
+                       "LIVITANYI", "MACLANE", "SA-", "spike:", "phase ", "Phase ")
+
+
+def _msg_tool_name(msg: Any) -> str:
+    """Best-effort tool name from a message dict."""
+    if not isinstance(msg, dict):
+        return ""
+    for key in ("tool_name", "name"):
+        val = msg.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""
+
+
+def _tag_message_type(msg: Any) -> str:
+    """Deterministic CAUSAL | STRUCTURAL | NOISE | NEUTRAL tag. No LLM."""
+    if not isinstance(msg, dict):
+        return "NEUTRAL"
+    role = str(msg.get("role") or "")
+    content = _message_text_for_entropy(msg)
+    tool = _msg_tool_name(msg)
+    if (role == "tool" and tool in _CAUSAL_TOOLS) or any(v in content for v in _CAUSAL_VERBS):
+        return "CAUSAL"
+    if any(m in content for m in _STRUCTURAL_MARKERS):
+        return "STRUCTURAL"
+    if (
+        role == "tool"
+        and tool in _NOISE_TOOLS
+        and len(content) > 2000
+        and not any(ch.isdigit() for ch in content)
+    ):
+        return "NOISE"
+    return "NEUTRAL"
+
+
 class ContextCompressor(
     SummaryDispatchMixin, PreLlmSkipMixin, CompressionTelemetryMixin, MicroCompactionMixin, ContextEngine,
 ):
