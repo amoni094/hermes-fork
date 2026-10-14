@@ -5117,10 +5117,10 @@ This compaction should PRIORITISE preserving all information related to the focu
     @classmethod
     def _summary_template_sections(cls, _section: dict[str, str], summary_budget: int, _session_log_section: str) -> str:
         """The ``## ...`` section template shared by the fresh and iterative-update prompts."""
-        _temporal_anchoring_rule = self._temporal_anchoring_rule()
+        _temporal_anchoring_rule = cls._temporal_anchoring_rule()
         suppress = {
             str(s).strip().lower()
-            for s in (getattr(self, "summary_suppress_sections", None) or [])
+            for s in (getattr(cls, "summary_suppress_sections", None) or [])
         }
         goal_block = ""
         if "goal" not in suppress:
