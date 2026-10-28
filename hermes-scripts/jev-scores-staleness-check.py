@@ -17,7 +17,7 @@ import os
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
@@ -59,7 +59,7 @@ def _newest_scores(candidates=CANDIDATES) -> tuple[Path | None, float | None]:
 
 
 def check(now: float | None = None, candidates=CANDIDATES) -> dict:
-    ts = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(UTC).isoformat()
     path, mt = _newest_scores(candidates)
     tnow = now if now is not None else time.time()
     if path is None or mt is None:

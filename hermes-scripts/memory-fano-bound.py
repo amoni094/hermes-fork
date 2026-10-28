@@ -71,7 +71,7 @@ def fano_pe_lower(h_x_given_y_bits: float, alphabet: int) -> dict:
     # Tight-ish: invert H(X|Y) <= h2(Pe) + Pe log2(|X|-1) by grid search
     logAm1 = math.log2(max(A - 1, 2))
     pe_tight = 0.0
-    for i in range(0, 501):
+    for i in range(501):
         pe = i / 500.0
         rhs = binary_entropy(pe) + pe * logAm1
         if rhs + 1e-12 >= hxy:

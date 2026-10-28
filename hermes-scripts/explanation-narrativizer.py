@@ -31,7 +31,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -152,7 +152,7 @@ def narrativize(events: list[dict], audience: str, session_id: str) -> str:
 
 
 def run(session_id: str | None, audience: str, all_audiences: bool, dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     paths = sorted(SESSIONS_DIR.glob("*.jsonl"))
 
     if not paths:

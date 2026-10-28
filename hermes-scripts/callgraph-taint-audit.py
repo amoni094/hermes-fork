@@ -22,7 +22,7 @@ import ast
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -147,10 +147,7 @@ def analyze_function(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> list[dict]:
                         for elt in t.elts:
                             if isinstance(elt, ast.Name):
                                 tainted.add(elt.id)
-        elif isinstance(stmt, ast.AnnAssign) and stmt.value is not None:
-            if rhs_tainted(stmt.value) and isinstance(stmt.target, ast.Name):
-                tainted.add(stmt.target.id)
-        elif isinstance(stmt, ast.AugAssign):
+        elif isinstance(stmt, ast.AnnAssign) and stmt.value is not None or isinstance(stmt, ast.AugAssign):
             if rhs_tainted(stmt.value) and isinstance(stmt.target, ast.Name):
                 tainted.add(stmt.target.id)
         elif isinstance(stmt, ast.Call):
@@ -243,7 +240,7 @@ def run() -> dict:
     alarms = [f for f in all_f if f.get('severity') == 'ALARM']
     warns = [f for f in all_f if f.get('severity') == 'WARN']
     report = {
-        'ts': datetime.now(timezone.utc).isoformat(),
+        'ts': datetime.now(UTC).isoformat(),
         'theorem': 'Nielson et al. taint lattice / abstract interpretation',
         'n_files_scanned': scanned,
         'n_findings': len(all_f),

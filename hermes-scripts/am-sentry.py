@@ -34,7 +34,7 @@ import sqlite3
 import urllib.request
 import urllib.error
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from pathlib import Path
 
 DB_PATH = Path.home() / ".hermes" / "state.db"
@@ -208,7 +208,7 @@ def analyze_text(text: str) -> tuple[str, list[str]]:
     # Sweep 24: Tool output injection role-header detection (arXiv:2608.21423)
     m_inj = TOOL_OUTPUT_INJECTION.search(text)
     if m_inj:
-        reasons.append(f"tool output injection: role-header pattern detected in memory content")
+        reasons.append("tool output injection: role-header pattern detected in memory content")
 
     # Sentence-level imperative density
     sentences = re.split(r"[.!?\n]+", text)
@@ -319,7 +319,7 @@ def scan_action_layer(since_days: int, verbose: bool) -> list[dict]:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=since_days)).timestamp()
+    cutoff = (datetime.now(UTC) - timedelta(days=since_days)).timestamp()
 
     # Load all assistant tool-call messages grouped by session
     cur.execute(
@@ -361,7 +361,7 @@ def scan_action_layer(since_days: int, verbose: bool) -> list[dict]:
                         "severity": "LOW",
                         "source": "action-layer sequence scan",
                         "session_id": session_id,
-                        "timestamp": datetime.fromtimestamp(tool_calls[i]["ts"], tz=timezone.utc).isoformat(),
+                        "timestamp": datetime.fromtimestamp(tool_calls[i]["ts"], tz=UTC).isoformat(),
                         "context_label": f"tool sequence: {t1} → {t2}",
                         "text_preview": f"{t1} followed by {t2}",
                         "patterns_matched": [f"action-layer suspicious sequence: {reason}"],
@@ -380,7 +380,7 @@ def scan_action_layer(since_days: int, verbose: bool) -> list[dict]:
                     "severity": "LOW",
                     "source": "action-layer burst scan",
                     "session_id": session_id,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "context_label": f"tool burst: {tool_name}",
                     "text_preview": f"{tool_name} called {counts[tool_name]} times (threshold: {threshold})",
                     "patterns_matched": [f"tool burst: {tool_name} × {counts[tool_name]} > threshold {threshold}"],
@@ -399,11 +399,11 @@ def scan_action_layer(since_days: int, verbose: bool) -> list[dict]:
 # Patterns indicating semantic drift from stated goal
 GOAL_DRIFT_PATTERNS = [
     # Agent moves away from user intent
-    re.compile(r"(?:act(?:ually|ing)|instead|pivot(?:ed)?|switch(?:ed)?|replac(?:ed?|ing))\s+(?:the\s+)?(?:goal|task|objective|request|instruction)", re.I),
+    re.compile(r"(?:act(?:ually|ing)|instead|pivot(?:ed)?|switch(?:ed)?|replac(?:ed?|ing))\s+(?:the\s+)?(?:goal|task|objective|request|instruction)", re.IGNORECASE),
     # Agent inventing new subtasks not in original request
-    re.compile(r"(?:also|additionally|furthermore|bonus|extra)[:,]\s+(?:I\s+(?:will|am|have)|let(?:'?s| me))\s+\w+", re.I),
+    re.compile(r"(?:also|additionally|furthermore|bonus|extra)[:,]\s+(?:I\s+(?:will|am|have)|let(?:'?s| me))\s+\w+", re.IGNORECASE),
     # Agent contradicting the original user message
-    re.compile(r"(?:user\s+said|original\s+request|initial\s+goal)\s+(?:was|said|asked)\s+.{5,80}but", re.I),
+    re.compile(r"(?:user\s+said|original\s+request|initial\s+goal)\s+(?:was|said|asked)\s+.{5,80}but", re.IGNORECASE),
 ]
 
 # Tool sequences that indicate goal hijack (external content driving agent away from task)
@@ -430,7 +430,7 @@ def scan_intent_drift(since_days: int, verbose: bool) -> list[dict]:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=since_days)).timestamp()
+    cutoff = (datetime.now(UTC) - timedelta(days=since_days)).timestamp()
 
     # Load messages grouped by session
     cur.execute(
@@ -697,7 +697,7 @@ def scan_db(since_days: int, verbose: bool) -> list[dict]:
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=since_days)).timestamp()
+    cutoff = (datetime.now(UTC) - timedelta(days=since_days)).timestamp()
 
     # Find assistant messages with hindsight_retain in their tool_calls
     cur.execute(
@@ -749,7 +749,7 @@ def scan_db(since_days: int, verbose: bool) -> list[dict]:
                 if severity == "LOW":
                     severity = "HIGH"  # Upgrade to HIGH if contradiction found
 
-            ts = datetime.fromtimestamp(row["timestamp"], tz=timezone.utc).isoformat()
+            ts = datetime.fromtimestamp(row["timestamp"], tz=UTC).isoformat()
             flag = {
                 "severity": severity,
                 "source": "state.db (pre-commit)",
@@ -869,7 +869,7 @@ def scan_skill_credentials(verbose: bool = False) -> list[dict]:
                     "path": str(skill_file),
                     "pattern": label,
                     "match_preview": m.group(0)[:60] + "...",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 })
                 if verbose:
                     print(f"\n[HIGH] Credential pattern in skill: {skill_file.name}")
@@ -891,7 +891,7 @@ def scan_skill_credentials(verbose: bool = False) -> list[dict]:
                     "path": str(script_file),
                     "pattern": label,
                     "match_preview": "(key-format literal in script)",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 })
 
     print(f"Credential-leak scan: {scanned} skill files checked.")
@@ -922,7 +922,7 @@ def scan_asi06_unguarded_copies(verbose: bool = False) -> list[dict]:
                     "source": "asi06_backup",
                     "path": str(backup),
                     "pattern": "world-readable-backup",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 })
                 if verbose:
                     print(f"\n[HIGH] World-readable backup: {backup}")
@@ -939,7 +939,7 @@ def scan_asi06_unguarded_copies(verbose: bool = False) -> list[dict]:
                 "source": "asi06_db",
                 "path": str(state_db),
                 "pattern": "group-or-world-readable-db",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             })
 
     # Check cache/delegation for unencrypted task outputs
@@ -952,7 +952,7 @@ def scan_asi06_unguarded_copies(verbose: bool = False) -> list[dict]:
                 "source": "asi06_delegation_logs",
                 "path": str(deleg_dir),
                 "pattern": f"large-unencrypted-log-cache ({count} files)",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             })
 
     print(f"ASI06 scan: {len(flags)} unguarded-copy issues found.")
@@ -1021,7 +1021,7 @@ def main():
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     report_path = REPORT_DIR / f"am-sentry-report-{datetime.now().strftime('%Y-%m-%d')}.json"
     report = {
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "days": args.since,
         "total_flagged": len(all_flags),
         "high": len(high),

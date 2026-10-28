@@ -28,7 +28,7 @@ import os
 import sqlite3
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 
@@ -120,7 +120,7 @@ def voi_decision(counts: dict[str, float], cost: float = CONSOLIDATION_COST,
 
 def maybe_run(dry_run: bool = True) -> dict:
     decision = voi_decision(load_type_counts())
-    decision["ts"] = datetime.now(timezone.utc).isoformat()
+    decision["ts"] = datetime.now(UTC).isoformat()
     decision["dry_run"] = dry_run
     decision["spawned"] = False
     logp = cache_dir() / "memory-voi-log.jsonl"

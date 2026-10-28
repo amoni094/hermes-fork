@@ -31,7 +31,7 @@ import argparse
 import json
 import sys
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -97,7 +97,7 @@ def verify_plan(plan: dict) -> dict:
       }
     Returns verification report dict.
     """
-    now    = datetime.now(timezone.utc).isoformat()
+    now    = datetime.now(UTC).isoformat()
     tasks  = plan.get("tasks", [])
     errors: list[str] = []
     warnings: list[str] = []
@@ -209,7 +209,7 @@ def _print_report(report: dict) -> None:
     print(f"\n  Status: [{flag}] {status}")
     print(f"  Tasks: {report['n_tasks']}  |  Topo order: {report['topo_order']}")
     if report.get("level_sets"):
-        print(f"  Execution waves:")
+        print("  Execution waves:")
         for i, wave in enumerate(report["level_sets"]):
             print(f"    Wave {i}: {wave}")
     if report["errors"]:
@@ -226,7 +226,7 @@ def _print_report(report: dict) -> None:
 
 
 def run(plan_path: Path | None, example: bool, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     print(f"\n=== Skill Dependency Verifier — {now[:10]} ===")
 
     plans = []

@@ -26,7 +26,7 @@ import math
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 # -- Profile-aware paths
@@ -168,7 +168,7 @@ def bps_select(query: str, budget_tokens: int = 4000, topk: int = 5) -> list[dic
 
     # Log
     log_entry = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "query": query[:200],
         "budget_tokens": budget_tokens,
         "topk": topk,

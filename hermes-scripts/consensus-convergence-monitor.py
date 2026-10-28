@@ -31,7 +31,7 @@ import argparse
 import json
 import math
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 import sys
 
@@ -155,7 +155,7 @@ def main():
     session_dirs = [d for d in [SESSIONS_DIR, FORK_SESSIONS] if d.exists()]
     result = check_consensus(session_dirs, args.threshold)
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     result["checked_at"] = now
 
     if not args.dry_run:

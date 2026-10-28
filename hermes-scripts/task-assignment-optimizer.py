@@ -29,7 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -112,7 +112,7 @@ def assign(query: str, top_k: int = 20) -> list[dict]:
 
 
 def run(query: str, dry_run: bool = False) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     assignments = assign(query)
 
     print(f"\n=== Task Assignment Optimizer — {now[:10]} ===")

@@ -52,64 +52,64 @@ DIFFICULTY_BUDGETS_L = {
 
 # OverThink attack patterns: blocks that look like puzzle/game injections
 PUZZLE_PATTERNS = [
-    re.compile(r'\b(?:solve the following|find the path|minimum steps|maximum score)\b', re.I),
-    re.compile(r'\b(?:sudoku|crossword|maze|grid puzzle|wordle|chess puzzle|kakuro)\b', re.I),
-    re.compile(r'\bMDP\b|\bMarkov decision process\b', re.I),
-    re.compile(r'\b(?:state space|transition function|reward function|policy optimization)\b', re.I),
-    re.compile(r'^\s*\d+\s*[\|:]\s*\d+\s*[\|:]\s*\d+', re.M),   # grid rows
-    re.compile(r'\b(?:from state|to state|action cost|heuristic value)\b', re.I),
-    re.compile(r'\bgoal state\b.*\binitial state\b|\binitial state\b.*\bgoal state\b', re.I),
-    re.compile(r'\b(?:BFS|DFS|A\*|Dijkstra|dynamic programming)\b.*\bpath\b', re.I),
-    re.compile(r'\btowers of hanoi\b|\bnqueens\b|\bn-queens\b|\btraveling salesman\b', re.I),
-    re.compile(r'(?:step \d+:|move \d+:|action \d+:)\s*(?:left|right|up|down|swap|rotate)', re.I),
+    re.compile(r'\b(?:solve the following|find the path|minimum steps|maximum score)\b', re.IGNORECASE),
+    re.compile(r'\b(?:sudoku|crossword|maze|grid puzzle|wordle|chess puzzle|kakuro)\b', re.IGNORECASE),
+    re.compile(r'\bMDP\b|\bMarkov decision process\b', re.IGNORECASE),
+    re.compile(r'\b(?:state space|transition function|reward function|policy optimization)\b', re.IGNORECASE),
+    re.compile(r'^\s*\d+\s*[\|:]\s*\d+\s*[\|:]\s*\d+', re.MULTILINE),   # grid rows
+    re.compile(r'\b(?:from state|to state|action cost|heuristic value)\b', re.IGNORECASE),
+    re.compile(r'\bgoal state\b.*\binitial state\b|\binitial state\b.*\bgoal state\b', re.IGNORECASE),
+    re.compile(r'\b(?:BFS|DFS|A\*|Dijkstra|dynamic programming)\b.*\bpath\b', re.IGNORECASE),
+    re.compile(r'\btowers of hanoi\b|\bnqueens\b|\bn-queens\b|\btraveling salesman\b', re.IGNORECASE),
+    re.compile(r'(?:step \d+:|move \d+:|action \d+:)\s*(?:left|right|up|down|swap|rotate)', re.IGNORECASE),
 ]
 
 # Commitment signals in a reasoning trace (first committed answer)
 COMMITMENT_SIGNALS = [
-    re.compile(r'\bthe answer is\b', re.I),
-    re.compile(r'\btherefore[,:]?\s+(?:the\s+)?(?:answer|result|solution|value)\b', re.I),
-    re.compile(r'\bso[,:]?\s+(?:the\s+)?(?:answer|result)\b', re.I),
-    re.compile(r'\bconclusion[:]?\s', re.I),
-    re.compile(r'\bfinal answer[:]?\s', re.I),
-    re.compile(r'\bin summary[,:]?\s', re.I),
-    re.compile(r'\bto conclude[,:]?\s', re.I),
+    re.compile(r'\bthe answer is\b', re.IGNORECASE),
+    re.compile(r'\btherefore[,:]?\s+(?:the\s+)?(?:answer|result|solution|value)\b', re.IGNORECASE),
+    re.compile(r'\bso[,:]?\s+(?:the\s+)?(?:answer|result)\b', re.IGNORECASE),
+    re.compile(r'\bconclusion[:]?\s', re.IGNORECASE),
+    re.compile(r'\bfinal answer[:]?\s', re.IGNORECASE),
+    re.compile(r'\bin summary[,:]?\s', re.IGNORECASE),
+    re.compile(r'\bto conclude[,:]?\s', re.IGNORECASE),
 ]
 
 # Reversal signals (agent reversing a committed answer without new evidence)
 REVERSAL_SIGNALS = [
-    re.compile(r'\bactually[,\s]', re.I),
-    re.compile(r'\bwait[,\s]', re.I),
-    re.compile(r'\bno[,\s]+(?:wait|actually|let me reconsider)\b', re.I),
-    re.compile(r'\blet me reconsider\b', re.I),
-    re.compile(r'\bi was wrong\b|\bI made an error\b', re.I),
-    re.compile(r'\bon second thought\b', re.I),
-    re.compile(r'\brecalculating\b|\brethinking\b', re.I),
+    re.compile(r'\bactually[,\s]', re.IGNORECASE),
+    re.compile(r'\bwait[,\s]', re.IGNORECASE),
+    re.compile(r'\bno[,\s]+(?:wait|actually|let me reconsider)\b', re.IGNORECASE),
+    re.compile(r'\blet me reconsider\b', re.IGNORECASE),
+    re.compile(r'\bi was wrong\b|\bI made an error\b', re.IGNORECASE),
+    re.compile(r'\bon second thought\b', re.IGNORECASE),
+    re.compile(r'\brecalculating\b|\brethinking\b', re.IGNORECASE),
 ]
 
 # Evidence markers (valid reason to change a committed answer)
 NEW_EVIDENCE_MARKERS = [
-    re.compile(r'\baccording to\b', re.I),
-    re.compile(r'\bthe tool (?:returned|shows|says)\b', re.I),
-    re.compile(r'\bweb search\b|\bsearch result\b', re.I),
-    re.compile(r'\bthe file (?:says|shows|contains)\b', re.I),
-    re.compile(r'\bI checked\b|\bI looked up\b', re.I),
-    re.compile(r'\bthe database\b|\bthe API\b|\bthe output\b', re.I),
+    re.compile(r'\baccording to\b', re.IGNORECASE),
+    re.compile(r'\bthe tool (?:returned|shows|says)\b', re.IGNORECASE),
+    re.compile(r'\bweb search\b|\bsearch result\b', re.IGNORECASE),
+    re.compile(r'\bthe file (?:says|shows|contains)\b', re.IGNORECASE),
+    re.compile(r'\bI checked\b|\bI looked up\b', re.IGNORECASE),
+    re.compile(r'\bthe database\b|\bthe API\b|\bthe output\b', re.IGNORECASE),
 ]
 
 # Hedge patterns for certainty probing
 HIGH_CERTAINTY_PATTERNS = [
-    re.compile(r'\bI(?:\'m| am) (?:certain|confident|sure)\b', re.I),
-    re.compile(r'\bthe answer is (?:definitely|clearly|certainly)\b', re.I),
-    re.compile(r'\bwithout (?:doubt|question)\b', re.I),
-    re.compile(r'\bI(?:\'ve| have) verified\b', re.I),
+    re.compile(r'\bI(?:\'m| am) (?:certain|confident|sure)\b', re.IGNORECASE),
+    re.compile(r'\bthe answer is (?:definitely|clearly|certainly)\b', re.IGNORECASE),
+    re.compile(r'\bwithout (?:doubt|question)\b', re.IGNORECASE),
+    re.compile(r'\bI(?:\'ve| have) verified\b', re.IGNORECASE),
 ]
 
 LOW_CERTAINTY_PATTERNS = [
-    re.compile(r'\b(?:I think|I believe|perhaps|maybe|possibly|might be|could be)\b', re.I),
-    re.compile(r'\bnot (?:sure|certain|confident)\b', re.I),
-    re.compile(r'\b(?:roughly|approximately|around|about)\b', re.I),
-    re.compile(r'\bI(?:\'m| am) (?:not sure|unsure|uncertain)\b', re.I),
-    re.compile(r'\bI(?:\'m| am) (?:guessing|estimating)\b', re.I),
+    re.compile(r'\b(?:I think|I believe|perhaps|maybe|possibly|might be|could be)\b', re.IGNORECASE),
+    re.compile(r'\bnot (?:sure|certain|confident)\b', re.IGNORECASE),
+    re.compile(r'\b(?:roughly|approximately|around|about)\b', re.IGNORECASE),
+    re.compile(r'\bI(?:\'m| am) (?:not sure|unsure|uncertain)\b', re.IGNORECASE),
+    re.compile(r'\bI(?:\'m| am) (?:guessing|estimating)\b', re.IGNORECASE),
 ]
 
 
@@ -230,8 +230,8 @@ def cmd_fr_cot(text: str) -> dict:
     _log_shannon_util(text.split())
 
     # Try to extract function name and key args pattern
-    func_match = re.search(r'(?:Function|Tool|Call):\s*([^\n/,]+)', text, re.I)
-    args_match  = re.search(r'(?:Key\s+args?|Args?|Parameters?):\s*([^\n]+)', text, re.I)
+    func_match = re.search(r'(?:Function|Tool|Call):\s*([^\n/,]+)', text, re.IGNORECASE)
+    args_match  = re.search(r'(?:Key\s+args?|Args?|Parameters?):\s*([^\n]+)', text, re.IGNORECASE)
 
     function_name = func_match.group(1).strip() if func_match else None
     key_args      = args_match.group(1).strip()  if args_match else None
@@ -449,9 +449,9 @@ def cmd_fcot_extract(text: str) -> dict:
 
     # Heuristics: long, noisy, document-like content benefits most
     noisy_signals = [
-        bool(re.search(r'\b(?:however|although|despite|while|whereas)\b', text, re.I)),
-        bool(re.search(r'\b(?:for example|for instance|such as|e\.g\.)\b', text, re.I)),
-        bool(re.search(r'\b(?:according to|as stated in|the article says)\b', text, re.I)),
+        bool(re.search(r'\b(?:however|although|despite|while|whereas)\b', text, re.IGNORECASE)),
+        bool(re.search(r'\b(?:for example|for instance|such as|e\.g\.)\b', text, re.IGNORECASE)),
+        bool(re.search(r'\b(?:according to|as stated in|the article says)\b', text, re.IGNORECASE)),
         words > 150,
         sentences > 8,
     ]

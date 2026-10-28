@@ -28,7 +28,7 @@ import json
 import math
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -122,7 +122,7 @@ def _kl_curvature(p: np.ndarray, q: np.ndarray, eps: float = EPS) -> float:
 
 
 def run(top_n: int = 10) -> int:
-    now    = datetime.now(timezone.utc).isoformat()
+    now    = datetime.now(UTC).isoformat()
     skills = _load_skills()
 
     if len(skills) < 4:
@@ -162,10 +162,10 @@ def run(top_n: int = 10) -> int:
 
     # Show top-N highest and lowest curvature pairs
     pairs_sorted = sorted(pairs, key=lambda x: x[2])
-    print(f"  Lowest curvature (most ambiguous routing):")
+    print("  Lowest curvature (most ambiguous routing):")
     for a, b, c in pairs_sorted[:5]:
         print(f"    {a:<30} ↔ {b:<30} C={c:.6f}")
-    print(f"\n  Highest curvature (sharpest distinction):")
+    print("\n  Highest curvature (sharpest distinction):")
     for a, b, c in pairs_sorted[-5:][::-1]:
         print(f"    {a:<30} ↔ {b:<30} C={c:.6f}")
 

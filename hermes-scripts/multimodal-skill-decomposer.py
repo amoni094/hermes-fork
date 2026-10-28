@@ -32,7 +32,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -109,7 +109,7 @@ def decompose(skill_a: str, skill_b: str, query: str) -> dict:
 
 
 def run(skill_a: str | None, skill_b: str | None, query: str, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     if skill_a and skill_b:
         cases = [(skill_a, skill_b, query)]

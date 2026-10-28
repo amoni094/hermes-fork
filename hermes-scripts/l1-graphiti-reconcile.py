@@ -161,7 +161,7 @@ def initialize_session() -> str:
 
 def write_episode(session_id: str, row: sqlite3.Row) -> bool:
     """Attempt to write one fact row to Graphiti. Returns True on success."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     source_tag = f"[source_type={row['source_type']}]"
     as_of_tag = f"[as_of={now.strftime('%Y-%m-%dT%H:%MZ')}]"
     vc_tag = f"[vc={row['volatility_class']}]"
@@ -298,7 +298,7 @@ def cmd_record(args: list[str]):
 
     content_hash, episode_name, status = args[0], args[1], args[2]
     fact_text = args[3] if len(args) > 3 else ""
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now = datetime.datetime.now(datetime.UTC).isoformat()
 
     conn = get_db()
     existing = conn.execute(
@@ -366,7 +366,7 @@ def cmd_reconcile():
                 (r["content_hash"],)
             ).fetchone()
             if not existing:
-                now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                now = datetime.datetime.now(datetime.UTC).isoformat()
                 conn.execute(
                     "INSERT INTO graphiti_writes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (r["content_hash"], r["episode_name"], r["fact_text"],
@@ -399,7 +399,7 @@ def cmd_reconcile():
     if grant_id:
         print(f"[tracegrant] grant={grant_id} caller=l1-graphiti-reconcile", file=sys.stderr)
 
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now = datetime.datetime.now(datetime.UTC).isoformat()
     recovered = 0
     still_failed = 0
 
@@ -455,7 +455,7 @@ def cmd_register_staging():
         return
 
     conn = get_db()
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now = datetime.datetime.now(datetime.UTC).isoformat()
     registered = 0
     for r in rows:
         existing = conn.execute(
@@ -486,7 +486,7 @@ def cmd_mark_written_from_output(script_output: str):
     Lines like: '  [graphiti] WARNING: failed to write ...' → failed
     """
     conn = get_db()
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now = datetime.datetime.now(datetime.UTC).isoformat()
     written = 0
     failed = 0
 
@@ -552,7 +552,7 @@ def cmd_status():
 
 def cmd_prune():
     cutoff = (
-        datetime.datetime.now(datetime.timezone.utc)
+        datetime.datetime.now(datetime.UTC)
         - datetime.timedelta(days=PRUNE_DAYS)
     ).isoformat()
     conn = get_db()

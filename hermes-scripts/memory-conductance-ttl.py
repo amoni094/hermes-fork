@@ -151,8 +151,7 @@ def min_conductance(W: list[list[float]], deg: list[float]) -> float:
         for k in range(1, n):
             S.add(order[k - 1])
             phi = cut_conductance(S, W, deg)
-            if phi < best:
-                best = phi
+            best = min(best, phi)
     return max(best, 0.0)
 
 

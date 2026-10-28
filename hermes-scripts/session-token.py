@@ -65,7 +65,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     try:
         ts_ns = int(args.ts)
     except (TypeError, ValueError):
-        print(f"[ERROR] --ts must be an integer (nanoseconds)", file=sys.stderr)
+        print("[ERROR] --ts must be an integer (nanoseconds)", file=sys.stderr)
         return 2
 
     expected = _compute_token(key, session_id, ts_ns)

@@ -32,7 +32,7 @@ import json
 import math
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -113,7 +113,7 @@ def score_idea(idea: dict, now: datetime) -> float:
 
 
 def run(top_n: int, dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc)
+    now   = datetime.now(UTC)
     ideas = _load_ideas()
 
     scored = []

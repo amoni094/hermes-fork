@@ -164,8 +164,7 @@ def check_redundancy(
         coverage = len(cand_set & set(fact_tokens)) / max(len(cand_set), 1)
         sim = max(cosine, coverage)
         residual = _hilbert_residual(cand_vec, fact_vec)
-        if residual < min_residual:
-            min_residual = residual
+        min_residual = min(min_residual, residual)
         if sim > best_sim:
             best_sim = sim
             nearest = fact[:120]

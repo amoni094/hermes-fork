@@ -63,8 +63,7 @@ def property_mcdiarmid(n: int = 16, trials: int = 40, k: int = RRF_K, seed: int 
         alt[i] = f"REPLACED {rng.random()} prefers python"
         other = rrf_score(alt, query, k)
         delta = abs(base - other)
-        if delta > worst:
-            worst = delta
+        worst = max(worst, delta)
         if delta > bound + 1e-12:
             return {"ok": False, "delta": delta, "bound": bound, "n": n}
     return {"ok": True, "worst": worst, "bound": bound, "n": n, "trials": trials}

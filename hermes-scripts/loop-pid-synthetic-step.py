@@ -29,7 +29,7 @@ import os
 import random
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -80,7 +80,7 @@ def simulate(n: int = N_DEFAULT, seed: int = 7, setpoint: float = SETPOINT) -> d
         w = rng.gauss(0.0, PROC_SIGMA)
         y = y + DT * ((u - y) / TAU) + w
         history.append({
-            'ts': datetime.now(timezone.utc).isoformat(),
+            'ts': datetime.now(UTC).isoformat(),
             'k': k,
             'e': round(float(e), 6),
             'u': round(float(u), 6),

@@ -309,10 +309,7 @@ def route_query(query: str, allow_llm: bool = True) -> RouteResult:
     try:
         _w = _route_weights.get(qtype, 1.0)
         if _w < 0.4:
-            if confidence == 'high':
-                confidence = 'low'
-                reason = reason + f' [ftrl_weight={_w:.3f}→low]'
-            elif confidence == 'medium':
+            if confidence == 'high' or confidence == 'medium':
                 confidence = 'low'
                 reason = reason + f' [ftrl_weight={_w:.3f}→low]'
         elif _w < 0.7:

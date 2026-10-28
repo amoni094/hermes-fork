@@ -12,7 +12,7 @@ import sqlite3
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
@@ -58,7 +58,7 @@ def _write_episode(name: str, body: str) -> bool:
         "episode_body": body,
         "source_type": "cron",
         "group_id": GROUP_ID,
-        "reference_time": datetime.now(timezone.utc).isoformat(),
+        "reference_time": datetime.now(UTC).isoformat(),
     }
     return _graphiti_post("/add_episode", payload) is not None
 

@@ -33,7 +33,7 @@ import re
 import sqlite3
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -95,7 +95,7 @@ def _fractional_ub(session_skills: list[str], skill_value: dict[str, float]) -> 
 
 
 def run(dry_run: bool = False) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     session_files = sorted([f for d in [SESSIONS, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")])
 
     # Build skill value map: use frequency as proxy for value

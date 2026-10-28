@@ -34,7 +34,7 @@ import math
 import sys
 import time
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import anthropic
@@ -93,7 +93,7 @@ def triangulate(claim: str, dry_run: bool = False) -> dict:
     Triangulate a claim. Returns result dict with verdict.
     In dry-run mode: skips LLM calls, uses simple random divergence estimate.
     """
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     if dry_run:
         # Syntactic self-consistency check without LLM (baseline)
@@ -128,7 +128,7 @@ def triangulate(claim: str, dry_run: bool = False) -> dict:
         try:
             r = _rephrase(client, claim, angle)
             rephrases.append(r)
-        except Exception as e:
+        except Exception:
             rephrases.append(claim)  # fallback: use original
 
     dists = [_keyword_dist(r) for r in rephrases]
@@ -185,7 +185,7 @@ def main() -> None:
 
     result = triangulate(claim, dry_run=args.dry_run)
 
-    print(f"\n=== Semantic Triangulation Verifier ===")
+    print("\n=== Semantic Triangulation Verifier ===")
     print(f"Claim ({result['claim_length']} chars): {claim[:80]}...")
     print(f"Triangle JS:  {result['triangle_js']}")
     print(f"Mean JS:      {result['mean_js']:.4f}  (threshold={result['threshold']})")

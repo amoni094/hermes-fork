@@ -31,7 +31,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -145,7 +145,7 @@ def estimate(task: str, local_stats: dict) -> dict:
 
 
 def run(tasks: list[str], dry_run: bool) -> int:
-    now         = datetime.now(timezone.utc).isoformat()
+    now         = datetime.now(UTC).isoformat()
     local_stats = _estimate_local_stats()
 
     print(f"\n=== Spawning Utility Estimator — {now[:10]} ===")

@@ -28,7 +28,7 @@ import json
 import math
 import re
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -76,7 +76,7 @@ def _count_delegations(text: str) -> int:
 
 
 def run(dry_run: bool = False) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     session_files = sorted([f for d in [SESSIONS, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")])
 
     fan_out: dict[str, int] = {}
@@ -119,7 +119,7 @@ def run(dry_run: bool = False) -> None:
 
         # Top delegators
         top = sorted(fan_out.items(), key=lambda x: -x[1])[:5]
-        print(f"\nTop delegating sessions:")
+        print("\nTop delegating sessions:")
         for s, n in top:
             if n > 0:
                 print(f"  {s}: {n} subagent(s)")

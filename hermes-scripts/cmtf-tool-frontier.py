@@ -23,7 +23,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
@@ -160,7 +160,7 @@ def cmd_state(state_file: str) -> int:
     # Log
     _CACHE.mkdir(parents=True, exist_ok=True)
     entry = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "last_tool": last_tool,
         "exposed": exposed,
         "total": total,

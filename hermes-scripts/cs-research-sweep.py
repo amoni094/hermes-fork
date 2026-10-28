@@ -22,7 +22,7 @@ import json
 import importlib.util
 import argparse
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 # ── Load the core sweep module ──────────────────────────────────────────────
 
@@ -383,7 +383,7 @@ def main():
     sweep.CATEGORIES  = CS_CATEGORIES
     sweep.SEEN_FILE   = CACHE / "seen_papers_cs.json"
     sweep.OUTPUT_LATEST = CACHE / "hermes-cs-sweep-latest.json"
-    sweep.OUTPUT_DATED  = CACHE / f"hermes-cs-sweep-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.json"
+    sweep.OUTPUT_DATED  = CACHE / f"hermes-cs-sweep-{datetime.now(UTC).strftime('%Y-%m-%d')}.json"
 
     # Suppress ALL listing-page harvests for the CS sweep — they run the parent sweep's
     # listing harvester which hard-codes category="reasoning_planning" for cs.AI/cs.CL
@@ -413,7 +413,7 @@ def main():
     cs_out = CACHE / "hermes-cs-sweep-latest.json"
     _cs_tmp = cs_out.with_suffix(".tmp")
     _cs_tmp.write_text(json.dumps({
-        "sweep_date": datetime.now(timezone.utc).isoformat(),
+        "sweep_date": datetime.now(UTC).isoformat(),
         "new_paper_count": len(new_papers),
         "new_papers_flat": new_papers,
         "all_papers": all_papers,

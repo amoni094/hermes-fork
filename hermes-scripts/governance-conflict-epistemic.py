@@ -16,7 +16,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -83,13 +83,12 @@ def run() -> dict:
     if not conflicts and summary.get('most_recent'):
         conflicts = [summary['most_recent']]
     out = annotate(conflicts)
-    out['ts'] = datetime.now(timezone.utc).isoformat()
+    out['ts'] = datetime.now(UTC).isoformat()
     now = time.time()
     try:
         REGRESS.parent.mkdir(parents=True, exist_ok=True)
         with open(REGRESS, 'a', encoding='utf-8') as fh:
-            for e in out['events']:
-                fh.write(json.dumps({'ts': now, **e}) + '\n')
+            fh.writelines(json.dumps({'ts': now, **e}) + '\n' for e in out['events'])
     except OSError:
         pass
     try:

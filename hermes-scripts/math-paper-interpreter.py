@@ -32,7 +32,7 @@ import json
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
@@ -847,7 +847,7 @@ def main():
                     _ea = {x.get("hermes_artifact", "") for x in _ei}
                     _ni = [x for x in generated_ideas if x.get("hermes_artifact", "") not in _ea]
                     _tmp__iqp = _iqp.with_suffix('.tmp')
-                    _tmp__iqp.write_text(json.dumps({"last_updated": datetime.now(timezone.utc).isoformat(), "total_ideas": len(_ei)+len(_ni), "ideas": _ei+_ni}, indent=2))
+                    _tmp__iqp.write_text(json.dumps({"last_updated": datetime.now(UTC).isoformat(), "total_ideas": len(_ei)+len(_ni), "ideas": _ei+_ni}, indent=2))
                     _tmp__iqp.replace(_iqp)
                     print(f"[math-interpreter] Budget-guard ideas flush: {len(_ni)} new ideas written", file=sys.stderr)
                 break
@@ -951,7 +951,7 @@ def main():
     track_skip_rate(len(unique), skipped)
 
     output = {
-        "run_date": datetime.now(timezone.utc).isoformat(),
+        "run_date": datetime.now(UTC).isoformat(),
         "sweep_date": sweep.get("sweep_date", ""),
         "math_papers_processed": len(results),  # actual count processed, not total unique (budget guard may stop early)
         "spike_count": len(spikes),

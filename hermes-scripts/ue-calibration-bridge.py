@@ -140,8 +140,7 @@ def predicted_confidence(row: dict) -> Optional[float]:
     lp = row.get("logprob_confidence")
     if lp is not None and str(lp).strip() != "":
         lp_c = _clip01(lp, default=conf)
-        if conf > lp_c:
-            conf = lp_c
+        conf = min(conf, lp_c)
     # empty-input rows are not evidence of high confidence
     if row.get("empty_input") is True:
         conf = min(conf, 0.0)

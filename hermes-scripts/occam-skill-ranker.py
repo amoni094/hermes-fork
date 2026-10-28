@@ -142,7 +142,7 @@ def _op_norm(x: dict[str, float], Tx: dict[str, float]) -> float:
     return nTx / nx if nx > 0 else float("inf")
 
 
-def _sinkhorn(C: "np.ndarray", reg: float = 0.05, max_iter: int = 100) -> "np.ndarray":
+def _sinkhorn(C: np.ndarray, reg: float = 0.05, max_iter: int = 100) -> np.ndarray:
     """Sinkhorn-Knopp algorithm for regularised OT. Returns soft transport plan P.
 
     Args:
@@ -439,8 +439,7 @@ def rank_skills_occam(
         results.sort(key=lambda x: (-x["score"], x["name"]))
     for row in results:
         row.pop("_ruzicka_occam", None)
-    if top_k < 0:
-        top_k = 0
+    top_k = max(top_k, 0)
     ranked = results[:top_k]
     if coverage or uncovered:
         out: dict = {"results": ranked}
@@ -456,10 +455,10 @@ def rank_skills_occam(
 
 
 def _extract_description(content: str) -> str:
-    m = re.search(r"^description:\s*[\"'](.+?)[\"']\s*$", content, re.M)
+    m = re.search(r"^description:\s*[\"'](.+?)[\"']\s*$", content, re.MULTILINE)
     if m:
         return m.group(1).strip()
-    m = re.search(r"^description:\s+(.+)$", content, re.M)
+    m = re.search(r"^description:\s+(.+)$", content, re.MULTILINE)
     if m:
         return m.group(1).strip().strip("\"'")
     return ""
@@ -814,13 +813,13 @@ def cmd_score(argv: list[str]) -> None:
 
         K = args.slw_projections  # default 50
 
-        def _to_dense(vec: dict[str, float], vocab: list[str]) -> "_np.ndarray":
+        def _to_dense(vec: dict[str, float], vocab: list[str]) -> _np.ndarray:
             a = _np.zeros(len(vocab), dtype=float)
             for i, t in enumerate(vocab):
                 a[i] = vec.get(t, 0.0)
             return a
 
-        def _sliced_w1(a: "_np.ndarray", b: "_np.ndarray", k: int, rng: "_np.random.Generator") -> float:
+        def _sliced_w1(a: _np.ndarray, b: _np.ndarray, k: int, rng: _np.random.Generator) -> float:
             """Monte-Carlo Sliced W1: average 1D W1 over k random projections."""
             d = len(a)
             if d == 0:
@@ -914,7 +913,7 @@ def cmd_score(argv: list[str]) -> None:
                 hhi = sum(pk * pk for pk in p)
                 entropy = -sum(pk * math.log(pk + 1e-12) for pk in p)
                 print("\nRouting concentration (Royden Lp norms):")
-                print(f"  L1  = 1.0  (normalised)")
+                print("  L1  = 1.0  (normalised)")
                 print(f"  L2  = {l2:.6f}")
                 print(f"  L∞  = {linf:.6f}")
                 print(f"  HHI = {hhi:.6f}  (sum p_i^2; high → over-concentrated routing)")

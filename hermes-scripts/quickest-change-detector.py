@@ -27,7 +27,7 @@ import os
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -59,8 +59,7 @@ def _cusum(series: list[float], shift_factor: float = SHIFT_FACTOR) -> tuple[flo
 
     for i, x in enumerate(series[MIN_OBS:], MIN_OBS):
         s = max(0.0, s + (x - mu0) - kappa)
-        if s > s_max:
-            s_max = s
+        s_max = max(s_max, s)
         if s > CUSUM_THRESHOLD and alarm_idx == -1:
             alarm_idx = i
 
@@ -126,7 +125,7 @@ def analyse_session(session_path: Path) -> dict:
 
 
 def run(dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     paths = sorted(SESSIONS_DIR.glob("*.jsonl"))[-10:]
 
     if not paths:
@@ -153,7 +152,7 @@ def run(dry_run: bool) -> int:
         print(f"\nALARM: yes — {len(alarm_cases)} session(s) show regime shifts")
         rc = 1
     else:
-        print(f"\nALARM: no — no regime shifts detected")
+        print("\nALARM: no — no regime shifts detected")
         rc = 0
 
     if not dry_run:

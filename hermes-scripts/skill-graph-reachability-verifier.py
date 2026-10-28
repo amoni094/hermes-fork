@@ -27,7 +27,7 @@ import json
 import re
 import sys
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME       = Path.home()
@@ -127,7 +127,7 @@ def _find_dead_ends(skills: list[dict], graph: dict[str, list[str]]) -> list[str
 
 def run(from_skill: str | None, to_skill: str | None,
         plan_file: Path | None, audit_all: bool, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Load skills
     skill_files: list[Path] = []
@@ -166,7 +166,7 @@ def run(from_skill: str | None, to_skill: str | None,
             if b not in reach:
                 broken.append((a, b))
         if broken:
-            print(f"\nBroken links in plan:")
+            print("\nBroken links in plan:")
             for a, b in broken:
                 print(f"  {a} ↛ {b}")
             alarm_exit = 1

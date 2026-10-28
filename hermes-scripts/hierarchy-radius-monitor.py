@@ -30,7 +30,7 @@ import os
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -113,7 +113,7 @@ def analyse_session(session_path: Path) -> dict:
 
 
 def run(dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     paths = sorted(SESSIONS_DIR.glob("*.jsonl"))[-10:]
 
     if not paths:
@@ -145,7 +145,7 @@ def run(dry_run: bool) -> int:
         print(f"\nALARM: yes — {len(alarm_cases)} session(s) show context hierarchy violations")
         rc = 1
     else:
-        print(f"\nALARM: no — context budget hierarchy intact")
+        print("\nALARM: no — context budget hierarchy intact")
         rc = 0
 
     if not dry_run:

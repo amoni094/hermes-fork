@@ -28,7 +28,7 @@ import argparse
 import json
 import math
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -143,7 +143,7 @@ def _allocate_budget(gain: dict[str, float], total: int) -> dict[str, int]:
 
 
 def run(dry_run: bool = False, budget: int = BUDGET_TOTAL) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     session_files = sorted(SESSIONS.glob("*.jsonl"))
 
     # Aggregate gain across sessions

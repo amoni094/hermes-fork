@@ -155,7 +155,7 @@ def update_metrics(skill_name: str, success: bool, tokens_used: int, time_taken:
         conn.commit()
 
 
-def audit_skills() -> List[Dict]:
+def audit_skills() -> list[dict]:
     """Generate a yield report for all skills."""
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
@@ -183,7 +183,7 @@ def audit_skills() -> List[Dict]:
         return report
 
 
-def prune_skills() -> List[Dict]:
+def prune_skills() -> list[dict]:
     """Deprecate skills with yield < 0.1 for 10+ invocations."""
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()

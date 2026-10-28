@@ -35,6 +35,7 @@ from collections import Counter
 from pathlib import Path
 
 import numpy as np
+from datetime import UTC
 
 HOME      = Path.home()
 SKILLS_DIR = HOME / ".hermes/skills"
@@ -145,10 +146,10 @@ def retrieve(query: str, top_k: int = TOP_K) -> list[dict]:
 
 def run(query: str, dry_run: bool = False) -> None:
     from datetime import datetime, timezone
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     results = retrieve(query)
-    print(f"\n=== Projection Implication Scorer ===")
+    print("\n=== Projection Implication Scorer ===")
     print(f"Query: '{query}'")
     print(f"Skills indexed: {len(_load_skills())}")
     print(f"Results (top {len(results)}):")

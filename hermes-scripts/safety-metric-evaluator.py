@@ -36,7 +36,7 @@ import json
 import math
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -164,7 +164,7 @@ def evaluate_session(path: Path) -> dict:
 
 
 def run(session_filter: str | None, dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     alarms: list[str] = []
 
     paths = list(SESSIONS_DIR.glob(f"*{session_filter}*.jsonl")) if session_filter \

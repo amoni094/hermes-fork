@@ -37,7 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -136,7 +136,7 @@ def _type_check(steps: list[dict]) -> list[str]:
 
 
 def compile_plan(task: str) -> dict:
-    now     = datetime.now(timezone.utc).isoformat()
+    now     = datetime.now(UTC).isoformat()
     clauses = _parse_clauses(task)
     steps   = []
 

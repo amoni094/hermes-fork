@@ -24,7 +24,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -103,7 +103,7 @@ def route(task: str, skill: str) -> dict:
 
 
 def run(task: str | None, skill: str | None, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     demo_cases = [
         ("Search for recent AI papers",                 "web_search"),

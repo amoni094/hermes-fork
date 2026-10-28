@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 
 import json, math, sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from collections import defaultdict
 
@@ -66,7 +66,7 @@ def _extract_tasks(path: Path) -> list[dict]:
 
 
 def run() -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     print(f"\n=== Adversarial Allocation Auditor — {now[:10]} ===\n")
 
     files = sorted(
@@ -115,7 +115,7 @@ def run() -> int:
     if violations:
         print(f"\nALARM: yes — {len(violations)} agent(s) below PROP1 fairness floor: {violations}")
     else:
-        print(f"\nALARM: no — all agents satisfy PROP1 allocation guarantee")
+        print("\nALARM: no — all agents satisfy PROP1 allocation guarantee")
 
     _tmp_out_file = OUT_FILE.with_suffix('.tmp')
     _tmp_out_file.write_text(json.dumps({

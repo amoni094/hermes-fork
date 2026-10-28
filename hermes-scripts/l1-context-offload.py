@@ -41,7 +41,7 @@ import json
 import os
 import sys
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
@@ -158,7 +158,7 @@ def save_index(session_id: str, idx: dict):
 def cmd_offload(session_id: str, label: str, content: str, dry_run: bool = False, intent: str = ""):
     """Tier-route content: hot → pass-through, warm → file, large → cold summary."""
     size = len(content)
-    ts = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(UTC).isoformat()
 
     if size <= HOT_LIMIT:
         print(f"[offload] HOT ({size} chars) — content fits in context, no offload needed.")
@@ -243,7 +243,7 @@ def cmd_evict(session_id: str, dry_run: bool = False, intent: str = ""):
         print(f"[offload] No warm-tier chunks to evict for session {session_id[:16]}")
         return
     print(f"[offload] Evicting {len(warm)} warm chunks to cold tier...", file=sys.stderr)
-    ts = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(UTC).isoformat()
     for label, meta in warm:
         p = Path(meta["path"])
         if not p.exists():
@@ -267,7 +267,7 @@ def cmd_evict(session_id: str, dry_run: bool = False, intent: str = ""):
             print(f"  DRY-RUN evict: {label} ({meta['size']} chars)")
     if not dry_run:
         save_index(session_id, idx)
-    print(f"[offload] Eviction complete.")
+    print("[offload] Eviction complete.")
 
 
 def cmd_stats(session_id: str):

@@ -176,8 +176,7 @@ def score_skills(query_tokens: list[str], top_k: int = 10) -> list[dict]:
         })
 
     results.sort(key=lambda x: (-x["score"], x["name"]))
-    if top_k < 0:
-        top_k = 0
+    top_k = max(top_k, 0)
     return results[:top_k]
 
 

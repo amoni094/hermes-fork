@@ -24,7 +24,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -123,7 +123,7 @@ def analyse_session(session_path: Path) -> dict:
 
 
 def run(dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     paths = sorted(SESSIONS_DIR.glob("*.jsonl"))[-10:]
 
     if not paths:
@@ -150,7 +150,7 @@ def run(dry_run: bool) -> int:
         print(f"\nALARM: yes — {len(alarm_cases)} session(s) show high decision-boundary uncertainty")
         return 1
     else:
-        print(f"\nALARM: no — confidence within bounds")
+        print("\nALARM: no — confidence within bounds")
         return 0
 
 

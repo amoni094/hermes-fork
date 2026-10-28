@@ -36,7 +36,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -164,7 +164,7 @@ def _check_single_file(path: Path) -> dict:
 
 
 def run(session_filter: str | None, check_file: Path | None, dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     alarms: list[str] = []
     results: list[dict] = []
 

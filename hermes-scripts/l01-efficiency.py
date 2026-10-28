@@ -794,16 +794,16 @@ def verbosity_score(text: str) -> dict:
     correction = None
     if score > 0.4:
         correction = (
-            "Your response has verbosity markers (score {:.2f}). "
+            f"Your response has verbosity markers (score {score:.2f}). "
             "Rewrite: remove openers, sign-offs, question restatements, "
             "reflection tokens (Wait/Hmm), and hedge pileups. "
             "Start with the answer. End when done."
-        ).format(score)
+        )
     elif score > 0.2:
         correction = (
-            "Minor verbosity (score {:.2f}). "
+            f"Minor verbosity (score {score:.2f}). "
             "Consider trimming filler phrases and reflection tokens."
-        ).format(score)
+        )
 
     return {
         "verbosity_score": round(score, 3),

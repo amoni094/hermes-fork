@@ -16,9 +16,10 @@ SRC_DIR = REPO_ROOT / 'src'
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from browser_manager import BrowserManager  # noqa: E402
-from dom_handler import DOMHandler  # noqa: E402
-from models import BrowserOptions  # noqa: E402
+from browser_manager import BrowserManager
+from dom_handler import DOMHandler
+from models import BrowserOptions
+from datetime import UTC
 
 SESSION_ROOT = Path('/var/home/rainbow/.hermes/state/stealth-browser-sessions')
 DEBUG_RUN_ROOT = Path('/var/home/rainbow/.hermes/state/firecrawl-stealth-debug')
@@ -49,8 +50,8 @@ def _resolve_session_dir(url: str, session_name: Optional[str], session_dir: Opt
     return str(path)
 
 
-def _parse_headers(header_args: List[str]) -> Dict[str, str]:
-    headers: Dict[str, str] = {}
+def _parse_headers(header_args: list[str]) -> dict[str, str]:
+    headers: dict[str, str] = {}
     for raw in header_args:
         if ':' not in raw:
             raise ValueError(f'Invalid --header value (expected Key: Value): {raw}')
@@ -62,13 +63,13 @@ def _parse_headers(header_args: List[str]) -> Dict[str, str]:
 def _make_debug_run_dir(url: str) -> Path:
     from datetime import datetime, timezone
 
-    stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    stamp = datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')
     run_dir = DEBUG_RUN_ROOT / f"{stamp}-{_default_session_name(url)}"
     run_dir.mkdir(parents=True, exist_ok=True)
     return run_dir
 
 
-def _write_json(path: Path, payload: Dict[str, Any]) -> None:
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     _tmp_path = path.with_suffix('.tmp')
     _tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n')
@@ -91,8 +92,8 @@ BLOCK_INDICATORS = [
 ]
 
 
-def detect_blocked_content(title: str, content: str, html: str, metadata: Dict[str, Any]) -> List[str]:
-    reasons: List[str] = []
+def detect_blocked_content(title: str, content: str, html: str, metadata: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
     haystacks = [title.lower(), content.lower(), html.lower()]
     joined = '\n'.join(h for h in haystacks if h)
 
@@ -110,7 +111,7 @@ def detect_blocked_content(title: str, content: str, html: str, metadata: Dict[s
     return sorted(set(reasons))
 
 
-def fetch_via_firecrawl(url: str, timeout: int) -> Dict[str, Any]:
+def fetch_via_firecrawl(url: str, timeout: int) -> dict[str, Any]:
     endpoint = f"{_firecrawl_base_url()}/v1/scrape"
     response = requests.post(
         endpoint,
@@ -150,8 +151,8 @@ async def fetch_via_stealth(
     proxy: Optional[str] = None,
     session_dir: Optional[str] = None,
     timezone_id: Optional[str] = None,
-    extra_headers: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
+    extra_headers: Optional[dict[str, str]] = None,
+) -> dict[str, Any]:
     manager = BrowserManager()
     options = BrowserOptions(
         headless=headless,
@@ -217,9 +218,9 @@ async def main() -> int:
     debug_run_dir = _make_debug_run_dir(args.url) if args.save_debug_files else None
 
     errors = []
-    result: Optional[Dict[str, Any]] = None
-    firecrawl_result: Optional[Dict[str, Any]] = None
-    stealth_result: Optional[Dict[str, Any]] = None
+    result: Optional[dict[str, Any]] = None
+    firecrawl_result: Optional[dict[str, Any]] = None
+    stealth_result: Optional[dict[str, Any]] = None
 
     if not args.force_stealth:
         try:

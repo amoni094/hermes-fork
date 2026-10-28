@@ -19,9 +19,10 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
-from shadow_telemetry import evaluate_flag  # noqa: E402
+from shadow_telemetry import evaluate_flag
 
 import os
+from datetime import UTC
 _hermes_base_sgn = pathlib.Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _hermes_profile_sgn = os.environ.get("HERMES_PROFILE", "")
 _hermes_root_sgn = (_hermes_base_sgn / "profiles" / _hermes_profile_sgn) if _hermes_profile_sgn else _hermes_base_sgn
@@ -115,7 +116,7 @@ def main() -> None:
 
     # Print markdown summary
     from datetime import datetime, timezone
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     print(f"## Shadow Gate Nightly Report — {now}")
     print()
     print("| Flag | Samples (n) | Pass rate | Recommendation |")

@@ -18,7 +18,7 @@ import glob
 import os
 import subprocess
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 STATE_DIR = Path("/var/home/rainbow/.hermes/state")
 HUD_FILE = STATE_DIR / "hud-active-agents.json"
@@ -27,7 +27,7 @@ HUD_FILE = STATE_DIR / "hud-active-agents.json"
 def fmt_duration(iso_start: str) -> str:
     try:
         start = datetime.fromisoformat(iso_start)
-        delta = datetime.now(timezone.utc) - start
+        delta = datetime.now(UTC) - start
         s = int(delta.total_seconds())
         if s < 60:
             return f"{s}s"
@@ -84,14 +84,14 @@ def show_hud():
     for _a in running:
         try:
             _start = datetime.fromisoformat(_a.get("started_at", ""))
-            _durations.append((datetime.now(timezone.utc) - _start).total_seconds())
+            _durations.append((datetime.now(UTC) - _start).total_seconds())
         except Exception:
             pass
     _mean_dur = sum(_durations) / len(_durations) if _durations else 0.0
     lines.append(f"\n  FLEET: rho={_rho:.2f} ({_n_running}/{_max_children} slots)  mean_dur={_mean_dur:.0f}s")
 
     if done:
-        lines.append(f"\n  RECENT:")
+        lines.append("\n  RECENT:")
         for a in done[-5:]:
             status = a.get("status", "?")
             started = a.get("started_at", "")[:19]

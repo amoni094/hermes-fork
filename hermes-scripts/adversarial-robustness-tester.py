@@ -25,7 +25,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -127,7 +127,7 @@ def test_robustness(response: str, query: str) -> dict:
 
 
 def run(response: str | None, query: str | None, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     demo_cases = [
         ("The answer is definitely correct and precisely accurate in all cases.",

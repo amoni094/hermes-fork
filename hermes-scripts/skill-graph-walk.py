@@ -888,7 +888,7 @@ def main():
         print(f"{i:3}. {name}{marker}{provides_str}{deps_str}")
 
     print(f"\n# Load this skill set topologically to resolve all prerequisites for '{target}'.")
-    print(f"# Graph-walk script: ~/.hermes/scripts/skill-graph-walk.py")
+    print("# Graph-walk script: ~/.hermes/scripts/skill-graph-walk.py")
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -117,7 +117,7 @@ def handshake(decisions: list[dict], proposals: list[dict]) -> dict:
 def run() -> dict:
     stale = _shadow_stale()
     if stale is not None:
-        stale['ts'] = datetime.now(timezone.utc).isoformat()
+        stale['ts'] = datetime.now(UTC).isoformat()
         try:
             _atomic_write(OUT, stale)
             stale['output'] = str(OUT)
@@ -126,7 +126,7 @@ def run() -> dict:
         return stale
     sprt = _load(CACHE / 'shadow-sprt-decisions.json')
     out = handshake(sprt.get('decisions') or [], _proposals())
-    out['ts'] = datetime.now(timezone.utc).isoformat()
+    out['ts'] = datetime.now(UTC).isoformat()
     try:
         _atomic_write(OUT, out)
         out['output'] = str(OUT)

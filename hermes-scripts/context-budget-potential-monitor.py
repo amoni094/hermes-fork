@@ -27,7 +27,7 @@ import os
 import json
 import math
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -104,7 +104,7 @@ def _parse_session(path: Path) -> dict:
 
 
 def run() -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     print(f"\n=== Context Budget Potential Monitor — {now[:10]} ===\n")
 
     sessions = _load_sessions()

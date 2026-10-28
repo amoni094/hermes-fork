@@ -32,7 +32,7 @@ import json
 import math
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any
 
 
@@ -88,8 +88,8 @@ def _recency_score(ts_str: str | None) -> float:
     try:
         ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
-        age_hours = (datetime.now(timezone.utc) - ts).total_seconds() / 3600
+            ts = ts.replace(tzinfo=UTC)
+        age_hours = (datetime.now(UTC) - ts).total_seconds() / 3600
         # Exponential decay: half-life = 168h (7 days)
         return math.exp(-age_hours / 168.0)
     except (ValueError, TypeError):

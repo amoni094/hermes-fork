@@ -26,7 +26,7 @@ import json
 import math
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -128,7 +128,7 @@ def allocate(blocks: list[dict], budget: int) -> dict:
 
 
 def run(budget: int, session_path: Path | None, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Demo blocks if no session
     demo_blocks = [
@@ -162,7 +162,7 @@ def run(budget: int, session_path: Path | None, dry_run: bool) -> int:
         print(f"  {icon} {b['idx']:<2} {b['role']:<10} {b['score']:>6.2f} "
               f"{b['chars']:>6} {b.get('allocated', b['chars']):>6}")
 
-    print(f"\nALARM: no — allocation complete")
+    print("\nALARM: no — allocation complete")
     if not dry_run:
         _tmp_out_file = OUT_FILE.with_suffix('.tmp')
         _tmp_out_file.write_text(json.dumps({

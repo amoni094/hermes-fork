@@ -20,7 +20,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -53,10 +53,8 @@ def cusum(xs: list[float], mu0: float = 0.0, k: float = K_DEFAULT, h: float = H_
     for i, x in enumerate(xs):
         sp = max(0.0, sp + (x - mu0) - k)
         sm = max(0.0, sm - (x - mu0) - k)
-        if sp > max_sp:
-            max_sp = sp
-        if sm > max_sm:
-            max_sm = sm
+        max_sp = max(max_sp, sp)
+        max_sm = max(max_sm, sm)
         if alarm_at is None and (sp > h or sm > h):
             alarm_at = i
     return {
@@ -132,7 +130,7 @@ def save_cusum_state(s_pos: float, s_neg: float, n_seen: int = 0, path: Path | N
     payload = {
         'S_pos': float(s_pos),
         'S_neg': float(s_neg),
-        'last_update_ts': datetime.now(timezone.utc).isoformat(),
+        'last_update_ts': datetime.now(UTC).isoformat(),
         'n_seen': int(n_seen),
     }
     _atomic_write(p, payload)
@@ -189,7 +187,7 @@ def run() -> dict:
     out['fresh_start'] = state['fresh_start']
     out['calibration_warning'] = calibration_warning
     out['h_effective'] = h_effective
-    out['ts'] = datetime.now(timezone.utc).isoformat()
+    out['ts'] = datetime.now(UTC).isoformat()
     out['recommendation'] = 'retune_pid_or_mpc' if out['alarm'] else 'pid_gains_stable'
     try:
         save_cusum_state(out['S_plus'], out['S_minus'], n_after)

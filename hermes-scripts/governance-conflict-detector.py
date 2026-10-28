@@ -18,7 +18,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -54,7 +54,7 @@ def _parse_ts(rec: dict):
             continue
         if isinstance(v, (int, float)):
             try:
-                return datetime.fromtimestamp(float(v), tz=timezone.utc)
+                return datetime.fromtimestamp(float(v), tz=UTC)
             except (OSError, ValueError, OverflowError):
                 continue
         if isinstance(v, str):
@@ -62,7 +62,7 @@ def _parse_ts(rec: dict):
             try:
                 dt = datetime.fromisoformat(s)
                 if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
+                    dt = dt.replace(tzinfo=UTC)
                 return dt
             except ValueError:
                 continue
@@ -161,7 +161,7 @@ def load_logs(auth_path: Path | None = None, block_path: Path | None = None) -> 
 
 def detect_conflicts(auth_rows: list[dict], block_rows: list[dict],
                      now: datetime | None = None, window_h: float = WINDOW_H) -> list[dict]:
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     cutoff = now - timedelta(hours=window_h)
 
     def in_window(rec):
@@ -224,7 +224,7 @@ def run(auth_path: Path | None = None, block_path: Path | None = None) -> dict:
     n_a = sum(1 for e in events if e['type'] == 'CONFLICT_TYPE_A')
     n_b = sum(1 for e in events if e['type'] == 'CONFLICT_TYPE_B')
     summary = {
-        'ts': datetime.now(timezone.utc).isoformat(),
+        'ts': datetime.now(UTC).isoformat(),
         'n_conflicts': len(events),
         'n_type_a': n_a,
         'n_type_b': n_b,
@@ -244,7 +244,7 @@ def run(auth_path: Path | None = None, block_path: Path | None = None) -> dict:
 
 def self_test() -> int:
     failures = []
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     auth = [
         {'tool': 'write_file', 'decision': 'ALLOW', 'ts': now.isoformat()},
         {'tool': 'read_file', 'decision': 'ALLOW', 'ts': now.isoformat()},

@@ -12,7 +12,7 @@ Usage:
 
 import sys, json, time, importlib.util, argparse
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 # ── Load sweep and interpreter modules ────────────────────────────────────────
 
@@ -61,7 +61,7 @@ def main():
         print("[DRY RUN] Would sweep categories:")
         for k in sorted(MATH_CATS):
             print(f"  {k}: {MATH_CATS[k]['arxiv_cats']}")
-        print(f"\nPrimers available:")
+        print("\nPrimers available:")
         for k in sorted(MATH_CATS):
             p = interp.load_primer(k)
             print(f"  {k}: {'OK ' + str(len(p)) + ' chars' if p else 'MISSING'}")
@@ -108,7 +108,7 @@ def main():
     math_sweep_out = CACHE / 'hermes-math-sweep-latest.json'
     _tmp_math_sweep_out = math_sweep_out.with_suffix('.tmp')
     _tmp_math_sweep_out.write_text(json.dumps({
-        'sweep_date': datetime.now(timezone.utc).isoformat(),
+        'sweep_date': datetime.now(UTC).isoformat(),
         'new_paper_count': len(new_papers),
         'new_papers_flat': new_papers,
         'all_papers': all_papers,
@@ -147,7 +147,7 @@ def main():
                 if fetched.get('title'):
                     title = title or fetched['title']
                 time.sleep(0.5)
-            except Exception as e:
+            except Exception:
                 pass
 
         paper_full = {**paper, 'title': title, 'abstract': abstract}
@@ -156,7 +156,7 @@ def main():
 
         try:
             r = interp.interpret_paper(paper_full, cat)
-        except Exception as e:
+        except Exception:
             errors += 1
             continue
 
@@ -181,7 +181,7 @@ def main():
     # ── Step 3: Save interpretation results ───────────────────────────────────
     print()
     output = {
-        'sweep_date': datetime.now(timezone.utc).isoformat(),
+        'sweep_date': datetime.now(UTC).isoformat(),
         'math_categories': len(MATH_CATS),
         'papers_found': len(new_papers),
         'spikes': spikes,
@@ -196,7 +196,7 @@ def main():
     _tmp_out_path.replace(out_path)
 
     # ── Step 4: Summary ───────────────────────────────────────────────────────
-    print(f"[hermes-math-sweep] Done.")
+    print("[hermes-math-sweep] Done.")
     print(f"  Papers found:    {len(new_papers)}")
     print(f"  Spikes:          {len(spikes)}")
     print(f"  Optimizations:   {len(optimizations)}")

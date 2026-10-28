@@ -30,7 +30,7 @@ def marginal_gain(route: str, call_number: int) -> float:
     return r["base_gain"] * math.exp(-r["decay"] * call_number)
 
 def schedule(task: str, call_log: list[str]) -> None:
-    print(f"\n=== Route Preemption Scheduler ===")
+    print("\n=== Route Preemption Scheduler ===")
     print(f"Task: {task[:60]}")
     print(f"Call log: {call_log}\n")
 

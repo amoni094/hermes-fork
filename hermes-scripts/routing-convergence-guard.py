@@ -30,7 +30,7 @@ from pathlib import Path
 # ── Path setup ────────────────────────────────────────────────────────────────
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
-from ot_utils import build_tf, w1_distance, sinkhorn  # noqa: E402
+from ot_utils import build_tf, w1_distance, sinkhorn
 
 import numpy as np
 
@@ -230,7 +230,7 @@ def cmd_jko_step(query: str) -> None:
 
     top5_idx = np.argsort(p1)[-5:][::-1]
     print(f"\n=== Single JKO Step — query: '{query}' ===")
-    print(f"  Uniform start → 1 JKO step (top-5 skills):\n")
+    print("  Uniform start → 1 JKO step (top-5 skills):\n")
     for rank, i in enumerate(top5_idx, 1):
         print(f"  {rank}. {names[i]:<50s}  p = {p1[i]:.6f}")
     print()

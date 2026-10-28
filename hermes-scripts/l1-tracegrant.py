@@ -29,7 +29,7 @@ import os
 import sys
 import uuid
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import sqlite3
@@ -146,7 +146,7 @@ def tracegrant_log_grant(
     """
     grant_id = f"grant-{uuid.uuid4().hex[:12]}"
     allowed_ns = sorted(NAMESPACE_POLICY.get(source_type, _DEFAULT_ALLOWED_NS))
-    now_ts = datetime.now(timezone.utc).isoformat()
+    now_ts = datetime.now(UTC).isoformat()
     dhash = _compute_decision_hash(caller, source_type, allowed_ns, now_ts)
     db = _get_db_path()
     try:
@@ -169,7 +169,7 @@ def tracegrant_log_grant(
 
 def tracegrant_revoke(grant_id: str) -> bool:
     """Mark a grant as revoked. Returns True on success."""
-    now_ts = datetime.now(timezone.utc).isoformat()
+    now_ts = datetime.now(UTC).isoformat()
     db = _get_db_path()
     try:
         with sqlite3.connect(str(db)) as conn:

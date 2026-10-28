@@ -82,7 +82,7 @@ def fuse(query: str) -> list[dict]:
     selected: list[dict] = []
     remaining = list(all_results)
 
-    print(f"\n=== Dual-Backend Memory Fuser ===")
+    print("\n=== Dual-Backend Memory Fuser ===")
     print(f"Query: {query[:60]}")
     print(f"Backend A: {len(pool_a)} results, Backend B: {len(pool_b)} results\n")
     print(f"  {'Rank':<5} {'ID':<35} {'Rel':>6} {'Nov':>6} {'Fused':>7}")

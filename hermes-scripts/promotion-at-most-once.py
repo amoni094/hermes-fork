@@ -14,7 +14,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 import time
 
@@ -49,7 +49,7 @@ def check(decisions: list[dict], ledger: dict) -> tuple[dict, dict]:
         else:
             seen_this.add(flag)
             new.append(flag)
-            promoted[flag] = {'ts': datetime.now(timezone.utc).isoformat()}
+            promoted[flag] = {'ts': datetime.now(UTC).isoformat()}
     report = {
         'n_new': len(new),
         'n_dup': len(dups),
@@ -64,7 +64,7 @@ def check(decisions: list[dict], ledger: dict) -> tuple[dict, dict]:
 def run() -> dict:
     EFFECTIVE = CACHE / 'effective-shadow-decisions.json'
     SHADOW = CACHE / 'shadow-sprt-decisions.json'
-    ts = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(UTC).isoformat()
     # WIRE-004: never fall back to raw SPRT. Skip if effective is missing or older than shadow.
     if not EFFECTIVE.exists():
         report = {

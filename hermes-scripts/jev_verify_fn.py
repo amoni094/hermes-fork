@@ -141,7 +141,7 @@ def _get_call_llm():
         if _HERMES_AGENT_PATH not in sys.path:
             sys.path.insert(0, _HERMES_AGENT_PATH)
         try:
-            from agent.auxiliary_client import call_llm  # noqa: PLC0415
+            from agent.auxiliary_client import call_llm
             _call_llm_cache = call_llm
             return call_llm
         except ImportError as exc:
@@ -594,7 +594,7 @@ def _demo() -> None:
     # 1. consistency_scorer with per-thread mock verify_fn
     sys.path.insert(0, str(Path(__file__).parent))
     try:
-        from consistency_scorer import consistency_score, ConsistencyConfig  # noqa: PLC0415
+        from consistency_scorer import consistency_score, ConsistencyConfig
         score = consistency_score(
             "Python's open() raises FileNotFoundError on missing files",
             make_mock_fn(42),

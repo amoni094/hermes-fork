@@ -6,7 +6,7 @@ Exits 0 (run sync) or exits with SKIP sentinel if no new sessions.
 """
 import json, os, subprocess, sys
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 LIVE_SYNC_NOTE = Path("/var/home/rainbow/Documents/SecondBrain/04 Resources/Hermes Chat Live Sync.md")
 SESSIONS_DB = Path("/var/home/rainbow/.hermes/state.db")
@@ -34,9 +34,9 @@ def count_new_sessions(since: datetime) -> int:
         return 1  # Fail safe: run the sync
     try:
         sessions = json.loads(result.stdout)
-        since_utc = since.astimezone(timezone.utc)
+        since_utc = since.astimezone(UTC)
         new = [s for s in sessions
-               if datetime.fromisoformat(s.get("updated_at","1970-01-01")).astimezone(timezone.utc) > since_utc
+               if datetime.fromisoformat(s.get("updated_at","1970-01-01")).astimezone(UTC) > since_utc
                and s.get("source","") not in ("cron","subagent")]
         return len(new)
     except Exception:
@@ -48,7 +48,7 @@ def main():
         print("No prior sync found — running sync")
         sys.exit(0)
 
-    age_hours = (datetime.now(timezone.utc) - last_sync.astimezone(timezone.utc)).total_seconds() / 3600
+    age_hours = (datetime.now(UTC) - last_sync.astimezone(UTC)).total_seconds() / 3600
     new_count = count_new_sessions(last_sync)
 
     print(f"Last sync: {last_sync} ({age_hours:.1f}h ago) | New sessions: {new_count}")

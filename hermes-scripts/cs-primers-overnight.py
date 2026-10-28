@@ -28,7 +28,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 PRIMERS_DIR = Path("~/.hermes/cache/research/cs-primers").expanduser()
@@ -408,7 +408,7 @@ def make_fallback_primer(key: str, label: str, tier: str,
     analogues_str = "\n".join(f"  - {a}" for a in analogues)
     return f"""CS Category: {label}
 Hermes Relevance Tier: {tier}
-Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d')} (static fallback — no API key)
+Generated: {datetime.now(UTC).strftime('%Y-%m-%d')} (static fallback — no API key)
 
 CORE DOMAIN
 {label} covers a set of computer science problems and techniques. Papers in this category
@@ -460,7 +460,7 @@ def generate_primer(key: str, force: bool = False) -> bool:
 
     header = (f"# CS Primer: {label}\n"
               f"# Key: {key} | Tier: {tier}\n"
-              f"# Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n\n")
+              f"# Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}\n\n")
     primer_path.write_text(header + text, encoding="utf-8")
     print(f"  [{key}] Written: {primer_path.name} ({len(text)} chars)")
     return True
@@ -468,12 +468,12 @@ def generate_primer(key: str, force: bool = False) -> bool:
 
 def update_index():
     """Write INDEX.txt listing all primer files with generation date."""
-    lines = [f"CS Primers Index — updated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n"]
+    lines = [f"CS Primers Index — updated {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}\n"]
     for key in sorted(CS_PRIMER_SPECS.keys()):
         label, tier, _, _ = CS_PRIMER_SPECS[key]
         primer_path = PRIMERS_DIR / f"{key}.txt"
         if primer_path.exists():
-            mtime = datetime.fromtimestamp(primer_path.stat().st_mtime, tz=timezone.utc)
+            mtime = datetime.fromtimestamp(primer_path.stat().st_mtime, tz=UTC)
             status = f"OK  {mtime.strftime('%Y-%m-%d')}"
         else:
             status = "MISSING"
@@ -549,7 +549,7 @@ def main():
     if not api_key:
         print("[cs-primers] No ANTHROPIC_API_KEY — will use static fallback primers")
     else:
-        print(f"[cs-primers] API key found — generating rich primers via claude-haiku-4-5")
+        print("[cs-primers] API key found — generating rich primers via claude-haiku-4-5")
 
     print(f"[cs-primers] Generating CS primers for {len(CS_PRIMER_SPECS)} categories")
     print(f"[cs-primers] Output: {PRIMERS_DIR}")

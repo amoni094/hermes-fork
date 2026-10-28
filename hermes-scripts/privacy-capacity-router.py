@@ -26,7 +26,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -107,7 +107,7 @@ def route(task: str, context: str, epsilon: float) -> dict:
 
 
 def run(task: str, context: str, epsilon: float, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     demos = [
         ("Summarise the quarterly report", "Revenue was $4.2M, salary pool $1.1M"),

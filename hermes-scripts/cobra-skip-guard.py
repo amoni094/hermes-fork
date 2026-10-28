@@ -237,7 +237,7 @@ def main():
             print(json.dumps({"error": "sklearn not available"}))
             sys.exit(2)
         # Serialize coefficients
-        import numpy as np  # noqa: F811
+        import numpy as np
         probe_data = {
             "coef": np.array(clf.coef_).tolist(),
             "intercept": np.array(clf.intercept_).tolist(),

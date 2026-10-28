@@ -27,7 +27,7 @@ import argparse
 import hashlib
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 import sys
 
@@ -124,7 +124,7 @@ def ingest(conn: sqlite3.Connection, dry_run: bool, max_files: int = 50):
             if not dry_run:
                 conn.execute(
                     "INSERT INTO skill_calibration (skill_id, input_hash, model_confidence, actual_error, ts) VALUES (?,?,?,?,?)",
-                    (skill_id, input_hash, confidence, actual_error, datetime.now(timezone.utc).isoformat())
+                    (skill_id, input_hash, confidence, actual_error, datetime.now(UTC).isoformat())
                 )
                 inserted += 1
 
@@ -212,7 +212,7 @@ def main():
                 "alarm": True,
                 "flagged_skills": flagged,
                 "threshold": args.threshold,
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
             }, indent=2))
             _tmp.replace(ALARM_PATH)
             print(f"\nALARM: yes — {len(flagged)} overconfident skill(s) — written to {ALARM_PATH}")

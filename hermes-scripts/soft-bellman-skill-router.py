@@ -34,7 +34,7 @@ import json
 import math
 import re
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -208,7 +208,7 @@ def run(
     temperature: float,
     dry_run: bool,
 ) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     q_table, n_sessions = build_q_table(SESSIONS)
 
     print(f"\n=== Soft-Bellman Skill Router — {now[:10]} ===")

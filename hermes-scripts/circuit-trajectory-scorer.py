@@ -27,7 +27,7 @@ import argparse
 import json
 import sqlite3
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 import sys
 
@@ -231,7 +231,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Don't write output files")
     args = parser.parse_args()
 
-    print(f"[circuit-scorer] Loading tool-call records...", file=sys.stderr)
+    print("[circuit-scorer] Loading tool-call records...", file=sys.stderr)
     records = []
     records.extend(load_from_lifecycle_db())
     records.extend(load_from_session_logs())
@@ -253,7 +253,7 @@ def main():
     top_circuits = circuits[:args.top]
 
     output = {
-        "scored_at": datetime.now(timezone.utc).isoformat(),
+        "scored_at": datetime.now(UTC).isoformat(),
         "total_sessions": len(sequences),
         "total_records": len(records),
         "total_circuits_found": len(circuits),

@@ -32,7 +32,7 @@ import os
 import re
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
@@ -61,7 +61,7 @@ def node_id(label: str, content: str) -> str:
 def write_ref(session_id: str, nid: str, label: str, content: str) -> Path:
     ref_path = session_dir(session_id) / "refs" / f"{nid}.md"
     ref_path.write_text(
-        f"# {label}\n\n> node_id: {nid}  |  captured: {datetime.now(timezone.utc).isoformat()}Z\n\n{content}\n",
+        f"# {label}\n\n> node_id: {nid}  |  captured: {datetime.now(UTC).isoformat()}Z\n\n{content}\n",
         encoding="utf-8",
     )
     return ref_path
@@ -97,7 +97,7 @@ def render_mermaid(canvas: dict) -> str:
         rel = e.get("rel", "→").replace('"', "'")
         lines.append(f'  {e["from"]} -->|"{rel}"| {e["to"]}')
     lines.append("```")
-    lines.append(f"\n_Canvas updated: {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M')}Z_")
+    lines.append(f"\n_Canvas updated: {datetime.now(UTC).strftime('%Y-%m-%dT%H:%M')}Z_")
     lines.append(f"_Nodes: {len(canvas['nodes'])}  |  Refs: refs/<node_id>.md_")
     return "\n".join(lines)
 

@@ -27,7 +27,7 @@ import json
 import math
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -82,7 +82,7 @@ def _jsd(p: dict, q: dict) -> float:
 
 
 def run() -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     print(f"\n=== Performative Stability Monitor — {now[:10]} ===\n")
 
     if not SESSIONS_DIR.exists():

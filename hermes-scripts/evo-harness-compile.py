@@ -31,11 +31,11 @@ STOPWORDS = {
 ARTIFACT_RES = [
     re.compile(r"`[^`]{1,200}`"),
     re.compile(r"https?://\S+"),
-    re.compile(r"\b[0-9a-f]{8,}\b", re.I),
+    re.compile(r"\b[0-9a-f]{8,}\b", re.IGNORECASE),
     re.compile(r"(?:/var/home|/home|~)/[^\s,;:]+"),
-    re.compile(r"\b(?:session|run|job)[_-][A-Za-z0-9._-]+\b", re.I),
+    re.compile(r"\b(?:session|run|job)[_-][A-Za-z0-9._-]+\b", re.IGNORECASE),
     re.compile(r"\b\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?\b"),
-    re.compile(r"\barXiv:\d{4}\.\d{4,5}(?:v\d+)?\b", re.I),
+    re.compile(r"\barXiv:\d{4}\.\d{4,5}(?:v\d+)?\b", re.IGNORECASE),
     re.compile(r"```[\s\S]*?```"),
 ]
 

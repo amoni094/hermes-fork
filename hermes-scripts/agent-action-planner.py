@@ -34,7 +34,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -161,7 +161,7 @@ def _plan(task: str, budget: int) -> list[dict]:
 
 
 def run(task: str, budget: int, dry_run: bool, list_tools: bool) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     if list_tools:
         print("Available tools:")

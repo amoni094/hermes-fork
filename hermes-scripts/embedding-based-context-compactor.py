@@ -25,7 +25,7 @@ import json
 import math
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -102,7 +102,7 @@ def compact_session(session_path: Path, task: str, budget: int) -> dict:
 
 
 def run(task: str, budget: int, dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     paths = sorted(SESSIONS_DIR.glob("*.jsonl"))[-5:]
 
     if not paths:

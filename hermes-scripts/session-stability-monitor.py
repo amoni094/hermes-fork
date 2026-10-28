@@ -23,7 +23,7 @@ import json
 import math
 import sqlite3
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 import sys
 
@@ -215,7 +215,7 @@ def check_alarm(conn: sqlite3.Connection, session_id: str, v_t: float,
             "recent_delta_vs": [round(d, 4) for d in delta_vs],
             "reason": "monotone_increase" if increasing else "threshold_breach",
             "threshold": threshold,
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
         }, indent=2))
         _tmp.replace(ALARM_PATH)
         print(f"[stability] ALARM written to {ALARM_PATH}", file=sys.stderr)
@@ -259,13 +259,13 @@ def main():
         conn.execute(
             "INSERT INTO session_stability (session_id, turn_idx, v_t, delta_v, alarm, ts) VALUES (?,?,?,?,?,?)",
             (session_id, turn_idx, v_t, delta_v, int(alarm),
-             datetime.now(timezone.utc).isoformat())
+             datetime.now(UTC).isoformat())
         )
         conn.commit()
 
     conn.close()
 
-    print(f"\n=== Session Stability Monitor — {datetime.now(timezone.utc).isoformat()[:19]} ===")
+    print(f"\n=== Session Stability Monitor — {datetime.now(UTC).isoformat()[:19]} ===")
     print(f"Session:    {session_id}")
     print(f"Turns used: {len(turns)} (window={args.window})")
     print(f"V_t:        {v_t:.4f}  (threshold={args.threshold})")

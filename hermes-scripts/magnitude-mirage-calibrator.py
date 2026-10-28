@@ -30,7 +30,7 @@ import json
 import math
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME       = Path.home()
@@ -102,7 +102,7 @@ def calibrate(query: str, skills: list[dict]) -> list[dict]:
 
 
 def run(query: str, top: int, dry_run: bool) -> int:
-    now    = datetime.now(timezone.utc).isoformat()
+    now    = datetime.now(UTC).isoformat()
     skills = _load_skills(50)
 
     if not skills:
@@ -128,7 +128,7 @@ def run(query: str, top: int, dry_run: bool) -> int:
         print(f"\nALARM: yes — avg calibration error {avg_error:.3f} > {CALIBRATION_ERROR_THRESHOLD}")
         rc = 1
     else:
-        print(f"\nALARM: no — retrieval scores adequately calibrated")
+        print("\nALARM: no — retrieval scores adequately calibrated")
         rc = 0
 
     if not dry_run:

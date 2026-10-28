@@ -31,7 +31,7 @@ import argparse
 import json
 import sqlite3
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from pathlib import Path
 import re
 
@@ -124,7 +124,7 @@ def _load_ttl_config() -> None:
 
 
 def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _load_staleness_ttls() -> dict:
@@ -203,10 +203,10 @@ def load_expired(conn: sqlite3.Connection) -> tuple[list[dict], int]:
         # Type-conditioned TTL for volatile preference facts (sweep 24, arXiv:2604.20006)
         if vc == "volatile" and fact_type == "personal_procedure":
             ttl = PERSONAL_PROCEDURE_TTL  # M2: 7d — shorter than preference (14d)
-            reason = f"ttl_exceeded_volatile_personal_procedure"
+            reason = "ttl_exceeded_volatile_personal_procedure"
         elif vc == "volatile" and fact_type == "skill_trace":
             ttl = SKILL_TRACE_TTL  # M2b: 90d — keep skill traces for retrospective improvement sweeps
-            reason = f"ttl_exceeded_volatile_skill_trace"
+            reason = "ttl_exceeded_volatile_skill_trace"
         elif vc == "volatile" and fact_type in PREFERENCE_FACT_TYPES:
             ttl = VOLATILE_PREFERENCE_TTL
             reason = f"ttl_exceeded_volatile_preference_{fact_type}"
@@ -227,7 +227,7 @@ def load_expired(conn: sqlite3.Connection) -> tuple[list[dict], int]:
             ac_row = conn.execute(
                 "SELECT access_count FROM fact_lifecycle WHERE memory_id=? LIMIT 1", (r[0],)
             ).fetchone()
-            access_count = int((ac_row[0] or 0)) if ac_row else 0
+            access_count = int(ac_row[0] or 0) if ac_row else 0
         except Exception:
             pass
         ttl = ttl + _echo_ttl_extension(access_count)
@@ -424,7 +424,7 @@ def check_constraint_freshness(conn: sqlite3.Connection, max_age_days: int = 90)
     These need re-validation before being injected into handoffs or working memory.
     Emits a staleness warning for each stale constraint found.
     """
-    cutoff_ts = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
+    cutoff_ts = (datetime.now(UTC) - timedelta(days=max_age_days)).isoformat()
     try:
         cur = conn.cursor()
         cur.execute(
@@ -457,7 +457,7 @@ def check_constraint_freshness(conn: sqlite3.Connection, max_age_days: int = 90)
         with log_path.open("a") as f:
             import json as _json
             f.write(_json.dumps({
-                "checked_at": datetime.now(timezone.utc).isoformat(),
+                "checked_at": datetime.now(UTC).isoformat(),
                 "max_age_days": max_age_days,
                 "stale_count": len(stale),
                 "constraints": stale,

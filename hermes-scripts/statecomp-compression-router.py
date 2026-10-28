@@ -26,7 +26,7 @@ import pathlib
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 # -- Profile-aware paths ------------------------------------------------------
@@ -204,7 +204,7 @@ def cmd_check(session_id: str) -> int:
     # Save state
     _CACHE.mkdir(parents=True, exist_ok=True)
     state = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "session_id": session_id,
         "total_interactions": len(interactions),
         "candidate_spans": len(spans),

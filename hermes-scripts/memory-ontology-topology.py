@@ -22,7 +22,7 @@ import json
 import random
 import sys
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from itertools import combinations
 
 DIAMETER_CAP = 50
@@ -40,7 +40,7 @@ def _cache_dir() -> Path:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _atomic_write_json(path: Path, obj) -> None:

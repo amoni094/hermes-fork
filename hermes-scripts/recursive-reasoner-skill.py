@@ -25,7 +25,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -97,7 +97,7 @@ def reason(steps: list[str], eps: float = CONVERGENCE_EPS) -> dict:
 
 
 def run(steps: list[str] | None, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     if not steps:
         # Demo: 5-step reasoning about memory compression

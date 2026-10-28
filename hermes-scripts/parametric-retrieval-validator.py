@@ -31,7 +31,7 @@ import json
 import re
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -145,11 +145,11 @@ def _extract_assistant_responses(session_path: Path) -> list[str]:
 
 
 def run(text: str | None, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     if text:
         result = validate_response(text)
-        print(f"\n=== Parametric Retrieval Validator ===")
+        print("\n=== Parametric Retrieval Validator ===")
         print(f"hedge_rate={result['hedge_rate']:.3f}  "
               f"rep_rate={result['repetition_rate']:.3f}  "
               f"confidence={result['confidence_proxy']:.3f}")

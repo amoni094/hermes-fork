@@ -23,7 +23,7 @@ def sinkhorn(
     C: np.ndarray,
     reg: float = 0.05,
     max_iter: int = 100,
-) -> Tuple[np.ndarray, float]:
+) -> tuple[np.ndarray, float]:
     """Sinkhorn–Knopp regularised optimal transport.
 
     Parameters
@@ -64,9 +64,9 @@ def sinkhorn(
 
 
 def tf_to_vec(
-    tf_dict_a: Dict[str, float],
-    tf_dict_b: Dict[str, float],
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    tf_dict_a: dict[str, float],
+    tf_dict_b: dict[str, float],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Convert two TF token dicts to Sinkhorn-ready (a, b, C).
 
     Marginals are normalised frequency vectors over the union vocabulary.
@@ -99,20 +99,20 @@ def tf_to_vec(
     return a, b, C
 
 
-def build_tf(text: str) -> Dict[str, float]:
+def build_tf(text: str) -> dict[str, float]:
     """Build a term-frequency dict from raw text.
 
     Tokens: lower-cased alpha sequences of length >= 2.
     Values: raw counts (caller may normalise if desired).
     """
     tokens = re.findall(r"[a-z]{2,}", text.lower())
-    tf: Dict[str, float] = {}
+    tf: dict[str, float] = {}
     for t in tokens:
         tf[t] = tf.get(t, 0.0) + 1.0
     return tf
 
 
-def w1_distance(tf_a: Dict[str, float], tf_b: Dict[str, float], reg: float = 0.05) -> float:
+def w1_distance(tf_a: dict[str, float], tf_b: dict[str, float], reg: float = 0.05) -> float:
     """Approximate W1 (earth-mover) distance between two TF histograms.
 
     Uses Sinkhorn with a binary cost matrix.  Lower = better vocabulary match.

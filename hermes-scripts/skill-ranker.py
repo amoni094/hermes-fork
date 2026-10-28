@@ -36,7 +36,7 @@ import argparse
 import json
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -163,7 +163,7 @@ def rank_skills(category: str | None, top: int) -> list[dict]:
 
 
 def run(category: str | None, top: int, dry_run: bool) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     ranked = rank_skills(category, top)
 
     cat_label = f" (category={category})" if category else ""
@@ -177,7 +177,7 @@ def run(category: str | None, top: int, dry_run: bool) -> None:
 
     if len(ranked) >= 5:
         bottom_5 = ranked[-5:]
-        print(f"\n  Low-quality candidates (oracle filter targets):")
+        print("\n  Low-quality candidates (oracle filter targets):")
         for s in bottom_5:
             print(f"    {s['score']:.4f}  {s['category']}/{s['name']} "
                   f"(age={s['age_days']:.0f}d, pitfalls={s['pitfalls']})")

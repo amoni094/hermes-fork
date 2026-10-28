@@ -27,7 +27,7 @@ import math
 import re
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -110,18 +110,18 @@ def _extract_assistant_outputs(session_path: Path) -> list[str]:
 
 
 def run(outputs: list[str] | None, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     if outputs:
         result = compute_consensus(outputs)
-        print(f"\n=== Federated Consensus Monitor ===")
+        print("\n=== Federated Consensus Monitor ===")
         print(f"Outputs: {result['n_outputs']}  vocab={result['vocab_size']}")
         print(f"JSD={result['jsd']:.4f}  consensus={result['consensus']:.4f}")
         if result["fragmented"]:
             print(f"FRAGMENTED: YES — JSD {result['jsd']:.3f} > {FRAGMENTATION_THRESHOLD}")
             return 1
         else:
-            print(f"FRAGMENTED: NO — consensus within bounds")
+            print("FRAGMENTED: NO — consensus within bounds")
             return 0
 
     # Session-level scan: compare assistant outputs within each session
@@ -158,7 +158,7 @@ def run(outputs: list[str] | None, dry_run: bool) -> int:
               f"(JSD > {FRAGMENTATION_THRESHOLD})")
         alarm_exit = 1
     else:
-        print(f"\nALARM: no — all sessions within consensus bounds")
+        print("\nALARM: no — all sessions within consensus bounds")
         alarm_exit = 0
 
     if not dry_run:

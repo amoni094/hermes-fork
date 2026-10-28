@@ -30,7 +30,7 @@ Per-session copies (when --session is set) live in ~/.hermes/cache/loop-pid-sess
 """
 import argparse, hashlib, json, math
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 Kp, Ki, Kd = 1.0, 0.15, 0.4
 U_MAX, U_MIN = 1.0, 0.0
@@ -137,7 +137,7 @@ def cmd_step(args):
 
     s['prev_error'] = e
     s['windup'] = windup
-    s['history'].append({'ts': datetime.now(timezone.utc).isoformat(), 'e': e, 'u': round(u, 4)})
+    s['history'].append({'ts': datetime.now(UTC).isoformat(), 'e': e, 'u': round(u, 4)})
     s['history'] = s['history'][-20:]  # keep last 20
 
     action = ('HALT' if u < 0.15 else 'PATCH' if u < 0.5 else 'REPLAN' if u < 0.8 else 'ESCALATE')
@@ -164,7 +164,7 @@ def cmd_step(args):
     log.append({
         'action': action,
         'hypotheses_tried': int(s.get('hypotheses_tried') or 0),
-        'ts': datetime.now(timezone.utc).isoformat(),
+        'ts': datetime.now(UTC).isoformat(),
         'prev_hash': prev_hash,
     })
     s['action_log'] = log[-50:]

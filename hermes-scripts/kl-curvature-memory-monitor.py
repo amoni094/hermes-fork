@@ -31,7 +31,7 @@ import json
 import math
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -113,7 +113,7 @@ def analyse_session(session_path: Path) -> dict:
 
 
 def run(dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     paths = sorted(SESSIONS_DIR.glob("*.jsonl"))[-10:]
 
     if not paths:
@@ -148,7 +148,7 @@ def run(dry_run: bool) -> int:
               f"(curvature > {CURVATURE_THRESHOLD})")
         rc = 1
     else:
-        print(f"\nALARM: no — routing diversity within bounds")
+        print("\nALARM: no — routing diversity within bounds")
         rc = 0
 
     if not dry_run:
