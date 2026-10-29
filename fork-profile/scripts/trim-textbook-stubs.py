@@ -26,6 +26,12 @@ OPERATIONAL_MARKERS = [
     "## Causal Claim Detection Gate",
     "## Routing Rules",
     "## Operational Summary",
+    "## Algorithm",
+    "## Lessons",
+    "## Decision rules",
+    "## Script",
+    "## Steps",
+    "## Usage",
 ]
 
 
