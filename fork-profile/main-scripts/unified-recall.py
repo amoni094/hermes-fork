@@ -68,6 +68,64 @@ def _hermes_root() -> 'Path':
     return Path(_h) if _h else Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 
 
+def _profile_script(name: str) -> Path:
+    """Resolve a fork-profile script without path-doubling.
+
+    HERMES_HOME may be ~/.hermes OR ~/.hermes/profiles/fork. Never append
+    profiles/fork/scripts on top of an already-profiled root.
+    """
+    root = _hermes_root()
+    candidates = [
+        root / "scripts" / name,
+        Path.home() / ".hermes" / "profiles" / "fork" / "scripts" / name,
+    ]
+    if root.name == ".hermes":
+        candidates.insert(0, root / "profiles" / "fork" / "scripts" / name)
+    for p in candidates:
+        if p.exists():
+            return p
+    return candidates[0]
+
+
+def _parse_inhibition_weight(raw) -> float:
+    """Coerce inhibition_weight to [0, 1]. Never raise (recall must not crash)."""
+    try:
+        iw = float(raw or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(iw) or iw <= 0.0:
+        return 0.0
+    return min(iw, 1.0)
+
+
+def _load_inhibition_weights() -> dict:
+    """Map fact_text[:80] → inhibition_weight from lifecycle.db. Fail-open."""
+    db = _hermes_root() / "memory-facts" / "lifecycle.db"
+    if not db.exists():
+        return {}
+    out: dict = {}
+    try:
+        with sqlite3.connect(str(db), timeout=5.0) as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(fact_lifecycle)")]
+            if "inhibition_weight" not in cols:
+                return {}
+            rows = conn.execute(
+                "SELECT fact_text, inhibition_weight FROM fact_lifecycle "
+                "WHERE COALESCE(inhibition_weight, 0) > 0"
+            ).fetchall()
+            for text, iw in rows:
+                w = _parse_inhibition_weight(iw)
+                if w <= 0.0:
+                    continue
+                key = (text or "").strip()[:80]
+                if key:
+                    out[key] = w
+    except Exception:
+        return {}
+    return out
+
+
 GRAPHITI_BASE = os.environ.get("GRAPHITI_BASE", "http://127.0.0.1:8765/mcp")
 GRAPHITI_GROUP_IDS = ["hermes", "hermes-reasoning"]
 RRF_K = 60
@@ -595,6 +653,10 @@ def fuse_results(
     import math as _math, time as _time
     _now = _time.time()
     _decay_rate = 0.02  # half-life ≈ 35 days
+    try:
+        _inhib_map = _load_inhibition_weights()
+    except Exception:
+        _inhib_map = {}
     for item in fused:
         _created = item.get("created_at") or item.get("timestamp") or ""
         try:
@@ -627,8 +689,12 @@ def fuse_results(
         # Anderson (1994) retrieval-induced forgetting: inhibition_weight stored in lifecycle.db
         # by memory-inhibition-cron.py. High inhibition_weight = weak competitor of a strong
         # memory — down-rank so strong memories dominate. Formula: score / (1 + inhibition_weight).
-        # inhibition_weight=0 (default) leaves score unchanged.
-        _iw = float(item.get("inhibition_weight") or 0.0)
+        # inhibition_weight=0 (default) leaves score unchanged. Scale is [0, 1].
+        _iw_raw = item.get("inhibition_weight")
+        if _iw_raw is None:
+            _txt = (item.get("_full_text") or item.get("text") or "").strip()
+            _iw_raw = _inhib_map.get(_txt[:80], 0.0)
+        _iw = _parse_inhibition_weight(_iw_raw)
         if _iw > 0.0:
             item["enriched_weight"] = round(item["enriched_weight"] / (1.0 + _iw), 4)
             item["_inhibition_weight"] = _iw
@@ -958,7 +1024,7 @@ def recall(
         import importlib.util as _ilu_si, sys as _sys_si
         _si_key = "side-info-memory-filter"
         if _si_key not in _sys_si.modules:
-            _si_path = str(_hermes_root() / "profiles" / "fork" / "scripts" / "side-info-memory-filter.py")
+            _si_path = str(_profile_script("side-info-memory-filter.py"))
             _si_spec = _ilu_si.spec_from_file_location(_si_key, _si_path)
             if _si_spec and _si_spec.loader:
                 _si_mod = _ilu_si.module_from_spec(_si_spec)
@@ -996,7 +1062,9 @@ def record_query_access(fused: list[dict]) -> None:
             # BEGIN IMMEDIATE: acquire write lock upfront to avoid SQLITE_BUSY when multiple
             # cron jobs and recall paths race to update access_count simultaneously.
             # Fails fast (timeout=5s) rather than silently discarding updates (DEFERRED default).
-            conn.execute("BEGIN IMMEDIATE")
+            # Skip if this connection is already in a transaction (nested BEGIN raises).
+            if not conn.in_transaction:
+                conn.execute("BEGIN IMMEDIATE")
             for item in fused:
                 text = (item.get("_full_text") or item.get("text") or "").strip()
                 if len(text) < 20:
