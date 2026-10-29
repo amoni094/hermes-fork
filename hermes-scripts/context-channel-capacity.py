@@ -91,8 +91,7 @@ def channel_stats(pre: str, post: str, intent: str = "") -> dict:
     mi = max(0.0, h_pre + h_post - h_both)
     h_x_given_y = max(0.0, h_both - h_post)  # spec formula
     efficiency = (mi / h_pre) if h_pre > 0 else 0.0
-    if efficiency > 1.0:
-        efficiency = 1.0
+    efficiency = min(efficiency, 1.0)
     alarm = bool(efficiency < EFFICIENCY_ALARM) if h_pre > 0 else False
     rec = {
         "channel_efficiency": round(efficiency, 6),

@@ -28,7 +28,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -165,7 +165,7 @@ def route(task: str, weights: np.ndarray = DEFAULT_WEIGHTS) -> dict:
 
 
 def run(task: str, weights: np.ndarray, dry_run: bool) -> int:
-    now    = datetime.now(timezone.utc).isoformat()
+    now    = datetime.now(UTC).isoformat()
     result = route(task, weights)
 
     print(f"\n=== Robustness-Cost-Governance Router — {now[:10]} ===")

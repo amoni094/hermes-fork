@@ -37,7 +37,7 @@ import os
 import argparse
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -161,7 +161,7 @@ def run_session(session_path: Path, dry_run: bool) -> dict:
 
 
 def run(session_id: str | None, all_sessions: bool, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     alarms: list[str] = []
     all_results = []
 
@@ -171,7 +171,7 @@ def run(session_id: str | None, all_sessions: bool, dry_run: bool) -> int:
         paths = list(SESSIONS_DIR.glob(f"*{session_id}*.jsonl"))
 
     if not paths:
-        print(f"[adaptive-mesh] No sessions found")
+        print("[adaptive-mesh] No sessions found")
         return 0
 
     print(f"[adaptive-mesh] Analysing {len(paths)} session(s)")

@@ -29,7 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -114,7 +114,7 @@ def analyse_session(path: Path, k: int = 8) -> dict | None:
 
 
 def run(dry_run: bool = False, k: int = 8, show_all: bool = False) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     session_files = sorted(SESSIONS.glob("*.jsonl"))
 
     results: list[dict] = []

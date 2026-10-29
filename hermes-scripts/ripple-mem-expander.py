@@ -27,7 +27,7 @@ import pathlib
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 # -- Profile-aware paths ------------------------------------------------------
@@ -97,7 +97,7 @@ def build_graph() -> dict:
                 edges[b["name"]].append(a["name"])
 
     graph = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "nodes": {s["name"]: {"mtime": s["mtime"], "snippet": s["snippet"]} for s in skills},
         "edges": edges,
         "skill_count": len(skills),
@@ -196,7 +196,7 @@ def ripple_expand(query: str, topk: int = 5) -> list[dict]:
 
     # Log recall
     log_entry = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "query": query[:200],
         "topk": topk,
         "anchors": anchors[:5],

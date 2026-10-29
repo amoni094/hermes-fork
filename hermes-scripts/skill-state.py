@@ -43,7 +43,7 @@ import hashlib
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
 
@@ -99,7 +99,7 @@ _load_runtime_config()
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _key(session_id: str, skill_name: str) -> str:
@@ -295,7 +295,7 @@ def cmd_gc(args: argparse.Namespace) -> int:
     from datetime import timedelta
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     max_age_h = getattr(args, "hours", None) or GC_AFTER_HOURS
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_h)
+    cutoff = datetime.now(UTC) - timedelta(hours=max_age_h)
     removed = 0
     for p in STATE_DIR.glob("*.json"):
         try:

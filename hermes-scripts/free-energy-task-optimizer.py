@@ -28,7 +28,7 @@ import argparse
 import json
 import math
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -75,7 +75,7 @@ def optimise(actions: list[str], costs: list[float], beta: float) -> dict:
 
 
 def run(actions: list[str], costs: list[float], beta: float, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Demo: route Hermes task across 5 action types
     if not actions:

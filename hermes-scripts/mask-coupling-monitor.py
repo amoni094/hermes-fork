@@ -26,7 +26,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -123,7 +123,7 @@ def analyse_session(session_path: Path, skill_db: dict[str, set[str]]) -> dict:
 
 
 def run(dry_run: bool) -> int:
-    now      = datetime.now(timezone.utc).isoformat()
+    now      = datetime.now(UTC).isoformat()
     skill_db = _load_skill_keywords()
     paths    = sorted(SESSIONS_DIR.glob("*.jsonl"))[-10:]
 
@@ -151,7 +151,7 @@ def run(dry_run: bool) -> int:
         print(f"\nALARM: yes — {len(alarm_cases)} session(s) show degraded mask-pattern coupling")
         rc = 1
     else:
-        print(f"\nALARM: no — memory retrieval coupling within bounds")
+        print("\nALARM: no — memory retrieval coupling within bounds")
         rc = 0
 
     if not dry_run:

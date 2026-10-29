@@ -31,7 +31,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME       = Path.home()
@@ -64,7 +64,7 @@ def _jaccard_dist(a: set, b: set) -> float:
 
 
 def run(dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Collect skill paths from both locations
     paths: list[Path] = []
@@ -108,7 +108,7 @@ def run(dry_run: bool) -> int:
 
     # Most isolated skills
     top_isolated = sorted(zip(nn_dists, [s[0] for s in skills]), reverse=True)[:5]
-    print(f"\nMost isolated skills (high NN distance):")
+    print("\nMost isolated skills (high NN distance):")
     for dist, name in top_isolated:
         print(f"  {dist:.4f}  {name}")
 
@@ -117,7 +117,7 @@ def run(dry_run: bool) -> int:
         print("       Skill embeddings are incoherent — consolidation recommended")
         rc = 1
     else:
-        print(f"\nALARM: no — packing/covering duality holds")
+        print("\nALARM: no — packing/covering duality holds")
         rc = 0
 
     if not dry_run:

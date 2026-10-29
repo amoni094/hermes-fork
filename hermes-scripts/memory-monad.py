@@ -38,7 +38,7 @@ import time
 import urllib.request
 import urllib.error
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Callable, Generic, Optional, TypeVar
 
@@ -78,7 +78,7 @@ class GrothPair:
     type: str = "fact"
     tags: list[str] = field(default_factory=list)
     derived_from: list[str] = field(default_factory=list)
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     fact_id: str = field(default_factory=lambda: "")
 
     def __post_init__(self):
@@ -96,7 +96,7 @@ class GrothPair:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict) -> "GrothPair":
+    def from_dict(cls, d: dict) -> GrothPair:
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
 
@@ -499,10 +499,10 @@ class HyperSkillTracker:
             return
         key = self._combo_key(skills)
         if key not in self._data:
-            self._data[key] = {"skills": sorted(skills), "count": 0, "task_types": {}, "first_seen": datetime.now(timezone.utc).isoformat()}
+            self._data[key] = {"skills": sorted(skills), "count": 0, "task_types": {}, "first_seen": datetime.now(UTC).isoformat()}
         self._data[key]["count"] += 1
         self._data[key]["task_types"][task_type] = self._data[key]["task_types"].get(task_type, 0) + 1
-        self._data[key]["last_seen"] = datetime.now(timezone.utc).isoformat()
+        self._data[key]["last_seen"] = datetime.now(UTC).isoformat()
         self._save()
 
     def get_hyperedge_candidates(self, min_count: int = 3) -> list[dict]:
@@ -573,7 +573,7 @@ class ProvenanceGraph:
             "conclusion": conclusion_id,
             "method": method,
             "session_id": session_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         })
         self._save()
 
@@ -588,7 +588,7 @@ class ProvenanceGraph:
             "path2": path2_id,
             "witness": witness,
             "confidence": confidence,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         })
         self._save()
 
@@ -712,7 +712,7 @@ class MemoryResult(Generic[T]):
     def is_ok(self) -> bool:
         return self.error is None
 
-    def bind(self, fn: Callable[[Any], "MemoryResult"]) -> "MemoryResult":
+    def bind(self, fn: Callable[[Any], MemoryResult]) -> MemoryResult:
         """Kleisli composition: chain memory operations with error propagation."""
         if not self.is_ok:
             return self  # propagate error
@@ -723,7 +723,7 @@ class MemoryResult(Generic[T]):
         except Exception as e:
             return MemoryResult(value=None, error=str(e), trace=self.trace + [f"error: {e}"])
 
-    def map(self, fn: Callable[[Any], Any]) -> "MemoryResult":
+    def map(self, fn: Callable[[Any], Any]) -> MemoryResult:
         """Functor map: transform the value without chaining."""
         if not self.is_ok:
             return self
@@ -754,7 +754,7 @@ class MemoryMonad:
             return
         entry = {
             "op": op, "fact_id": fact_id, "status": status,
-            "detail": detail, "ts": datetime.now(timezone.utc).isoformat()
+            "detail": detail, "ts": datetime.now(UTC).isoformat()
         }
         self._log_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self._log_path, "a") as f:
@@ -918,7 +918,7 @@ if __name__ == "__main__":
             sys.exit(1)
 
     elif args.cmd == "olog-validate":
-        pair = GrothPair(context=args.context, content=args.content, type=getattr(args, "type"))
+        pair = GrothPair(context=args.context, content=args.content, type=args.type)
         result = OlogSchema.validate_fact(pair)
         print(json.dumps(result, indent=2))
         if not result.get("valid", True):

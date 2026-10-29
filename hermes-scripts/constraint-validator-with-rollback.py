@@ -36,7 +36,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -199,7 +199,7 @@ def validate_cache_files(cache_dir: Path) -> list[dict]:
 
 
 def run(check_path: Path | None, check_output: str | None, dry_run: bool) -> int:
-    now    = datetime.now(timezone.utc).isoformat()
+    now    = datetime.now(UTC).isoformat()
     alarms: list[str] = []
     all_violations: list[dict] = []
 
@@ -244,7 +244,7 @@ def run(check_path: Path | None, check_output: str | None, dry_run: bool) -> int
             print(f"    ! {v['file']}: {v['violations']}")
             alarms.append(f"CACHE_INVALID: {v['file']} — {v['violations'][0]['detail'][:60]}")
     else:
-        print(f"  Cache: all checked JSON files pass schema constraints")
+        print("  Cache: all checked JSON files pass schema constraints")
 
     if alarms:
         print(f"\nALARM: yes — {len(alarms)} constraint violation(s):")

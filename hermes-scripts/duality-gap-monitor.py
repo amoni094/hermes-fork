@@ -25,7 +25,7 @@ Output:
 import argparse
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 import sys
 
@@ -124,7 +124,7 @@ def main():
     if not args.dry_run:
         conn.execute(
             "INSERT INTO duality_gaps (run_ts, primal, dual, gap, relative_gap, alarm) VALUES (?,?,?,?,?,?)",
-            (datetime.now(timezone.utc).isoformat(), primal, dual, gap, relative_gap, int(alarm))
+            (datetime.now(UTC).isoformat(), primal, dual, gap, relative_gap, int(alarm))
         )
         conn.commit()
 
@@ -139,14 +139,14 @@ def main():
                 "relative_gap": round(relative_gap, 4),
                 "threshold": args.threshold,
                 "recommendation": "Re-run circuit-trajectory-scorer.py and review top-K routing paths.",
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
             }, indent=2))
             _tmp.replace(ALARM_PATH)
             print(f"[duality-gap] ALARM written to {ALARM_PATH}", file=sys.stderr)
 
     conn.close()
 
-    print(f"\n=== Duality Gap Monitor — {datetime.now(timezone.utc).isoformat()[:19]} ===")
+    print(f"\n=== Duality Gap Monitor — {datetime.now(UTC).isoformat()[:19]} ===")
     print(f"Circuits analysed: {len(circuits)} (top-K={args.top_k})")
     print(f"Primal objective:  {primal:.4f}")
     print(f"Dual bound (UB):   {dual:.4f}")

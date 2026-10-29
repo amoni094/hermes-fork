@@ -19,7 +19,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 ASSIGN_THRESHOLD = 0.6  # containment: 60% of term trigrams in concept text
 _TOKEN_RE = re.compile(r'[A-Za-z]{4,}')
@@ -42,7 +42,7 @@ def _cache_dir() -> Path:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _atomic_write(path: Path, obj) -> None:
@@ -134,7 +134,7 @@ def _parse_skill_md(text: str) -> list:
                 chunks.append(line.strip())
                 break
         return chunks
-    m = re.search(r'^description:\s*(.*)$', fm, re.M)
+    m = re.search(r'^description:\s*(.*)$', fm, re.MULTILINE)
     if m:
         val = m.group(1).strip().strip('"').strip("'")
         if val in ('>', '|'):
@@ -145,7 +145,7 @@ def _parse_skill_md(text: str) -> list:
                     break
         else:
             chunks.append(val.split('\n')[0])
-    tm = re.search(r'^triggers:\s*$', fm, re.M)
+    tm = re.search(r'^triggers:\s*$', fm, re.MULTILINE)
     if tm:
         for ln in fm[tm.end():].splitlines():
             if not ln.strip():

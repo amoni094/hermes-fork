@@ -82,7 +82,7 @@ HOOKS = {
 }
 
 
-def extract_symbols(diff: str, file_path: str) -> Set[str]:
+def extract_symbols(diff: str, file_path: str) -> set[str]:
     """Extract symbols from diff hunks for a file."""
     ext = Path(file_path).suffix.lstrip('.').lower()
     patterns = SYMBOL_PATTERNS.get(ext, [])
@@ -101,7 +101,7 @@ def extract_symbols(diff: str, file_path: str) -> Set[str]:
     return symbols
 
 
-def get_git_diff(repo_path: str, commit_range: str) -> Tuple[str, Dict[str, str]]:
+def get_git_diff(repo_path: str, commit_range: str) -> tuple[str, dict[str, str]]:
     """Get git diff for the given range and return diff text + file diffs."""
     cmd = ['git', '-C', repo_path, 'diff', '--unified=0', commit_range]
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -127,9 +127,9 @@ def get_git_diff(repo_path: str, commit_range: str) -> Tuple[str, Dict[str, str]
     return diff_text, file_diffs
 
 
-def analyze_impact(file_diffs: Dict[str, str]) -> Dict:
+def analyze_impact(file_diffs: dict[str, str]) -> dict:
     """Analyze impact from file diffs."""
-    symbols: Dict[str, Set[str]] = defaultdict(set)
+    symbols: dict[str, set[str]] = defaultdict(set)
     files = set()
     lines_added = 0
     lines_deleted = 0
@@ -219,7 +219,7 @@ def main():
         print(f"Error running git: {e.stderr}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
-        print(f"Error: {str(e)}", file=sys.stderr)
+        print(f"Error: {e!s}", file=sys.stderr)
         sys.exit(1)
 
 

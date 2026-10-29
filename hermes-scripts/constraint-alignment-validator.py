@@ -25,7 +25,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -161,7 +161,7 @@ def validate_session(session_path: Path) -> dict:
 
 
 def run(session_id: str | None, dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     paths = sorted(SESSIONS_DIR.glob("*.jsonl"))
 
     if session_id:

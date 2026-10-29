@@ -30,7 +30,7 @@ import json
 import math
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from itertools import combinations
 from pathlib import Path
 
@@ -128,7 +128,7 @@ def certify(reviewer_names: list[str], profiles: dict[str, set]) -> dict:
 
 
 def run(reviewer_names: list[str] | None, dry_run: bool) -> int:
-    now     = datetime.now(timezone.utc).isoformat()
+    now     = datetime.now(UTC).isoformat()
     profiles = DEFAULT_REVIEWERS
 
     if reviewer_names is None:

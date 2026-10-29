@@ -21,7 +21,7 @@ import json
 import re
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 CONFIDENCE = 0.7
 STOPWORDS = {
@@ -72,7 +72,7 @@ def _skills_dir() -> Path:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _atomic_write_json(path: Path, obj) -> None:

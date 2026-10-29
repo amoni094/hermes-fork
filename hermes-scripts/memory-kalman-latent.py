@@ -23,7 +23,7 @@ import json
 import os
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 
@@ -110,7 +110,7 @@ def step(key: str, z: float, Q: float = 1e-4, R: float = 0.05,
             x, P, n = z, 1.0, 0
         x_pred, P_pred = predict(x, P, Q)
         x_post, P_post, K = update(x_pred, P_pred, z, R)
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(UTC).isoformat()
         conn.execute(
             """
             INSERT INTO kalman_scalar(key, x, P, Q, R, n, updated_at)

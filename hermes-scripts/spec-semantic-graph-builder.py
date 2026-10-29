@@ -36,7 +36,7 @@ import json
 import re
 import sys
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME       = Path.home()
@@ -156,7 +156,7 @@ def analyse_skill(path: Path) -> dict:
 
 
 def run(skill_name: str | None, export: Path | None, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Collect skill files
     skill_files: list[Path] = []

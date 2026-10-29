@@ -18,7 +18,7 @@ import math
 import os
 import re
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, UTC
 from pathlib import Path
 
 MEMORY_PATH = os.path.expanduser("~/.hermes/memories/MEMORY.md")
@@ -267,7 +267,7 @@ def main():
     out_path = CACHE / "memory-staleness.json"
     out_path.write_text(json.dumps({
         "sections": classified,
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
     }, indent=2))
     print(f"Wrote {out_path}")
 

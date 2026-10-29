@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 
 import json, sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from collections import defaultdict
 
@@ -69,7 +69,7 @@ def _parse(path: Path) -> list[dict]:
 
 
 def run() -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     print(f"\n=== Signal Separation Monitor — {now[:10]} ===\n")
 
     files = sorted(
@@ -110,7 +110,7 @@ def run() -> int:
         else:
             sep = effective - first
             separations.append(sep)
-        print(f"  {tool:<35} {first:>6} {str(effective):>10} {str(sep):>5}")
+        print(f"  {tool:<35} {first:>6} {effective!s:>10} {sep!s:>5}")
 
     if not separations:
         print("\nALARM: no — no tools with enough calls to compute separation")

@@ -58,7 +58,7 @@ import subprocess
 import sys
 import uuid
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
 
@@ -103,7 +103,7 @@ def _wm_verify_mac(doc: dict[str, Any]) -> bool:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _path(session_id: str) -> Path:
@@ -261,7 +261,7 @@ def cmd_add_constraint(args: argparse.Namespace) -> int:
         "source_context": getattr(args, "source_context", None) or None,  # e.g. "session:abc123" or "skill:hermes-agent"
         "predecessor_model": getattr(args, "predecessor_model", None) or None,  # model that generated this constraint
         # arXiv:2608.25553: stale constraint expiry metadata (required)
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "expires_at_or_policy": getattr(args, "expires_at", None) or "until_changed",
         "source_turn": getattr(args, "source_turn", None),
         # Zenn JP Aug 2026: card scope

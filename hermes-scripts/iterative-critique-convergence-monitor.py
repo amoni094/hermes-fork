@@ -17,7 +17,7 @@ from ~/.hermes/cache/monitors/ and tracks issue-count trajectory.
 from __future__ import annotations
 
 import json, math, sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -50,7 +50,7 @@ def _infer_from_suite_cache() -> list[dict]:
 
 
 def run() -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     print(f"\n=== Iterative Critique Convergence Monitor — {now[:10]} ===\n")
 
     history = _load_history() or _infer_from_suite_cache()
@@ -82,7 +82,7 @@ def run() -> int:
         print(f"\nALARM: yes — critique loop not converging: last ratio={last_ratio:.3f} "
               f"(need <{CONVERGENCE_RATIO}); consider stopping refinement")
     else:
-        print(f"\nALARM: no — critique loop converging normally")
+        print("\nALARM: no — critique loop converging normally")
 
     _tmp_out_file = OUT_FILE.with_suffix('.tmp')
     _tmp_out_file.write_text(json.dumps({

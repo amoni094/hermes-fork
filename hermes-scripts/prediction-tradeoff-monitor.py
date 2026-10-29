@@ -27,7 +27,7 @@ import json
 import math
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -100,7 +100,7 @@ def compute_tradeoff(records: list[dict]) -> dict:
 
 
 def run() -> int:
-    now  = datetime.now(timezone.utc).isoformat()
+    now  = datetime.now(UTC).isoformat()
     print(f"\n=== Prediction Tradeoff Monitor — {now[:10]} ===\n")
 
     if not SESSIONS_DIR.exists():

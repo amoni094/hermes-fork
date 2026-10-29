@@ -28,7 +28,7 @@ import json
 import math
 import sys
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -123,7 +123,7 @@ def analyse_session(session_path: Path) -> dict:
 
 
 def run(dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     paths = sorted(SESSIONS_DIR.glob("*.jsonl"))[-10:]
 
     if not paths:
@@ -150,7 +150,7 @@ def run(dry_run: bool) -> int:
         print(f"\nALARM: yes — {len(alarm_cases)} session(s) exceed mixing/error budget")
         rc = 1
     else:
-        print(f"\nALARM: no — routing chain mixing within budget")
+        print("\nALARM: no — routing chain mixing within budget")
         rc = 0
 
     if not dry_run:

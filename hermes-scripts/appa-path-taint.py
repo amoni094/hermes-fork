@@ -51,7 +51,7 @@ RE_LIVE_CALL = re.compile(r"^->\s*([A-Za-z0-9_.-]+)(?:\((.*)\))?\s*$")
 
 
 class ToolCall:
-    __slots__ = ("name", "index", "inp", "out")
+    __slots__ = ("index", "inp", "name", "out")
 
     def __init__(self, name: str, index: int, inp: str = "", out: str = "") -> None:
         self.name = name or "unknown"
@@ -186,7 +186,7 @@ def parse_log_text(text: str, start_index: int = 0) -> list[ToolCall]:
         if hint_name:
             for i, cand in enumerate(pending):
                 if cand.name == hint_name:
-                    tc = pending[i]
+                    tc = cand
                     del pending[i]
                     break
         if tc is None and pending:

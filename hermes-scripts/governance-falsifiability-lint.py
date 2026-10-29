@@ -16,7 +16,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -53,7 +53,7 @@ def _parse_dt(v) -> datetime | None:
         return None
     if isinstance(v, (int, float)):
         try:
-            return datetime.fromtimestamp(float(v), tz=timezone.utc)
+            return datetime.fromtimestamp(float(v), tz=UTC)
         except (OSError, ValueError, OverflowError):
             return None
     if isinstance(v, str):
@@ -61,7 +61,7 @@ def _parse_dt(v) -> datetime | None:
         try:
             dt = datetime.fromisoformat(s)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
+                dt = dt.replace(tzinfo=UTC)
             return dt
         except ValueError:
             return None
@@ -74,7 +74,7 @@ def _is_boilerplate_fo(raw: str) -> bool:
 
 
 def lint_proposal(rec: dict, now: datetime | None = None) -> dict:
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     pid = rec.get('id') or rec.get('proposal_id') or rec.get('name') or '?'
     raw = rec.get('failure_observable')
     boilerplate = False
@@ -157,7 +157,7 @@ def load_proposals() -> list[dict]:
 
 
 def run(rows: list[dict] | None = None) -> dict:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rows = rows if rows is not None else load_proposals()
     latest: dict[str, dict] = {}
     for rec in rows:
@@ -188,7 +188,7 @@ def run(rows: list[dict] | None = None) -> dict:
 
 def self_test() -> int:
     failures = []
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     missing = lint_proposal({'id': 'a'}, now=now)
     if missing['status'] != 'WARN':
         failures.append('missing should WARN')

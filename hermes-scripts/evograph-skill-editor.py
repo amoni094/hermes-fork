@@ -24,7 +24,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
@@ -88,7 +88,7 @@ def build_graph() -> dict:
             "failure_streak": failure_streak,
             "last_used": last_used,
             "needs_review": status in ("failing", "low-yield"),
-            "updated": datetime.now(timezone.utc).isoformat(),
+            "updated": datetime.now(UTC).isoformat(),
         }
 
         # Edge: skills with similar failure patterns are likely related
@@ -97,7 +97,7 @@ def build_graph() -> dict:
             edges.append({"from": skill_name, "type": "needs_review", "reason": status})
 
     graph = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "node_count": len(nodes),
         "nodes": nodes,
         "edges": edges,

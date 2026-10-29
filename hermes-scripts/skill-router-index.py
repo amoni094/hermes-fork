@@ -18,7 +18,7 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import os
@@ -413,7 +413,7 @@ def cmd_build():
 
     # Strip tfidf from the JSON (rebuild at query time from tokens)
     index = {
-        "built_at": datetime.now(timezone.utc).isoformat(),
+        "built_at": datetime.now(UTC).isoformat(),
         "total": len(skills),
         "skills": [
             {
@@ -641,7 +641,7 @@ def route(query_text: str, top: int = 5) -> list[dict]:
         _evt_log = _hermes_root_sri / 'cache' / 'routing-events.jsonl'
         _evt_log.parent.mkdir(parents=True, exist_ok=True)
         _evt = json.dumps({
-            'ts': datetime.now(timezone.utc).isoformat(),
+            'ts': datetime.now(UTC).isoformat(),
             'query_len': len(query_text.split()),
             'top_skill': results[0]['name'] if results else None,
             'top_score': results[0]['score'] if results else None,
@@ -892,7 +892,7 @@ def cmd_check():
     for sim, a, b in flags:
         print(f"  {sim:.3f}  {a}  <->  {b}")
 
-    print(f"\n(These pairs may confuse routing — consider tightening descriptions or merging)")
+    print("\n(These pairs may confuse routing — consider tightening descriptions or merging)")
 
 
 def _print_worked_example() -> None:

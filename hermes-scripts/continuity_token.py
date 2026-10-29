@@ -12,7 +12,7 @@ import hashlib
 import hmac
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 
 @dataclass
@@ -62,7 +62,7 @@ def make_child_token(parent_session_id, scope, restrictions, expiry_turns, secre
         granted_scope=list(scope),
         tool_restrictions=list(restrictions),
         expiry_turns=expiry_turns,
-        issued_at=datetime.now(timezone.utc).isoformat(),
+        issued_at=datetime.now(UTC).isoformat(),
     )
     sign(token, secret)
     return token

@@ -30,7 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -152,7 +152,7 @@ def _intersection_match(
 
 
 def run(query: str | None, dry_run: bool, list_skills: bool) -> None:
-    now    = datetime.now(timezone.utc).isoformat()
+    now    = datetime.now(UTC).isoformat()
     skills = _load_skills()
     print(f"[priority-matcher] Loaded {len(skills)} skills")
 

@@ -30,7 +30,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import anthropic
@@ -114,7 +114,7 @@ def _probe_claims(client: anthropic.Anthropic, claims: list[str]) -> dict:
 
 
 def analyse_session(path: Path, dry_run: bool = False) -> dict:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     try:
         text = path.read_text()
     except Exception as e:
@@ -169,7 +169,7 @@ def main() -> None:
 
     result = analyse_session(path, dry_run=args.dry_run)
 
-    print(f"\n=== Belief Probe Evaluator ===")
+    print("\n=== Belief Probe Evaluator ===")
     print(f"Session:     {result.get('session', path.stem[:20])}")
     print(f"Claims found: {result.get('claims_found', result.get('claims_checked', 0))}")
     if not args.dry_run:

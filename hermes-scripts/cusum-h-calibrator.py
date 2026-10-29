@@ -26,7 +26,7 @@ import math
 import os
 import random
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -243,7 +243,7 @@ def run(arl_target: int = ARL_TARGET, B: int = B_DEFAULT, k: float = K_DEFAULT, 
     uncal = arl0_block_bootstrap(z_ic, mu0_z, k, H_DEFAULT, B, arl_target, seed)
     cal = search_h(z_ic, mu0_z, k, B, arl_target, seed + 50)
     out = {
-        'ts': datetime.now(timezone.utc).isoformat(),
+        'ts': datetime.now(UTC).isoformat(),
         'theorem': 'Page CUSUM ARL_0 calibration via Kunsch moving-block bootstrap; AUDIT-10',
         'source': source,
         'n_series': len(xs),

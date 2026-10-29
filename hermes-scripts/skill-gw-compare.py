@@ -28,7 +28,7 @@ from pathlib import Path
 # ── Path setup ────────────────────────────────────────────────────────────────
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
-from ot_utils import build_tf, w1_distance, sinkhorn  # noqa: E402
+from ot_utils import build_tf, w1_distance, sinkhorn
 
 import numpy as np
 
@@ -167,7 +167,7 @@ def cmd_compare(dir1: str, dir2: str) -> None:
     path1 = Path(dir1).expanduser()
     path2 = Path(dir2).expanduser()
 
-    print(f"\n[skill-gw-compare] Loading skills from:")
+    print("\n[skill-gw-compare] Loading skills from:")
     print(f"  Dir A: {path1}")
     print(f"  Dir B: {path2}\n")
 
@@ -179,7 +179,7 @@ def cmd_compare(dir1: str, dir2: str) -> None:
         sys.exit(1)
 
     print(f"  Sampled {len(tfs_A)} skills from A, {len(tfs_B)} from B")
-    print(f"  Building pairwise W1 cost matrices…")
+    print("  Building pairwise W1 cost matrices…")
 
     C_A, names_A = _build_cost_matrix(tfs_A)
     C_B, names_B = _build_cost_matrix(tfs_B)
@@ -189,7 +189,7 @@ def cmd_compare(dir1: str, dir2: str) -> None:
     gw_cost, T = _gw_distance(C_A, C_B, names_A, names_B, n_rounds=GW_ROUNDS, reg=GW_REG)
 
     print(f"=== GW Distance: {gw_cost:.6f} ===\n")
-    print(f"  (Lower = more structurally similar skill ecosystems)\n")
+    print("  (Lower = more structurally similar skill ecosystems)\n")
 
     top_pairs = _top_matched_pairs(T, names_A, names_B, top_k=TOP_PAIRS)
     print(f"  Top-{TOP_PAIRS} matched skill pairs (by transport mass):")
@@ -214,7 +214,7 @@ def cmd_self_compare() -> None:
         print(f"[self-compare] Default skills dir not found: {path1}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"\n[skill-gw-compare] Self-compare:")
+    print("\n[skill-gw-compare] Self-compare:")
     print(f"  Default: {path1}")
     print(f"  Fork:    {path2}\n")
 
@@ -226,7 +226,7 @@ def cmd_self_compare() -> None:
         tfs_B = _load_skills_from_dir(path2, seed=99)
 
     if not tfs_B:
-        print(f"  [Note] Fork skills dir empty or absent — comparing two disjoint halves of default skills dir.", file=sys.stderr)
+        print("  [Note] Fork skills dir empty or absent — comparing two disjoint halves of default skills dir.", file=sys.stderr)
         # Load full default set, split into two halves by odd/even alphabetical index
         all_default = _load_skills_from_dir(path1, max_sample=40, seed=42)
         all_names = sorted(all_default.keys())
@@ -252,7 +252,7 @@ def cmd_self_compare() -> None:
     only_B = set(tfs_B) - set(tfs_A)
     print(f"  Shared names: {len(shared)},  only-default: {len(only_A)},  only-fork: {len(only_B)}")
 
-    print(f"  Building pairwise W1 cost matrices…")
+    print("  Building pairwise W1 cost matrices…")
     C_A, names_A = _build_cost_matrix(tfs_A)
     C_B, names_B = _build_cost_matrix(tfs_B)
 
@@ -260,7 +260,7 @@ def cmd_self_compare() -> None:
     gw_cost, T = _gw_distance(C_A, C_B, names_A, names_B, n_rounds=GW_ROUNDS, reg=GW_REG)
 
     print(f"=== GW Distance (default vs fork): {gw_cost:.6f} ===\n")
-    print(f"  (0 = identical structure; higher = more divergence between profiles)\n")
+    print("  (0 = identical structure; higher = more divergence between profiles)\n")
 
     top_pairs = _top_matched_pairs(T, names_A, names_B, top_k=TOP_PAIRS)
     print(f"  Top-{TOP_PAIRS} skill pairs with highest transport mass (most structurally matched):")
@@ -268,7 +268,7 @@ def cmd_self_compare() -> None:
         print(f"  {rank}. {na:<45s}  ↔  {nb:<45s}  mass={mass:.6f}")
 
     # Also highlight divergent pairs (skills with low transport mass to their name-twin)
-    print(f"\n  Shared skills with divergent content (high W1 between same-name skill in each profile):")
+    print("\n  Shared skills with divergent content (high W1 between same-name skill in each profile):")
     divergent = []
     for name in sorted(shared):
         if name in tfs_A and name in tfs_B:

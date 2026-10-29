@@ -15,7 +15,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -73,7 +73,7 @@ def check(decisions: list[dict]) -> dict:
 def run() -> dict:
     stale = _shadow_stale()
     if stale is not None:
-        stale['ts'] = datetime.now(timezone.utc).isoformat()
+        stale['ts'] = datetime.now(UTC).isoformat()
         try:
             _atomic_write(OUT, stale)
             stale['output'] = str(OUT)
@@ -87,7 +87,7 @@ def run() -> dict:
     except (OSError, json.JSONDecodeError):
         pass
     out = check(decisions)
-    out['ts'] = datetime.now(timezone.utc).isoformat()
+    out['ts'] = datetime.now(UTC).isoformat()
     try:
         _atomic_write(OUT, out)
         out['output'] = str(OUT)

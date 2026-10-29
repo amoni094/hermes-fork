@@ -27,7 +27,7 @@ import os
 
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 import math
 
@@ -80,7 +80,7 @@ def _load_recent_tools(session_path: Path) -> list[str]:
 
 
 def run() -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Find most recent session
     if not SESSIONS_DIR.exists():
@@ -152,5 +152,5 @@ def run() -> int:
 
 
 if __name__ == "__main__":
-    print(f"\n=== State Concentration Monitor — {datetime.now(timezone.utc).date()} ===\n")
+    print(f"\n=== State Concentration Monitor — {datetime.now(UTC).date()} ===\n")
     sys.exit(run())

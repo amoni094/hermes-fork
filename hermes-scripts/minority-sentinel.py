@@ -107,7 +107,7 @@ def _extract_fingerprint(verdicts: list[dict]) -> dict[str, Any]:
         # Count capitalized tokens, numbers, arXiv IDs, quoted strings
         caps = len(re.findall(r'\b[A-Z][A-Za-z]+\b', text))
         nums = len(re.findall(r'\b\d+\.?\d*\b', text))
-        refs = len(re.findall(r'arXiv|doi|citation|study|paper|research|\[[\d,]+\]', text, re.I))
+        refs = len(re.findall(r'arXiv|doi|citation|study|paper|research|\[[\d,]+\]', text, re.IGNORECASE))
         return (caps + nums + refs) / max(len(text.split()), 1)
     f_specificity = specificity(minority_group) - specificity(majority_group)
 

@@ -13,7 +13,7 @@ import os
 import re
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -73,7 +73,7 @@ def ingest(source: Path, pattern: str, out: Path) -> dict:
         except OSError:
             existing = ''
     n_id = _max_episode_id(out)
-    ts = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(UTC).isoformat()
     appended = []
     for raw in lines:
         if not rx.search(raw):

@@ -37,7 +37,7 @@ import os
 import argparse
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -151,7 +151,7 @@ def _consistency_score(intents: list[np.ndarray]) -> tuple[float, str]:
 
 
 def run_monitor(session_filter: str | None, dry_run: bool) -> int:
-    now    = datetime.now(timezone.utc).isoformat()
+    now    = datetime.now(UTC).isoformat()
     alarms: list[str] = []
     results: list[dict] = []
 

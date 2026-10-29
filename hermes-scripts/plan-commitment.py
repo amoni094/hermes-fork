@@ -26,7 +26,7 @@ import json
 import os
 import secrets
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
@@ -34,7 +34,7 @@ COMMITMENTS_DIR = HERMES_HOME / "cache" / "plan-commitments"
 
 
 def _now_ts() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
 
 
 def _compute_commitment(nonce_bytes: bytes, plan_bytes: bytes) -> str:

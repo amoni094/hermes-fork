@@ -37,7 +37,7 @@ import re
 import sqlite3
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 FACTS_DIR    = Path.home() / ".hermes" / "memory-facts"
@@ -50,7 +50,7 @@ MIN_FACTS_FOR_ZSCORE = 8   # std is unstable below this
 
 
 def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def now_iso() -> str:

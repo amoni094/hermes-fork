@@ -392,7 +392,7 @@ def write_fact(session_id: str, fact: dict, name: str, confidence: float = 0.8) 
     source_tag = f"[source_type={fact['source_type']}]"
     # Trust-Tiered Librarian (arXiv:2608.12984, Aug 2026): every episode carries as_of timestamp.
     # Downstream consumers use this for point-in-time trust queries ("what did we know as of T?")
-    as_of_tag = f"[as_of={datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%MZ')}]"
+    as_of_tag = f"[as_of={datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%MZ')}]"
     entities = fact.get("entities", [])
     if entities:
         entity_str = ", ".join(f"{e['type']}:{e['name']}" for e in entities)
@@ -496,7 +496,7 @@ def main():
     # Sweep 24: session-complete mode — filter to most recent extract batch only
     # Helps entity coherence: Graphiti sees a topically consistent episode set
     if on_session_complete and facts:
-        today_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+        today_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
         recent = [f for f in facts if today_str in f.get("text", "")[:40]]
         if recent:
             print(f"[l1-graphiti-write] --on-session-complete: filtering to {len(recent)}/{len(facts)} today's facts")
@@ -504,7 +504,7 @@ def main():
         else:
             print(f"[l1-graphiti-write] --on-session-complete: no today-tagged facts; writing all {len(facts)}")
 
-    print(f"[l1-graphiti-write] Initializing Graphiti session...")
+    print("[l1-graphiti-write] Initializing Graphiti session...")
     try:
         session_id = initialize_session()
     except Exception as e:
@@ -528,7 +528,7 @@ def main():
     grant_id = tracegrant_log_grant("l1-graphiti-write", source_type, taint_path=taint)
     if grant_id:
         print(f"[tracegrant] grant={grant_id} source_type={source_type}", file=sys.stderr)
-    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    now = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
     written = 0
     failed = 0
 

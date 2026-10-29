@@ -27,7 +27,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -88,7 +88,7 @@ def validate_predictions(predictions: list[str]) -> dict:
 
 
 def run(predictions: list[str] | None, input_file: Path | None, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     if input_file and input_file.exists():
         data        = json.loads(input_file.read_text())
@@ -118,7 +118,7 @@ def run(predictions: list[str] | None, input_file: Path | None, dry_run: bool) -
     print(f"Majority:        {result['majority_count']}/{result['n_predictions']-1} agree  "
           f"({'YES' if result['has_majority'] else 'NO'})")
 
-    print(f"\nPairwise similarity matrix:")
+    print("\nPairwise similarity matrix:")
     for i, row in enumerate(result["pairwise_sim"]):
         print(f"  [{i}] {row}")
 
@@ -127,7 +127,7 @@ def run(predictions: list[str] | None, input_file: Path | None, dry_run: bool) -
               f"(fragmentation={result['fragmentation']:.3f})")
         alarm_exit = 1
     else:
-        print(f"\nALARM: no — predictions show sufficient consensus")
+        print("\nALARM: no — predictions show sufficient consensus")
         alarm_exit = 0
 
     if not dry_run:

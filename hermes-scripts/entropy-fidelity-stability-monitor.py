@@ -29,7 +29,7 @@ import os
 import sqlite3
 import time
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME = Path.home()
@@ -128,7 +128,7 @@ def _append_alarm(alarm: dict) -> None:
 
 def run(dry_run: bool = False, window: int = 5) -> None:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     entropy  = _read_memory_entropy()
     fidelity = _read_fidelity()
 

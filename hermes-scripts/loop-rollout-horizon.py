@@ -15,7 +15,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -81,7 +81,7 @@ def run() -> dict:
     cusum = _load('loop-cusum-changepoint.json')
     pid_ok = cmp_.get('preferred_model', 'M0') == 'M0' and (cmp_.get('recommendation') != 'switch_to_mpc_rollout')
     out = rollout(last_e(), pid_ok, bool(cusum.get('alarm')))
-    out['ts'] = datetime.now(timezone.utc).isoformat()
+    out['ts'] = datetime.now(UTC).isoformat()
     try:
         _atomic_write(OUT, out)
         out['output'] = str(OUT)

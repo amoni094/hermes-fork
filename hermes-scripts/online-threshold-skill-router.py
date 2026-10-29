@@ -49,7 +49,7 @@ def route(task: str, verbose: bool = True) -> str:
     scores.sort(key=lambda x: -x[1])
 
     if verbose:
-        print(f"\n=== Online Threshold Skill Router ===")
+        print("\n=== Online Threshold Skill Router ===")
         print(f"Task:      {task[:70]}")
         print(f"Threshold: {THETA} (CR = {THETA*(1-THETA):.4f} for static-threshold strategy)\n")
         print(f"  {'Skill':<40} {'Score':>7}  Decision")

@@ -27,7 +27,7 @@ import json
 import math
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME          = Path.home()
@@ -86,7 +86,7 @@ def _mutual_information(seq: list[str]) -> float:
 
 
 def run() -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     print(f"\n=== Adaptive Key Leakage Monitor — {now[:10]} ===\n")
 
     session_files = sorted(

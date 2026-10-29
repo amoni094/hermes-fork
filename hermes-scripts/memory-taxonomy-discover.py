@@ -17,7 +17,7 @@ _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile 
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 JACCARD_THRESHOLD = 0.4
 SUBSET_CONFIDENCE = 0.9
@@ -31,7 +31,7 @@ def _cache_dir() -> Path:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _atomic_write(path: Path, obj) -> None:
@@ -168,10 +168,8 @@ def discover_taxonomy(concepts) -> dict:
                     'reason': 'subset',
                 })
             jac = trigram_jaccard(intent_a, intent_b)
-            if jac > 1.0:
-                jac = 1.0
-            if jac < 0.0:
-                jac = 0.0
+            jac = min(jac, 1.0)
+            jac = max(jac, 0.0)
             if jac >= JACCARD_THRESHOLD:
                 # Symmetric similarity: one directed edge (lexicographic) to
                 # avoid trivial 2-cycles. Prefer subset direction when present.

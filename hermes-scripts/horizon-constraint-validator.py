@@ -25,7 +25,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -101,7 +101,7 @@ def validate_plan(plan_steps: list[dict]) -> dict:
 
 
 def run(plan: list[dict] | None, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     if plan is None:
         # Demo: a mixed-safety multi-step plan

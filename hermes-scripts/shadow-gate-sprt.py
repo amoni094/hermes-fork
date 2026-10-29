@@ -27,7 +27,7 @@ import json
 import math
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -303,7 +303,7 @@ def run() -> dict:
         except Exception:
             decisions = []
     summary = {
-        'ts': datetime.now(timezone.utc).isoformat(),
+        'ts': datetime.now(UTC).isoformat(),
         'theorem': 'Wald Sequential Analysis SPRT; alpha=beta=0.05; N(3,1) vs N(4,1)',
         'A': A,
         'A_effective': a_effective,

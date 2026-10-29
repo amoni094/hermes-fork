@@ -30,7 +30,7 @@ import json
 import math
 import re
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -119,7 +119,7 @@ def analyse_session(path: Path) -> dict | None:
 
 
 def run(dry_run: bool = False) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     session_files = sorted([f for d in [SESSIONS, FORK_SESSIONS] if d.exists() for f in d.glob("*.jsonl")])
 
     results: list[dict] = []

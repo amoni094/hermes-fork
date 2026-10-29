@@ -145,7 +145,7 @@ import time
 import urllib.request
 import urllib.parse
 import urllib.error
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -189,7 +189,7 @@ def is_near_duplicate(title, abstract):
 CACHE_DIR = Path.home() / ".hermes" / "cache" / "research"
 SEEN_FILE = CACHE_DIR / "seen_papers.json"
 OUTPUT_LATEST = CACHE_DIR / "hermes-research-latest.json"
-OUTPUT_DATED = CACHE_DIR / f"hermes-research-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.json"
+OUTPUT_DATED = CACHE_DIR / f"hermes-research-{datetime.now(UTC).strftime('%Y-%m-%d')}.json"
 MAX_SEEN = 2000   # rolling window
 
 DRY_RUN = "--dry-run" in sys.argv
@@ -249,7 +249,7 @@ def is_offtopic(paper: dict) -> bool:
 # Index-pairing IDs with page-level title regexes mislabels real papers.
 _JUNK_TITLE_RE = re.compile(
     r'(Showing\s+\d|results for all:|Search v\d|&nbsp;|Released \d{4})',
-    re.I,
+    re.IGNORECASE,
 )
 
 def clean_arxiv_title(title: str) -> str:
@@ -1057,7 +1057,7 @@ def load_seen() -> dict:
 def save_seen(seen: dict) -> None:
     if len(seen["seen"]) > MAX_SEEN:
         seen["seen"] = seen["seen"][-MAX_SEEN:]
-    seen["last_updated"] = datetime.now(timezone.utc).isoformat()
+    seen["last_updated"] = datetime.now(UTC).isoformat()
     _tmp = SEEN_FILE.with_suffix(".tmp")
     _tmp.write_text(json.dumps(seen, indent=2))
     _tmp.replace(SEEN_FILE)
@@ -1131,7 +1131,7 @@ def search_arxiv_html(query: str, max_results: int = 10) -> list[dict]:
     seen = set()
     # Pair ID+title from the same result card. Global index pairing mislabels papers
     # because arXiv:ID appears twice per hit (abs + pdf) and chrome matches 'title'.
-    blocks = re.findall(r'class="arxiv-result"(.*?)</li>', html, re.DOTALL | re.I)
+    blocks = re.findall(r'class="arxiv-result"(.*?)</li>', html, re.DOTALL | re.IGNORECASE)
     for block in blocks:
         m = re.search(r'arXiv:(\d{4}\.\d{4,5})', block)
         if not m:
@@ -1459,7 +1459,7 @@ def run_sweep() -> tuple[list[dict], list[dict]]:
     seen_keys = set(seen["seen"])
     all_papers: list[dict] = []
 
-    print(f"[hermes-research-sweep] Starting sweep at {datetime.now(timezone.utc).isoformat()}", file=sys.stderr)
+    print(f"[hermes-research-sweep] Starting sweep at {datetime.now(UTC).isoformat()}", file=sys.stderr)
     print(f"[hermes-research-sweep] Known papers: {len(seen_keys)}", file=sys.stderr)
 
     fetched_arxiv_cats: set[str] = set()  # track already-fetched listing pages
@@ -1605,7 +1605,7 @@ def run_sweep() -> tuple[list[dict], list[dict]]:
             key = paper_key(p["id"])
             if key not in seen_keys:
                 seen["seen"].append(key)
-        seen["last_sweep"] = datetime.now(timezone.utc).isoformat()
+        seen["last_sweep"] = datetime.now(UTC).isoformat()
         save_seen(seen)
 
     return unique_papers, new_papers
@@ -1619,7 +1619,7 @@ def build_output(new_papers: list[dict], all_papers: list[dict]) -> dict:
         by_category.setdefault(cat, []).append(p)
 
     return {
-        "sweep_date": datetime.now(timezone.utc).isoformat(),
+        "sweep_date": datetime.now(UTC).isoformat(),
         "new_paper_count": len(new_papers),
         "total_scanned": len(all_papers),
         "categories": {k: v["label"] for k, v in CATEGORIES.items()},
@@ -1671,7 +1671,7 @@ def main():
     if new_papers or FORCE:
         print(format_digest(output))
     else:
-        print(f"[hermes-research-sweep] No new papers found — silent tick", file=sys.stderr)
+        print("[hermes-research-sweep] No new papers found — silent tick", file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ import argparse
 import math
 import statistics
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 
 def parse_args():
@@ -45,7 +45,7 @@ def parse_args():
 
 
 def now_utc_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 PRUNE_LOG_PATH = Path.home() / ".hermes" / "logs" / "prestudy-prune-log.jsonl"

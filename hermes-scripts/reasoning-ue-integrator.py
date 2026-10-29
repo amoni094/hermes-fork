@@ -186,9 +186,7 @@ def audit(query: str, response: str, has_tool_verification: bool = False,
         recommended_action = 'WARN_USER'
     elif mesa_detection_signal:
         recommended_action = 'REGENERATE'
-    elif high_reasoning_risk or domain_shift:
-        recommended_action = 'SLOW_CHANNEL'
-    elif garrabrant_update_required:
+    elif high_reasoning_risk or domain_shift or garrabrant_update_required:
         recommended_action = 'SLOW_CHANNEL'
     else:
         recommended_action = 'PASS'
@@ -300,7 +298,7 @@ def self_test() -> dict:
         assert r['predicates']['mesa_signal_a'] is True, \
             f"MESA_A should fire: verb={fake_ue['scores']['verbalization_confidence']}, ue={fake_ue['composite_ue']}"
         assert r['predicates']['mesa_detection_signal'] is True, \
-            f"mesa_detection_signal should be True"
+            "mesa_detection_signal should be True"
         # recommended_action: WARN_USER takes precedence if reward_hack fires; accept REGENERATE or WARN_USER
         assert r['recommended_action'] in ('REGENERATE', 'WARN_USER'), \
             f"unexpected action: {r['recommended_action']}"

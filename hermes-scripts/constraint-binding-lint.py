@@ -33,26 +33,26 @@ SOFTEN_RE = re.compile(
     r"\b(consider|might want to|optional(?:ly)?|if convenient|nice to have|"
     r"as appropriate|when possible|if possible|feel free to|you may want to|"
     r"maybe|perhaps|try to|ideally|preferably|it would be good to)\b",
-    re.I,
+    re.IGNORECASE,
 )
 MUSTISH_RE = re.compile(
     r"\b(must|must not|do not|don't|never|required|blocker|hard (?:rule|constraint)|"
     r"forbidden|shall not|mandatory)\b",
-    re.I,
+    re.IGNORECASE,
 )
 # Soft obligation that often replaces a must after handoff rewrite
 SOFT_OBLIGATION_RE = re.compile(
     r"\b(should(?:\s+not)?|ought to|recommended|advisable|avoid|try not to)\b",
-    re.I,
+    re.IGNORECASE,
 )
 BINDING_LINE_RE = re.compile(
     r"binding\s*[:=]\s*[\"']?(must|should|info)[\"']?",
-    re.I,
+    re.IGNORECASE,
 )
 NUMERIC_CONSTRAINT_RE = re.compile(r"(\w+)\s*(>=|<=|!=|>|<|==)\s*([\d.]+)")
 CONSTRAINT_HEADING_RE = re.compile(
     r"^#+\s*(?:action-binding\s+)?constraints?\b|^constraints\s*:",
-    re.I,
+    re.IGNORECASE,
 )
 
 
@@ -105,7 +105,7 @@ def lint_text(text: str, source: str) -> list[dict]:
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
         if CONSTRAINT_HEADING_RE.match(stripped) or re.match(
-            r"^#+\s*.*\bconstraints?\b", stripped, re.I
+            r"^#+\s*.*\bconstraints?\b", stripped, re.IGNORECASE
         ):
             if in_constraints:
                 _flush_section(i - 1)
@@ -119,7 +119,7 @@ def lint_text(text: str, source: str) -> list[dict]:
             continue
         if in_constraints and stripped and not stripped.startswith("```"):
             section_lines += 1
-        if BINDING_LINE_RE.search(line) and re.search(r"binding\s*[:=]\s*[\"']?must", line, re.I):
+        if BINDING_LINE_RE.search(line) and re.search(r"binding\s*[:=]\s*[\"']?must", line, re.IGNORECASE):
             section_has_binding_must = True
         if MUSTISH_RE.search(line) and SOFTEN_RE.search(line):
             issues.append(
@@ -135,7 +135,7 @@ def lint_text(text: str, source: str) -> list[dict]:
         # Soft obligation inside a constraints section without binding:must nearby
         if in_constraints and (SOFTEN_RE.search(line) or SOFT_OBLIGATION_RE.search(line)):
             window = "\n".join(lines[max(0, i - 4) : i + 4])
-            if not re.search(r"binding\s*[:=]\s*[\"']?must", window, re.I):
+            if not re.search(r"binding\s*[:=]\s*[\"']?must", window, re.IGNORECASE):
                 section_has_soft_only = True
                 issues.append(
                     {

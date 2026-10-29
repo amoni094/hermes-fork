@@ -7,6 +7,7 @@ to match the claim-time fingerprint is not proof of death. Terminal states are i
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
@@ -15,7 +16,7 @@ import threading
 import time
 import uuid
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
@@ -25,6 +26,11 @@ from cron.constants import CLAIM_TTL_INACTIVITY_HEADROOM
 from hermes_cli.observability.shared_metrics_gateway import record_cron_finish
 
 logger = logging.getLogger(__name__)
+
+
+class StaleGenerationError(RuntimeError):
+    """Chubby sequencer: reject a write whose generation is no longer current."""
+
 
 # Optional test override. Production resolves the path at transaction time so dashboard operations
 # that temporarily enter another profile cannot leak that profile's records into the import-time
@@ -37,6 +43,151 @@ LIVE_OWNER_STALE_CLAIM_FLOOR_SECONDS = 7200.0
 _TERMINAL_STATES = ("completed", "failed", "unknown")
 _lock = threading.RLock()
 _PROCESS_ID = uuid.uuid4().hex
+_LOCK_TTL_SECONDS = 300
+
+def _hermes_home_base() -> Path:
+    """Resolve the .hermes root even when HERMES_HOME points at a profile."""
+    env = os.environ.get("HERMES_HOME", "").strip()
+    p = Path(env).expanduser() if env else Path.home() / ".hermes"
+    if p.name != ".hermes" and p.parent.name == "profiles":
+        return p.parent.parent
+    return p
+
+
+HERMES_HOME = _hermes_home_base()
+# ZooKeeper ephemeral-znode analogue (Hunt et al. 2010): presence == liveness.
+LOCK_DIR: Path = HERMES_HOME / "profiles" / "fork" / "cron" / ".locks"
+
+
+def _lock_dir() -> Path:
+    """Resolve lock dir at call time so HERMES_HOME / EXECUTIONS_FILE redirects apply.
+
+    Prefer the executions DB's parent (tests monkeypatch EXECUTIONS_FILE).
+    Otherwise ``get_hermes_home()/cron/.locks`` — same tree as executions.db.
+    """
+    if EXECUTIONS_FILE:
+        return Path(EXECUTIONS_FILE).parent / ".locks"
+    try:
+        from hermes_constants import get_hermes_home
+        return Path(get_hermes_home()).resolve() / "cron" / ".locks"
+    except Exception:
+        return LOCK_DIR
+
+
+def _lock_path(execution_id: str) -> Path:
+    safe = str(execution_id).replace("/", "_").replace("\\", "_")
+    return _lock_dir() / f"{safe}.lock"
+
+
+def _parse_iso(stamp: str) -> datetime:
+    dt = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def create_execution_lock(execution_id: str, pid: int, started_at: str) -> Path:
+    """Create an ephemeral lock file for a running execution (mkdir -p LOCK_DIR).
+
+    JSON payload: {execution_id, pid, started_at, expires_at=started_at+300}.
+    Analogous to a ZooKeeper ephemeral znode: the lock dies with the process.
+    """
+    _lock_dir().mkdir(parents=True, exist_ok=True)
+    started_dt = _parse_iso(started_at)
+    expires_at = (started_dt + timedelta(seconds=_LOCK_TTL_SECONDS)).isoformat()
+    payload = {
+        "execution_id": str(execution_id),
+        "pid": int(pid),
+        "started_at": started_at,
+        "expires_at": expires_at,
+    }
+    dest = _lock_path(execution_id)
+    tmp = dest.with_suffix(".lock.tmp")
+    tmp.write_text(json.dumps(payload), encoding="utf-8")
+    os.replace(str(tmp), str(dest))
+    return dest
+
+
+def release_execution_lock(execution_id: str) -> bool:
+    """Delete LOCK_DIR/{execution_id}.lock if it exists. True iff deleted."""
+    path = _lock_path(execution_id)
+    if not path.exists():
+        return False
+    try:
+        path.unlink()
+        return True
+    except OSError:
+        return False
+
+
+def is_lock_live(execution_id: str) -> bool:
+    """True iff the lock file exists and its PID is still alive (os.kill(pid, 0))."""
+    path = _lock_path(execution_id)
+    if not path.is_file():
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        pid = int(data["pid"])
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # process exists but is not ours
+    except OSError:
+        return False
+
+
+def reap_stale_locks() -> list[str]:
+    """Delete lock files whose PID is dead or whose expires_at has passed.
+
+    Expired locks are reaped regardless of PID (TTL session expiry).
+    Returns the list of reaped execution_ids.
+    """
+    reaped: list[str] = []
+    lock_dir = _lock_dir()
+    if not lock_dir.is_dir():
+        return reaped
+    now = datetime.now(timezone.utc)
+    for path in lock_dir.glob("*.lock"):
+        execution_id = path.stem
+        expired = False
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            execution_id = str(data.get("execution_id") or execution_id)
+            exp = data.get("expires_at")
+            if exp:
+                exp_dt = _parse_iso(str(exp))
+                if now >= exp_dt:
+                    expired = True
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            expired = True
+        if expired or not is_lock_live(execution_id):
+            try:
+                path.unlink(missing_ok=True)
+                reaped.append(execution_id)
+            except OSError:
+                pass
+    return reaped
+
+
+def _safe_create_execution_lock(execution_id: str, pid: int, started_at: str) -> None:
+    try:
+        create_execution_lock(execution_id, pid, started_at)
+    except Exception:
+        logger.debug("create_execution_lock(%s) failed", execution_id, exc_info=True)
+
+
+def _safe_release_execution_lock(execution_id: str) -> None:
+    if not execution_id:
+        return
+    try:
+        release_execution_lock(execution_id)
+    except Exception:
+        logger.debug("release_execution_lock(%s) failed", execution_id, exc_info=True)
 
 
 # --- executions ledger --------------------------------------------------------------------------
@@ -71,7 +222,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
              claimed_at TEXT NOT NULL,
              started_at TEXT,
              finished_at TEXT,
-             error TEXT
+             error TEXT,
+             generation INTEGER NOT NULL DEFAULT 0
            )"""
     )
     add_column_if_missing(
@@ -92,6 +244,9 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "executions", "delivery_outcome", "delivery_outcome TEXT")
     add_column_if_missing(conn, "executions", "scheduled_instant", "scheduled_instant TEXT")
     add_column_if_missing(conn, "executions", "progress_at", "progress_at TEXT")
+    add_column_if_missing(
+        conn, "executions", "generation", "generation INTEGER NOT NULL DEFAULT 0"
+    )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_executions_occurrence "
         "ON executions(job_id, scheduled_instant) WHERE status='completed'"
@@ -109,6 +264,39 @@ def _transaction() -> Iterator[sqlite3.Connection]:
 def _fetch(conn: sqlite3.Connection, execution_id: str) -> Optional[dict[str, Any]]:
     row = conn.execute("SELECT * FROM executions WHERE id=?", (execution_id,)).fetchone()
     return dict(row) if row is not None else None
+
+
+def _read_generation(conn: sqlite3.Connection, execution_id: str) -> Optional[int]:
+    """Return the Chubby generation for ``execution_id``, or None if the row is gone."""
+    row = conn.execute(
+        "SELECT generation FROM executions WHERE id=?",
+        (execution_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    try:
+        val = row["generation"]
+    except (KeyError, IndexError, TypeError):
+        val = row[0]
+    return int(val or 0)
+
+
+def _require_generation(
+    conn: sqlite3.Connection, execution_id: str, expected_gen: Optional[int]
+) -> int:
+    """SELECT current generation and reject a stale writer (Burrows 2006 §2.9).
+
+    If ``expected_gen`` is None, the stored generation is the CAS predicate
+    (same-process writers that did not capture dispatch-time gen).
+    """
+    stored = _read_generation(conn, execution_id)
+    if stored is None:
+        raise StaleGenerationError(f"execution {execution_id} does not exist")
+    if expected_gen is not None and stored != int(expected_gen):
+        raise StaleGenerationError(
+            f"stale generation for {execution_id}: stored={stored} expected={expected_gen}"
+        )
+    return stored if expected_gen is None else int(expected_gen)
 
 
 def _emit_execution_state(
@@ -275,18 +463,26 @@ def adopt_claimed_execution(execution_id: str) -> Optional[dict[str, Any]]:
     process_started_at = _process_start_time(pid)
     now = _hermes_now().isoformat()
     with _transaction() as conn:
+        stored_gen = _read_generation(conn, execution_id)
+        if stored_gen is None:
+            return None
         cur = conn.execute(
             """UPDATE executions
                SET process_id=?, pid=?, process_started_at=?,
                    status='running', started_at=?, handoff_pending=0,
-                   handoff_started_at=NULL
-               WHERE id=? AND status='claimed' AND handoff_pending=1""",
-            (_PROCESS_ID, pid, process_started_at, now, execution_id),
+                   handoff_started_at=NULL, generation = generation + 1
+               WHERE id=? AND status='claimed' AND handoff_pending=1
+                 AND generation=?""",
+            (_PROCESS_ID, pid, process_started_at, now, execution_id, stored_gen),
         )
         if cur.rowcount != 1:
             return None
         record = _fetch(conn, execution_id)
     _emit_execution_state(record)
+    if record is not None:
+        _safe_create_execution_lock(
+            execution_id, pid, record.get("started_at") or now,
+        )
     return record
 
 
@@ -294,42 +490,66 @@ def mark_execution_running(execution_id: str) -> Optional[dict[str, Any]]:
     """Transition one claimed attempt to running exactly once."""
     now = _hermes_now().isoformat()
     with _transaction() as conn:
+        stored_gen = _read_generation(conn, execution_id)
+        if stored_gen is None:
+            return None
         cur = conn.execute(
             """UPDATE executions
                SET status='running', started_at=?, handoff_pending=0,
-                   handoff_started_at=NULL
+                   handoff_started_at=NULL, generation = generation + 1
                WHERE id=? AND status='claimed' AND handoff_pending=0
-                 AND process_id=? AND pid=?""",
-            (now, execution_id, _PROCESS_ID, os.getpid()),
+                 AND process_id=? AND pid=? AND generation=?""",
+            (now, execution_id, _PROCESS_ID, os.getpid(), stored_gen),
         )
         if cur.rowcount != 1:
             return None
         record = _fetch(conn, execution_id)
     _emit_execution_state(record)
+    if record is not None:
+        _safe_create_execution_lock(
+            execution_id, os.getpid(), record.get("started_at") or now,
+        )
     return record
 
 
 def finish_execution(
     execution_id: str, *, success: bool, error: Optional[str] = None,
     delivery_outcome: Optional[str] = None,
+    expected_generation: Optional[int] = None,
 ) -> Optional[dict[str, Any]]:
     """Write a terminal result once; terminal attempts cannot be rewritten.
 
     Only the owning process may finish its attempt; receipt recovery for a departed owner
     settles through ``recover_receipted_execution``.
+
+    ``expected_generation`` is the Chubby sequencer value captured at dispatch. A
+    mismatch raises ``StaleGenerationError`` so a slow duplicate cannot clobber a
+    newer completion.
     """
     now = _hermes_now().isoformat()
     status = "completed" if success else "failed"
     detail = None if success else (str(error) if error else "unknown failure")
     with _transaction() as conn:
         owner = (_PROCESS_ID, os.getpid())
+        stored_gen = _read_generation(conn, execution_id)
+        if stored_gen is None:
+            if expected_generation is not None:
+                raise StaleGenerationError(f"execution {execution_id} does not exist")
+            return None
+        if expected_generation is not None and stored_gen != int(expected_generation):
+            raise StaleGenerationError(
+                f"stale generation for {execution_id}: "
+                f"stored={stored_gen} expected={expected_generation}"
+            )
+        cas_gen = stored_gen if expected_generation is None else int(expected_generation)
         cur = conn.execute(
             """UPDATE executions
                SET status=?, finished_at=?, error=?, handoff_pending=0,
-                   handoff_started_at=NULL, delivery_outcome=?
+                   handoff_started_at=NULL, delivery_outcome=?,
+                   generation = generation + 1
                WHERE id=? AND status IN ('claimed','running')
-                 AND process_id=? AND pid=?""",
-            (status, now, detail, delivery_outcome, execution_id, *owner),
+                 AND process_id=? AND pid=? AND generation=?""",
+            (status, now, detail, delivery_outcome, execution_id, *owner, cas_gen),
         )
         if cur.rowcount != 1:
             return None
@@ -337,6 +557,7 @@ def finish_execution(
         record = _fetch(conn, execution_id)
     _emit_execution_state(record, delivery_outcome=delivery_outcome)
     record_cron_finish(record, delivery_outcome)
+    _safe_release_execution_lock(execution_id)
     return record
 
 
@@ -351,15 +572,18 @@ def recover_receipted_execution(execution_id, job_id, *, success, error=None, de
         row = _recoverable_row(conn, execution_id, job_id)
         if row is None or _row_owner_live(row):
             return None
+        cas_gen = _require_generation(conn, execution_id, None)
         conn.execute(
             """UPDATE executions SET status=?, finished_at=?, error=?, handoff_pending=0,
-               handoff_started_at=NULL, delivery_outcome=? WHERE id=?""",
+               handoff_started_at=NULL, delivery_outcome=?, generation = generation + 1
+               WHERE id=? AND generation=?""",
             ('completed' if success else 'failed', now, None if success else (str(error) if error else 'unknown failure'),
-             delivery_outcome, execution_id))
+             delivery_outcome, execution_id, cas_gen))
         _prune_unlocked(conn)
         record = _fetch(conn, execution_id)
     _emit_execution_state(record, delivery_outcome=delivery_outcome)
     record_cron_finish(record, delivery_outcome)
+    _safe_release_execution_lock(execution_id)
     return record
 
 
@@ -418,7 +642,7 @@ def settle_unstarted_execution(execution_id: str, job_id: str, error: str) -> No
     so a ledger write cannot mask the failure the caller logs or re-raises."""
     try:
         finish_execution(execution_id, success=False, error=error)
-    except (sqlite3.Error, OSError) as record_err:
+    except (sqlite3.Error, OSError, StaleGenerationError) as record_err:
         logger.error("Job '%s': failed to close execution receipt %s (%s): %s",
                      job_id, execution_id, error, record_err)
 
@@ -437,7 +661,8 @@ def recover_interrupted_executions() -> int:
     with _transaction() as conn:
         rows = conn.execute(
             """SELECT id, status, process_id, pid, process_started_at,
-                      handoff_pending, handoff_started_at, claimed_at, progress_at
+                      handoff_pending, handoff_started_at, claimed_at, progress_at,
+                      generation
                FROM executions
                WHERE status IN ('claimed','running')"""
         ).fetchall()
@@ -473,15 +698,23 @@ def recover_interrupted_executions() -> int:
                 < HANDOFF_ADOPTION_GRACE_SECONDS
             ):
                 continue
+            try:
+                cas_gen = _require_generation(
+                    conn, row["id"], int(row["generation"] or 0)
+                )
+            except StaleGenerationError:
+                continue
             cur = conn.execute(
                 """UPDATE executions
                    SET status='unknown', finished_at=?, error=?,
-                       handoff_pending=0, handoff_started_at=NULL
+                       handoff_pending=0, handoff_started_at=NULL,
+                       generation = generation + 1
                    WHERE id=? AND status=? AND process_id=? AND pid=?
                      AND handoff_pending=?
-                     AND handoff_started_at IS ?""",
+                     AND handoff_started_at IS ?
+                     AND generation=?""",
                 (now, reason, row["id"], row["status"], row["process_id"], row["pid"],
-                 row["handoff_pending"], row["handoff_started_at"]),
+                 row["handoff_pending"], row["handoff_started_at"], cas_gen),
             )
             changed += cur.rowcount
             if cur.rowcount:
@@ -492,6 +725,7 @@ def recover_interrupted_executions() -> int:
             _prune_unlocked(conn)
     for record in recovered:
         _emit_execution_state(record)
+        _safe_release_execution_lock(str(record.get("id") or ""))
     return changed
 
 
@@ -518,7 +752,7 @@ def terminalize_dead_owner(execution_id: str, *, reason: str) -> bool:
     with _transaction() as conn:
         row = conn.execute(
             """SELECT id, status, process_id, pid, process_started_at,
-                      handoff_pending, handoff_started_at
+                      handoff_pending, handoff_started_at, generation
                FROM executions WHERE id=?""",
             (execution_id,),
         ).fetchone()
@@ -535,18 +769,24 @@ def terminalize_dead_owner(execution_id: str, *, reason: str) -> bool:
             and time.time() - float(handoff_started_at) < HANDOFF_ADOPTION_GRACE_SECONDS
         ):
             return False
+        try:
+            cas_gen = _require_generation(conn, execution_id, int(row["generation"] or 0))
+        except StaleGenerationError:
+            return False
         cur = conn.execute(
             """UPDATE executions
                SET status='unknown', finished_at=?, error=?,
-                   handoff_pending=0, handoff_started_at=NULL
-               WHERE id=? AND status=? AND process_id=? AND pid=?""",
-            (now, reason, row["id"], row["status"], row["process_id"], row["pid"]),
+                   handoff_pending=0, handoff_started_at=NULL,
+                   generation = generation + 1
+               WHERE id=? AND status=? AND process_id=? AND pid=? AND generation=?""",
+            (now, reason, row["id"], row["status"], row["process_id"], row["pid"], cas_gen),
         )
         if cur.rowcount != 1:
             return False
         record = _fetch(conn, execution_id)
         _prune_unlocked(conn)
     _emit_execution_state(record)
+    _safe_release_execution_lock(execution_id)
     return True
 
 
@@ -557,16 +797,22 @@ def give_up_execution(execution_id: str, *, reason: str) -> bool:
     the owner's later terminal receipt can settle it only once it is marked given up."""
     now = _hermes_now().isoformat()
     with _transaction() as conn:
+        stored_gen = _read_generation(conn, str(execution_id))
+        if stored_gen is None:
+            return False
         cur = conn.execute(
             """UPDATE executions SET status='unknown', finished_at=?, error=?,
-                   handoff_pending=0, handoff_started_at=NULL
-               WHERE id=? AND status IN ('claimed','running') AND process_id=? AND pid=?""",
-            (now, reason, str(execution_id), _PROCESS_ID, os.getpid()))
+                   handoff_pending=0, handoff_started_at=NULL,
+                   generation = generation + 1
+               WHERE id=? AND status IN ('claimed','running') AND process_id=? AND pid=?
+                 AND generation=?""",
+            (now, reason, str(execution_id), _PROCESS_ID, os.getpid(), stored_gen))
         if cur.rowcount != 1:
             return False
         record = _fetch(conn, str(execution_id))
         _prune_unlocked(conn)
     _emit_execution_state(record)
+    _safe_release_execution_lock(str(execution_id))
     return True
 
 
@@ -647,3 +893,53 @@ def latest_executions(job_ids: list[str]) -> dict[str, dict[str, Any]]:
             clean,
         ).fetchall()
     return {row["job_id"]: dict(row) for row in rows}
+
+
+def _self_test() -> None:
+    """Chubby sequencer: wrong gen rejected; correct gen bumps 0 -> 1."""
+    import tempfile
+
+    global EXECUTIONS_FILE
+    prev = EXECUTIONS_FILE
+    tmp = tempfile.TemporaryDirectory(prefix="executions-gen-")
+    try:
+        EXECUTIONS_FILE = Path(tmp.name) / "executions.db"
+        rec = create_execution("self-test-job", source="self-test")
+        eid = rec["id"]
+        gen0 = int(rec.get("generation") or 0)
+        if gen0 != 0:
+            raise AssertionError(f"new execution generation must be 0, got {gen0}")
+        raised = False
+        try:
+            finish_execution(eid, success=True, expected_generation=gen0 + 1)
+        except StaleGenerationError:
+            raised = True
+        if not raised:
+            raise AssertionError("wrong generation must raise StaleGenerationError")
+        still = get_execution(eid)
+        if still is None or still.get("status") != "claimed":
+            raise AssertionError("stale write must not change status")
+        if int(still.get("generation") or 0) != 0:
+            raise AssertionError("stale write must not bump generation")
+        rec2 = finish_execution(eid, success=True, expected_generation=gen0)
+        if rec2 is None:
+            raise AssertionError("correct generation must succeed")
+        if int(rec2.get("generation") or 0) != 1:
+            raise AssertionError(f"generation must be 1 after CAS, got {rec2.get('generation')}")
+        rec3 = get_execution(eid)
+        if rec3 is None or int(rec3.get("generation") or 0) != 1:
+            raise AssertionError("persisted generation must be 1")
+        print("self-test ok: StaleGenerationError on wrong gen; generation=1 after CAS")
+    finally:
+        EXECUTIONS_FILE = prev
+        tmp.cleanup()
+
+
+if __name__ == "__main__":
+    import sys
+
+    if "--self-test" in sys.argv:
+        _self_test()
+    else:
+        print("usage: python3 -m cron.executions --self-test", file=sys.stderr)
+        raise SystemExit(2)

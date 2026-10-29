@@ -28,7 +28,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -57,7 +57,7 @@ TERMINAL_MAP = {
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _normalize_outcome(status: str | None, exit_reason: str | None) -> str | None:

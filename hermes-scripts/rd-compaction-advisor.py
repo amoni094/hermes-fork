@@ -300,7 +300,7 @@ def _current_from_log() -> int | None:
     matches = re.findall(
         r"(?:prompt_tokens|context_tokens|current_tokens|approx_tokens)[=:\s]+(\d{3,8})",
         tail,
-        flags=re.I,
+        flags=re.IGNORECASE,
     )
     if not matches:
         return None

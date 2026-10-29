@@ -15,7 +15,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -80,7 +80,7 @@ def load_hist() -> tuple[list[dict], float]:
 def run() -> dict:
     hist, e = load_hist()
     out = halt_live(hist, e)
-    out['ts'] = datetime.now(timezone.utc).isoformat()
+    out['ts'] = datetime.now(UTC).isoformat()
     try:
         _atomic_write(OUT, out)
         out['output'] = str(OUT)

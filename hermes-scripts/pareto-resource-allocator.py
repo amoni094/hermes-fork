@@ -29,7 +29,7 @@ import argparse
 import json
 import math
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -109,7 +109,7 @@ def _pareto_frontier(points: np.ndarray) -> np.ndarray:
 
 
 def run(quality_target: float | None, dry_run: bool = False) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     session_files = sorted(SESSIONS.glob("*.jsonl"))
 
     metrics: list[dict] = []
@@ -158,7 +158,7 @@ def run(quality_target: float | None, dry_run: bool = False) -> None:
         mean_cost    = sum(m["cost"]    for m in frontier_metrics) / len(frontier_metrics)
         mean_latency = sum(m["latency"] for m in frontier_metrics) / len(frontier_metrics)
         mean_quality = sum(m["quality"] for m in frontier_metrics) / len(frontier_metrics)
-        print(f"\nPareto frontier summary:")
+        print("\nPareto frontier summary:")
         print(f"  Mean cost (tool calls): {mean_cost:.1f}")
         print(f"  Mean latency (calls/turn): {mean_latency:.2f}")
         print(f"  Mean quality: {mean_quality:.2f}")
@@ -168,7 +168,7 @@ def run(quality_target: float | None, dry_run: bool = False) -> None:
         _tmp_out_file.write_text(json.dumps({
             "ts": now,
             "sessions": len(metrics),
-            "frontier_size": int(len(frontier_idx)),
+            "frontier_size": len(frontier_idx),
             "frontier": [metrics[i] for i in frontier_idx],
         }, indent=2))
         _tmp_out_file.replace(OUT_FILE)

@@ -76,8 +76,7 @@ def page_fingerprint(
         count = int(element_count)
     except (TypeError, ValueError):
         count = 0
-    if count < 0:
-        count = 0
+    count = max(count, 0)
     ch = (content_hash or "").strip() or _sha(text or "")
     return f"{normalize_url(url)}|{count}|{ch}"
 
@@ -87,7 +86,7 @@ def _token_sort(s: str) -> str:
     return " ".join(sorted(toks))
 
 
-def normalize_action(action: Dict[str, Any]) -> str:
+def normalize_action(action: dict[str, Any]) -> str:
     """Normalize an action dict to a comparable hash key.
 
     Supported shapes (tolerant):
@@ -157,7 +156,7 @@ def normalize_action(action: Dict[str, Any]) -> str:
     return f"{t}|{_sha(json.dumps(scalars, sort_keys=True, default=str))}"
 
 
-def action_hash(action: Dict[str, Any]) -> str:
+def action_hash(action: dict[str, Any]) -> str:
     return _sha(normalize_action(action), 16)
 
 
@@ -168,8 +167,8 @@ def action_hash(action: Dict[str, Any]) -> str:
 class LoopState:
     """Persistent soft-loop detector state (JSON-serializable)."""
 
-    recent_pairs: List[str] = field(default_factory=list)  # "ahash@fp"
-    recent_fps: List[str] = field(default_factory=list)
+    recent_pairs: list[str] = field(default_factory=list)  # "ahash@fp"
+    recent_fps: list[str] = field(default_factory=list)
     same_action_streak: int = 0
     stagnant_page_streak: int = 0
     last_action_hash: str = ""
@@ -180,11 +179,11 @@ class LoopState:
     # caps
     max_recent: int = 20
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Optional[Dict[str, Any]]) -> "LoopState":
+    def from_dict(cls, data: Optional[dict[str, Any]]) -> LoopState:
         if not data:
             return cls()
         known = {f.name for f in cls.__dataclass_fields__.values()}  # type: ignore[attr-defined]
@@ -203,20 +202,20 @@ class LoopObservation:
     should_break: bool
     suggestion: str
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
 def observe_loop(
     state: LoopState,
-    action: Dict[str, Any],
+    action: dict[str, Any],
     fingerprint: str,
     *,
     soft: int = DEFAULT_SOFT_THRESHOLD,
     medium: int = DEFAULT_MEDIUM_THRESHOLD,
     hard: int = DEFAULT_HARD_THRESHOLD,
     stagnant_pages: int = DEFAULT_STAGNANT_PAGES,
-) -> Tuple[LoopState, LoopObservation]:
+) -> tuple[LoopState, LoopObservation]:
     """Record one (action, page) observation and return escalating nudge if thrashing.
 
     Soft loop detection (browser-use style): does NOT hard-kill the agent.
@@ -321,17 +320,17 @@ class ActionResultSplit:
     content_chars: int = 0
     long_term_chars: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         return d
 
-    def agent_view(self, *, seen_content: bool = False) -> Dict[str, Any]:
+    def agent_view(self, *, seen_content: bool = False) -> dict[str, Any]:
         """What to inject into the next agent turn.
 
         If include_content_only_once and content was already shown, omit extracted_content.
         Always keep long_term_memory + error.
         """
-        out: Dict[str, Any] = {}
+        out: dict[str, Any] = {}
         if self.error:
             out["error"] = self.error[:MAX_ERROR_CHARS]
         if self.long_term_memory:
@@ -389,7 +388,7 @@ def multi_act_should_stop(
     *,
     max_actions: int = DEFAULT_MAX_ACTIONS,
     force_stop: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Decide whether to stop a multi-act batch early.
 
     Stop when:
@@ -401,14 +400,12 @@ def multi_act_should_stop(
         idx = int(action_index)
     except (TypeError, ValueError):
         idx = 0
-    if idx < 0:
-        idx = 0
+    idx = max(idx, 0)
     try:
         cap = int(max_actions)
     except (TypeError, ValueError):
         cap = DEFAULT_MAX_ACTIONS
-    if cap < 1:
-        cap = 1
+    cap = max(cap, 1)
 
     prev = (prev_fingerprint or "").strip()
     curr = (curr_fingerprint or "").strip()
@@ -443,7 +440,7 @@ _NOISE_LINE_RE = re.compile(
     r"(cookie|consent|newsletter|subscribe|sign.?up.?for|accept all|reject all|"
     r"privacy policy|terms of (use|service)|enable (javascript|cookies)|"
     r"loading\.\.\.|advertisement|\bad\b|tracker)",
-    re.I,
+    re.IGNORECASE,
 )
 
 
@@ -452,14 +449,14 @@ def filter_snapshot_lines(
     *,
     max_lines: Optional[int] = None,
     drop_noise: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Drop common chrome/noise lines from an AX/snapshot dump.
 
     This is NOT a paint-order occlusion filter — only cheap text heuristics.
     Returns kept text + stats so callers can see what was removed.
     """
     lines = (text or "").splitlines()
-    kept: List[str] = []
+    kept: list[str] = []
     dropped = 0
     for line in lines:
         if drop_noise and _NOISE_LINE_RE.search(line) and len(line.strip()) < 120:

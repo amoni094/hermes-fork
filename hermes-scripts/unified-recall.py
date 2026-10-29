@@ -50,7 +50,7 @@ import sqlite3
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Optional
 
@@ -975,7 +975,7 @@ def record_query_access(fused: list[dict]) -> None:
     db = _hermes_root() / "memory-facts" / "lifecycle.db"
     if not db.exists() or not fused:
         return
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     try:
         with sqlite3.connect(str(db)) as conn:
             for item in fused:
@@ -1012,7 +1012,7 @@ def record_query_access(fused: list[dict]) -> None:
                     ).fetchone()
                     if row and row[0]:
                         t0 = datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
-                        gap = (datetime.now(timezone.utc) - t0).total_seconds() / 86400.0
+                        gap = (datetime.now(UTC) - t0).total_seconds() / 86400.0
                         item["gen_gap_days"] = round(gap, 2)
                         item["vc"] = item.get("vc") or row[1]
                 except Exception:

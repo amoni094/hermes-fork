@@ -38,7 +38,7 @@ import argparse
 import json
 import math
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -177,7 +177,7 @@ def calibrate_from_sessions() -> None:
 
 
 def run(task: str, calibrate: bool, dry_run: bool) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     if calibrate:
         calibrate_from_sessions()
@@ -197,7 +197,7 @@ def run(task: str, calibrate: bool, dry_run: bool) -> None:
     print(f"  Recommended: timeout={routing['timeout_s']}s  background={routing['background']}")
     print(f"  Model note: {routing['model_note']}")
     if routing["split"]:
-        print(f"  SPLIT RECOMMENDED: task likely exceeds single-turn budget")
+        print("  SPLIT RECOMMENDED: task likely exceeds single-turn budget")
 
     if not dry_run:
         _tmp_out = OUT_FILE.with_suffix(".tmp")

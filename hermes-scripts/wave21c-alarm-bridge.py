@@ -15,7 +15,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -122,7 +122,7 @@ def emit_sidecar(source_stem: str, alarm: bool, severity: str, msg: str) -> dict
         'msg': msg,
         'reason': msg,
         'source': source_stem,
-        'ts': datetime.now(timezone.utc).isoformat(),
+        'ts': datetime.now(UTC).isoformat(),
         'theorem': 'alarm-aggregator *-alarm.json contract; 2h TTL refresh',
     }
     out = CACHE / f'wave21c-{source_stem}-alarm.json'
@@ -147,7 +147,7 @@ def run() -> dict:
         if alarm:
             n_active += 1
     summary = {
-        'ts': datetime.now(timezone.utc).isoformat(),
+        'ts': datetime.now(UTC).isoformat(),
         'n_sources': len(SOURCES),
         'n_active': n_active,
         'emitted': emitted,

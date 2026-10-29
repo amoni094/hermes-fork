@@ -30,7 +30,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -170,7 +170,7 @@ def analyse_session(session_path: Path) -> dict:
 
 
 def run(session_id: str | None, dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     paths = sorted(SESSIONS_DIR.glob("*.jsonl"))
     if session_id:
         paths = [p for p in paths if session_id in p.stem]
@@ -200,7 +200,7 @@ def run(session_id: str | None, dry_run: bool) -> int:
         print(f"\nALARM: yes — {len(at_risk)} session(s) show injection risk")
         alarm_exit = 1
     else:
-        print(f"\nALARM: no — no injection patterns detected")
+        print("\nALARM: no — no injection patterns detected")
         alarm_exit = 0
 
     if not dry_run:

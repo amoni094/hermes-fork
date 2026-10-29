@@ -28,7 +28,7 @@ import json
 import math
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -139,7 +139,7 @@ def estimate_fisher(query: str, skills: list[dict]) -> dict:
 
 
 def run(query: str, dry_run: bool) -> int:
-    now    = datetime.now(timezone.utc).isoformat()
+    now    = datetime.now(UTC).isoformat()
     skills = _load_skills(20)
 
     if not skills:
@@ -165,7 +165,7 @@ def run(query: str, dry_run: bool) -> int:
         if r.get("no_coverage"):
             icon = "○"
             print(f"  {icon} \"{r['query']}\"")
-            print(f"      no_coverage — query has no overlap with loaded skills (coverage gap)")
+            print("      no_coverage — query has no overlap with loaded skills (coverage gap)")
             no_coverage += 1
         else:
             icon = "⚠" if r["uncertain"] else "✓"

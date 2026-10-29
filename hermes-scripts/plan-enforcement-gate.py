@@ -34,7 +34,7 @@ import re
 import secrets
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -89,7 +89,7 @@ def _issue_pet(plan_json_str: str, approved: bool) -> dict:
     Cleans up expired token files (mtime > 10 min) before writing.
     Returns the token dict that should be merged into the gate result.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     now_ts = now.timestamp()
 
     # Cleanup expired token files (older than 10 minutes)
@@ -115,7 +115,7 @@ def _issue_pet(plan_json_str: str, approved: bool) -> dict:
     token_hex = hmac.new(session_key, plan_hash.encode(), hashlib.sha256).hexdigest()
 
     issued_at = now.isoformat()
-    expires_at = datetime.fromtimestamp(now_ts + 300, tz=timezone.utc).isoformat()
+    expires_at = datetime.fromtimestamp(now_ts + 300, tz=UTC).isoformat()
 
     token_dict = {
         "token": token_hex,
@@ -177,7 +177,7 @@ def _verify_pet(token_hex: str, plan_json_str: str) -> dict:
     # Check expiry
     try:
         expires_at = datetime.fromisoformat(stored["expires_at"])
-        if datetime.now(timezone.utc) > expires_at:
+        if datetime.now(UTC) > expires_at:
             return {"valid": False, "reason": "token expired"}
     except (KeyError, ValueError):
         return {"valid": False, "reason": "invalid expires_at in token"}
@@ -332,7 +332,7 @@ def enforce(plan: dict | str) -> dict:
 
 
 def run(plan_json: Path | None, plan_text: str | None, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     if plan_json and plan_json.exists():
         plan = json.loads(plan_json.read_text())

@@ -24,7 +24,7 @@ import os
 import sys
 import urllib.request
 import urllib.error
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
 
@@ -336,7 +336,7 @@ def main():
 
     # Save lattice to cache for query-time activation
     lattice_data = {
-        "built_at": datetime.now(timezone.utc).isoformat(),
+        "built_at": datetime.now(UTC).isoformat(),
         "n_facts": len(facts),
         "n_clusters": args.clusters,
         "concepts": [

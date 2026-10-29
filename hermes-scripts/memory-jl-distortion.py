@@ -112,8 +112,7 @@ def distortion(texts: list, dim: int = HASH_DIM, eps: float = EPS) -> dict:
                 continue
             denom = max(d0, 1e-6)
             rel = abs(d1 - d0) / denom
-            if rel > max_rel:
-                max_rel = rel
+            max_rel = max(max_rel, rel)
     k_need = jl_floor(n, eps)
     alarm = bool(max_rel > eps and dim < k_need)
     return {

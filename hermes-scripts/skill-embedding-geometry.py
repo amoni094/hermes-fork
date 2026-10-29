@@ -26,7 +26,7 @@ from pathlib import Path
 # ── Path setup ────────────────────────────────────────────────────────────────
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
-from ot_utils import build_tf, tf_to_vec, w1_distance, sinkhorn  # noqa: E402
+from ot_utils import build_tf, tf_to_vec, w1_distance, sinkhorn
 
 import numpy as np
 
@@ -246,7 +246,7 @@ def cmd_curvature(skills_dir=None, n_triplets: int = 20, top_k: int = 5, seed: i
     triplets_results.sort(key=lambda x: -x[0])
 
     print(f"\n=== Triangle Inequality Slack (W2 Curvature) — top {top_k} of {len(triplets_results)} triplets ===")
-    print(f"  Slack = W2(A,C) - W2(A,B) - W2(B,C)  [positive → non-Euclidean curvature]\n")
+    print("  Slack = W2(A,C) - W2(A,B) - W2(B,C)  [positive → non-Euclidean curvature]\n")
     for rank, (slack, A, B, C, d_AB, d_BC, d_AC) in enumerate(triplets_results[:top_k], 1):
         print(f"  {rank}. Slack = {slack:+.6f}")
         print(f"     A = {A}")

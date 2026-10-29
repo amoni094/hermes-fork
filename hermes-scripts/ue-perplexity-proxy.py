@@ -35,7 +35,7 @@ import math
 import os
 import sys
 import zlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
@@ -144,7 +144,7 @@ def score_perplexity(query: str | None, response: str | None, log: bool = True) 
     }
     if log:
         rec = dict(out)
-        rec["ts"] = datetime.now(timezone.utc).isoformat()
+        rec["ts"] = datetime.now(UTC).isoformat()
         rec["query_len"] = len(q)
         rec["response_len"] = len(r)
         _append_log(rec)

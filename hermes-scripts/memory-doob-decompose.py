@@ -27,7 +27,7 @@ import json
 import os
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
 
@@ -64,7 +64,7 @@ def wm_dir() -> Path:
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _connect(path: Path | None = None) -> sqlite3.Connection:
@@ -97,7 +97,7 @@ def _entry_ts(entry: dict[str, Any], fallback: str) -> str:
         if isinstance(v, str) and v:
             return v
         if isinstance(v, (int, float)) and v > 0:
-            return datetime.fromtimestamp(float(v), tz=timezone.utc).isoformat()
+            return datetime.fromtimestamp(float(v), tz=UTC).isoformat()
     return fallback
 
 

@@ -31,7 +31,7 @@ import json
 import math
 import re
 from itertools import permutations
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -144,7 +144,7 @@ def recommend_chain(
 
 
 def run(query: str, dry_run: bool = False) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     chains = recommend_chain(query)
 
     print(f"\n=== GDOP-Aware Tool Selector — {now[:10]} ===")

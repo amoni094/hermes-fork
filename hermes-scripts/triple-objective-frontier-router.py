@@ -57,7 +57,7 @@ def route(task: str, weights=(0.4, 0.3, 0.3)) -> None:
     frontier = _pareto_frontier(ROUTES)
     frontier_names = {r[0] for r in frontier}
 
-    print(f"\n=== Triple-Objective Frontier Router ===")
+    print("\n=== Triple-Objective Frontier Router ===")
     print(f"Task:    {task[:60]}")
     print(f"Weights: accuracy={w_acc} speed={w_spd} cost={w_cst}\n")
     print(f"  {'Route':<30} {'Score':>7} {'Err':>6} {'Lat(s)':>8} {'Cost':>8}  Pareto")

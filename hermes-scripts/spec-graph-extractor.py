@@ -34,7 +34,7 @@ import argparse
 import json
 import re
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import NamedTuple
 
@@ -146,7 +146,7 @@ def topological_order(nodes: set[str], edges: list[Edge]) -> list[str]:
 
 
 def run(spec_root: Path, query: str | None, dry_run: bool) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Collect spec files
     spec_files: list[Path] = []
@@ -182,7 +182,7 @@ def run(spec_root: Path, query: str | None, dry_run: bool) -> None:
             order = topological_order(entities, edges)
             print(f"\nTopological order ({len(order)} nodes): {order[:20]}{'...' if len(order)>20 else ''}")
         if not m and not m2 and "order" not in q:
-            print(f"Query not parsed. Try: 'what depends on <name>' / 'what does <name> depend on' / 'topological order'")
+            print("Query not parsed. Try: 'what depends on <name>' / 'what does <name> depend on' / 'topological order'")
 
     if not dry_run:
         _tmp_graph_out = GRAPH_OUT.with_suffix('.tmp')
@@ -192,7 +192,7 @@ def run(spec_root: Path, query: str | None, dry_run: bool) -> None:
         }, indent=2))
         _tmp_graph_out.replace(GRAPH_OUT)
         print(f"\n[spec-graph] Graph written: {GRAPH_OUT}")
-        print(f"[spec-graph] Top edges by src:")
+        print("[spec-graph] Top edges by src:")
         from collections import Counter
         top_srcs = Counter(e.src for e in edges).most_common(5)
         for src, cnt in top_srcs:

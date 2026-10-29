@@ -480,6 +480,19 @@ def _run_job_script(
         # env itself — no raw copy at the spawn site (test_subprocess_env_guard).
         env = build_subprocess_env(strip_launch_profile=True)
         env.update(env_overlay)
+        # Miller (2006) Object Capability Security: generate a time-limited HMAC capability token
+        # scoped to this script path + launch instant. Scripts can use HERMES_CRON_TOKEN to
+        # authenticate callbacks; the token is revoked implicitly at process exit (timeout).
+        # Saltzer-Schroeder principle of least privilege: token carries no persistent authority.
+        try:
+            import hashlib, hmac as _hmac
+            _cap_secret = env.get("HERMES_API_KEY", "") or env.get("HERMES_TOKEN", "") or "hermes-cron"
+            _cap_msg = f"{script_path}:{time.monotonic_ns()}:{script_timeout}".encode()
+            _cap_token = _hmac.new(_cap_secret.encode(), _cap_msg, hashlib.sha256).hexdigest()[:32]
+            env["HERMES_CRON_TOKEN"] = _cap_token
+            env["HERMES_CRON_TOKEN_EXPIRY"] = str(int(time.time()) + script_timeout)
+        except Exception:
+            pass  # capability token is best-effort; never block script launch
         # Subprocess cwd only (default: scripts-dir parent). NEVER os.chdir() the process.
         # Use the job's workdir as the subprocess cwd when configured, otherwise default to the scripts-dir
         # parent (back-compat). NEVER mutate the Python process cwd — that would leak into concurrent

@@ -27,7 +27,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -98,7 +98,7 @@ def route(task: str, threshold: float) -> dict:
 
 
 def run(task: str, threshold: float, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     demo_tasks = [
         task,

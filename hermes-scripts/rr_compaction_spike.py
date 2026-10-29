@@ -450,7 +450,7 @@ def print_comparison(scored: list[dict], top_k: int, lam: float) -> None:
     delta = rr_reclaim - pos_reclaim
     print(f"  Delta:                      {'+' if delta >= 0 else ''}{delta:,} tokens")
 
-    print(f"\n--- Information preservation (lower = less loss) ---")
+    print("\n--- Information preservation (lower = less loss) ---")
     print(f"  Positional pp-loss sum:     {pos_pp_loss:.2f}")
     print(f"  RR pp-loss sum:             {rr_pp_loss:.2f}")
     pp_delta = rr_pp_loss - pos_pp_loss
@@ -460,7 +460,7 @@ def print_comparison(scored: list[dict], top_k: int, lam: float) -> None:
     # Efficiency: tokens freed per unit of information lost
     pos_efficiency = pos_reclaim / max(pos_pp_loss, 0.001)
     rr_efficiency = rr_reclaim / max(rr_pp_loss, 0.001)
-    print(f"\n--- Compression efficiency (tokens/pp-unit, higher=better) ---")
+    print("\n--- Compression efficiency (tokens/pp-unit, higher=better) ---")
     print(f"  Positional:  {pos_efficiency:.0f}")
     print(f"  RR scorer:   {rr_efficiency:.0f}")
 
@@ -478,7 +478,7 @@ def print_comparison(scored: list[dict], top_k: int, lam: float) -> None:
 
     print(f"\n  (* = in RR but NOT in positional top-{n}; these are the interesting disagreements)")
 
-    print(f"\n--- Positional-only demotion candidates (would demote but RR wouldn't) ---")
+    print("\n--- Positional-only demotion candidates (would demote but RR wouldn't) ---")
     pos_only = pos_set - rr_set
     if pos_only:
         for i in sorted(pos_only):
@@ -698,7 +698,7 @@ def main():
             tf_full = _ot_utils.build_tf(full_text)
             tf_kept = _ot_utils.build_tf(kept_text)
             w1 = _ot_utils.w1_distance(tf_full, tf_kept)
-            print(f"\n--- OT-9 Quality Diagnostic ---")
+            print("\n--- OT-9 Quality Diagnostic ---")
             print(f"  OT_quality_loss = {w1:.6f}  (W1 distance; lower = better vocabulary preservation)")
             if w1 < 0.05:
                 print("  Interpretation: excellent — kept context closely mirrors full vocabulary.")

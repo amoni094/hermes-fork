@@ -21,7 +21,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
 
@@ -37,29 +37,29 @@ TIMEOUT = 12
 FILE_WRITE_RE = re.compile(
     r"(write|save|upload|unlink|rmdir|mkdir|delete|remove|patch|export|"
     r"to_file|file_upload|clone_element_to_file|clear_graph|truncate)",
-    re.I,
+    re.IGNORECASE,
 )
 FILE_READ_RE = re.compile(
     r"(read_file|read_resource|list_resources|list_clone_files|open_file)",
-    re.I,
+    re.IGNORECASE,
 )
 NETWORK_RE = re.compile(
     r"(http|https|url|fetch|request|navigate|browse|scrape|download|"
     r"webhook|socket|dns|proxy)",
-    re.I,
+    re.IGNORECASE,
 )
 SYSTEM_RE = re.compile(
     r"(shell|exec|subprocess|popen|command|terminal|os\.system|"
     r"execute_script|execute_python|execute_cdp|inject_and_execute|"
     r"hot_reload|spawn_browser|create_python_binding)",
-    re.I,
+    re.IGNORECASE,
 )
 ALLOWLIST_RE = re.compile(
     r"(allowlist|allowed_hosts|allowed_domains|allowed_paths|"
     r"allowed_commands|domain_allow|path_prefix|workspace_only)",
-    re.I,
+    re.IGNORECASE,
 )
-TMP_OR_WS_RE = re.compile(r"(/tmp|workspace|workdir|cwd)", re.I)
+TMP_OR_WS_RE = re.compile(r"(/tmp|workspace|workdir|cwd)", re.IGNORECASE)
 
 
 def load_yaml(path: Path) -> dict:
@@ -247,7 +247,7 @@ def tools_from_manifest_or_source(server: dict) -> tuple[list[dict], str]:
                     seen.setdefault(n, {"name": n, "description": f"section:{py.name}"})
                 # async def likely_tool(
                 if py.name == "server.py":
-                    for m in re.finditer(r"^(?:async\s+)?def\s+([A-Za-z_][\w]*)\(", text, re.M):
+                    for m in re.finditer(r"^(?:async\s+)?def\s+([A-Za-z_][\w]*)\(", text, re.MULTILINE):
                         n = m.group(1)
                         if n.startswith("_") or n in {
                             "main",
@@ -278,7 +278,7 @@ def classify_tool(tool: dict, workspace: Path) -> list[dict]:
 
     if FILE_WRITE_RE.search(name) or FILE_WRITE_RE.search(desc):
         if not constrained_fs and not re.search(
-            r"(/tmp|workspace[_-]?only|allowed_paths)", blob, re.I
+            r"(/tmp|workspace[_-]?only|allowed_paths)", blob, re.IGNORECASE
         ):
             findings.append(
                 {
@@ -300,7 +300,7 @@ def classify_tool(tool: dict, workspace: Path) -> list[dict]:
         )
 
     if NETWORK_RE.search(name) or NETWORK_RE.search(desc) or re.search(
-        r'"url"|["\']uri["\']', schema, re.I
+        r'"url"|["\']uri["\']', schema, re.IGNORECASE
     ):
         if not has_allowlist:
             findings.append(
@@ -336,7 +336,7 @@ def audit(config_path: Path, workspace: Path, report_path: Path) -> int:
     servers = mcp_servers_from_config(cfg)
     lines: list[str] = []
     lines.append("MCP least-privilege audit")
-    lines.append(f"generated: {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}")
+    lines.append(f"generated: {datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')}")
     lines.append(f"config: {config_path}")
     lines.append(f"workspace: {workspace}")
     lines.append("ruleset: filesystem writes outside /tmp|workspace; "

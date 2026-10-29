@@ -207,9 +207,8 @@ def _levenshtein(a: str, b: str) -> int:
             ins = cur[j - 1] + 1
             delete = prev[j] + 1
             sub = prev[j - 1] + (0 if ca == cb else 1)
-            cur[j] = ins if ins < delete else delete
-            if sub < cur[j]:
-                cur[j] = sub
+            cur[j] = min(delete, ins)
+            cur[j] = min(cur[j], sub)
         prev = cur
     return prev[-1]
 
@@ -226,8 +225,7 @@ def pairwise_lexical_sim(samples: list[str]) -> Optional[float]:
             sj = samples[j][:LEV_CAP]
             denom = max(len(si), len(sj), 1)
             sim = 1.0 - (_levenshtein(si, sj) / denom)
-            if sim < 0.0:
-                sim = 0.0
+            sim = max(sim, 0.0)
             acc += sim
             pairs += 1
     if pairs <= 0:
@@ -302,8 +300,7 @@ def verbalization_confidence(text: str) -> Optional[float]:
                 pct = float(raw)
             except ValueError:
                 return None
-            if pct > 100.0:
-                pct = 100.0
+            pct = min(pct, 100.0)
             return _clip01(pct / 100.0, default=0.5)
     low = t.lower()
     for phrase in _LOW_CERT:
@@ -491,8 +488,7 @@ def compute_scores(
         lp = _clip01(logprob_confidence)
         # implied UE from logprob
         lp_ue = _clip01(1.0 - lp, default=0.5)
-        if composite < lp_ue:
-            composite = lp_ue
+        composite = max(composite, lp_ue)
 
     composite = _clip01(composite, default=1.0)
     high_ue = bool(composite > HIGH_UE_THRESHOLD)

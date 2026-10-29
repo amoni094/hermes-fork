@@ -32,7 +32,7 @@ import os
 import urllib.request
 import urllib.error
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Optional
 
@@ -72,7 +72,7 @@ class ProfiniteThread:
     images: dict[str, LayerImage] = field(default_factory=dict)
     is_thread: bool = False
     obstruction: Optional[str] = None   # layer where compatibility breaks
-    computed_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    computed_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -131,7 +131,7 @@ class H2ObstructionLedger:
             "facts": [fact_a[:60], fact_b[:60], fact_c[:60]],
             "type": obstruction_type,  # "merge_conflict", "transitivity_fail", "projection_gap"
             "detail": detail,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "resolved": False,
         })
         self._save()
@@ -143,7 +143,7 @@ class H2ObstructionLedger:
             if o["class_id"] == class_id:
                 o["resolved"] = True
                 o["resolution"] = resolution
-                o["resolved_at"] = datetime.now(timezone.utc).isoformat()
+                o["resolved_at"] = datetime.now(UTC).isoformat()
         self._save()
 
     def report(self) -> str:

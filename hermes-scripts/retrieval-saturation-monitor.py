@@ -31,7 +31,7 @@ import json
 import math
 import re
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 import sys
 
@@ -199,7 +199,7 @@ def main():
 
     saturated = compute_saturation(all_events, args.threshold)
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     result = {
         "analysed_at": now,
         "sessions": len(files),

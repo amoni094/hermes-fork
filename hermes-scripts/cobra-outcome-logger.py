@@ -43,7 +43,7 @@ from __future__ import annotations
 import json
 import sys
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Optional
 
@@ -84,7 +84,7 @@ def _load_records() -> list[dict[str, Any]]:
 
 def cmd_record(args) -> int:
     record = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "tool_name": args.tool,
         "query_tokens": args.query_tokens or 0,
         "context_chars": args.context_chars or 0,

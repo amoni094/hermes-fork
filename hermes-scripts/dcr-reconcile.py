@@ -33,7 +33,7 @@ import argparse
 import json
 import sys
 from difflib import SequenceMatcher
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any
 
 
@@ -261,7 +261,7 @@ def cmd_check(args: argparse.Namespace) -> int:
             "Candidates disagree -- run Phase 2 DCR reconciliation."
         ),
         "agreement_analysis": analysis,
-        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
 
     print(json.dumps(result, indent=2))
@@ -302,7 +302,7 @@ def cmd_prompt(args: argparse.Namespace) -> int:
         "reconcile_prompt": prompt,
         "domain": args.domain,
         "n_candidates": len(candidates),
-        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     print(json.dumps(result, indent=2))
     return 0
@@ -352,7 +352,7 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
         ),
         "domain": args.domain,
         "n_candidates": len(candidates),
-        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
 
     print(json.dumps(result, indent=2))

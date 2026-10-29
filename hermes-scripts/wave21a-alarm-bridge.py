@@ -15,7 +15,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import os
@@ -159,7 +159,7 @@ def emit_sidecar(stem: str, alarm: bool, severity: str, msg: str) -> dict:
         'msg': msg,
         'reason': msg,
         'source': stem,
-        'ts': datetime.now(timezone.utc).isoformat(),
+        'ts': datetime.now(UTC).isoformat(),
         'theorem': 'alarm-aggregator *-alarm.json contract; 2h TTL refresh',
     }
     out = CACHE / f'wave21a-{stem}-alarm.json'
@@ -185,7 +185,7 @@ def run() -> dict:
     if sa:
         n_active += 1
     summary = {
-        'ts': datetime.now(timezone.utc).isoformat(),
+        'ts': datetime.now(UTC).isoformat(),
         'n_sources': len(SOURCES) + 1,
         'n_active': n_active,
         'emitted': emitted,

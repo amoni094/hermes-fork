@@ -33,7 +33,7 @@ import re
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 # -- Profile-aware paths
@@ -72,7 +72,7 @@ def _sha256(path: Path) -> str:
 
 def _log_result(verdict: str, check_type: str, details: dict) -> None:
     entry = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "verdict": verdict,
         "check_type": check_type,
         **details,

@@ -35,7 +35,7 @@ import argparse
 import json
 import math
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 import sys
 
@@ -197,7 +197,7 @@ def main():
     parser.add_argument("--report", action="store_true", help="Print risk table only")
     args = parser.parse_args()
 
-    print(f"[cascade] Loading session tool sequences...", file=sys.stderr)
+    print("[cascade] Loading session tool sequences...", file=sys.stderr)
     sessions = load_tool_sequences()
     print(f"[cascade] {len(sessions)} sessions loaded", file=sys.stderr)
 
@@ -209,7 +209,7 @@ def main():
     risks = compute_risk_scores(metrics)
     allocations = allocate_budget(risks, args.budget)
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     if not args.dry_run and not args.report:
         OUTPUT_RISK.parent.mkdir(parents=True, exist_ok=True)

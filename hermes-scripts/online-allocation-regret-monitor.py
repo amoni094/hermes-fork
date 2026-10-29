@@ -25,7 +25,7 @@ import argparse
 import json
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -87,7 +87,7 @@ def analyse_session(session_path: Path) -> dict:
     for i, tool in enumerate(tools):
         reward  = freq_map.get(tool, 0.1)
         regret += best_reward - reward
-        if i > 0 and tools[i] != tools[i-1]:
+        if i > 0 and tool != tools[i-1]:
             regret  += SWITCHING_COST
             switches += 1
 
@@ -107,7 +107,7 @@ def analyse_session(session_path: Path) -> dict:
 
 
 def run(dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     paths = sorted(SESSIONS_DIR.glob("*.jsonl"))[-10:]
 
     if not paths:
@@ -134,7 +134,7 @@ def run(dry_run: bool) -> int:
         print(f"\nALARM: yes — {len(alarm_cases)} session(s) exceed switching regret threshold")
         rc = 1
     else:
-        print(f"\nALARM: no — routing regret within bounds")
+        print("\nALARM: no — routing regret within bounds")
         rc = 0
 
     if not dry_run:

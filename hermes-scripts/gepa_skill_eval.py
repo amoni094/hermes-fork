@@ -307,7 +307,7 @@ def main():
     # Baseline evaluation
     score, info = evaluate_skill(skill_md, cases)
     print(f"\nBaseline score: {score:.3f}")
-    print(f"Per-check results:")
+    print("Per-check results:")
     for check_id, res in info["per_check"].items():
         marker = "OK" if res["score"] >= 0.8 else "!!"
         print(f"  [{marker}] {check_id}: {res['score']:.2f} — {res['detail']}")

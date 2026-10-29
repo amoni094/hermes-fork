@@ -45,7 +45,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
 
@@ -169,9 +169,9 @@ def check_grant(grant: CapabilityGrant | None, tool_name: str) -> bool:
             return False
         exp = grant.expires_at
         if exp is not None:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if exp.tzinfo is None:
-                exp = exp.replace(tzinfo=timezone.utc)
+                exp = exp.replace(tzinfo=UTC)
             if now >= exp:
                 return False
         return True
@@ -179,7 +179,7 @@ def check_grant(grant: CapabilityGrant | None, tool_name: str) -> bool:
         return False
 
 
-def _load_active_grant() -> "CapabilityGrant | None":
+def _load_active_grant() -> CapabilityGrant | None:
     """Load the active CapabilityGrant from the profile-aware cache path.
 
     Fail-open: returns None when the file is absent, expired (>3600s), or malformed.
@@ -202,7 +202,7 @@ def _load_active_grant() -> "CapabilityGrant | None":
         denied = frozenset(data.get("denied_tools", []))
         effective = allowed - denied
         expires_str = data.get("expires_at", "")
-        expires_dt: "datetime | None" = None
+        expires_dt: datetime | None = None
         if expires_str:
             try:
                 expires_dt = datetime.fromisoformat(expires_str.replace("Z", "+00:00"))
@@ -254,7 +254,7 @@ _load_runtime_config()
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _log_path(session_id: str) -> Path:
@@ -338,7 +338,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     # Load the file-backed grant (fail-open on missing/expired/malformed file).
     active_grant = _load_active_grant()
     tool_name = getattr(args, "tool_name", None) or args.proposed_action.split()[0]
-    grant_verified: "bool | None" = None
+    grant_verified: bool | None = None
     if active_grant is not None:
         grant_ok = check_grant(active_grant, tool_name)
         if not grant_ok:

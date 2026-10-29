@@ -15,7 +15,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -66,7 +66,7 @@ def run() -> dict:
             'status': 'skipped',
             'reason': 'effective_not_ready',
             'alarm': False,
-            'ts': datetime.now(timezone.utc).isoformat(),
+            'ts': datetime.now(UTC).isoformat(),
         }
         try:
             _atomic_write(OUT, out)
@@ -81,7 +81,7 @@ def run() -> dict:
     except (OSError, json.JSONDecodeError):
         pass
     out = model_check(decisions)
-    out['ts'] = datetime.now(timezone.utc).isoformat()
+    out['ts'] = datetime.now(UTC).isoformat()
     try:
         _atomic_write(OUT, out)
         out['output'] = str(OUT)

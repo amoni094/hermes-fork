@@ -35,7 +35,7 @@ import math
 import os
 import re
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from pathlib import Path
 
 # OT utilities (shared; OT-4)
@@ -147,7 +147,7 @@ def main():
                         "with overlap score and heuristic barycenter description suggestion")
     args = p.parse_args()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     stale_cutoff = now - timedelta(days=args.days)
 
     usage = load_usage()

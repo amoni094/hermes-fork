@@ -359,7 +359,7 @@ def _import_jev_verify():
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
     try:
-        import jev_verify_fn  # noqa: PLC0415
+        import jev_verify_fn
         return jev_verify_fn
     except ImportError as exc:
         raise ImportError(

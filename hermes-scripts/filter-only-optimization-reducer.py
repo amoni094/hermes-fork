@@ -28,7 +28,7 @@ import os
 import argparse
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME       = Path.home()
@@ -99,7 +99,7 @@ def reduce_and_rank(query: str, top_n: int, floor: float) -> dict:
 
 
 def run(query: str, top_n: int, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     demo = [query] if query != "agent memory compression" else [
         "agent memory compression",

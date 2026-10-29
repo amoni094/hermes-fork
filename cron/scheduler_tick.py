@@ -99,6 +99,14 @@ def _tick_admitted(
     executed (0 if another tick holds the lock)."""
     from cron import scheduler as _sched
 
+    # ZooKeeper ephemeral-znode reap: drop locks whose PID died or TTL expired
+    # so a crashed run cannot block the next fire of the same job.
+    try:
+        from cron.executions import reap_stale_locks
+        reap_stale_locks()
+    except Exception:
+        logger.debug("ephemeral execution lock reap failed", exc_info=True)
+
     # Stale-code yield gate — BEFORE the lock race. A process whose checkout was updated under it
     # serves mixed sys.modules (jobs die on ImportErrors); if a fresher gateway holds the runtime
     # lock, ITS ticker dispatches. With no fresh holder (desktop-standalone) the tick proceeds.
@@ -165,6 +173,21 @@ def _tick_admitted(
             _sched._sweep_mcp_orphans()
             return 0
 
+        # EDF-priority catch-up ordering: sort by urgency = lateness / cadence (descending).
+        # Weekly jobs overdue by 22h rank far above hourly jobs overdue by 5 min,
+        # so the thread-pool fills with the most-critical jobs first during catch-up bursts.
+        # Jobs with unknown cadence (urgency=0) sort last — they fire next tick anyway.
+        def _edf_urgency(job: dict) -> float:
+            try:
+                from cron.jobs import _schedule_cadence_seconds
+                lateness = max(0.0, float(job.get("last_dispatch", {}).get("lateness_seconds", 0.0) or 0.0))
+                cadence = _schedule_cadence_seconds(job.get("schedule", {}))
+                return lateness / cadence if cadence and cadence > 0 else 0.0
+            except Exception:
+                return 0.0
+
+        due_jobs = sorted(due_jobs, key=_edf_urgency, reverse=True)
+
         _max_workers = _sched._resolve_max_parallel_workers()
         if verbose:
             _sched.logger.info(
@@ -181,6 +204,22 @@ def _tick_admitted(
         _all_futures: list = []
         pool = _sched._get_parallel_pool(_max_workers)
         for job in due_jobs:
+            # Skip if a prior execution still holds a live ephemeral lock
+            # (Hunt 2010: presence of the znode == owner still alive).
+            try:
+                from cron.executions import is_lock_live, live_inflight_execution
+                execution_id = job.get("execution_id")
+                if not execution_id:
+                    inflight = live_inflight_execution(job["id"])
+                    if inflight:
+                        execution_id = inflight.get("id")
+                if execution_id and is_lock_live(str(execution_id)):
+                    logger.info(
+                        "Job '%s' already running (live execution lock) — skipping",
+                        job.get("name", job["id"]))
+                    continue
+            except Exception:
+                logger.debug("execution lock check failed", exc_info=True)
             fut = _sched._submit_with_guard(job, pool, _process_job)
             if fut is None:
                 continue

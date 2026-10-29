@@ -16,7 +16,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -47,7 +47,7 @@ def compose(nyquist: dict, timescale: dict) -> dict:
     contradiction = bool(nyquist) and bool(timescale) and ts_ok and n_aliased > 0
     missing = not nyquist or not timescale
     return {
-        'ts': datetime.now(timezone.utc).isoformat(),
+        'ts': datetime.now(UTC).isoformat(),
         'theorem': 'Nyquist fs>=2B vs Khalil two-time-scale; contradiction => false health',
         'nyquist_n_aliased': n_aliased,
         'two_timescale_ok': ts_ok,

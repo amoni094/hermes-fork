@@ -21,7 +21,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -183,7 +183,7 @@ def run() -> dict:
         _load('pid-circle-criterion.json'),
         _load('nyquist-timescale-bridge.json'),
     )
-    out['ts'] = datetime.now(timezone.utc).isoformat()
+    out['ts'] = datetime.now(UTC).isoformat()
     try:
         _atomic_write(OUT, out)
         out['output'] = str(OUT)

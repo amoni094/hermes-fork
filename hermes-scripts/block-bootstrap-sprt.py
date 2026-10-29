@@ -28,7 +28,7 @@ import math
 import os
 import random
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -87,10 +87,8 @@ def sprt_path(xs: list[float], a: float, b: float, mu0: float = MU_0, mu1: float
     n_stop = len(xs)
     for t, x in enumerate(xs, start=1):
         llr += llr_increment(x, mu0, mu1, sigma)
-        if llr > max_llr:
-            max_llr = llr
-        if llr < min_llr:
-            min_llr = llr
+        max_llr = max(max_llr, llr)
+        min_llr = min(min_llr, llr)
         if llr >= a:
             decision = 'reject_H0'
             n_stop = t
@@ -148,8 +146,7 @@ def max_llr_unstopped(xs: list[float], mu0: float = MU_0, mu1: float = MU_1, sig
     peak = 0.0
     for x in xs:
         llr += llr_increment(x, mu0, mu1, sigma)
-        if llr > peak:
-            peak = llr
+        peak = max(peak, llr)
     return peak
 
 
@@ -264,7 +261,7 @@ def run(n: int = N_MAX, rho: float = 0.6, B: int = B_DEFAULT, n_sims: int = 400,
     iid_oc = mc_alpha_beta(a_wald, b_wald, n=n, rho=0.0, n_sims=n_sims, seed=seed + 303)
     alarm = boot_oc['empirical_alpha'] > ALPHA * 1.5 and wald_oc['empirical_alpha'] > ALPHA * 2
     out = {
-        'ts': datetime.now(timezone.utc).isoformat(),
+        'ts': datetime.now(UTC).isoformat(),
         'theorem': (
             'Wald SPRT i.i.d. assumption fails under AR(1); Kunsch moving-block '
             'bootstrap calibrates A so P_H0(max LLR >= A_boot) ~= alpha'

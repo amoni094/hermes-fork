@@ -24,7 +24,7 @@ import json
 import math
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME       = Path.home()
@@ -50,7 +50,7 @@ def _tokenize(text: str) -> list[str]:
 def _load_corpus() -> list[dict]:
     """Load all skills as documents."""
     docs = []
-    now  = datetime.now(timezone.utc)
+    now  = datetime.now(UTC)
     for base in [SKILLS_DIR, ALT_SKILLS]:
         if not base.exists():
             continue
@@ -104,7 +104,7 @@ def _bm25(query_tokens: list[str], docs: list[dict]) -> list[tuple[float, str]]:
 
 
 def run(query: str, top: int, dry_run: bool) -> int:
-    now  = datetime.now(timezone.utc).isoformat()
+    now  = datetime.now(UTC).isoformat()
     docs = _load_corpus()
 
     if not docs:

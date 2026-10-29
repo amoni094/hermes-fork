@@ -68,6 +68,133 @@ def _hermes_root() -> 'Path':
     return Path(_h) if _h else Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 
 
+def _profile_script(name: str) -> Path:
+    """Resolve a fork-profile script without path-doubling.
+
+    HERMES_HOME may be ~/.hermes OR ~/.hermes/profiles/fork. Never append
+    profiles/fork/scripts on top of an already-profiled root.
+    """
+    root = _hermes_root()
+    candidates = [
+        root / "scripts" / name,
+        Path.home() / ".hermes" / "profiles" / "fork" / "scripts" / name,
+    ]
+    if root.name == ".hermes":
+        candidates.insert(0, root / "profiles" / "fork" / "scripts" / name)
+    for p in candidates:
+        if p.exists():
+            return p
+    return candidates[0]
+
+
+def _parse_inhibition_weight(raw) -> float:
+    """Coerce inhibition_weight to [0, 1]. Never raise (recall must not crash)."""
+    try:
+        iw = float(raw or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(iw) or iw <= 0.0:
+        return 0.0
+    return min(iw, 1.0)
+
+
+# PRIMA/Curino 2008: known-safe fact_lifecycle columns when schema lookup fails.
+_SAFE_LIFECYCLE_COLUMNS = [
+    "memory_id", "fact_text", "fact_type", "volatility_class", "valid_from",
+    "valid_to", "superseded_by", "access_count", "last_accessed",
+    "interference_count", "last_interfered", "retention_score", "memory_status",
+    "inserted_at", "updated_at", "grant_id", "source_type", "action_id",
+    "session_id", "last_accessed_turn", "fact_track",
+    "quality_score", "inhibition_weight", "competitor_of", "strength",
+    "block_id", "source", "_path", "created_at", "last_accessed_at",
+]
+
+
+def _lifecycle_columns(conn) -> list:
+    """Version-aware fact_lifecycle column list (PRIMA/Curino 2008).
+
+    Reads schema_migrations (best-effort provenance) then PRAGMA table_info.
+    Falls back to a known-safe column list if either lookup fails.
+    """
+    try:
+        try:
+            conn.execute("SELECT version FROM schema_migrations LIMIT 1")
+        except Exception:
+            pass
+        rows = conn.execute("PRAGMA table_info(fact_lifecycle)").fetchall()
+        cols = []
+        for row in rows:
+            name = row[1] if row else None
+            if isinstance(name, str) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
+                cols.append(name)
+        if cols:
+            return cols
+    except Exception:
+        pass
+    return list(_SAFE_LIFECYCLE_COLUMNS)
+
+
+def _lifecycle_select_list(conn, wanted: list) -> list:
+    """Intersect requested columns with the live schema, preserving order."""
+    present = set(_lifecycle_columns(conn))
+    return [c for c in wanted if c in present]
+
+
+def _self_test_lifecycle_columns() -> int:
+    """In-memory schema fixtures: live PRAGMA vs fallback column list."""
+    import tempfile as _tf
+
+    d = Path(_tf.mkdtemp(prefix="ur-lc-"))
+    db = d / "t.db"
+    conn = sqlite3.connect(str(db), timeout=30)
+    conn.execute("CREATE TABLE schema_migrations (version TEXT)")
+    conn.execute("INSERT INTO schema_migrations(version) VALUES ('1')")
+    conn.execute(
+        "CREATE TABLE fact_lifecycle (fact_text TEXT, access_count INT, strength REAL)"
+    )
+    conn.commit()
+    cols = _lifecycle_columns(conn)
+    assert "fact_text" in cols and "strength" in cols, cols
+    sel = _lifecycle_select_list(conn, ["fact_text", "inhibition_weight", "access_count"])
+    assert sel == ["fact_text", "access_count"], sel
+    conn.close()
+    conn2 = sqlite3.connect(str(d / "empty.db"), timeout=30)
+    fallback = _lifecycle_columns(conn2)
+    assert "memory_id" in fallback and "fact_text" in fallback, fallback
+    conn2.close()
+    print(json.dumps({"ok": True, "cols": cols, "sel": sel}))
+    return 0
+
+
+def _load_inhibition_weights() -> dict:
+    """Map fact_text[:80] → inhibition_weight from lifecycle.db. Fail-open."""
+    db = _hermes_root() / "memory-facts" / "lifecycle.db"
+    if not db.exists():
+        return {}
+    out: dict = {}
+    try:
+        with sqlite3.connect(str(db), timeout=5.0) as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            wanted = _lifecycle_select_list(conn, ["fact_text", "inhibition_weight"])
+            if "fact_text" not in wanted or "inhibition_weight" not in wanted:
+                return {}
+            col_sql = ", ".join(wanted)
+            rows = conn.execute(
+                "SELECT " + col_sql + " FROM fact_lifecycle "
+                "WHERE COALESCE(inhibition_weight, 0) > 0"
+            ).fetchall()
+            for text, iw in rows:
+                w = _parse_inhibition_weight(iw)
+                if w <= 0.0:
+                    continue
+                key = (text or "").strip()[:80]
+                if key:
+                    out[key] = w
+    except Exception:
+        return {}
+    return out
+
+
 GRAPHITI_BASE = os.environ.get("GRAPHITI_BASE", "http://127.0.0.1:8765/mcp")
 GRAPHITI_GROUP_IDS = ["hermes", "hermes-reasoning"]
 RRF_K = 60
@@ -595,6 +722,10 @@ def fuse_results(
     import math as _math, time as _time
     _now = _time.time()
     _decay_rate = 0.02  # half-life ≈ 35 days
+    try:
+        _inhib_map = _load_inhibition_weights()
+    except Exception:
+        _inhib_map = {}
     for item in fused:
         _created = item.get("created_at") or item.get("timestamp") or ""
         try:
@@ -624,6 +755,18 @@ def fuse_results(
         item["enriched_weight"] = round(item["rrf_score"] * _decay * _trust_weight, 4)
         item["enriched_distance"] = round(1.0 - item["enriched_weight"], 4)
         item["_age_days"] = round(_age_days, 1)
+        # Anderson (1994) retrieval-induced forgetting: inhibition_weight stored in lifecycle.db
+        # by memory-inhibition-cron.py. High inhibition_weight = weak competitor of a strong
+        # memory — down-rank so strong memories dominate. Formula: score / (1 + inhibition_weight).
+        # inhibition_weight=0 (default) leaves score unchanged. Scale is [0, 1].
+        _iw_raw = item.get("inhibition_weight")
+        if _iw_raw is None:
+            _txt = (item.get("_full_text") or item.get("text") or "").strip()
+            _iw_raw = _inhib_map.get(_txt[:80], 0.0)
+        _iw = _parse_inhibition_weight(_iw_raw)
+        if _iw > 0.0:
+            item["enriched_weight"] = round(item["enriched_weight"] / (1.0 + _iw), 4)
+            item["_inhibition_weight"] = _iw
 
     _src_used = list({s for k in list(scores.keys())[:top] for s in sources.get(k, [])})
     log_recall_query(query, _src_used, _q_type)
@@ -943,6 +1086,28 @@ def recall(
         except Exception:
             pass  # index not yet built or import failed — never block recall
 
+    # Wyner-Ziv side-information filter: suppress facts already deducible from session
+    # context (caller's side information). Saves context tokens without information loss.
+    # side-info-memory-filter.py does bigram Jaccard + containment checks; fail-open.
+    try:
+        import importlib.util as _ilu_si, sys as _sys_si
+        _si_key = "side-info-memory-filter"
+        if _si_key not in _sys_si.modules:
+            _si_path = str(_profile_script("side-info-memory-filter.py"))
+            _si_spec = _ilu_si.spec_from_file_location(_si_key, _si_path)
+            if _si_spec and _si_spec.loader:
+                _si_mod = _ilu_si.module_from_spec(_si_spec)
+                _sys_si.modules[_si_key] = _si_mod
+                _si_spec.loader.exec_module(_si_mod)  # type: ignore[union-attr]
+            else:
+                raise ImportError("side-info-memory-filter spec unavailable")
+        else:
+            _si_mod = _sys_si.modules[_si_key]
+        if hasattr(_si_mod, "filter_redundant"):
+            fused = _si_mod.filter_redundant(fused, query)
+    except Exception:
+        pass  # side-info filter is best-effort; never block recall
+
     return fused
 
 
@@ -957,7 +1122,18 @@ def record_query_access(fused: list[dict]) -> None:
         return
     now = datetime.now(timezone.utc).isoformat()
     try:
-        with sqlite3.connect(str(db)) as conn:
+        with sqlite3.connect(str(db), timeout=5.0) as conn:
+            # SQLite WAL paper (Howard & Bhattacharjee): WAL allows concurrent readers
+            # during writes. synchronous=NORMAL is safe under WAL and ~3x faster than FULL.
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA wal_autocheckpoint=100")
+            # BEGIN IMMEDIATE: acquire write lock upfront to avoid SQLITE_BUSY when multiple
+            # cron jobs and recall paths race to update access_count simultaneously.
+            # Fails fast (timeout=5s) rather than silently discarding updates (DEFERRED default).
+            # Skip if this connection is already in a transaction (nested BEGIN raises).
+            if not conn.in_transaction:
+                conn.execute("BEGIN IMMEDIATE")
             for item in fused:
                 text = (item.get("_full_text") or item.get("text") or "").strip()
                 if len(text) < 20:
@@ -985,11 +1161,16 @@ def record_query_access(fused: list[dict]) -> None:
                     )
                 # Sweep 27 FAMA genGap: if fact is old at retrieval, annotate item for SEU/RDM
                 try:
-                    row = conn.execute(
-                        "SELECT valid_from, volatility_class FROM fact_lifecycle "
-                        "WHERE fact_text LIKE ? LIMIT 1",
-                        (key + "%",),
-                    ).fetchone()
+                    wanted = _lifecycle_select_list(conn, ["valid_from", "volatility_class"])
+                    if "valid_from" not in wanted:
+                        row = None
+                    else:
+                        col_sql = ", ".join(wanted)
+                        row = conn.execute(
+                            "SELECT " + col_sql + " FROM fact_lifecycle "
+                            "WHERE fact_text LIKE ? LIMIT 1",
+                            (key + "%",),
+                        ).fetchone()
                     if row and row[0]:
                         t0 = datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
                         gap = (datetime.now(timezone.utc) - t0).total_seconds() / 86400.0
@@ -1099,9 +1280,16 @@ def search_pending_activefacts(query: str, limit: int = 5) -> list[dict]:
     where = " AND ".join(["lower(fact_text) LIKE ?" for _ in terms])
     params = [f"%{t}%" for t in terms]
     try:
-        with sqlite3.connect(str(db)) as conn:
+        with sqlite3.connect(str(db), timeout=5.0) as conn:
+            # WAL mode: concurrent readers during writes, NORMAL sync safe under WAL.
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            wanted = _lifecycle_select_list(conn, ["fact_text", "access_count"])
+            if "fact_text" not in wanted or "access_count" not in wanted:
+                return []
+            col_sql = ", ".join(wanted)
             rows = conn.execute(
-                f"""SELECT fact_text, access_count FROM fact_lifecycle
+                f"""SELECT {col_sql} FROM fact_lifecycle
                     WHERE memory_status='pending' AND COALESCE(fact_track,'active')='active'
                       AND {where}
                     ORDER BY COALESCE(access_count,0) DESC LIMIT ?""",
@@ -1221,7 +1409,8 @@ Examples:
   %(prog)s "trading stops" --json
         """,
     )
-    p.add_argument("query", help="Natural language query")
+    p.add_argument("--self-test", action="store_true", help="Test version-aware lifecycle column selection")
+    p.add_argument("query", nargs="?", default="", help="Natural language query")
     p.add_argument("--top", type=int, default=DEFAULT_TOP, help="Max results (default: 10)")
     p.add_argument("--min-score", type=float, default=0.0, help="Min RRF score 0-1 (default: 0)")
     p.add_argument("--json", action="store_true", dest="as_json", help="Output JSON")
@@ -1236,6 +1425,9 @@ Examples:
     p.add_argument("--hindsight-only", action="store_true")
     p.add_argument("--graphiti-only", action="store_true")
     args = p.parse_args()
+
+    if args.self_test:
+        sys.exit(_self_test_lifecycle_columns())
 
     if not args.query.strip():
         p.print_help()

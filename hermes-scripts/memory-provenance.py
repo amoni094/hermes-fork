@@ -27,7 +27,7 @@ import argparse
 import json
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 FACTS_DIR = Path.home() / ".hermes" / "memory-facts"
@@ -64,7 +64,7 @@ def write_edge(memory_id: str, action_id: str, context: str = "") -> bool:
     try:
         with sqlite3.connect(str(PROVENANCE_DB)) as conn:
             _init_db(conn)
-            ts = datetime.now(timezone.utc).isoformat()
+            ts = datetime.now(UTC).isoformat()
             conn.execute(
                 "INSERT OR IGNORE INTO provenance_edges (memory_id, action_id, ts, context) VALUES (?,?,?,?)",
                 (memory_id, action_id, ts, context),
@@ -86,7 +86,7 @@ def invalidate_memory(memory_id: str, reason: str = "") -> list[str]:
                 (memory_id,),
             ).fetchall()
             stale_ids = [r[0] for r in rows]
-            ts = datetime.now(timezone.utc).isoformat()
+            ts = datetime.now(UTC).isoformat()
             conn.execute(
                 "INSERT INTO invalidation_log (memory_id, ts, reason, stale_action_ids) VALUES (?,?,?,?)",
                 (memory_id, ts, reason, json.dumps(stale_ids)),

@@ -20,7 +20,7 @@ import json
 import math
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -168,7 +168,7 @@ def load_errors() -> tuple[list[float], dict]:
 def run() -> dict:
     xs, meta = load_errors()
     out = compare(xs)
-    out['ts'] = datetime.now(timezone.utc).isoformat()
+    out['ts'] = datetime.now(UTC).isoformat()
     out['source'] = meta.get('source')
     try:
         _atomic_write(OUT_PATH, out)

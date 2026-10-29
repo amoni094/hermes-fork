@@ -34,7 +34,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -174,7 +174,7 @@ def classify(task: str) -> dict:
 
 
 def run(tasks: list[str], dry_run: bool) -> int:
-    now     = datetime.now(timezone.utc).isoformat()
+    now     = datetime.now(UTC).isoformat()
     results = [classify(t) for t in tasks]
 
     print(f"\n=== Agent Escalation Classifier — {now[:10]} ===")
@@ -192,7 +192,7 @@ def run(tasks: list[str], dry_run: bool) -> int:
         print(f"\nALARM: yes — {len(high_risk)} high/critical escalation risk task(s)")
         alarm_exit = 1
     else:
-        print(f"\nALARM: no — all tasks classified as low/medium risk")
+        print("\nALARM: no — all tasks classified as low/medium risk")
         alarm_exit = 0
 
     if not dry_run:

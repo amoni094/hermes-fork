@@ -12,7 +12,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-import browser_act_guard as bag  # noqa: E402
+import browser_act_guard as bag
 
 
 def test_page_fingerprint_stable_and_strips_fragment():

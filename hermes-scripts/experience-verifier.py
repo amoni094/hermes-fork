@@ -33,7 +33,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -98,7 +98,7 @@ def _extract_outcomes(session_path: Path) -> list[dict]:
                             "call_id":  pending_tool["call_id"],
                             "args":     pending_tool["args"],
                             "fingerprint": fp,
-                            "ts":       datetime.now(timezone.utc).isoformat(),
+                            "ts":       datetime.now(UTC).isoformat(),
                         })
                         pending_tool = None
         except Exception:
@@ -167,7 +167,7 @@ def verify_ledger(ledger: list[dict]) -> list[dict]:
 
 def run(fingerprint_text: str | None, check_file: Path | None, dry_run: bool) -> int:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     if fingerprint_text is not None:
         fp = fingerprint(fingerprint_text)

@@ -23,7 +23,7 @@ import argparse
 import json
 import math
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 import sys
 
@@ -169,7 +169,7 @@ def main():
         conn.execute(
             "INSERT INTO freq_stability (run_ts, v_t, delta_v, routing_norm, entropy, alarm) "
             "VALUES (?,?,?,?,?,?)",
-            (datetime.now(timezone.utc).isoformat(), v_t, delta_v, routing_norm, entropy, int(alarm))
+            (datetime.now(UTC).isoformat(), v_t, delta_v, routing_norm, entropy, int(alarm))
         )
         conn.commit()
 
@@ -183,14 +183,14 @@ def main():
                 "delta_v": round(delta_v, 4) if delta_v is not None else None,
                 "routing_norm": round(routing_norm, 4),
                 "entropy": round(entropy, 4),
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
             }, indent=2))
             _tmp.replace(ALARM_PATH)
             print(f"[freq-stability] ALARM ({alarm_type}) written to {ALARM_PATH}", file=sys.stderr)
 
     conn.close()
 
-    print(f"\n=== Frequency Stability Monitor — {datetime.now(timezone.utc).isoformat()[:19]} ===")
+    print(f"\n=== Frequency Stability Monitor — {datetime.now(UTC).isoformat()[:19]} ===")
     print(f"V_t:          {v_t:.4f}")
     print(f"delta_V:      {delta_v:.4f}" if delta_v is not None else "delta_V:      (first run)")
     print(f"routing_norm: {routing_norm:.4f}")

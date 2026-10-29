@@ -95,8 +95,7 @@ def spectral_gap(P: list[list[float]]) -> float:
         for i in range(n):
             for j in range(i + 1, n):
                 tv = 0.5 * sum(abs(P[i][k] - P[j][k]) for k in range(n))
-                if tv > max_tv:
-                    max_tv = tv
+                max_tv = max(max_tv, tv)
         return max(1e-9, 1.0 - max_tv)
 
 

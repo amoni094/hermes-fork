@@ -17,7 +17,7 @@ import json
 import os
 import sys
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 # ── Config ────────────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ def save_cache(cache: dict) -> None:
     # Keep rolling window
     if len(cache["seen"]) > MAX_CACHE_ITEMS:
         cache["seen"] = cache["seen"][-MAX_CACHE_ITEMS:]
-    cache["last_updated"] = datetime.now(timezone.utc).isoformat()
+    cache["last_updated"] = datetime.now(UTC).isoformat()
     _cf_tmp = CACHE_FILE.with_suffix('.tmp')
     _cf_tmp.write_text(json.dumps(cache, indent=2))
     _cf_tmp.replace(CACHE_FILE)
@@ -145,7 +145,7 @@ def main() -> None:
                 new_items.append((feed_name, item))
 
     if new_items:
-        lines = [f"[news-diff] {len(new_items)} new item(s) — {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%MZ')}"]
+        lines = [f"[news-diff] {len(new_items)} new item(s) — {datetime.now(UTC).strftime('%Y-%m-%dT%H:%MZ')}"]
         for feed_name, item in new_items:
             title = item["title"] or "(no title)"
             url = item["url"]

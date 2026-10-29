@@ -36,7 +36,7 @@ import json
 import math
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from collections import Counter
 
@@ -143,7 +143,7 @@ def score_outputs(outputs: list[str], lambda_ent: float = LAMBDA_ENT,
 
 
 def run(outputs: list[str] | None, input_file: Path | None, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     if input_file and input_file.exists():
         data    = json.loads(input_file.read_text())
@@ -171,7 +171,7 @@ def run(outputs: list[str] | None, input_file: Path | None, dry_run: bool) -> in
     print(f"R_consensus:  {result['r_consensus']:.4f}")
     print(f"Entropy H(Y): {result['entropy']:.4f}")
     print(f"Reward:       {result['reward']:.4f}  (= R - λ·H, λ={result['lambda']})")
-    print(f"\nRanked outputs (idx, raw_score, consensus_sim):")
+    print("\nRanked outputs (idx, raw_score, consensus_sim):")
     for idx, rs, sim in result["ranked"]:
         flag = "  ← best" if idx == result["ranked"][0][0] else ""
         print(f"  [{idx}] raw={rs:.4f}  sim={sim:.4f}{flag}")

@@ -18,7 +18,7 @@ import os
 import statistics
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
@@ -171,7 +171,7 @@ def _load_scores() -> tuple[list[float], int, int, int, int]:
 def run() -> dict:
     stale = _shadow_stale()
     if stale is not None:
-        stale['ts'] = datetime.now(timezone.utc).isoformat()
+        stale['ts'] = datetime.now(UTC).isoformat()
         try:
             _atomic_write(OUT, stale)
             stale['output'] = str(OUT)
@@ -180,7 +180,7 @@ def run() -> dict:
         return stale
     scores, n_zero, n, n_sampled, n_zero_sampled = _load_scores()
     out = detect(scores, n_zero, n, n_sampled=n_sampled, n_zero_sampled=n_zero_sampled)
-    out['ts'] = datetime.now(timezone.utc).isoformat()
+    out['ts'] = datetime.now(UTC).isoformat()
     try:
         _atomic_write(OUT, out)
         out['output'] = str(OUT)

@@ -28,7 +28,7 @@ import sys
 import tempfile
 import time
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from pathlib import Path
 from typing import Callable, Any
 
@@ -122,7 +122,7 @@ class PersistentBudgetState:
     # ------------------------------------------------------------------
 
     def _expire(self, data: dict) -> dict:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         result: dict = {}
         for label, classes in data.items():
             if not isinstance(classes, dict):
@@ -155,7 +155,7 @@ class PersistentBudgetState:
         if error_class not in _PERSISTENT_CLASSES:
             return 0  # not tracked persistently
 
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         label_map = self._state.setdefault(label, {})
         entry = label_map.setdefault(error_class, {
             "attempts":    0,
@@ -412,7 +412,7 @@ if __name__ == "__main__":
         else:
             verdict = "CONTINUE"
 
-        print(f"WALD2-1 SPRT Result")
+        print("WALD2-1 SPRT Result")
         print(f"  Observations : {observations}")
         print(f"  n            : {len(observations)}")
         print(f"  H0: p = {p0}   H1: p = {p1}")
@@ -450,7 +450,7 @@ if __name__ == "__main__":
         asn_h1 = numerator / kl_p1_p0 if kl_p1_p0 > 0 else float("inf")
         max_rec = int(_math.ceil(max(asn_h0, asn_h1) * 1.5))
 
-        print(f"WALD2-2 ASN Bounds")
+        print("WALD2-2 ASN Bounds")
         print(f"  H0: p = {p0}   H1: p = {p1}")
         print(f"  alpha={alpha}  beta={beta}")
         print(f"  A={A:.4f}  B={B:.4f}")

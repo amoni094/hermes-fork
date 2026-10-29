@@ -29,7 +29,7 @@ import json
 import math
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -92,7 +92,7 @@ def _js_divergence(p: Counter, q: Counter) -> float:
 
 
 def run(dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     paths = sorted(SESSIONS_DIR.glob("*.jsonl"))[-20:]
 
     if not paths:
@@ -141,7 +141,7 @@ def run(dry_run: bool) -> int:
               f"condition-dependent activation")
         rc = 1
     else:
-        print(f"\nALARM: no — tool behavior consistent across context sizes")
+        print("\nALARM: no — tool behavior consistent across context sizes")
         rc = 0
 
     if not dry_run:

@@ -29,7 +29,7 @@ import json
 import math
 import re
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -212,7 +212,7 @@ def project_query(query: str, calib: dict) -> list[dict]:
 
 
 def run(query: str | None, dry_run: bool = False) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     calib = calibrate(dry_run)
 
     print(f"\n=== Nuisance Parameter Projector — {now[:10]} ===")

@@ -139,6 +139,10 @@ _NO_TODO_SENTENCE = "- Reference code as `path:line` instead of pasting whole fi
 _NON_CODING_SKILL_CATEGORIES = (
     "apple", "communication", "cooking", "creative", "email", "finance", "gaming", "gifs", "health", "media",
     "music", "note-taking", "productivity", "shopping", "smart-home", "social-media", "travel", "yuanbao",
+    # Textbook/academic reference skills — demoted to names-only in coding/focus mode.
+    # These are pure reference material (See source PDF bodies); descriptions add noise for most tasks.
+    # Load with skill_view(name=...) when the specific textbook is relevant. (2026-10-29)
+    "textbook",
 )
 _MODE_ALIASES = {
     **dict.fromkeys(("focus", "strict", "lean"), "focus"),

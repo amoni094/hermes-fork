@@ -24,7 +24,7 @@ import os
 import json
 import math
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from collections import Counter
 
@@ -86,7 +86,7 @@ def check_proportionality(counts: Counter) -> dict:
 
 
 def run() -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     print(f"\n=== Proportionality Monitor — {now[:10]} ===\n")
 
     if not SESSIONS_DIR.exists():

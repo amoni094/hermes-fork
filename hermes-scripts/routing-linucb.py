@@ -191,6 +191,114 @@ def run(cache=None, skill=None, reward=0.0):
     return slim
 
 
+
+HITL_ARMS = ("auto_resolve", "human_escalate", "hybrid")
+HITL_ALPHA = 0.5
+HITL_STATE = "linucb-routing-state.json"
+
+
+def _mat_inv_identity(d):
+    return [[1.0 if i == j else 0.0 for j in range(d)] for i in range(d)]
+
+
+def hitl_features(query="", has_code=False, has_math=False, urgency=0.0):
+    qlen = float(len((query or "").split()))
+    qn = min(1.0, qlen / 64.0)
+    u = min(1.0, max(0.0, float(urgency)))
+    # x = [bias, query_length, has_code, has_math, urgency]
+    return [1.0, qn, 1.0 if has_code else 0.0, 1.0 if has_math else 0.0, u]
+
+
+def _hitl_default_state(d=5):
+    arms = {}
+    for a in HITL_ARMS:
+        arms[a] = {"A": [[1.0 if i == j else 0.0 for j in range(d)] for i in range(d)], "A_inv": _mat_inv_identity(d), "b": [0.0] * d}
+    return {"d": d, "alpha": HITL_ALPHA, "arms": arms, "history": []}
+
+
+def _load_hitl_state(cache: Path):
+    path = cache / HITL_STATE
+    st = _load_json(path, None)
+    if not isinstance(st, dict) or "arms" not in st:
+        return _hitl_default_state()
+    return st
+
+
+def hitl_ucb(x, arm_state, alpha=HITL_ALPHA):
+    A_inv = arm_state.get("A_inv") or _mat_inv_identity(len(x))
+    b = arm_state.get("b") or [0.0] * len(x)
+    theta = mat_vec(A_inv, b)
+    bonus = math.sqrt(max(0.0, vec_dot(x, mat_vec(A_inv, x))))
+    return vec_dot(theta, x) + alpha * bonus, theta
+
+
+def hitl_select(query="", has_code=False, has_math=False, urgency=0.0, cache=None):
+    cache = cache or _cache_dir()
+    x = hitl_features(query, has_code, has_math, urgency)
+    st = _load_hitl_state(cache)
+    scored = []
+    for arm in HITL_ARMS:
+        u, theta = hitl_ucb(x, st["arms"].get(arm) or {}, st.get("alpha", HITL_ALPHA))
+        scored.append({"arm": arm, "ucb": round(u, 6), "theta": [round(v, 6) for v in theta]})
+    scored.sort(key=lambda r: -r["ucb"])
+    chosen = scored[0]["arm"]
+    out = {
+        "chosen": chosen,
+        "ranked": scored,
+        "x": x,
+        "features": {
+            "query_length": len((query or "").split()),
+            "has_code": bool(has_code),
+            "has_math": bool(has_math),
+            "urgency": float(urgency),
+        },
+    }
+    return out, st, x
+
+
+def hitl_update(st, arm, x, reward):
+    arm_st = st["arms"].setdefault(arm, {"A_inv": _mat_inv_identity(len(x)), "b": [0.0] * len(x)})
+    arm_st["A_inv"] = sherman_morrison(arm_st.get("A_inv") or _mat_inv_identity(len(x)), x)
+    r = 0.0 if reward < 0 else (1.0 if reward > 1 else float(reward))
+    b = arm_st.get("b") or [0.0] * len(x)
+    arm_st["b"] = [b[i] + r * x[i] for i in range(len(x))]
+    st["arms"][arm] = arm_st
+    hist = st.get("history") or []
+    hist.append({"arm": arm, "reward": r})
+    st["history"] = hist[-200:]
+    return st
+
+
+def hitl_self_test():
+    import tempfile
+    failures = []
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            cache = Path(td)
+            chosen = []
+            for i in range(10):
+                q = "fix the code " + ("def f(): pass " if i % 2 == 0 else "prove lemma ")
+                has_code = i % 2 == 0
+                has_math = not has_code
+                urgency = 0.1 * i
+                sel, st, x = hitl_select(q, has_code, has_math, urgency, cache=cache)
+                assert sel["chosen"] in HITL_ARMS, sel
+                # synthetic reward: escalate when urgency high
+                reward = 1.0 if (urgency > 0.6 and sel["chosen"] == "human_escalate") or (urgency <= 0.6 and sel["chosen"] != "human_escalate") else 0.2
+                st = hitl_update(st, sel["chosen"], x, reward)
+                _atomic_write_json(cache / HITL_STATE, st)
+                chosen.append(sel["chosen"])
+            assert len(chosen) == 10
+            assert (cache / HITL_STATE).exists()
+            st2 = _load_json(cache / HITL_STATE, {})
+            assert "arms" in st2
+            for arm in HITL_ARMS:
+                assert arm in st2["arms"]
+    except Exception as e:
+        failures.append("hitl: %s" % e)
+    return failures
+
+
 def self_test():
     failures = []
     try:
@@ -216,6 +324,7 @@ def self_test():
             json.dumps(r)
     except Exception as e:
         failures.append(f'io: {e}')
+    failures.extend(hitl_self_test())
     return {'self_test': 'PASS' if not failures else 'FAIL', 'n_failures': len(failures), 'failures': failures}
 
 
@@ -224,12 +333,23 @@ def main():
     ap.add_argument('--self-test', action='store_true')
     ap.add_argument('--skill', default=None)
     ap.add_argument('--reward', type=float, default=0.0)
+    ap.add_argument('--hitl', action='store_true')
+    ap.add_argument('--query', default='')
+    ap.add_argument('--has-code', action='store_true')
+    ap.add_argument('--has-math', action='store_true')
+    ap.add_argument('--urgency', type=float, default=0.0)
     args = ap.parse_args()
     if args.self_test:
         r = self_test()
         print(json.dumps(r, indent=2))
         sys.exit(0 if r['self_test'] == 'PASS' else 1)
     try:
+        if args.hitl:
+            sel, st, x = hitl_select(args.query, args.has_code, args.has_math, args.urgency)
+            st = hitl_update(st, sel['chosen'], x, args.reward)
+            _atomic_write_json(_cache_dir() / HITL_STATE, st)
+            print(json.dumps(sel, indent=2))
+            return
         print(json.dumps(run(skill=args.skill, reward=args.reward), indent=2))
     except Exception:
         print(json.dumps({'error': 'shadow_path_failed'}))

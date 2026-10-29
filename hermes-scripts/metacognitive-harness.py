@@ -50,7 +50,7 @@ import os
 import re
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 # Config defaults (override via MH_* env vars)
@@ -583,7 +583,7 @@ def cmd_hedge_score(args):
 
 def cmd_profile(args):
     conn = _get_db()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     success = 1 if args.outcome == "success" else 0
     conn.execute("""
         INSERT INTO skill_profiles (skill, task_type, total, successes, updated_at)
@@ -810,16 +810,10 @@ def cmd_causal_check(args):
 
     if not observation or not cause:
         verdict, code = "UNKNOWN", 2
-    elif n_confounds >= 2 and not has_intervention:
+    elif n_confounds >= 2 and not has_intervention or ("temporal_proximity" in confound_risks
+          and not has_intervention and not causal_hits) or has_alts and n_confounds and not has_intervention:
         verdict, code = "CORRELATED", 1
-    elif ("temporal_proximity" in confound_risks
-          and not has_intervention and not causal_hits):
-        verdict, code = "CORRELATED", 1
-    elif has_alts and n_confounds and not has_intervention:
-        verdict, code = "CORRELATED", 1
-    elif has_intervention and n_confounds == 0:
-        verdict, code = "CAUSAL", 0
-    elif causal_hits and n_confounds == 0 and confidence >= 0.55:
+    elif has_intervention and n_confounds == 0 or causal_hits and n_confounds == 0 and confidence >= 0.55:
         verdict, code = "CAUSAL", 0
     elif confidence < 0.4 or (not has_intervention and not causal_hits):
         verdict, code = "UNKNOWN", 2
@@ -1515,10 +1509,10 @@ _HISTORY_OK_THRESHOLD = 0.5
 
 
 def _extract_skill_description(content: str) -> str:
-    m = re.search(r"^description:\s*[\"'](.+?)[\"']\s*$", content, re.M)
+    m = re.search(r"^description:\s*[\"'](.+?)[\"']\s*$", content, re.MULTILINE)
     if m:
         return m.group(1).strip()
-    m = re.search(r"^description:\s+(.+)$", content, re.M)
+    m = re.search(r"^description:\s+(.+)$", content, re.MULTILINE)
     if m:
         return m.group(1).strip().strip("\"'")
     return ""

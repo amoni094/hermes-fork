@@ -67,7 +67,7 @@ def _kl_categorical(q: list, p: list) -> float:
     for qi, pi in zip(q, p):
         if qi <= 0.0:
             continue
-        denom = pi if pi > EPS else EPS
+        denom = max(EPS, pi)
         kl += qi * math.log(qi / denom)
     return max(0.0, kl)
 

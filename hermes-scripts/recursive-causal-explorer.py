@@ -33,7 +33,7 @@ import json
 import re
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME         = Path.home()
@@ -132,14 +132,14 @@ def _load_graph() -> dict | None:
 
 def run(query_cause: str | None, query_effect: str | None,
         top_n: int, dry_run: bool) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     paths = sorted(SESSIONS_DIR.glob("*.jsonl"))
 
     sequences = [_extract_tool_sequence(p) for p in paths]
     sequences = [s for s in sequences if s]   # drop empty
 
     if not sequences:
-        print(f"[causal-explorer] No tool sequences found — need sessions with tool calls")
+        print("[causal-explorer] No tool sequences found — need sessions with tool calls")
         # Load cached graph if exists
         graph = _load_graph()
         if graph:
