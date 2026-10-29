@@ -124,11 +124,16 @@ def _job_cadence_seconds(job: dict) -> Optional[float]:
 
 
 def _job_timeout_seconds(job: dict) -> float:
-    """Get job timeout as C_i. Falls back to DEFAULT_TIMEOUT_SECONDS."""
+    """Get job timeout as C_i. Falls back to DEFAULT_TIMEOUT_SECONDS.
+
+    ADV-013 fix: timeout=0 undercounts load. Use DEFAULT_TIMEOUT_SECONDS instead.
+    """
     t = job.get("timeout")
     if t is not None:
         try:
-            return float(t)
+            tv = float(t)
+            # ADV-013: timeout <= 0 is inadmissible; treat as default worst-case
+            return tv if tv > 0 else DEFAULT_TIMEOUT_SECONDS
         except (TypeError, ValueError):
             pass
     return DEFAULT_TIMEOUT_SECONDS

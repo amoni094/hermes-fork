@@ -301,15 +301,23 @@ def _self_test() -> None:
 # Module-level adapter for unified-recall integration
 # ---------------------------------------------------------------------------
 
-def filter_redundant(fused: list, query: str, threshold: float = 0.70) -> list:
+def filter_redundant(fused: list, query: str, threshold: float = 0.70,
+                     session_context: str = "") -> list:
     """Adapter for unified-recall: filter fused result dicts by redundancy against query.
 
     Items whose text is redundant with the query (redundancy_score >= threshold) are
     suppressed UNLESS they contain a prospective-memory marker ([PROSPECTIVE], [ACTION],
     [TODO], [REMINDER]) per Einstein & McDaniel (1990) — those are never suppressed.
 
+    session_context: additional Wyner-Ziv side information (conversation history);
+    redundancy is checked against max(query_score, context_score) for better coverage.
+
     Returns the kept items (original order preserved).
     """
+    # ADV-002 fix: threshold=0 would suppress everything. Treat as no-op.
+    if threshold <= 0.0:
+        return list(fused)
+    threshold = min(threshold, 1.0)
     kept = []
     for item in fused:
         text = (item.get("_full_text") or item.get("text") or "").strip()
@@ -323,6 +331,10 @@ def filter_redundant(fused: list, query: str, threshold: float = 0.70) -> list:
             kept.append(item)
             continue
         score = redundancy_score(text, query)
+        # COH-002: also check against session_context (Wyner-Ziv side info = full session)
+        if session_context:
+            ctx_score = redundancy_score(text, session_context)
+            score = max(score, ctx_score)
         if score < threshold:
             kept.append(item)
         # else: suppress — fact is already deducible from query context (Wyner-Ziv)
