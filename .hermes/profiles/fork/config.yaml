@@ -319,6 +319,7 @@ plugins:
     - orca-status
     - post-tool-compliance
     - skill-access-logger
+    - skill-routing-nudge
     - tool-auth-gate
     - tool-result-audit
   entries:
