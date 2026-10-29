@@ -75,6 +75,9 @@ def chernoff_overload_prob(jobs, window_s=60, delta=0.5):
         cad = _cadence_s(j)
         if not cad or cad <= 0:
             continue
+        # Jobs with timeout=None have no bounded service time; skip them.
+        if j.get("timeout", 120) is None:
+            continue
         p = min(1.0, window_s / cad)
         mu += p
         timeout = _f(j.get("timeout", 120), 120.0)
@@ -83,13 +86,15 @@ def chernoff_overload_prob(jobs, window_s=60, delta=0.5):
         return {"P": 0.0, "mu": 0.0, "U": u, "alert": False}
     d = min(1.0, max(1e-6, delta))
     p_over = math.exp(-mu * d * d / 3.0)
+    # Degenerate-low-load: when μ < 1 the bound exp(-μ δ²/3) is near 1 even
+    # with no overload, so an alert is not meaningful.
     return {
         "P": p_over,
         "mu": mu,
         "U": u,
         "delta": d,
         "ln2": math.log(2.0),
-        "alert": bool(p_over > 0.05),
+        "alert": bool(mu >= 1.0 and p_over > 0.05),
         "u_below_ln2": u < math.log(2.0),
     }
 

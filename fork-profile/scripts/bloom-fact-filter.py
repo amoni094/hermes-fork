@@ -35,10 +35,9 @@ def _hashes(key: str, k: int, m: int) -> list[int]:
         h1 = mmh3.hash(data, 0) & 0xFFFFFFFF
         h2 = mmh3.hash(data, 1) & 0xFFFFFFFF
     else:
-        d1 = hashlib.sha256(data).digest()
-        d2 = hashlib.md5(data).digest()
-        h1 = int.from_bytes(d1[:4], "little")
-        h2 = int.from_bytes(d2[:4], "little") or 1
+        h1 = int(hashlib.md5(data).hexdigest(), 16)
+        h2 = int(hashlib.sha1(data).hexdigest(), 16)
+    h2 = h2 or 1
     return [(h1 + i * h2) % m for i in range(k)]
 
 
@@ -77,6 +76,8 @@ class BloomFilter:
     @classmethod
     def loads(cls, data: bytes) -> BloomFilter:
         m, k = struct.unpack(">II", data[:8])
+        if not (16 <= m <= 50_000_000 and 1 <= k <= 30):
+            raise ValueError(f"implausible bloom header m={m} k={k}")
         bf = cls(capacity=10000, nbits=m, nhash=k)
         bf.bits = bytearray(data[8:8 + (m + 7) // 8])
         if len(bf.bits) < (m + 7) // 8:
@@ -98,15 +99,21 @@ class BloomFilter:
             try:
                 return cls.loads(path.read_bytes())
             except Exception:
-                pass
+                return cls(capacity=capacity, error_rate=error_rate)
         return cls(capacity=capacity, error_rate=error_rate)
+
+
+def _item_key(item) -> str:
+    if isinstance(item, dict):
+        return str(item.get("_full_text") or item.get("text", ""))[:80]
+    return str(item)
 
 
 def filter_injected(items: list, bloom: BloomFilter | None = None) -> list:
     bloom = bloom or BloomFilter.load()
     out = []
     for it in items:
-        key = str(it.get("id") if isinstance(it, dict) else it)
+        key = _item_key(it)
         if key in bloom:
             continue
         out.append(it)
@@ -124,9 +131,9 @@ def _self_test() -> int:
     data = bf.dumps()
     bf2 = BloomFilter.loads(data)
     assert "alpha" in bf2 and "gamma" not in bf2
-    items = [{"id": "alpha"}, {"id": "gamma"}]
+    items = [{"text": "alpha"}, {"text": "gamma"}]
     kept = filter_injected(items, bf2)
-    assert [x["id"] for x in kept] == ["gamma"]
+    assert [x["text"] for x in kept] == ["gamma"]
     print(json.dumps({"ok": True, "m": bf.m, "k": bf.k, "backend": "mmh3" if mmh3 else "hashlib"}))
     return 0
 

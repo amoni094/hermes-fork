@@ -270,12 +270,20 @@ def live_facts(rows_by_id, uses):
         else:
             keys.append(str(it)[:80])
     cand = set(keys)
+    # competitor_of is TEXT memory_id (0 non-null rows at audit time).
+    # Resolve memory_id -> fact_text[:80] so killer membership matches candidates.
+    by_id = {}
+    for text_key, m in meta.items():
+        mid = m.get("memory_id")
+        if mid:
+            by_id[str(mid)] = text_key
     killers = {}
     for k in keys:
         m = meta.get(k) or {}
         killer = m.get("competitor_of")
         if killer:
-            killers[k] = str(killer).strip()[:80]
+            killer_s = str(killer).strip()
+            killers[k] = by_id.get(killer_s) or killer_s[:80]
     keep = []
     for it, k in zip(items, keys):
         killer = killers.get(k)
@@ -305,6 +313,7 @@ def _item_score(item) -> float:
 
 
 def inject_srpt(fused, min_score, token_budget=2000):
+    """Returns only items fitting within token_budget, shortest first."""
     try:
         min_score = float(min_score or 0.0)
     except (TypeError, ValueError):
@@ -314,18 +323,16 @@ def inject_srpt(fused, min_score, token_budget=2000):
     except (TypeError, ValueError):
         token_budget = 2000
     eligible = [it for it in fused if _item_score(it) >= min_score]
-    rest = [it for it in fused if _item_score(it) < min_score]
     eligible.sort(key=_item_tokens)
     out = []
     used = 0
     for it in eligible:
         t = _item_tokens(it)
         if out and used + t > token_budget:
-            rest.append(it)
             continue
         out.append(it)
         used += t
-    return out + rest
+    return out
 
 
 def apply_fb_attained(fused, strength_by_key, gamma=0.15, quality_by_key=None):
@@ -987,10 +994,6 @@ def fuse_results(
     except Exception:
         pass  # shadow: never block recall on trust posterior update
 
-    try:
-        fused = live_facts(fused, uses=set())
-    except Exception:
-        pass
     return sorted(fused, key=lambda x: x.get("enriched_weight", x.get("rrf_score", 0)), reverse=True)[:top]
 
 
@@ -1109,13 +1112,43 @@ def recall(
     # Normalize to set to avoid string-membership footgun (e.g. sources="hindsight")
     source_set = set(sources) if not isinstance(sources, str) else {sources}
     # Randomized AND of cheap backend probes (Motwani Ch 1).
+    def _hindsight_health() -> bool:
+        for dbp in (
+            Path.home() / ".hermes" / "hindsight.db",
+            _hermes_root() / "hindsight.db",
+            Path.home() / ".hermes" / "profiles" / "fork" / "hindsight.db",
+        ):
+            try:
+                if dbp.exists() and os.access(dbp, os.R_OK):
+                    dbp.stat()
+                    return True
+            except OSError:
+                continue
+        return False
+
+    def _graphiti_health() -> bool:
+        import socket
+        from urllib.parse import urlparse
+        u = urlparse(os.environ.get("GRAPHITI_BASE", "http://127.0.0.1:8765/mcp"))
+        host = u.hostname or "127.0.0.1"
+        port = int(u.port or 8765)
+        try:
+            with socket.create_connection((host, port), timeout=0.1):
+                return True
+        except OSError:
+            return False
+
     try:
         _rand = _fork_script_mod("rand-eval-predicates.py")
         _probes = []
         if "hindsight" in source_set:
-            _probes.append(lambda: True)
+            _probes.append(_hindsight_health)
+            if not _hindsight_health():
+                source_set.discard("hindsight")
         if "graphiti" in source_set:
-            _probes.append(lambda: True)
+            _probes.append(_graphiti_health)
+            if not _graphiti_health():
+                source_set.discard("graphiti")
         if _probes:
             _rand.rand_and(_probes)
     except Exception:
@@ -1332,6 +1365,12 @@ def recall(
             fused = _si_mod.filter_redundant(fused, query)
     except Exception:
         pass  # side-info filter is best-effort; never block recall
+
+    # Order: fuse + fallback appends, then live_facts, then FB, Bloom, SRPT.
+    try:
+        fused = live_facts(fused, uses=set())
+    except Exception:
+        pass
 
     # FB/LAS demote, Bloom injected-facts, then SRPT size-aware injection.
     try:

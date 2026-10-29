@@ -52,32 +52,47 @@ def emit_constraints(tree: ast.AST) -> dict:
         visit_AsyncFunctionDef = visit_FunctionDef
 
         def visit_Lambda(self, node):
-            lid = f"λ{node.lineno}_{node.col_offset}"
+            lid = f"_lambda_{node.lineno}"
             lambdas[lid] = node
+            self.fn_stack.append(lid)
             self.generic_visit(node)
+            self.fn_stack.pop()
 
         def visit_Assign(self, node):
             src = _name_of(node.value)
+            dest_names = []
             for t in node.targets:
                 dst = _name_of(t)
                 if src and dst:
                     assigns.append((src, dst))
                     edges.append((f"val:{src}", f"val:{dst}"))
+                if dst:
+                    dest_names.append(dst)
             if isinstance(node.value, ast.Lambda):
-                lid = f"λ{node.value.lineno}_{node.value.col_offset}"
-                for t in node.targets:
-                    dst = _name_of(t)
-                    if dst:
-                        edges.append((f"lam:{lid}", f"val:{dst}"))
+                lid = f"_lambda_{node.value.lineno}"
+                for dst in dest_names:
+                    edges.append((f"lam:{lid}", f"val:{dst}"))
+                    lambdas[dst] = node.value
             if isinstance(node.value, ast.Name) and node.value.id in fns:
-                for t in node.targets:
-                    dst = _name_of(t)
-                    if dst:
-                        edges.append((f"fn:{node.value.id}", f"val:{dst}"))
+                for dst in dest_names:
+                    edges.append((f"fn:{node.value.id}", f"val:{dst}"))
+            # Bound name sits under the lambda so recursive `f = lambda: f()`
+            # records caller `f` as well as `_lambda_{lineno}`.
+            for dst in dest_names:
+                if isinstance(node.value, ast.Lambda):
+                    self.fn_stack.append(dst)
             self.generic_visit(node)
+            if isinstance(node.value, ast.Lambda):
+                for _dst in dest_names:
+                    if self.fn_stack:
+                        self.fn_stack.pop()
 
         def visit_Call(self, node):
             caller = self.fn_stack[-1] if self.fn_stack else "<module>"
+            for name in reversed(self.fn_stack):
+                if not str(name).startswith("_lambda_"):
+                    caller = name
+                    break
             calls.append((caller, node))
             fname = _name_of(node.func)
             if fname in ("runpy.run_path", "runpy.run_module"):
@@ -125,6 +140,10 @@ def emit_constraints(tree: ast.AST) -> dict:
     for src, dst in assigns:
         vars_.add(f"val:{src}")
         vars_.add(f"val:{dst}")
+    for caller, call in calls:
+        fname = _name_of(call.func)
+        if fname:
+            vars_.add(f"call:{caller}->{fname}")
     if runpy_sites:
         vars_.add("dyn:runpy")
         for c in runpy_sites:

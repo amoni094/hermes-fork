@@ -209,18 +209,14 @@ def build_cfg(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> dict:
 def mfp_taint(cfg: dict, sigma_entry: set | None = None) -> dict:
     """May-taint MFP with pc tracking. Lattice: Untrusted >= Trusted, Sec >= Pub."""
     sigma_entry = set(sigma_entry or ())
-    A = {n: set() for n in cfg.get("nodes") or []}
-    if cfg.get("nodes"):
-        A[cfg["nodes"][0]] = set(sigma_entry)
-    pc = {n: "Pub" for n in cfg.get("nodes") or []}
-    W = list(cfg.get("nodes") or [])
+    nodes = list(cfg.get("nodes") or [])
+    succ = cfg.get("succ") or {}
     stmts = cfg.get("stmts") or []
-    guard = 0
-    while W and guard < max(8, len(W) * 8):
-        guard += 1
-        n = W.pop(0)
+    pc = {n: "Pub" for n in nodes}
+
+    def _xfer_body(n, val):
+        out = set(val or ())
         stmt = stmts[n] if n < len(stmts) else None
-        out = set(A.get(n) or ())
         dump = ast.dump(stmt) if stmt is not None else ""
         if any(s in dump for s in ("sys.argv", "input(", "json.loads", "os.environ")):
             out.add("Untrusted")
@@ -228,13 +224,46 @@ def mfp_taint(cfg: dict, sigma_entry: set | None = None) -> dict:
             for t in stmt.targets:
                 if isinstance(t, ast.Name) and "Untrusted" in out:
                     out.add(t.id)
-        for m in cfg.get("succ", {}).get(n, []):
-            j = (A.get(m) or set()) | out
-            if j != (A.get(m) or set()):
-                A[m] = j
-                W.append(m)
-            if "Untrusted" in out:
+        if "Untrusted" in out:
+            for m in succ.get(n, []):
                 pc[m] = "Sec"
+        return out
+
+    def _join(a, b):
+        return set(a or ()) | set(b or ())
+
+    A = None
+    try:
+        _scripts = Path.home() / ".hermes" / "profiles" / "fork" / "scripts"
+        if str(_scripts) not in sys.path:
+            sys.path.insert(0, str(_scripts))
+        from nielson_solver import worklist
+        A = worklist(
+            nodes,
+            succ,
+            _xfer_body,
+            set(sigma_entry),
+            [nodes[0]] if nodes else [],
+            join=_join,
+            bot=set(),
+        )
+    except Exception:
+        A = None
+    if A is None:
+        A = {n: set() for n in nodes}
+        if nodes:
+            A[nodes[0]] = set(sigma_entry)
+        W = list(nodes)
+        guard = 0
+        while W and guard < max(8, len(W) * 8):
+            guard += 1
+            n = W.pop(0)
+            out = _xfer_body(n, A.get(n) or set())
+            for m in succ.get(n, []):
+                j = (A.get(m) or set()) | out
+                if j != (A.get(m) or set()):
+                    A[m] = j
+                    W.append(m)
     return {"taint": {str(k): sorted(v) for k, v in A.items()}, "pc": pc}
 
 

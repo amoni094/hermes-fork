@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""MARK paging for context compaction (Motwani Ch 13).
+"""Standalone MARK paging implementation. Imported by rd-compaction-advisor.py when available. May also be called directly.
 
+MARK paging for context compaction (Motwani Ch 13).
 Intersect MARK-drop with typicality drop in rd-compaction-advisor.
 """
 from __future__ import annotations

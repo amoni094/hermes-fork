@@ -23,7 +23,10 @@ _hermes_root = (
     else _hermes_base
 )
 JOBS_PATH = _hermes_root / "cron" / "jobs.json"
-EXEC_DB = Path.home() / ".hermes" / "cron" / "executions.db"
+_home = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
+_profile = os.environ.get("HERMES_PROFILE", "default")
+_base = _home if "profiles" in str(_home) else _home / "profiles" / _profile
+EXEC_DB = _base / "cron" / "executions.db"
 REPORT_PATH = _hermes_root / "omni" / "cron-pk-delay-report.json"
 DEFAULT_TIMEOUT = 120.0
 

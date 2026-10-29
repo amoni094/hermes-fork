@@ -38,7 +38,36 @@ LIFECYCLE_DB = (
 )
 INDEX_PATH = _hermes_root / "memory-facts" / "assoc-index.json"
 SKILLS_DIR = _hermes_root / "skills"
+CMS_PATH = _hermes_root / "cache" / "cms-ami.pkl"
 TOKEN_RE = re.compile(r"[a-z0-9]+")
+_CMS = None
+
+
+def _cms_singleton(mod):
+    """Load a process-wide CountMinSketch, persisted across retrieve() calls."""
+    global _CMS
+    if _CMS is not None:
+        return _CMS
+    try:
+        import pickle
+        if CMS_PATH.exists():
+            _CMS = pickle.loads(CMS_PATH.read_bytes())
+            return _CMS
+    except Exception:
+        _CMS = None
+    _CMS = mod.CountMinSketch(width=2000, depth=5)
+    return _CMS
+
+
+def _cms_save(cm) -> None:
+    try:
+        import pickle
+        CMS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = CMS_PATH.with_suffix(".tmp")
+        tmp.write_bytes(pickle.dumps(cm))
+        os.replace(str(tmp), str(CMS_PATH))
+    except Exception:
+        pass
 
 
 def _tokenize(text: str) -> list[str]:
@@ -273,13 +302,14 @@ class AssociativeMemoryIndex:
             _spec = _ilu.spec_from_file_location("count_min_sketch", str(_cm_path))
             if _spec and _spec.loader:
                 _mod = _ilu.module_from_spec(_spec)
+                import sys as _sys_cm
+                _sys_cm.modules["count_min_sketch"] = _mod
                 _spec.loader.exec_module(_mod)
-                cm = getattr(self, "_cm", None)
-                if cm is None:
-                    cm = _mod.CountMinSketch(width=2000, depth=5)
-                    self._cm = cm
+                cm = _cms_singleton(_mod)
+                self._cm = cm
                 for bid in scores:
                     cm.add(bid, 1)
+                _cms_save(cm)
         except Exception:
             cm = None
         ranked = []

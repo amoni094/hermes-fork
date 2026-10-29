@@ -2465,6 +2465,120 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       }
+    },
+    {
+      "id": "c4a91f0e7b13",
+      "name": "cron-pk-delay-report",
+      "enabled": true,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 4 * * 0",
+        "tz": "Australia/Sydney"
+      },
+      "prompt": "",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cron-pk-delay.py",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "skill": null,
+      "max_gated_retries": 3,
+      "timeout": 120,
+      "repeat": {
+        "times": null,
+        "until": null
+      },
+      "catch_up": {
+        "max_delay_seconds": 300
+      },
+      "notify": false,
+      "notify_on_success": false,
+      "created_at": "2026-10-29T05:40:33.051889+00:00",
+      "updated_at": "2026-10-29T05:40:33.051907+00:00",
+      "last_run_at": null,
+      "last_status": null,
+      "last_error": null,
+      "last_duration_ms": null,
+      "last_delivery_error": null,
+      "next_run_at": "2026-11-01T04:00:00+11:00",
+      "last_notified_at": null,
+      "description": "Weekly PK delay + Little's Law farm report (Harchol-Balter)."
+    },
+    {
+      "id": "d7e28b1a9c04",
+      "name": "cron-chernoff-admission",
+      "enabled": true,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 3 * * *",
+        "tz": "Australia/Sydney"
+      },
+      "prompt": "",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cron-chernoff-admission.py",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "skill": null,
+      "max_gated_retries": 3,
+      "timeout": 60,
+      "repeat": {
+        "times": null,
+        "until": null
+      },
+      "catch_up": {
+        "max_delay_seconds": 300
+      },
+      "notify": false,
+      "notify_on_success": false,
+      "created_at": "2026-10-29T05:40:33.051932+00:00",
+      "updated_at": "2026-10-29T05:40:33.051934+00:00",
+      "last_run_at": null,
+      "last_status": null,
+      "last_error": null,
+      "last_duration_ms": null,
+      "last_delivery_error": null,
+      "next_run_at": "2026-10-30T03:00:00+11:00",
+      "last_notified_at": null,
+      "description": "Daily Chernoff overload companion to Liu-Layland admission."
+    },
+    {
+      "id": "e0f35c6d2a18",
+      "name": "cron-two-choice-offset",
+      "enabled": true,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 4 1 * *",
+        "tz": "Australia/Sydney"
+      },
+      "prompt": "",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cron-two-choice-offset.py",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "skill": null,
+      "max_gated_retries": 3,
+      "timeout": 120,
+      "repeat": {
+        "times": null,
+        "until": null
+      },
+      "catch_up": {
+        "max_delay_seconds": 300
+      },
+      "notify": false,
+      "notify_on_success": false,
+      "created_at": "2026-10-29T05:40:33.051953+00:00",
+      "updated_at": "2026-10-29T05:40:33.051956+00:00",
+      "last_run_at": null,
+      "last_status": null,
+      "last_error": null,
+      "last_duration_ms": null,
+      "last_delivery_error": null,
+      "next_run_at": "2026-11-01T04:00:00+11:00",
+      "last_notified_at": null,
+      "description": "Monthly two-choice cron offset rebalancer (--apply).",
+      "args": [
+        "--apply"
+      ]
     }
   ],
   "updated_at": "2026-10-09T02:22:10.864387+00:00"
