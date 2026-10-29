@@ -3,12 +3,76 @@
 import concurrent.futures
 import contextlib
 import logging
+import math
 import time
 
 from cron import store_health
 from cron.constants import is_recurring
 
 logger = logging.getLogger("cron.scheduler")
+
+
+SITA_CUT_S = 45.0
+_sita_pools = {}
+_sita_pool_k = {}
+
+
+def _predicted_s(job: dict) -> float:
+    if not isinstance(job, dict):
+        return 120.0
+    hist = job.get("_ema_duration")
+    if hist is not None:
+        try:
+            v = float(hist or 0.0)
+            if v > 0:
+                return v
+        except (TypeError, ValueError):
+            pass
+    try:
+        v = float(job.get("timeout") or job.get("timeout_seconds") or 120)
+    except (TypeError, ValueError):
+        v = 120.0
+    return v if v > 0 else 120.0
+
+
+def _edf_then_srpt(due_jobs):
+    """EDF bands, SRPT within band. band = floor(log2(1+10*urgency))."""
+    def _urgency(job: dict) -> float:
+        try:
+            from cron.jobs import _schedule_cadence_seconds
+            lateness = max(0.0, float(job.get("last_dispatch", {}).get("lateness_seconds", 0.0) or 0.0))
+            cadence = _schedule_cadence_seconds(job.get("schedule", {}))
+            return lateness / cadence if cadence and cadence > 0 else 0.0
+        except Exception:
+            return 0.0
+
+    def _key(job):
+        u = _urgency(job)
+        band = math.floor(math.log2(1.0 + 10.0 * max(0.0, u)))
+        return (-band, _predicted_s(job))
+
+    return sorted(due_jobs, key=_key)
+
+
+def _get_sita_pool(kind: str, k: int):
+    try:
+        k = int(k or 1)
+    except (TypeError, ValueError):
+        k = 1
+    k = max(1, k)
+    pool = _sita_pools.get(kind)
+    if pool is None or _sita_pool_k.get(kind) != k:
+        if pool is not None:
+            with contextlib.suppress(Exception):
+                pool.shutdown(wait=False, cancel_futures=False)
+        pool = concurrent.futures.ThreadPoolExecutor(
+            max_workers=k, thread_name_prefix=f"cron-sita-{kind}"
+        )
+        _sita_pools[kind] = pool
+        _sita_pool_k[kind] = k
+    return pool
+
+
 
 # Log the yield at most once per episode (reset when the skew changes) to avoid per-interval spam.
 _YIELD_LOG_INTERVAL_SECONDS = 3600.0
@@ -173,22 +237,10 @@ def _tick_admitted(
             _sched._sweep_mcp_orphans()
             return 0
 
-        # EDF-priority catch-up ordering: sort by urgency = lateness / cadence (descending).
-        # Weekly jobs overdue by 22h rank far above hourly jobs overdue by 5 min,
-        # so the thread-pool fills with the most-critical jobs first during catch-up bursts.
-        # Jobs with unknown cadence (urgency=0) sort last — they fire next tick anyway.
-        def _edf_urgency(job: dict) -> float:
-            try:
-                from cron.jobs import _schedule_cadence_seconds
-                lateness = max(0.0, float(job.get("last_dispatch", {}).get("lateness_seconds", 0.0) or 0.0))
-                cadence = _schedule_cadence_seconds(job.get("schedule", {}))
-                return lateness / cadence if cadence and cadence > 0 else 0.0
-            except Exception:
-                return 0.0
+        # EDF bands then SRPT within band (Harchol-Balter size-aware).
+        due_jobs = _edf_then_srpt(due_jobs)
 
-        due_jobs = sorted(due_jobs, key=_edf_urgency, reverse=True)
-
-        _max_workers = _sched._resolve_max_parallel_workers()
+        _max_workers = _sched._resolve_max_parallel_workers(due_jobs)
         if verbose:
             _sched.logger.info(
                 "Running %d job(s) in parallel (max_workers=%s)",
@@ -198,11 +250,30 @@ def _tick_admitted(
         def _process_job(job: dict) -> bool:
             return _sched._process_due_job(job, adapters, loop, verbose)
 
-        # Persistent pool, non-blocking dispatch. Already-running jobs are skipped; mark_job_run
-        # re-arms next_run_at on completion, so no catch-up queue is needed.
+        # Harchol-Balter Ch 24: do not rebalance pools to equal rho
+        # SITA: never steal a short-pool slot for a long job (defeats isolation).
+        short_jobs = [j for j in due_jobs if _predicted_s(j) < SITA_CUT_S]
+        long_jobs = [j for j in due_jobs if _predicted_s(j) >= SITA_CUT_S]
+        R_s = sum(_predicted_s(j) for j in short_jobs) / 60.0
+        R_l = sum(_predicted_s(j) for j in long_jobs) / 60.0
+        k_s = _sched._square_root_k(R_s, beta=1.0, k_min=1, k_max=12)
+        k_l = _sched._square_root_k(R_l, beta=1.0, k_min=1, k_max=8)
+        if _max_workers:
+            # cap total, but do not rebalance long->short when short is idle
+            total = k_s + k_l
+            if total > _max_workers:
+                scale = _max_workers / float(total)
+                k_s = max(1 if short_jobs else 0, math.floor(k_s * scale) or (1 if short_jobs else 0))
+                k_l = max(1 if long_jobs else 0, _max_workers - k_s)
+        short_pool = _get_sita_pool("short", max(1, k_s)) if short_jobs else None
+        long_pool = _get_sita_pool("long", max(1, k_l)) if long_jobs else None
+        logger.info(
+            "SITA dispatch short=%d k_s=%s long=%d k_l=%s cut=%.1f",
+            len(short_jobs), k_s, len(long_jobs), k_l, SITA_CUT_S,
+        )
+
         _results: list = []
         _all_futures: list = []
-        pool = _sched._get_parallel_pool(_max_workers)
         for job in due_jobs:
             # Skip if a prior execution still holds a live ephemeral lock
             # (Hunt 2010: presence of the znode == owner still alive).
@@ -220,6 +291,10 @@ def _tick_admitted(
                     continue
             except Exception:
                 logger.debug("execution lock check failed", exc_info=True)
+            size = _predicted_s(job)
+            pool = short_pool if size < SITA_CUT_S else long_pool
+            if pool is None:
+                pool = short_pool or long_pool or _sched._get_parallel_pool(_max_workers)
             fut = _sched._submit_with_guard(job, pool, _process_job)
             if fut is None:
                 continue

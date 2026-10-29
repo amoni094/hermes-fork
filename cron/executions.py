@@ -16,7 +16,7 @@ import threading
 import time
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
@@ -80,9 +80,9 @@ def _lock_path(execution_id: str) -> Path:
 
 
 def _parse_iso(stamp: str) -> datetime:
-    dt = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    dt = datetime.fromisoformat(str(stamp))
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -151,7 +151,7 @@ def reap_stale_locks() -> list[str]:
     lock_dir = _lock_dir()
     if not lock_dir.is_dir():
         return reaped
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for path in lock_dir.glob("*.lock"):
         execution_id = path.stem
         expired = False
@@ -204,6 +204,18 @@ def _connect() -> sqlite3.Connection:
     return open_db(path, db_label="cron/executions.db", synchronous_full=True, initialize=_initialize_schema)
 
 
+
+def _compute_duration_s(started_at, finished_at) -> Optional[float]:
+    """Wall-clock service time from ISO timestamps; None if either bound is missing."""
+    if not started_at or not finished_at:
+        return None
+    try:
+        delta = (_parse_iso(str(finished_at)) - _parse_iso(str(started_at))).total_seconds()
+        return max(0.0, float(delta))
+    except (TypeError, ValueError, OSError):
+        return None
+
+
 def _initialize_schema(conn: sqlite3.Connection) -> None:
     from hermes_cli.sqlite_util import add_column_if_missing
 
@@ -247,6 +259,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     add_column_if_missing(
         conn, "executions", "generation", "generation INTEGER NOT NULL DEFAULT 0"
     )
+    add_column_if_missing(conn, "executions", "duration_s", "REAL")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_executions_occurrence "
         "ON executions(job_id, scheduled_instant) WHERE status='completed'"
@@ -542,14 +555,21 @@ def finish_execution(
                 f"stored={stored_gen} expected={expected_generation}"
             )
         cas_gen = stored_gen if expected_generation is None else int(expected_generation)
+        started_row = conn.execute(
+            "SELECT started_at FROM executions WHERE id=?",
+            (execution_id,),
+        ).fetchone()
+        started_at = started_row["started_at"] if started_row else None
+        duration_s = _compute_duration_s(started_at, now)
         cur = conn.execute(
             """UPDATE executions
                SET status=?, finished_at=?, error=?, handoff_pending=0,
                    handoff_started_at=NULL, delivery_outcome=?,
+                   duration_s=?,
                    generation = generation + 1
                WHERE id=? AND status IN ('claimed','running')
                  AND process_id=? AND pid=? AND generation=?""",
-            (status, now, detail, delivery_outcome, execution_id, *owner, cas_gen),
+            (status, now, detail, delivery_outcome, duration_s, execution_id, *owner, cas_gen),
         )
         if cur.rowcount != 1:
             return None
@@ -573,12 +593,18 @@ def recover_receipted_execution(execution_id, job_id, *, success, error=None, de
         if row is None or _row_owner_live(row):
             return None
         cas_gen = _require_generation(conn, execution_id, None)
+        started_row = conn.execute(
+            "SELECT started_at FROM executions WHERE id=?",
+            (execution_id,),
+        ).fetchone()
+        started_at = started_row["started_at"] if started_row else None
+        duration_s = _compute_duration_s(started_at, now)
         conn.execute(
             """UPDATE executions SET status=?, finished_at=?, error=?, handoff_pending=0,
-               handoff_started_at=NULL, delivery_outcome=?, generation = generation + 1
+               handoff_started_at=NULL, delivery_outcome=?, duration_s=?, generation = generation + 1
                WHERE id=? AND generation=?""",
             ('completed' if success else 'failed', now, None if success else (str(error) if error else 'unknown failure'),
-             delivery_outcome, execution_id, cas_gen))
+             delivery_outcome, duration_s, execution_id, cas_gen))
         _prune_unlocked(conn)
         record = _fetch(conn, execution_id)
     _emit_execution_state(record, delivery_outcome=delivery_outcome)
@@ -662,7 +688,7 @@ def recover_interrupted_executions() -> int:
         rows = conn.execute(
             """SELECT id, status, process_id, pid, process_started_at,
                       handoff_pending, handoff_started_at, claimed_at, progress_at,
-                      generation
+                      generation, started_at
                FROM executions
                WHERE status IN ('claimed','running')"""
         ).fetchall()
@@ -704,16 +730,18 @@ def recover_interrupted_executions() -> int:
                 )
             except StaleGenerationError:
                 continue
+            duration_s = _compute_duration_s(row["started_at"], now)
             cur = conn.execute(
                 """UPDATE executions
                    SET status='unknown', finished_at=?, error=?,
                        handoff_pending=0, handoff_started_at=NULL,
+                       duration_s=?,
                        generation = generation + 1
                    WHERE id=? AND status=? AND process_id=? AND pid=?
                      AND handoff_pending=?
                      AND handoff_started_at IS ?
                      AND generation=?""",
-                (now, reason, row["id"], row["status"], row["process_id"], row["pid"],
+                (now, reason, duration_s, row["id"], row["status"], row["process_id"], row["pid"],
                  row["handoff_pending"], row["handoff_started_at"], cas_gen),
             )
             changed += cur.rowcount

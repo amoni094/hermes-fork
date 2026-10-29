@@ -50,7 +50,7 @@ import sqlite3
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Optional
 
@@ -193,6 +193,195 @@ def _load_inhibition_weights() -> dict:
     except Exception:
         return {}
     return out
+
+
+# --- wave4 recall helpers (injected into unified-recall.py) ---
+_backend_ewma_s: dict = {}
+_backend_inflight: dict = {}
+
+
+def _fork_script_mod(name: str):
+    import importlib.util as _ilu
+    path = _profile_script(name)
+    if not path.exists():
+        raise FileNotFoundError(str(path))
+    key = name.replace(".py", "").replace("-", "_")
+    spec = _ilu.spec_from_file_location(key, str(path))
+    if spec is None or spec.loader is None:
+        raise ImportError(name)
+    mod = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _load_lifecycle_meta() -> dict:
+    """key=fact_text[:80] -> {strength, quality_score, competitor_of, memory_id}."""
+    db = _hermes_root() / "memory-facts" / "lifecycle.db"
+    if not db.exists():
+        db = Path.home() / ".hermes" / "profiles" / "fork" / "memory-facts" / "lifecycle.db"
+    if not db.exists():
+        return {}
+    out = {}
+    try:
+        with sqlite3.connect(str(db), timeout=5.0) as conn:
+            wanted = _lifecycle_select_list(
+                conn, ["fact_text", "strength", "quality_score", "competitor_of", "memory_id"]
+            )
+            if "fact_text" not in wanted:
+                return {}
+            col_sql = ", ".join(wanted)
+            rows = conn.execute("SELECT " + col_sql + " FROM fact_lifecycle").fetchall()
+            # map by selected order
+            idx = {c: i for i, c in enumerate(wanted)}
+            for row in rows:
+                text = row[idx["fact_text"]] if "fact_text" in idx else ""
+                key = (text or "").strip()[:80]
+                if not key:
+                    continue
+                def _fv(col, default=0.0):
+                    if col not in idx:
+                        return default
+                    try:
+                        return float(row[idx[col]] or 0.0)
+                    except (TypeError, ValueError):
+                        return default
+                out[key] = {
+                    "strength": _fv("strength", 1.0),
+                    "quality_score": _fv("quality_score", 0.0),
+                    "competitor_of": row[idx["competitor_of"]] if "competitor_of" in idx else None,
+                    "memory_id": row[idx["memory_id"]] if "memory_id" in idx else None,
+                }
+    except Exception:
+        return {}
+    return out
+
+
+def live_facts(rows_by_id, uses):
+    """Backward-may on competitor_of DAG: drop a fact if its killer is also a candidate
+    and the fact is not in the use-set."""
+    uses = set(uses or [])
+    items = list(rows_by_id.values()) if isinstance(rows_by_id, dict) else list(rows_by_id or [])
+    meta = _load_lifecycle_meta()
+    keys = []
+    for it in items:
+        if isinstance(it, dict):
+            k = (it.get("_full_text") or it.get("text") or it.get("id") or "")
+            keys.append(str(k).strip()[:80])
+        else:
+            keys.append(str(it)[:80])
+    cand = set(keys)
+    killers = {}
+    for k in keys:
+        m = meta.get(k) or {}
+        killer = m.get("competitor_of")
+        if killer:
+            killers[k] = str(killer).strip()[:80]
+    keep = []
+    for it, k in zip(items, keys):
+        killer = killers.get(k)
+        if killer and killer in cand and k not in uses:
+            continue
+        keep.append(it)
+    return keep
+
+
+def _item_tokens(item) -> int:
+    text = ""
+    if isinstance(item, dict):
+        text = item.get("_full_text") or item.get("text") or item.get("content") or ""
+    else:
+        text = str(item)
+    n = len(str(text).split())
+    return max(1, n)
+
+
+def _item_score(item) -> float:
+    if not isinstance(item, dict):
+        return 0.0
+    try:
+        return float(item.get("enriched_weight") or item.get("rrf_score") or item.get("score") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def inject_srpt(fused, min_score, token_budget=2000):
+    try:
+        min_score = float(min_score or 0.0)
+    except (TypeError, ValueError):
+        min_score = 0.0
+    try:
+        token_budget = int(token_budget or 2000)
+    except (TypeError, ValueError):
+        token_budget = 2000
+    eligible = [it for it in fused if _item_score(it) >= min_score]
+    rest = [it for it in fused if _item_score(it) < min_score]
+    eligible.sort(key=_item_tokens)
+    out = []
+    used = 0
+    for it in eligible:
+        t = _item_tokens(it)
+        if out and used + t > token_budget:
+            rest.append(it)
+            continue
+        out.append(it)
+        used += t
+    return out + rest
+
+
+def apply_fb_attained(fused, strength_by_key, gamma=0.15, quality_by_key=None):
+    """LAS/FB demote by attained service (strength). Skip quality_score > 0.8."""
+    try:
+        gamma = float(gamma or 0.15)
+    except (TypeError, ValueError):
+        gamma = 0.15
+    quality_by_key = quality_by_key or {}
+    strength_by_key = strength_by_key or {}
+    out = []
+    for it in fused:
+        if not isinstance(it, dict):
+            out.append(it)
+            continue
+        key = (it.get("_full_text") or it.get("text") or it.get("id") or "")
+        key = str(key).strip()[:80]
+        try:
+            q = float(quality_by_key.get(key, it.get("quality_score") or 0.0) or 0.0)
+        except (TypeError, ValueError):
+            q = 0.0
+        if q > 0.8:
+            out.append(it)
+            continue
+        try:
+            s = float(strength_by_key.get(key, 1.0) or 1.0)
+        except (TypeError, ValueError):
+            s = 1.0
+        it = dict(it)
+        base = _item_score(it)
+        it["enriched_weight"] = round(base * math.exp(-gamma * max(0.0, s)), 4)
+        out.append(it)
+    return out
+
+
+def _lwl(name: str) -> float:
+    try:
+        inflight = float(_backend_inflight.get(name, 0) or 0)
+    except (TypeError, ValueError):
+        inflight = 0.0
+    try:
+        ewma = float(_backend_ewma_s.get(name, 0.0) or 0.0)
+    except (TypeError, ValueError):
+        ewma = 0.0
+    return ewma * (1.0 + inflight)
+
+
+def _lwl_skip(name: str, others: list) -> bool:
+    if _backend_inflight.get(name, 0) <= 0:
+        return False
+    mine = _lwl(name)
+    for o in others:
+        other = _lwl(o)
+        if other > 0 and mine > 3.0 * other:
+            return True
+    return False
 
 
 GRAPHITI_BASE = os.environ.get("GRAPHITI_BASE", "http://127.0.0.1:8765/mcp")
@@ -733,7 +922,7 @@ def fuse_results(
                 _age_days = (_now - float(_created)) / 86400.0
             elif _created:
                 from datetime import datetime, timezone as _tz
-                _ts = datetime.fromisoformat(_created.replace("Z", "+00:00")).timestamp()
+                _ts = datetime.fromisoformat(_created).timestamp()
                 _age_days = (_now - _ts) / 86400.0
             else:
                 _age_days = 30.0
@@ -798,6 +987,10 @@ def fuse_results(
     except Exception:
         pass  # shadow: never block recall on trust posterior update
 
+    try:
+        fused = live_facts(fused, uses=set())
+    except Exception:
+        pass
     return sorted(fused, key=lambda x: x.get("enriched_weight", x.get("rrf_score", 0)), reverse=True)[:top]
 
 
@@ -915,8 +1108,40 @@ def recall(
     """
     # Normalize to set to avoid string-membership footgun (e.g. sources="hindsight")
     source_set = set(sources) if not isinstance(sources, str) else {sources}
-    h_results, h_err = hindsight_search(query, limit=top * 2) if "hindsight" in source_set else ([], False)
-    g_results, g_err = graphiti_search(query, limit=top * 2) if "graphiti" in source_set else ([], False)
+    # Randomized AND of cheap backend probes (Motwani Ch 1).
+    try:
+        _rand = _fork_script_mod("rand-eval-predicates.py")
+        _probes = []
+        if "hindsight" in source_set:
+            _probes.append(lambda: True)
+        if "graphiti" in source_set:
+            _probes.append(lambda: True)
+        if _probes:
+            _rand.rand_and(_probes)
+    except Exception:
+        pass
+    import time as _t_lwl
+
+    def _run_backend(name, fn):
+        others = [x for x in ("hindsight", "graphiti") if x != name and x in source_set]
+        if _lwl_skip(name, others):
+            return [], False
+        _backend_inflight[name] = int(_backend_inflight.get(name, 0) or 0) + 1
+        t0 = _t_lwl.monotonic()
+        try:
+            return fn()
+        finally:
+            dt = _t_lwl.monotonic() - t0
+            _backend_inflight[name] = max(0, int(_backend_inflight.get(name, 1) or 1) - 1)
+            prev = _backend_ewma_s.get(name)
+            try:
+                prevf = float(prev) if prev is not None else None
+            except (TypeError, ValueError):
+                prevf = None
+            _backend_ewma_s[name] = dt if prevf is None else (0.3 * dt + 0.7 * prevf)
+
+    h_results, h_err = _run_backend("hindsight", lambda: hindsight_search(query, limit=top * 2)) if "hindsight" in source_set else ([], False)
+    g_results, g_err = _run_backend("graphiti", lambda: graphiti_search(query, limit=top * 2)) if "graphiti" in source_set else ([], False)
     pending = search_pending_activefacts(query)
 
     if not h_results and not g_results and not pending:
@@ -1108,6 +1333,26 @@ def recall(
     except Exception:
         pass  # side-info filter is best-effort; never block recall
 
+    # FB/LAS demote, Bloom injected-facts, then SRPT size-aware injection.
+    try:
+        meta = _load_lifecycle_meta()
+        strength = {k: v.get("strength", 1.0) for k, v in meta.items()}
+        quality = {k: v.get("quality_score", 0.0) for k, v in meta.items()}
+        fused = apply_fb_attained(fused, strength, gamma=0.15, quality_by_key=quality)
+    except Exception:
+        pass
+    try:
+        _bf = _fork_script_mod("bloom-fact-filter.py")
+        bloom = _bf.BloomFilter.load()
+        fused = _bf.filter_injected(fused, bloom)
+        bloom.save()
+    except Exception:
+        pass
+    try:
+        fused = inject_srpt(fused, min_score, token_budget=2000)
+    except Exception:
+        pass
+
     return fused
 
 
@@ -1120,7 +1365,7 @@ def record_query_access(fused: list[dict]) -> None:
     db = _hermes_root() / "memory-facts" / "lifecycle.db"
     if not db.exists() or not fused:
         return
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     try:
         with sqlite3.connect(str(db), timeout=5.0) as conn:
             # SQLite WAL paper (Howard & Bhattacharjee): WAL allows concurrent readers
@@ -1172,8 +1417,8 @@ def record_query_access(fused: list[dict]) -> None:
                             (key + "%",),
                         ).fetchone()
                     if row and row[0]:
-                        t0 = datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
-                        gap = (datetime.now(timezone.utc) - t0).total_seconds() / 86400.0
+                        t0 = datetime.fromisoformat(str(row[0]))
+                        gap = (datetime.now(UTC) - t0).total_seconds() / 86400.0
                         item["gen_gap_days"] = round(gap, 2)
                         item["vc"] = item.get("vc") or row[1]
                 except Exception:

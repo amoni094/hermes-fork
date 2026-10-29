@@ -19,7 +19,7 @@ import sys
 import tempfile
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
@@ -208,7 +208,7 @@ class AssociativeMemoryIndex:
         docs = facts + skills
         self.index = _tfidf_index(docs)
         payload = {
-            "built_at": datetime.now(timezone.utc).isoformat(),
+            "built_at": datetime.now(UTC).isoformat(),
             "n_docs": len(docs),
             "n_facts": len(facts),
             "n_skills": len(skills),
@@ -266,10 +266,32 @@ class AssociativeMemoryIndex:
             posts = self.index.get(gram) or {}
             for bid, weight in posts.items():
                 scores[bid] += q_weight * float(weight)
-        ranked = [
-            (bid, tfidf_score * self.strength_weight(bid))
-            for bid, tfidf_score in scores.items()
-        ]
+        cm = None
+        try:
+            import importlib.util as _ilu
+            _cm_path = Path(__file__).resolve().parent / "count-min-sketch.py"
+            _spec = _ilu.spec_from_file_location("count_min_sketch", str(_cm_path))
+            if _spec and _spec.loader:
+                _mod = _ilu.module_from_spec(_spec)
+                _spec.loader.exec_module(_mod)
+                cm = getattr(self, "_cm", None)
+                if cm is None:
+                    cm = _mod.CountMinSketch(width=2000, depth=5)
+                    self._cm = cm
+                for bid in scores:
+                    cm.add(bid, 1)
+        except Exception:
+            cm = None
+        ranked = []
+        for bid, tfidf_score in scores.items():
+            w = tfidf_score * self.strength_weight(bid)
+            if cm is not None:
+                q = cm.query(bid)
+                # heavy-hitter gate: boost only if count-min says frequently retrieved
+                if q >= 3:
+                    import math as _math
+                    w = w * _math.log(1.0 + q)
+            ranked.append((bid, w))
         ranked.sort(key=lambda item: item[1], reverse=True)
         return ranked[: max(0, int(top_k))]
 

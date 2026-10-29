@@ -10,6 +10,7 @@ import contextvars
 import errno
 import json
 import logging
+import math
 import os
 import re
 import subprocess
@@ -4188,20 +4189,71 @@ def _sweep_stale_inflight_for_tick(due_jobs: list) -> None:
         logger.warning("Stale in-flight sweep failed: %s", e)
 
 
-def _resolve_max_parallel_workers() -> Optional[int]:
-    """Max workers: env > config.yaml > unbounded (HERMES_CRON_MAX_PARALLEL=1 restores serial)."""
+
+def _predicted_s(job) -> float:
+    """Predicted service time: EMA if present, else job timeout (seconds)."""
+    if not isinstance(job, dict):
+        return 120.0
+    hist = job.get("_ema_duration")
+    if hist is not None:
+        try:
+            v = float(hist or 0.0)
+            if v > 0:
+                return v
+        except (TypeError, ValueError):
+            pass
+    try:
+        v = float(job.get("timeout") or job.get("timeout_seconds") or 120)
+    except (TypeError, ValueError):
+        v = 120.0
+    return v if v > 0 else 120.0
+
+
+def _square_root_k(R, beta=1.0, k_min=2, k_max=16) -> int:
+    """Halfin-Whitt / square-root staffing: k = ceil(R + beta * sqrt(R))."""
+    try:
+        R = float(R or 0.0)
+    except (TypeError, ValueError):
+        R = 0.0
+    try:
+        beta = float(beta or 1.0)
+    except (TypeError, ValueError):
+        beta = 1.0
+    try:
+        k_min = int(k_min or 2)
+    except (TypeError, ValueError):
+        k_min = 2
+    try:
+        k_max = int(k_max or 16)
+    except (TypeError, ValueError):
+        k_max = 16
+    if R <= 0:
+        return max(1, k_min)
+    k = math.ceil(R + beta * math.sqrt(R))
+    return max(k_min, min(k_max, int(k)))
+
+
+def _resolve_max_parallel_workers(due_jobs=None) -> Optional[int]:
+    """Max workers: square-root staffing when due_jobs given; env/config as cap."""
+    cap = None
     try:
         _env_par = cron_env_setting("HERMES_CRON_MAX_PARALLEL").strip()
         if _env_par:
-            return int(_env_par) or None
+            cap = int(_env_par) or None
     except (ValueError, TypeError):
         logger.warning("Invalid HERMES_CRON_MAX_PARALLEL value; defaulting to unbounded")
-    with contextlib.suppress(Exception):
-        _ucfg = load_config() or {}
-        _cfg_par = (_ucfg.get("cron", {}) if isinstance(_ucfg, dict) else {}).get("max_parallel_jobs")
-        if _cfg_par is not None:
-            return int(_cfg_par) or None
-    return None
+    if cap is None:
+        with contextlib.suppress(Exception):
+            _ucfg = load_config() or {}
+            _cfg_par = (_ucfg.get("cron", {}) if isinstance(_ucfg, dict) else {}).get("max_parallel_jobs")
+            if _cfg_par is not None:
+                cap = int(_cfg_par) or None
+    if due_jobs:
+        R = sum(_predicted_s(j) for j in due_jobs) / 60.0
+        k = _square_root_k(R, beta=1.0, k_min=2, k_max=16)
+        logger.info("square-root staffing R=%.3f k=%s cap=%s n_due=%s", R, k, cap, len(due_jobs))
+        return min(k, cap) if cap else k
+    return cap
 
 
 def _sweep_mcp_orphans() -> None:

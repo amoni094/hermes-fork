@@ -15,7 +15,7 @@ import json
 import os
 import sys
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -209,19 +209,19 @@ def script_id(path: Path) -> str:
 
 class ScriptInfo:
     __slots__ = (
+        "callees",
+        "exit_literals",
+        "handled_callees",
+        "has_error_prop",
+        "has_nonliteral_exit",
+        "hermes_unvalidated",
+        "imported_local",
+        "label",
+        "local_py_constants",
         "path",
         "sid",
-        "tree",
         "src",
-        "callees",
-        "handled_callees",
-        "exit_literals",
-        "has_nonliteral_exit",
-        "has_error_prop",
-        "label",
-        "hermes_unvalidated",
-        "local_py_constants",
-        "imported_local",
+        "tree",
     )
 
     def __init__(self, path: Path, src: str, tree: ast.AST):
@@ -460,27 +460,55 @@ def analyse_hermes_home(info: ScriptInfo) -> None:
 # Interprocedural lattice propagation
 # ---------------------------------------------------------------------------
 
-def propagate_labels(infos: dict[str, ScriptInfo]) -> None:
-    """If A calls B via subprocess and B is error_propagator, A inherits
-    unless the call site has explicit error handling."""
-    changed = True
-    guard = 0
-    while changed and guard < 64:
-        changed = False
-        guard += 1
-        for info in infos.values():
-            if info.label == "error_propagator":
+def propagate_summaries(infos: dict[str, ScriptInfo]) -> None:
+    """Functional summaries via worklist: phi_p(X) = exits(p) union unhandled-callee exits.
+
+    Lattice height is finite (2 labels) so the worklist terminates without a magic cap.
+    """
+    import sys as _sys
+    _scripts = Path(__file__).resolve().parent
+    if str(_scripts) not in _sys.path:
+        _sys.path.insert(0, str(_scripts))
+    from nielson_solver import worklist
+
+    nodes = list(infos.keys())
+    succ = {sid: sorted(info.callees) for sid, info in infos.items()}
+
+    def xfer(n, val):
+        info = infos.get(n)
+        if info is None:
+            return val
+        if info.label == "error_propagator":
+            return "error_propagator"
+        for callee in info.callees:
+            if callee in info.handled_callees:
                 continue
-            for callee in info.callees:
-                if callee in info.handled_callees:
-                    continue
-                other = infos.get(callee)
-                if other is None:
-                    continue
-                if other.label == "error_propagator":
-                    info.label = "error_propagator"
-                    changed = True
-                    break
+            other = infos.get(callee)
+            if other is not None and other.label == "error_propagator":
+                return "error_propagator"
+            if val == "error_propagator":
+                return "error_propagator"
+        return val
+
+    def join(a, b):
+        if a == "error_propagator" or b == "error_propagator":
+            return "error_propagator"
+        return a or b
+
+    A = worklist(
+        nodes, succ, xfer,
+        "error_propagator",
+        [sid for sid, info in infos.items() if info.label == "error_propagator"],
+        join=join,
+        bot="ok",
+    )
+    for sid, lab in A.items():
+        if lab == "error_propagator" and sid in infos:
+            infos[sid].label = "error_propagator"
+
+
+def propagate_labels(infos: dict[str, ScriptInfo]) -> None:
+    propagate_summaries(infos)
 
 
 def risk_paths(infos: dict[str, ScriptInfo]) -> list[list[str]]:
@@ -533,7 +561,7 @@ def build_report(infos: dict[str, ScriptInfo]) -> dict[str, Any]:
     labels = {sid: info.label for sid, info in sorted(infos.items())}
     unval = sorted(sid for sid, info in infos.items() if info.hermes_unvalidated)
     return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "call_edges": edges,
         "exit_code_labels": labels,
         "risk_paths": risk_paths(infos),
@@ -590,7 +618,7 @@ def main() -> int:
         analyse_hermes_home(info)
 
     infos = {info.sid: info for info in infos_list}
-    propagate_labels(infos)
+    propagate_summaries(infos)
     report = build_report(infos)
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     # Atomic write: write to .tmp then rename (M5 non-atomic fix; Lynch §10 atomicity)

@@ -182,6 +182,94 @@ def analyze_function(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> list[dict]:
     return findings
 
 
+
+# --- Nielson CFG + MFP taint summaries (upgrade, do not replace analyze_function) ---
+Sec = {"Pub", "Sec"}
+Int = {"Trusted", "Untrusted"}
+
+
+def build_cfg(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> dict:
+    """Intraprocedural CFG: node id -> successors. Linear + loop back-edges."""
+    body = list(fn.body)
+    succ = {}
+    nodes = []
+    for i, stmt in enumerate(body):
+        nid = i
+        nodes.append(nid)
+        nxt = [i + 1] if i + 1 < len(body) else []
+        if isinstance(stmt, (ast.For, ast.While)):
+            nxt = [i + 1] if i + 1 < len(body) else []
+            nxt.append(i)  # back-edge
+        if isinstance(stmt, ast.If):
+            nxt = [i + 1] if i + 1 < len(body) else []
+        succ[nid] = nxt
+    return {"fn": fn.name, "nodes": nodes, "succ": succ, "stmts": body}
+
+
+def mfp_taint(cfg: dict, sigma_entry: set | None = None) -> dict:
+    """May-taint MFP with pc tracking. Lattice: Untrusted >= Trusted, Sec >= Pub."""
+    sigma_entry = set(sigma_entry or ())
+    A = {n: set() for n in cfg.get("nodes") or []}
+    if cfg.get("nodes"):
+        A[cfg["nodes"][0]] = set(sigma_entry)
+    pc = {n: "Pub" for n in cfg.get("nodes") or []}
+    W = list(cfg.get("nodes") or [])
+    stmts = cfg.get("stmts") or []
+    guard = 0
+    while W and guard < max(8, len(W) * 8):
+        guard += 1
+        n = W.pop(0)
+        stmt = stmts[n] if n < len(stmts) else None
+        out = set(A.get(n) or ())
+        dump = ast.dump(stmt) if stmt is not None else ""
+        if any(s in dump for s in ("sys.argv", "input(", "json.loads", "os.environ")):
+            out.add("Untrusted")
+        if isinstance(stmt, ast.Assign):
+            for t in stmt.targets:
+                if isinstance(t, ast.Name) and "Untrusted" in out:
+                    out.add(t.id)
+        for m in cfg.get("succ", {}).get(n, []):
+            j = (A.get(m) or set()) | out
+            if j != (A.get(m) or set()):
+                A[m] = j
+                W.append(m)
+            if "Untrusted" in out:
+                pc[m] = "Sec"
+    return {"taint": {str(k): sorted(v) for k, v in A.items()}, "pc": pc}
+
+
+def summary(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> tuple:
+    """(gen_taint, kill_taint) for functional interprocedural summaries."""
+    cfg = build_cfg(fn)
+    mfp = mfp_taint(cfg, set())
+    gen = set()
+    for vs in mfp["taint"].values():
+        gen.update(vs)
+    kill = set()
+    for stmt in fn.body:
+        if isinstance(stmt, ast.Assign):
+            for t in stmt.targets:
+                if isinstance(t, ast.Name) and isinstance(stmt.value, ast.Constant):
+                    kill.add(t.id)
+    return (gen, kill)
+
+
+def slice_backward(fn: ast.FunctionDef | ast.AsyncFunctionDef, sink_node: int, tainted: set) -> list:
+    cfg = build_cfg(fn)
+    stmts = cfg.get("stmts") or []
+    keep = set()
+    W = [sink_node]
+    while W:
+        n = W.pop()
+        if n in keep or n < 0 or n >= len(stmts):
+            continue
+        keep.add(n)
+        dump = ast.dump(stmts[n])
+        if any(t in dump for t in tainted):
+            W.extend(range(n))
+    return sorted(keep)
+
+
 def analyze_source(src: str, filename: str = '<mem>') -> list[dict]:
     try:
         tree = ast.parse(src, filename=filename)
@@ -208,8 +296,7 @@ def scan_dir(root: Path) -> list[dict]:
             src = p.read_text(encoding='utf-8')
         except OSError:
             continue
-        for f in analyze_source(src, filename=str(p)):
-            findings.append(f)
+        findings.extend(analyze_source(src, filename=str(p)))
     return findings
 
 
