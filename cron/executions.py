@@ -55,10 +55,18 @@ LOCK_DIR: Path = HERMES_HOME / "profiles" / "fork" / "cron" / ".locks"
 
 
 def _lock_dir() -> Path:
-    """Resolve lock dir at call time so tests redirecting EXECUTIONS_FILE stay isolated."""
+    """Resolve lock dir at call time so HERMES_HOME / EXECUTIONS_FILE redirects apply.
+
+    Prefer the executions DB's parent (tests monkeypatch EXECUTIONS_FILE).
+    Otherwise ``get_hermes_home()/cron/.locks`` — same tree as executions.db.
+    """
     if EXECUTIONS_FILE:
         return Path(EXECUTIONS_FILE).parent / ".locks"
-    return LOCK_DIR
+    try:
+        from hermes_constants import get_hermes_home
+        return Path(get_hermes_home()).resolve() / "cron" / ".locks"
+    except Exception:
+        return LOCK_DIR
 
 
 def _lock_path(execution_id: str) -> Path:
