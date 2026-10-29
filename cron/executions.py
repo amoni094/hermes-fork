@@ -54,9 +54,16 @@ HERMES_HOME = _hermes_home_base()
 LOCK_DIR: Path = HERMES_HOME / "profiles" / "fork" / "cron" / ".locks"
 
 
+def _lock_dir() -> Path:
+    """Resolve lock dir at call time so tests redirecting EXECUTIONS_FILE stay isolated."""
+    if EXECUTIONS_FILE:
+        return Path(EXECUTIONS_FILE).parent / ".locks"
+    return LOCK_DIR
+
+
 def _lock_path(execution_id: str) -> Path:
     safe = str(execution_id).replace("/", "_").replace("\\", "_")
-    return LOCK_DIR / f"{safe}.lock"
+    return _lock_dir() / f"{safe}.lock"
 
 
 def _parse_iso(stamp: str) -> datetime:
@@ -72,7 +79,7 @@ def create_execution_lock(execution_id: str, pid: int, started_at: str) -> Path:
     JSON payload: {execution_id, pid, started_at, expires_at=started_at+300}.
     Analogous to a ZooKeeper ephemeral znode: the lock dies with the process.
     """
-    LOCK_DIR.mkdir(parents=True, exist_ok=True)
+    _lock_dir().mkdir(parents=True, exist_ok=True)
     started_dt = _parse_iso(started_at)
     expires_at = (started_dt + timedelta(seconds=_LOCK_TTL_SECONDS)).isoformat()
     payload = {
@@ -128,10 +135,11 @@ def reap_stale_locks() -> list[str]:
     Returns the list of reaped execution_ids.
     """
     reaped: list[str] = []
-    if not LOCK_DIR.is_dir():
+    lock_dir = _lock_dir()
+    if not lock_dir.is_dir():
         return reaped
     now = datetime.now(timezone.utc)
-    for path in LOCK_DIR.glob("*.lock"):
+    for path in lock_dir.glob("*.lock"):
         execution_id = path.stem
         expired = False
         try:
