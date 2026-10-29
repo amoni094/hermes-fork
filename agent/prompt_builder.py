@@ -1262,6 +1262,9 @@ def _build_snapshot_entry(skill_file: Path, skills_dir: Path, frontmatter: dict,
     parts = skill_file.relative_to(skills_dir).parts
     skill_name = skill_file.parent.name  # == parts[-2] whenever a parent component exists
     category = "general" if len(parts) < 2 else "/".join(parts[:-2]) if len(parts) > 2 else parts[0]
+    # Frontmatter `category` overrides path-derived category (e.g. category:textbook for demotion in focus mode)
+    if fm_cat := frontmatter.get("category"):
+        category = str(fm_cat).strip()
     platforms = frontmatter.get("platforms") or []
     platforms = [platforms] if isinstance(platforms, str) else platforms
     entry = {
