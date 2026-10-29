@@ -81,7 +81,7 @@ def _extract_session_features(text: str) -> dict:
                         args = tc["function"].get("arguments","{}")
                         if isinstance(args, str):
                             try: args = json.loads(args)
-                            except: pass
+                            except Exception: pass
                         s = args.get("name","") if isinstance(args,dict) else ""
                         if s:
                             skill_calls.append(s)

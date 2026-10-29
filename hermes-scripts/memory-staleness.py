@@ -21,7 +21,10 @@ import sys
 from datetime import date, datetime, timezone, UTC
 from pathlib import Path
 
-MEMORY_PATH = os.path.expanduser("~/.hermes/memories/MEMORY.md")
+MEMORY_PATH = os.environ.get(
+    "HERMES_MEMORY_PATH",
+    str(Path(os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))) / "memories" / "MEMORY.md"),
+)
 STALE_DAYS = 30
 REF_FREQUENT_MIN = 2
 _hermes_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
@@ -160,7 +163,7 @@ def classify_section(idx: int, section: str, corpus: str = "") -> dict:
     # ── Date staleness check ──────────────────────────────────────────────
     dates = extract_dates(section)
     if dates:
-        oldest = min(dates)
+        oldest = min(dates)  # noqa: F841
         newest = max(dates)
         age_days = (today - newest).days
         if age_days > recommended_ttl:
@@ -203,8 +206,7 @@ def classify_section(idx: int, section: str, corpus: str = "") -> dict:
     if status == "UNKNOWN" and ref_freq >= REF_FREQUENT_MIN:
         status = "ACTIVE"
         reasons.append(
-            "no dates but reference_frequency=%d (>=%d) => ACTIVE"
-            % (ref_freq, REF_FREQUENT_MIN)
+            f"no dates but reference_frequency={ref_freq} (>={REF_FREQUENT_MIN}) => ACTIVE"
         )
 
     first = (section.splitlines()[0].strip() if section else "")[:120]
