@@ -172,9 +172,9 @@ def _tick_admitted(
         def _edf_urgency(job: dict) -> float:
             try:
                 from cron.jobs import _schedule_cadence_seconds
-                lateness = job.get("last_dispatch", {}).get("lateness_seconds", 0.0) or 0.0
+                lateness = max(0.0, float(job.get("last_dispatch", {}).get("lateness_seconds", 0.0) or 0.0))
                 cadence = _schedule_cadence_seconds(job.get("schedule", {}))
-                return lateness / cadence if cadence else 0.0
+                return lateness / cadence if cadence and cadence > 0 else 0.0
             except Exception:
                 return 0.0
 
