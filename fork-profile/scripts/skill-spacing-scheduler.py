@@ -25,7 +25,7 @@ Usage:
   python3 skill-spacing-scheduler.py --json         # JSON output
   python3 skill-spacing-scheduler.py --self-test    # unit tests
 
-The scheduler reads skill_invocations from skill-yield.db (shared with
+The scheduler reads skill_invocations from state.db (shared with
 skill-yield-tracker.py) and writes review state to skill-spacing-state.json.
 """
 
@@ -322,10 +322,10 @@ def cmd_self_test() -> None:
         sys.exit(1)
     else:
         print("SELF-TEST PASS")
-        print("  ACT-R activation formula correct")
+        print(f"  ACT-R activation formula correct")
         print(f"  Spacing: n=0 gap={g0:.1f}d, n=1 gap={g1:.1f}d, n=2 gap={g2:.1f}d")
         print(f"  Cap at {_MAX_GAP_DAYS}d verified")
-        print("  mark_reviewed state transitions correct")
+        print(f"  mark_reviewed state transitions correct")
 
 
 def main() -> None:

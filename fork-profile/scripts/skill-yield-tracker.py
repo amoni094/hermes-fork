@@ -27,6 +27,7 @@ Pruning:
 """
 
 import json
+import math
 import os
 import sqlite3
 import sys
@@ -144,18 +145,24 @@ def update_metrics(skill_name: str, success: bool, tokens_used: int, time_taken:
         
         normalized_yield = (success_rate * avg_impact) / (avg_token_cost * avg_time_cost) if (avg_token_cost * avg_time_cost) > 0 else 0.0
         
-        # Update metrics
+        # INSERT or update — use DO UPDATE to preserve deprecated/deprecation_reason/replacement_skill
         cursor.execute(
-            "INSERT OR REPLACE INTO skill_yield_metrics "
+            "INSERT INTO skill_yield_metrics "
             "(skill_name, success_count, failure_count, token_cost_sum, time_cost_sum, impact_sum, invocation_count, last_invoked_at, yield, normalized_yield) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(skill_name) DO UPDATE SET "
+            "success_count=excluded.success_count, failure_count=excluded.failure_count, "
+            "token_cost_sum=excluded.token_cost_sum, time_cost_sum=excluded.time_cost_sum, "
+            "impact_sum=excluded.impact_sum, invocation_count=excluded.invocation_count, "
+            "last_invoked_at=excluded.last_invoked_at, yield=excluded.yield, "
+            "normalized_yield=excluded.normalized_yield",
             (skill_name, success_count, failure_count, token_cost_sum, time_cost_sum, impact_sum, invocation_count, time.strftime("%Y-%m-%dT%H:%M:%S"), yield_val, normalized_yield)
         )
         
         conn.commit()
 
 
-def audit_skills() -> List[Dict]:
+def audit_skills() -> list[dict]:
     """Generate a yield report for all skills."""
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
@@ -183,7 +190,7 @@ def audit_skills() -> List[Dict]:
         return report
 
 
-def prune_skills() -> List[Dict]:
+def prune_skills() -> list[dict]:
     """Deprecate skills with yield < 0.1 for 10+ invocations."""
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
@@ -393,6 +400,9 @@ def cmd_confidence_intervals(argv=None):
         hi = f"{row['ci_95_high']:.4f}" if row["ci_95_high"] is not None else "n/a"
         print(f"{row['skill_name']:<42}  {row['n_obs']:>5}  {sr:>12}  {lo:>10}  {hi:>11}")
 
+    for row in rows:
+        row['shrunk_p_hat'] = round(stureborg_shrink(row['success_rate'] or 0, row['n_obs']), 4)
+
     if args.json_out:
         print("\n--- JSON ---")
         print(json.dumps({
@@ -421,6 +431,11 @@ def wilson_ci(n: int, n_success: int, z: float = 1.96) -> tuple:
       denom = 1 + z^2/n
       centre = (p_hat + z^2/(2n)) / denom
       half_width = z * sqrt(p_hat*(1-p_hat)/n + z^2/(4n^2)) / denom
+
+    Small-n reliability: Wilson remains valid at extreme p and small n, but the
+    observed rate is still overoptimistic as a point estimate. See
+    stureborg_shrink (Stureborg et al. 2024, 'Is LLM-as-a-Judge Robust?';
+    Efron & Morris 1977, 'Stein's paradox in statistics').
     """
     if n == 0:
         return 0.0, 0.0, 1.0
@@ -430,6 +445,108 @@ def wilson_ci(n: int, n_success: int, z: float = 1.96) -> tuple:
     centre = (p_hat + z2 / (2 * n)) / denom
     half_width = z * ((p_hat * (1.0 - p_hat) / n + z2 / (4 * n * n)) ** 0.5) / denom
     return p_hat, max(0.0, centre - half_width), min(1.0, centre + half_width)
+
+
+def stureborg_shrink(p_hat: float, n: int, k: float = 1.0) -> float:
+    """Stureborg et al. (2024, 'Is LLM-as-a-Judge Robust?') reliability shrinkage.
+
+    At small n, observed agreement rate is unreliable. Shrink p_hat toward 0.5
+    by a factor that decreases as n grows:
+      p_shrunk = 0.5 + (p_hat - 0.5) * (1 - k / sqrt(n))
+
+    k=1.0 (default) matches the Stureborg recommendation for single-model LLM judges.
+    k=0 disables shrinkage (identity). Clamps result to [0, 1].
+    At n>=400, shrinkage is <5% and effectively negligible.
+
+    Shrinkage justification: Efron & Morris (1977) 'Stein's paradox in statistics'
+    — the sample mean is inadmissible in >=3 dimensions; shrinking toward a
+    grand mean (here 0.5, the uninformative rate) dominates the MLE at small n.
+    """
+    if n <= 0:
+        return 0.5
+    factor = max(0.0, 1.0 - k / (n ** 0.5))
+    return max(0.0, min(1.0, 0.5 + (p_hat - 0.5) * factor))
+
+
+def _reg_inc_beta(x, a, b):
+    """Regularised incomplete beta I_x(a,b) via Lentz continued fraction (Abramowitz 26.5)."""
+    x = float(x)
+    a = float(a)
+    b = float(b)
+    if x <= 0.0:
+        return 0.0
+    if x >= 1.0:
+        return 1.0
+    # Complementary identity when the CF converges slowly (Abramowitz 26.5.2).
+    if x > (a + 1.0) / (a + b + 2.0):
+        return 1.0 - _reg_inc_beta(1.0 - x, b, a)
+    lbeta = math.lgamma(a) + math.lgamma(b) - math.lgamma(a + b)
+    front = math.exp(math.log(x) * a + math.log(1.0 - x) * b - lbeta) / a
+    tiny = 1e-300
+    f = C = tiny
+    D = 0.0
+    for m in range(200):
+        two_m = 2.0 * m
+        if m == 0:
+            # Seed: 1 / (1 - (a+b)x/(a+1)); m=0 numer1 is 0/possibly-0.
+            D = 1.0 - (a + b) * x / (a + 1.0)
+            if abs(D) < tiny:
+                D = tiny
+            D = 1.0 / D
+            C = 1.0
+            f = D
+            continue
+        numer1 = m * (b - m) * x / ((a + two_m - 1.0) * (a + two_m))
+        numer2 = -(a + m) * (a + b + m) * x / ((a + two_m) * (a + two_m + 1.0))
+        done = False
+        for numer in (numer1, numer2):
+            D = 1.0 + numer * D
+            if abs(D) < tiny:
+                D = tiny
+            D = 1.0 / D
+            C = 1.0 + numer / C
+            if abs(C) < tiny:
+                C = tiny
+            delta = C * D
+            f *= delta
+            if abs(delta - 1.0) < 1e-10:
+                done = True
+                break
+        if done:
+            break
+    result = front * f
+    if result < 0.0:
+        return 0.0
+    if result > 1.0:
+        return 1.0
+    return result
+
+
+def _beta_quantile(p, a, b):
+    """Bisection on _reg_inc_beta to find the p-quantile of Beta(a,b)."""
+    lo = 0.0
+    hi = 1.0
+    mid = 0.5
+    for _ in range(60):
+        mid = (lo + hi) / 2.0
+        if _reg_inc_beta(mid, a, b) < p:
+            lo = mid
+        else:
+            hi = mid
+    return mid
+
+
+def clopper_pearson_ci(k, n, alpha=0.05):
+    """Clopper-Pearson (1934) exact binomial CI.
+
+    Clopper & Pearson (1934) Biometrika 26(4) pages 404-413;
+    MacKay (2003) ITILA Appendix B.
+    """
+    if n <= 0:
+        return (0.0, 1.0)
+    lo = 0.0 if k == 0 else _beta_quantile(alpha / 2.0, k, n - k + 1)
+    hi = 1.0 if k == n else _beta_quantile(1.0 - alpha / 2.0, k + 1, n - k)
+    return (lo, hi)
 
 
 def cmd_skill_ci(skill_name: Optional[str] = None, success: Optional[bool] = None,
@@ -463,17 +580,19 @@ def cmd_skill_ci(skill_name: Optional[str] = None, success: Optional[bool] = Non
         print("No skill metrics found. Record some observations first.")
         return
 
-    print(f"{'Skill':<40} {'n':>5} {'p_hat':>7} {'CI_lo':>7} {'CI_hi':>7} {'prior':>7} {'shift':>6}")
-    print("-" * 85)
+    print(f"{'Skill':<40} {'n':>5} {'p_hat':>7} {'CI_lo':>7} {'CI_hi':>7} {'prior':>7} {'shift':>6} {'shrunk':>7} {'cp_lo':>7} {'cp_hi':>7}")
+    print("-" * 109)
 
     for skill_n, n_success, n_total in rows:
         if n_total == 0:
             continue
         p_hat, lo, hi = wilson_ci(n_total, n_success)
+        p_shrunk = stureborg_shrink(p_hat, n_total)
+        lo_cp, hi_cp = clopper_pearson_ci(n_success, n_total)
         # Prior estimate: uniform Beta(1,1) mean = 0.5 if no explicit prior given
         prior = prior_estimate if prior_estimate is not None else 0.5
         shift = "YES ⚠" if not (lo <= prior <= hi) else "no"
-        print(f"{skill_n:<40} {n_total:>5} {p_hat:>7.3f} {lo:>7.3f} {hi:>7.3f} {prior:>7.3f} {shift:>6}")
+        print(f"{skill_n:<40} {n_total:>5} {p_hat:>7.3f} {lo:>7.3f} {hi:>7.3f} {prior:>7.3f} {shift:>6} {p_shrunk:>7.3f} {lo_cp:>7.3f} {hi_cp:>7.3f}")
 
     print()
     print("Wilson 95% CI: shift=YES when the prior estimate falls outside [CI_lo, CI_hi].")

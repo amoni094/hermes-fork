@@ -186,8 +186,10 @@ def decompose_constant_f(f, success_count, n):
         s = int(success_count)
     except (TypeError, ValueError):
         raise ValueError('invalid success_count')
-    s = max(s, 0)
-    s = min(s, n)
+    if s < 0:
+        s = 0
+    if s > n:
+        s = n
     o_bar = s / n
     brier = (s * (fc - 1.0) ** 2 + (n - s) * (fc ** 2)) / n
     return {
@@ -481,7 +483,7 @@ def main(argv=None):
     parser.add_argument(
         '--db',
         default=None,
-        help='override skill-yield.db path (default: profile cache)',
+        help='override state.db path (default: profile state)',
     )
     args = parser.parse_args(argv)
 
