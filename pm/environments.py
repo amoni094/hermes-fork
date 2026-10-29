@@ -153,10 +153,14 @@ def _payload_manifest(root: Path) -> dict | None:
     Every install asks, so a ``manifest.json`` that some other tool left beside a
     checkout, or one with a mistyped field, must read as "not a payload", never as an
     error. Readers then take each field with ``.get`` and treat an absent one as unset.
+
+    The probe must also swallow non-OS errors: a git checkout living inside
+    ``HERMES_HOME`` (``install.sh`` default) has its sibling path at the real home
+    root, and test FS guards refuse that open with ``AssertionError``.
     """
     try:
         manifest = json.loads((root.parent / "manifest.json").read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):
+    except Exception:
         return None
     if not isinstance(manifest, dict) or not isinstance(manifest.get("repo"), str):
         return None
@@ -165,7 +169,10 @@ def _payload_manifest(root: Path) -> dict | None:
     well_formed = (isinstance(commands, dict)
                    and isinstance(commands.get("hermes", ""), str)
                    and all(isinstance(manifest.get(key, ""), str) for key in ("venv", "store")))
-    return manifest if well_formed and (root.parent / manifest["repo"]).resolve() == root else None
+    try:
+        return manifest if well_formed and (root.parent / manifest["repo"]).resolve() == root else None
+    except Exception:
+        return None
 
 
 def _payload_path(root: Path, relative: str, what: str) -> Path:
