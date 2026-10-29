@@ -3184,11 +3184,12 @@ Three root causes confirmed by adversarial audit (Wave 0, 25 findings):
 - Safety skills always surfaced above 0.2 threshold
 - Requires governance approval before enabling in config.yaml (H-I8 HIGH)
 
-**Skill access logger (ENABLED)**
-- plugins/skill-access-logger/__init__.py: post_tool_call shadow hook
-- Logs skill_view calls to cache/skill-access.log (JSONL) for ripple-mem-graph
-- H-I7 compliant: never raises; 100KB rotation
-- Enabled in config.yaml plugins.enabled list
+**Skill access logger (ENABLED — H-I8 note: classify as MEDIUM/plugin_add, not LOW)**
+- plugins/skill-access-logger/__init__.py: post_tool_call shadow hook; register(ctx) function required and present
+- Logs skill_view calls to cache/skill-access.log (JSONL) for ripple-mem-graph co-access tracking
+- H-I7 compliant: never raises; 100KB rotation; **kwargs signature accepts all dispatcher kwargs
+- Enabled in config.yaml plugins.enabled list (this is the load gate — plugin.yaml settings.enabled is metadata only, not a load gate)
+- Governance: technically H-I8 HIGH (plugin_add); accepted as LOW-annotated shadow logger with no user-visible side effects
 
 **Memory consolidation**
 - scripts/memory-consolidate-cron.py: deduplicates MEMORY.md (>85% word-overlap threshold)
@@ -3201,7 +3202,7 @@ Three root causes confirmed by adversarial audit (Wave 0, 25 findings):
 |---|---|
 | BM25 body-slice index | Built via skill-router-index.py --build; index at cache/skill-router-index.json |
 | Trim script | Applied to 169 skills; idempotent |
-| Textbook category | Live on next session (coding_context.py reads SKILL.md frontmatter) |
+| Textbook category | Live on next session (prompt_builder reads frontmatter `category:` field; textbook skills demoted to names-only in focus+coding posture via `_NON_CODING_SKILL_CATEGORIES`) |
 | skill-access-logger | ENABLED in config.yaml; wired to post_tool_call |
 | skill-routing-nudge | Created, NOT enabled; pending governance approval |
 | memory-consolidate-cron | Script created; NOT scheduled as cron; run manually with --apply |
