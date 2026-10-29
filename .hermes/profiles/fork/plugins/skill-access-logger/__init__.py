@@ -27,7 +27,8 @@ MAX_LOG_BYTES = 102400
 def _log_path() -> Path:
     base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
     profile = os.environ.get('HERMES_PROFILE', '')
-    if profile:
+    # Guard: if HERMES_HOME already contains profiles/<profile>, don't double-nest
+    if profile and 'profiles' not in str(base):
         return base / 'profiles' / profile / 'cache' / 'skill-access.log'
     return base / 'cache' / 'skill-access.log'
 
