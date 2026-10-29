@@ -661,7 +661,8 @@ def recover_interrupted_executions() -> int:
     with _transaction() as conn:
         rows = conn.execute(
             """SELECT id, status, process_id, pid, process_started_at,
-                      handoff_pending, handoff_started_at, claimed_at, progress_at
+                      handoff_pending, handoff_started_at, claimed_at, progress_at,
+                      generation
                FROM executions
                WHERE status IN ('claimed','running')"""
         ).fetchall()
@@ -697,15 +698,23 @@ def recover_interrupted_executions() -> int:
                 < HANDOFF_ADOPTION_GRACE_SECONDS
             ):
                 continue
+            try:
+                cas_gen = _require_generation(
+                    conn, row["id"], int(row["generation"] or 0)
+                )
+            except StaleGenerationError:
+                continue
             cur = conn.execute(
                 """UPDATE executions
                    SET status='unknown', finished_at=?, error=?,
-                       handoff_pending=0, handoff_started_at=NULL
+                       handoff_pending=0, handoff_started_at=NULL,
+                       generation = generation + 1
                    WHERE id=? AND status=? AND process_id=? AND pid=?
                      AND handoff_pending=?
-                     AND handoff_started_at IS ?""",
+                     AND handoff_started_at IS ?
+                     AND generation=?""",
                 (now, reason, row["id"], row["status"], row["process_id"], row["pid"],
-                 row["handoff_pending"], row["handoff_started_at"]),
+                 row["handoff_pending"], row["handoff_started_at"], cas_gen),
             )
             changed += cur.rowcount
             if cur.rowcount:
@@ -743,7 +752,7 @@ def terminalize_dead_owner(execution_id: str, *, reason: str) -> bool:
     with _transaction() as conn:
         row = conn.execute(
             """SELECT id, status, process_id, pid, process_started_at,
-                      handoff_pending, handoff_started_at
+                      handoff_pending, handoff_started_at, generation
                FROM executions WHERE id=?""",
             (execution_id,),
         ).fetchone()
@@ -760,12 +769,17 @@ def terminalize_dead_owner(execution_id: str, *, reason: str) -> bool:
             and time.time() - float(handoff_started_at) < HANDOFF_ADOPTION_GRACE_SECONDS
         ):
             return False
+        try:
+            cas_gen = _require_generation(conn, execution_id, int(row["generation"] or 0))
+        except StaleGenerationError:
+            return False
         cur = conn.execute(
             """UPDATE executions
                SET status='unknown', finished_at=?, error=?,
-                   handoff_pending=0, handoff_started_at=NULL
-               WHERE id=? AND status=? AND process_id=? AND pid=?""",
-            (now, reason, row["id"], row["status"], row["process_id"], row["pid"]),
+                   handoff_pending=0, handoff_started_at=NULL,
+                   generation = generation + 1
+               WHERE id=? AND status=? AND process_id=? AND pid=? AND generation=?""",
+            (now, reason, row["id"], row["status"], row["process_id"], row["pid"], cas_gen),
         )
         if cur.rowcount != 1:
             return False
@@ -783,11 +797,16 @@ def give_up_execution(execution_id: str, *, reason: str) -> bool:
     the owner's later terminal receipt can settle it only once it is marked given up."""
     now = _hermes_now().isoformat()
     with _transaction() as conn:
+        stored_gen = _read_generation(conn, str(execution_id))
+        if stored_gen is None:
+            return False
         cur = conn.execute(
             """UPDATE executions SET status='unknown', finished_at=?, error=?,
-                   handoff_pending=0, handoff_started_at=NULL
-               WHERE id=? AND status IN ('claimed','running') AND process_id=? AND pid=?""",
-            (now, reason, str(execution_id), _PROCESS_ID, os.getpid()))
+                   handoff_pending=0, handoff_started_at=NULL,
+                   generation = generation + 1
+               WHERE id=? AND status IN ('claimed','running') AND process_id=? AND pid=?
+                 AND generation=?""",
+            (now, reason, str(execution_id), _PROCESS_ID, os.getpid(), stored_gen))
         if cur.rowcount != 1:
             return False
         record = _fetch(conn, str(execution_id))
@@ -874,3 +893,53 @@ def latest_executions(job_ids: list[str]) -> dict[str, dict[str, Any]]:
             clean,
         ).fetchall()
     return {row["job_id"]: dict(row) for row in rows}
+
+
+def _self_test() -> None:
+    """Chubby sequencer: wrong gen rejected; correct gen bumps 0 -> 1."""
+    import tempfile
+
+    global EXECUTIONS_FILE
+    prev = EXECUTIONS_FILE
+    tmp = tempfile.TemporaryDirectory(prefix="executions-gen-")
+    try:
+        EXECUTIONS_FILE = Path(tmp.name) / "executions.db"
+        rec = create_execution("self-test-job", source="self-test")
+        eid = rec["id"]
+        gen0 = int(rec.get("generation") or 0)
+        if gen0 != 0:
+            raise AssertionError(f"new execution generation must be 0, got {gen0}")
+        raised = False
+        try:
+            finish_execution(eid, success=True, expected_generation=gen0 + 1)
+        except StaleGenerationError:
+            raised = True
+        if not raised:
+            raise AssertionError("wrong generation must raise StaleGenerationError")
+        still = get_execution(eid)
+        if still is None or still.get("status") != "claimed":
+            raise AssertionError("stale write must not change status")
+        if int(still.get("generation") or 0) != 0:
+            raise AssertionError("stale write must not bump generation")
+        rec2 = finish_execution(eid, success=True, expected_generation=gen0)
+        if rec2 is None:
+            raise AssertionError("correct generation must succeed")
+        if int(rec2.get("generation") or 0) != 1:
+            raise AssertionError(f"generation must be 1 after CAS, got {rec2.get('generation')}")
+        rec3 = get_execution(eid)
+        if rec3 is None or int(rec3.get("generation") or 0) != 1:
+            raise AssertionError("persisted generation must be 1")
+        print("self-test ok: StaleGenerationError on wrong gen; generation=1 after CAS")
+    finally:
+        EXECUTIONS_FILE = prev
+        tmp.cleanup()
+
+
+if __name__ == "__main__":
+    import sys
+
+    if "--self-test" in sys.argv:
+        _self_test()
+    else:
+        print("usage: python3 -m cron.executions --self-test", file=sys.stderr)
+        raise SystemExit(2)
