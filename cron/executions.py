@@ -7,6 +7,7 @@ to match the claim-time fingerprint is not proof of death. Terminal states are i
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
@@ -15,7 +16,7 @@ import threading
 import time
 import uuid
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
@@ -37,6 +38,135 @@ LIVE_OWNER_STALE_CLAIM_FLOOR_SECONDS = 7200.0
 _TERMINAL_STATES = ("completed", "failed", "unknown")
 _lock = threading.RLock()
 _PROCESS_ID = uuid.uuid4().hex
+_LOCK_TTL_SECONDS = 300
+
+def _hermes_home_base() -> Path:
+    """Resolve the .hermes root even when HERMES_HOME points at a profile."""
+    env = os.environ.get("HERMES_HOME", "").strip()
+    p = Path(env).expanduser() if env else Path.home() / ".hermes"
+    if p.name != ".hermes" and p.parent.name == "profiles":
+        return p.parent.parent
+    return p
+
+
+HERMES_HOME = _hermes_home_base()
+# ZooKeeper ephemeral-znode analogue (Hunt et al. 2010): presence == liveness.
+LOCK_DIR: Path = HERMES_HOME / "profiles" / "fork" / "cron" / ".locks"
+
+
+def _lock_path(execution_id: str) -> Path:
+    safe = str(execution_id).replace("/", "_").replace("\\", "_")
+    return LOCK_DIR / f"{safe}.lock"
+
+
+def _parse_iso(stamp: str) -> datetime:
+    dt = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def create_execution_lock(execution_id: str, pid: int, started_at: str) -> Path:
+    """Create an ephemeral lock file for a running execution (mkdir -p LOCK_DIR).
+
+    JSON payload: {execution_id, pid, started_at, expires_at=started_at+300}.
+    Analogous to a ZooKeeper ephemeral znode: the lock dies with the process.
+    """
+    LOCK_DIR.mkdir(parents=True, exist_ok=True)
+    started_dt = _parse_iso(started_at)
+    expires_at = (started_dt + timedelta(seconds=_LOCK_TTL_SECONDS)).isoformat()
+    payload = {
+        "execution_id": str(execution_id),
+        "pid": int(pid),
+        "started_at": started_at,
+        "expires_at": expires_at,
+    }
+    dest = _lock_path(execution_id)
+    tmp = dest.with_suffix(".lock.tmp")
+    tmp.write_text(json.dumps(payload), encoding="utf-8")
+    os.replace(str(tmp), str(dest))
+    return dest
+
+
+def release_execution_lock(execution_id: str) -> bool:
+    """Delete LOCK_DIR/{execution_id}.lock if it exists. True iff deleted."""
+    path = _lock_path(execution_id)
+    if not path.exists():
+        return False
+    try:
+        path.unlink()
+        return True
+    except OSError:
+        return False
+
+
+def is_lock_live(execution_id: str) -> bool:
+    """True iff the lock file exists and its PID is still alive (os.kill(pid, 0))."""
+    path = _lock_path(execution_id)
+    if not path.is_file():
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        pid = int(data["pid"])
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # process exists but is not ours
+    except OSError:
+        return False
+
+
+def reap_stale_locks() -> list[str]:
+    """Delete lock files whose PID is dead or whose expires_at has passed.
+
+    Expired locks are reaped regardless of PID (TTL session expiry).
+    Returns the list of reaped execution_ids.
+    """
+    reaped: list[str] = []
+    if not LOCK_DIR.is_dir():
+        return reaped
+    now = datetime.now(timezone.utc)
+    for path in LOCK_DIR.glob("*.lock"):
+        execution_id = path.stem
+        expired = False
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            execution_id = str(data.get("execution_id") or execution_id)
+            exp = data.get("expires_at")
+            if exp:
+                exp_dt = _parse_iso(str(exp))
+                if now >= exp_dt:
+                    expired = True
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            expired = True
+        if expired or not is_lock_live(execution_id):
+            try:
+                path.unlink(missing_ok=True)
+                reaped.append(execution_id)
+            except OSError:
+                pass
+    return reaped
+
+
+def _safe_create_execution_lock(execution_id: str, pid: int, started_at: str) -> None:
+    try:
+        create_execution_lock(execution_id, pid, started_at)
+    except Exception:
+        logger.debug("create_execution_lock(%s) failed", execution_id, exc_info=True)
+
+
+def _safe_release_execution_lock(execution_id: str) -> None:
+    if not execution_id:
+        return
+    try:
+        release_execution_lock(execution_id)
+    except Exception:
+        logger.debug("release_execution_lock(%s) failed", execution_id, exc_info=True)
 
 
 # --- executions ledger --------------------------------------------------------------------------
@@ -287,6 +417,10 @@ def adopt_claimed_execution(execution_id: str) -> Optional[dict[str, Any]]:
             return None
         record = _fetch(conn, execution_id)
     _emit_execution_state(record)
+    if record is not None:
+        _safe_create_execution_lock(
+            execution_id, pid, record.get("started_at") or now,
+        )
     return record
 
 
@@ -306,6 +440,10 @@ def mark_execution_running(execution_id: str) -> Optional[dict[str, Any]]:
             return None
         record = _fetch(conn, execution_id)
     _emit_execution_state(record)
+    if record is not None:
+        _safe_create_execution_lock(
+            execution_id, os.getpid(), record.get("started_at") or now,
+        )
     return record
 
 
@@ -337,6 +475,7 @@ def finish_execution(
         record = _fetch(conn, execution_id)
     _emit_execution_state(record, delivery_outcome=delivery_outcome)
     record_cron_finish(record, delivery_outcome)
+    _safe_release_execution_lock(execution_id)
     return record
 
 
@@ -360,6 +499,7 @@ def recover_receipted_execution(execution_id, job_id, *, success, error=None, de
         record = _fetch(conn, execution_id)
     _emit_execution_state(record, delivery_outcome=delivery_outcome)
     record_cron_finish(record, delivery_outcome)
+    _safe_release_execution_lock(execution_id)
     return record
 
 
@@ -492,6 +632,7 @@ def recover_interrupted_executions() -> int:
             _prune_unlocked(conn)
     for record in recovered:
         _emit_execution_state(record)
+        _safe_release_execution_lock(str(record.get("id") or ""))
     return changed
 
 
@@ -547,6 +688,7 @@ def terminalize_dead_owner(execution_id: str, *, reason: str) -> bool:
         record = _fetch(conn, execution_id)
         _prune_unlocked(conn)
     _emit_execution_state(record)
+    _safe_release_execution_lock(execution_id)
     return True
 
 
@@ -567,6 +709,7 @@ def give_up_execution(execution_id: str, *, reason: str) -> bool:
         record = _fetch(conn, str(execution_id))
         _prune_unlocked(conn)
     _emit_execution_state(record)
+    _safe_release_execution_lock(str(execution_id))
     return True
 
 
