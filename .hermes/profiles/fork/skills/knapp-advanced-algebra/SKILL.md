@@ -1,6 +1,7 @@
 ---
 name: knapp-advanced-algebra
 description: Use when working with advanced algebraic structures.
+category: textbook
 ---
 
 ## Overview
@@ -40,11 +41,4 @@ Knapp's Advanced Algebra (2007) is a rigorous graduate-level reference covering 
 - Applying results outside their domain of validity (check assumptions)
 - Confusing syntactic and semantic levels in formal treatments
 
-## Hermes Relevance
-
-- Group/ring/field theory: algebraic structure of knowledge graphs and symmetry in agent protocols
-- Galois theory: fixed-point analysis of self-modifying agent processes
-- Module theory: linear representation of agent state spaces
-- Alignment survey: direct reference for evaluating Hermes safety properties and inner alignment risks
-
-Source: Reconstructed from authoritative knowledge (PDF is image-only, text extraction failed)
+<!-- textbook-stub: see source PDF -->

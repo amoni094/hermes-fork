@@ -1,6 +1,7 @@
 ---
 name: milne-galois-theory
 description: Use when studying fields and Galois theory.
+category: textbook
 ---
 
 ## Overview
@@ -32,11 +33,4 @@ Milne's Fields and Galois Theory (v4.61) is a concise graduate text covering fie
 - Applying results outside their domain of validity (check assumptions)
 - Confusing syntactic and semantic levels in formal treatments
 
-## Hermes Relevance
-
-- Group/ring/field theory: algebraic structure of knowledge graphs and symmetry in agent protocols
-- Galois theory: fixed-point analysis of self-modifying agent processes
-- Module theory: linear representation of agent state spaces
-- Alignment survey: direct reference for evaluating Hermes safety properties and inner alignment risks
-
-Source: Reconstructed from authoritative knowledge (PDF is image-only, text extraction failed)
+<!-- textbook-stub: see source PDF -->
