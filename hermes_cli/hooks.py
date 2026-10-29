@@ -131,6 +131,10 @@ _DEFAULT_PAYLOADS = {
     },
     "on_session_finalize": {"session_id": "test-session"},
     "on_session_reset": {"session_id": "test-session"},
+    "pre_compress": {
+        "session_id": "test-session", "context_tokens": 8192, "turn_count": 12,
+        "trigger_reason": "auto",
+    },
     "pre_api_request": {
         "session_id": "test-session", "task_id": "test-task", "platform": "cli",
         "model": "claude-sonnet-4-6", "provider": "anthropic",

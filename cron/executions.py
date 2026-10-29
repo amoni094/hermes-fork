@@ -27,6 +27,11 @@ from hermes_cli.observability.shared_metrics_gateway import record_cron_finish
 
 logger = logging.getLogger(__name__)
 
+
+class StaleGenerationError(RuntimeError):
+    """Chubby sequencer: reject a write whose generation is no longer current."""
+
+
 # Optional test override. Production resolves the path at transaction time so dashboard operations
 # that temporarily enter another profile cannot leak that profile's records into the import-time
 # home.
@@ -217,7 +222,8 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
              claimed_at TEXT NOT NULL,
              started_at TEXT,
              finished_at TEXT,
-             error TEXT
+             error TEXT,
+             generation INTEGER NOT NULL DEFAULT 0
            )"""
     )
     add_column_if_missing(
@@ -238,6 +244,9 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     add_column_if_missing(conn, "executions", "delivery_outcome", "delivery_outcome TEXT")
     add_column_if_missing(conn, "executions", "scheduled_instant", "scheduled_instant TEXT")
     add_column_if_missing(conn, "executions", "progress_at", "progress_at TEXT")
+    add_column_if_missing(
+        conn, "executions", "generation", "generation INTEGER NOT NULL DEFAULT 0"
+    )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_executions_occurrence "
         "ON executions(job_id, scheduled_instant) WHERE status='completed'"
@@ -255,6 +264,39 @@ def _transaction() -> Iterator[sqlite3.Connection]:
 def _fetch(conn: sqlite3.Connection, execution_id: str) -> Optional[dict[str, Any]]:
     row = conn.execute("SELECT * FROM executions WHERE id=?", (execution_id,)).fetchone()
     return dict(row) if row is not None else None
+
+
+def _read_generation(conn: sqlite3.Connection, execution_id: str) -> Optional[int]:
+    """Return the Chubby generation for ``execution_id``, or None if the row is gone."""
+    row = conn.execute(
+        "SELECT generation FROM executions WHERE id=?",
+        (execution_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    try:
+        val = row["generation"]
+    except (KeyError, IndexError, TypeError):
+        val = row[0]
+    return int(val or 0)
+
+
+def _require_generation(
+    conn: sqlite3.Connection, execution_id: str, expected_gen: Optional[int]
+) -> int:
+    """SELECT current generation and reject a stale writer (Burrows 2006 §2.9).
+
+    If ``expected_gen`` is None, the stored generation is the CAS predicate
+    (same-process writers that did not capture dispatch-time gen).
+    """
+    stored = _read_generation(conn, execution_id)
+    if stored is None:
+        raise StaleGenerationError(f"execution {execution_id} does not exist")
+    if expected_gen is not None and stored != int(expected_gen):
+        raise StaleGenerationError(
+            f"stale generation for {execution_id}: stored={stored} expected={expected_gen}"
+        )
+    return stored if expected_gen is None else int(expected_gen)
 
 
 def _emit_execution_state(
@@ -421,13 +463,17 @@ def adopt_claimed_execution(execution_id: str) -> Optional[dict[str, Any]]:
     process_started_at = _process_start_time(pid)
     now = _hermes_now().isoformat()
     with _transaction() as conn:
+        stored_gen = _read_generation(conn, execution_id)
+        if stored_gen is None:
+            return None
         cur = conn.execute(
             """UPDATE executions
                SET process_id=?, pid=?, process_started_at=?,
                    status='running', started_at=?, handoff_pending=0,
-                   handoff_started_at=NULL
-               WHERE id=? AND status='claimed' AND handoff_pending=1""",
-            (_PROCESS_ID, pid, process_started_at, now, execution_id),
+                   handoff_started_at=NULL, generation = generation + 1
+               WHERE id=? AND status='claimed' AND handoff_pending=1
+                 AND generation=?""",
+            (_PROCESS_ID, pid, process_started_at, now, execution_id, stored_gen),
         )
         if cur.rowcount != 1:
             return None
@@ -444,13 +490,16 @@ def mark_execution_running(execution_id: str) -> Optional[dict[str, Any]]:
     """Transition one claimed attempt to running exactly once."""
     now = _hermes_now().isoformat()
     with _transaction() as conn:
+        stored_gen = _read_generation(conn, execution_id)
+        if stored_gen is None:
+            return None
         cur = conn.execute(
             """UPDATE executions
                SET status='running', started_at=?, handoff_pending=0,
-                   handoff_started_at=NULL
+                   handoff_started_at=NULL, generation = generation + 1
                WHERE id=? AND status='claimed' AND handoff_pending=0
-                 AND process_id=? AND pid=?""",
-            (now, execution_id, _PROCESS_ID, os.getpid()),
+                 AND process_id=? AND pid=? AND generation=?""",
+            (now, execution_id, _PROCESS_ID, os.getpid(), stored_gen),
         )
         if cur.rowcount != 1:
             return None
@@ -466,24 +515,41 @@ def mark_execution_running(execution_id: str) -> Optional[dict[str, Any]]:
 def finish_execution(
     execution_id: str, *, success: bool, error: Optional[str] = None,
     delivery_outcome: Optional[str] = None,
+    expected_generation: Optional[int] = None,
 ) -> Optional[dict[str, Any]]:
     """Write a terminal result once; terminal attempts cannot be rewritten.
 
     Only the owning process may finish its attempt; receipt recovery for a departed owner
     settles through ``recover_receipted_execution``.
+
+    ``expected_generation`` is the Chubby sequencer value captured at dispatch. A
+    mismatch raises ``StaleGenerationError`` so a slow duplicate cannot clobber a
+    newer completion.
     """
     now = _hermes_now().isoformat()
     status = "completed" if success else "failed"
     detail = None if success else (str(error) if error else "unknown failure")
     with _transaction() as conn:
         owner = (_PROCESS_ID, os.getpid())
+        stored_gen = _read_generation(conn, execution_id)
+        if stored_gen is None:
+            if expected_generation is not None:
+                raise StaleGenerationError(f"execution {execution_id} does not exist")
+            return None
+        if expected_generation is not None and stored_gen != int(expected_generation):
+            raise StaleGenerationError(
+                f"stale generation for {execution_id}: "
+                f"stored={stored_gen} expected={expected_generation}"
+            )
+        cas_gen = stored_gen if expected_generation is None else int(expected_generation)
         cur = conn.execute(
             """UPDATE executions
                SET status=?, finished_at=?, error=?, handoff_pending=0,
-                   handoff_started_at=NULL, delivery_outcome=?
+                   handoff_started_at=NULL, delivery_outcome=?,
+                   generation = generation + 1
                WHERE id=? AND status IN ('claimed','running')
-                 AND process_id=? AND pid=?""",
-            (status, now, detail, delivery_outcome, execution_id, *owner),
+                 AND process_id=? AND pid=? AND generation=?""",
+            (status, now, detail, delivery_outcome, execution_id, *owner, cas_gen),
         )
         if cur.rowcount != 1:
             return None
@@ -506,11 +572,13 @@ def recover_receipted_execution(execution_id, job_id, *, success, error=None, de
         row = _recoverable_row(conn, execution_id, job_id)
         if row is None or _row_owner_live(row):
             return None
+        cas_gen = _require_generation(conn, execution_id, None)
         conn.execute(
             """UPDATE executions SET status=?, finished_at=?, error=?, handoff_pending=0,
-               handoff_started_at=NULL, delivery_outcome=? WHERE id=?""",
+               handoff_started_at=NULL, delivery_outcome=?, generation = generation + 1
+               WHERE id=? AND generation=?""",
             ('completed' if success else 'failed', now, None if success else (str(error) if error else 'unknown failure'),
-             delivery_outcome, execution_id))
+             delivery_outcome, execution_id, cas_gen))
         _prune_unlocked(conn)
         record = _fetch(conn, execution_id)
     _emit_execution_state(record, delivery_outcome=delivery_outcome)
@@ -574,7 +642,7 @@ def settle_unstarted_execution(execution_id: str, job_id: str, error: str) -> No
     so a ledger write cannot mask the failure the caller logs or re-raises."""
     try:
         finish_execution(execution_id, success=False, error=error)
-    except (sqlite3.Error, OSError) as record_err:
+    except (sqlite3.Error, OSError, StaleGenerationError) as record_err:
         logger.error("Job '%s': failed to close execution receipt %s (%s): %s",
                      job_id, execution_id, error, record_err)
 

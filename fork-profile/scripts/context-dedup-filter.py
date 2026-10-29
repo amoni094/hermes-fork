@@ -182,7 +182,10 @@ class ContextDedupFilter:
             # modifies suppression threshold. High inhibition = weak/competitor memory = suppress
             # more aggressively (lower threshold). Low inhibition = strong, important = harder to suppress.
             # inhibition_weight is optional; defaults to 0 (no modification).
-            iw = float(block.get("inhibition_weight") or 0.0)
+            try:
+                iw = float(block.get("inhibition_weight") or 0.0)
+            except (TypeError, ValueError):
+                iw = 0.0
             if iw > 0.0 and not prospective:
                 # Effective threshold: lower for high-inhibition blocks (easier to suppress)
                 effective_jac_thresh = self.jaccard_threshold * max(0.5, 1.0 / (1.0 + iw))
