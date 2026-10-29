@@ -17,8 +17,12 @@ from pathlib import Path
 def _mem_path() -> Path:
     base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
     profile = os.environ.get('HERMES_PROFILE', 'fork')
-    if profile:
-        return base / 'profiles' / profile / 'memories' / 'MEMORY.md'
+    # If base already includes the profile path, don't double-nest
+    if profile and 'profiles' not in str(base):
+        candidate = base / 'profiles' / profile / 'memories' / 'MEMORY.md'
+        if candidate.exists():
+            return candidate
+    # Fallback: resolve via the global memories dir (symlink-safe)
     return base / 'memories' / 'MEMORY.md'
 
 
