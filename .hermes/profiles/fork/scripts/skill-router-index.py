@@ -9,18 +9,6 @@ Usage:
 
 Based on: SkillRouter (arXiv:2603.22455) — Sweep 21 implementation.
 At 80k skills, name+description routing degrades 31-44pp. TF-IDF is fine at current scale (~100 skills).
-
-Complexity (Arora-Barak / Sipser) — do not claim P for NP-hard subproblems:
-  TF-IDF / BM25 build and query over S skills, V terms: P (sparse matvec).
-  Pairwise overlap --check is O(S^2) — polynomial, not smart at 80k.
-  NOT claimed in P: exact concept lattice / formal-concept-analysis of the
-  skill context (can be exponential in attributes). We do not build that
-  lattice. Skill stacking / optimal subset under budget is a knapsack;
-  this file does not solve knapsack — BPS lives in bps-skill-selector.py
-  as a (1-1/e,1) greedy, which is NOT an exact NP solver.
-
-Reverse mathematics (Dean): RCA0. Finite bag-of-words, finite argmax over
-a given list. No ACA0 comprehension of "the skill that is truly relevant".
 """
 
 import argparse
@@ -34,9 +22,9 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-import os as _os_sri
-_hermes_base_sri = Path(_os_sri.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
-_hermes_profile_sri = _os_sri.environ.get("HERMES_PROFILE", "")
+import os
+_hermes_base_sri = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hermes_profile_sri = os.environ.get("HERMES_PROFILE", "")
 _hermes_root_sri = (_hermes_base_sri / "profiles" / _hermes_profile_sri) if _hermes_profile_sri and "profiles" not in str(_hermes_base_sri) else _hermes_base_sri
 # When HERMES_HOME itself points at a profile dir (.../profiles/<name>), derive the true
 # hermes root (2 levels up) so _HERMES_MAIN_SKILLS resolves to the real skills library.
@@ -51,9 +39,7 @@ SKILLS_ROOT = _hermes_root_sri / "skills"
 # same-named skills keep fork priority. Do NOT derive this from __file__ — when
 # this script lives in ~/.hermes/scripts or profiles/fork/scripts that would
 # resolve to a non-existent scripts/skills directory.
-_HERMES_MAIN_SKILLS = _hermes_base_sri / "skills"
-if "profiles" in str(_hermes_base_sri):
-    _HERMES_MAIN_SKILLS = pathlib.Path(_os_sri.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "skills"
+_HERMES_MAIN_SKILLS = _true_hermes_base_sri / "skills"
 
 INDEX_PATH = _hermes_root_sri / "cache" / "skill-router-index.json"
 OVERLAP_THRESHOLD = 0.65
@@ -364,27 +350,11 @@ def structural_fingerprint(text: str) -> str:
     return " ".join(top_bigrams)
 
 
-def _load_arena_credits() -> dict:
-    """ArenaFlow credit boosts (arXiv:2609.21378): multiplicative skill-score multipliers.
-
-    credits.json format: {"skill-name": float, ...}
-    Values > 1.0 boost; < 1.0 demote. Written by improvement_governance.py after
-    pairwise tournament ranking of parallel-run traces. Missing skills default to 1.0.
-    """
-    import json as _json_ac
-    _credits_path = _hermes_root_sri / "cache" / "arena-credits.json"
-    try:
-        if _credits_path.exists():
-            _raw = _json_ac.loads(_credits_path.read_text())
-            # Clamp to [0.5, 2.0] to prevent extreme boosts from bad data
-            return {k: max(0.5, min(2.0, float(v))) for k, v in _raw.items() if isinstance(v, (int, float))}
-    except Exception:
-        pass
-    return {}
-
-
 def cross_domain_boost(query_text: str, candidate_text: str) -> float:
     """Return an additive boost in [0.0, 0.15] based on structural fingerprint Jaccard similarity (R4).
+
+    Returns 0.15 * Jaccard(query_fp, candidate_fp) if Jaccard > 0.4, else 0.0.
+    Jaccard is computed over the bigram sets of the two fingerprints.
     """
     q_fp = set(structural_fingerprint(query_text).split())
     c_fp = set(structural_fingerprint(candidate_text).split())
@@ -455,117 +425,6 @@ def tokenize(text: str) -> list[str]:
     }
     tokens = re.findall(r"[a-z][a-z0-9]*", text.lower())
     return [t for t in tokens if t not in stopwords and len(t) > 2]
-
-
-ENTROPY_FALLBACK_FRAC = 0.85  # of log2(k); high H → semantic fallback regardless of gap
-
-
-def score_entropy(scores: list[float]) -> float:
-    """Shannon entropy of a softmax over routing scores (bits)."""
-    if not scores:
-        return 0.0
-    m = max(scores)
-    exps = [math.exp(s - m) for s in scores]
-    z = sum(exps) or 1.0
-    return -sum((e / z) * math.log2(e / z) for e in exps if e > 0)
-
-
-def high_entropy_routing(scored: list, k: int = 8) -> bool:
-    """Hard core: high-entropy routing decisions get semantic reranking."""
-    top = [float(s) for s, _ in scored[:k]]
-    if len(top) < 2:
-        return False
-    h = score_entropy(top)
-    hmax = math.log2(len(top))
-    return h > ENTROPY_FALLBACK_FRAC * hmax
-
-
-_DPI_TOKEN_BOUND = 512  # ADV-010/GAP-5: DPI token count above which BM25 signal is diluted
-
-
-def should_semantic_fallback(
-    scored: list,
-    gap_thresh: float = 0.12,
-    query_token_count: int = 0,
-) -> bool:
-    """GAP-5/ADV-010 fix: enforce semantic fallback when query_token_count > DPI_TOKEN_BOUND.
-
-    Data-processing inequality: I(X;Y) >= I(X;Z) when Z=f(Y).
-    BM25 is a lossy compression; at high token counts mutual info decays.
-    Above DPI_TOKEN_BOUND, force semantic reranking regardless of score gap.
-    """
-    if len(scored) < 2:
-        return False
-    gap = float(scored[0][0]) - float(scored[1][0])
-    dpi_trigger = query_token_count > _DPI_TOKEN_BOUND
-    return gap < gap_thresh or high_entropy_routing(scored) or dpi_trigger
-
-
-def mobius_correct_scores(scored: list) -> list:
-    """Möbius inversion on the token-set inclusion poset (Stanley).
-
-    Treat BM25 scores as zeta-transformed (mass of a skill includes subsumed
-    skills). Invert, then rescale so sum(corrected) == sum(original).
-    """
-    n = len(scored)
-    if n == 0:
-        return scored
-    tokens = [set(s.get("tokens") or []) for _, s in scored]
-    scores = [float(sc) for sc, _ in scored]
-    total = sum(scores)
-    order = sorted(range(n), key=lambda i: (len(tokens[i]), i))
-    g = [0.0] * n
-    for i in order:
-        ti = tokens[i]
-        below = 0.0
-        if ti:
-            for j in order:
-                if j == i:
-                    continue
-                tj = tokens[j]
-                if tj and tj < ti:
-                    below += g[j]
-        g[i] = scores[i] - below
-    s_g = sum(g)
-    if abs(s_g) < 1e-12:
-        return scored
-    scale = total / s_g if total else 1.0
-    out = [(g[i] * scale, scored[i][1]) for i in range(n)]
-    out.sort(key=lambda x: -x[0])
-    return out
-
-
-def token_edit_distance(a: list[str], b: list[str]) -> int:
-    """Levenshtein distance on token sequences (Lin error-control coding analog)."""
-    la, lb = len(a), len(b)
-    if la == 0:
-        return lb
-    if lb == 0:
-        return la
-    prev = list(range(lb + 1))
-    for i, ca in enumerate(a, 1):
-        cur = [i] + [0] * lb
-        for j, cb in enumerate(b, 1):
-            ins, delete, sub = cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + (ca != cb)
-            cur[j] = min(ins, delete, sub)
-        prev = cur
-    return prev[lb]
-
-
-def flag_near_duplicate_triggers(skills: list[dict], min_dist: int = 5) -> list[tuple]:
-    """Hard core: no two skill trigger phrases have token edit distance < 5."""
-    flags = []
-    phrases = []
-    for s in skills:
-        desc = (s.get("description") or "")[:200]
-        phrases.append((s.get("name", "?"), tokenize(desc)))
-    for i in range(len(phrases)):
-        for j in range(i + 1, len(phrases)):
-            d = token_edit_distance(phrases[i][1], phrases[j][1])
-            if d < min_dist:
-                flags.append((d, phrases[i][0], phrases[j][0]))
-    flags.sort()
-    return flags
 
 
 def build_tfidf(skills: list[dict]) -> tuple[list[dict], dict]:
@@ -656,7 +515,35 @@ def scan_skills() -> list[dict]:
                 name = fm["name"]
                 description = fm.get("description", "")
                 triggers = fm.get("triggers", [])
-                combined = " ".join([name, description] + triggers)
+                # Extract structured body slice (arXiv:2603.22455: body-aware routing)
+                body_slice = ""
+                try:
+                    body_start = 0
+                    if text.startswith('---'):
+                        end_fm = text.find('\n---', 3)
+                        if end_fm != -1:
+                            body_start = end_fm + 4
+                    body = text[body_start:]
+                    _BOILERPLATE = [
+                        '## Hermes Relevance',
+                        '- Core definitions, theorems, and proofs in the domain',
+                        '- Applying asymptotic results outside their regime',
+                        '<!-- textbook-stub',
+                    ]
+                    cut = len(body)
+                    for marker in _BOILERPLATE:
+                        idx = body.find(marker)
+                        if idx != -1 and idx < cut:
+                            cut = idx
+                    # Stop at 'Source: *.pdf' too
+                    import re as _re_body
+                    m = _re_body.search(r'Source: [^\n]+\.pdf', body)
+                    if m and m.start() < cut:
+                        cut = m.start()
+                    body_slice = body[:cut].strip()[:1500]
+                except Exception:
+                    body_slice = ""
+                combined = " ".join([name, description] + triggers + ([body_slice] if body_slice else []))
                 tokens = tokenize(combined)
                 try:
                     rel_path = str(skill_md_path.relative_to(skills_dir))
@@ -669,6 +556,7 @@ def scan_skills() -> list[dict]:
                     "path": rel_path,
                     "skill_path": str(skill_md_path),  # R2: full path for collision detection
                     "tokens": tokens,
+                    "body_slice_len": len(body_slice),
                 }
                 # R2: Collision detection (Motwani&Raghavan universal hashing §5.2)
                 # Two skills with the same frontmatter name would silently overwrite;
@@ -680,13 +568,32 @@ def scan_skills() -> list[dict]:
                     except OSError:
                         same_file = existing_path == str(skill_md_path)
                     if not same_file:
-                        print(
-                            f"[skill-router WARN] name collision: '{name}' in both "
-                            f"{existing_path!r} and {str(skill_md_path)!r} — "
-                            f"keeping first-seen (fork priority).",
-                            file=sys.stderr,
-                        )
-                    # Do NOT overwrite — first-seen wins
+                        # True fork-local files (not via category symlink into the
+                        # default library) beat first-seen walk order.
+                        def _under_main(p: Path) -> bool:
+                            try:
+                                resolved = p.resolve()
+                                main = _HERMES_MAIN_SKILLS.resolve()
+                                return resolved == main or str(resolved).startswith(str(main) + _os_scan.sep)
+                            except OSError:
+                                return False
+                        existing_main = _under_main(Path(existing_path))
+                        new_main = _under_main(skill_md_path)
+                        if existing_main and not new_main:
+                            print(
+                                f"[skill-router WARN] name collision: '{name}' in both "
+                                f"{existing_path!r} and {str(skill_md_path)!r} — "
+                                f"keeping fork-local overlay.",
+                                file=sys.stderr,
+                            )
+                            seen_names[name] = entry
+                        else:
+                            print(
+                                f"[skill-router WARN] name collision: '{name}' in both "
+                                f"{existing_path!r} and {str(skill_md_path)!r} — "
+                                f"keeping first-seen (fork priority).",
+                                file=sys.stderr,
+                            )
                 else:
                     seen_names[name] = entry
             except Exception as e:
@@ -841,21 +748,20 @@ def route(query_text: str, top: int = 5) -> list[dict]:
         ) * float(routing_weights.get(
             (s.get("path") or "").split("/")[0] or (s.get("category") or ""),
             1.0,
-        )) * float(_load_arena_credits().get(s["name"], 1.0))
+        ))
         for s in skills
     ]
     scored = list(zip(scored, skills))
     scored.sort(key=lambda x: -x[0])
-    scored = mobius_correct_scores(scored)
     score_threshold, result_top = _adaptive_bm25_threshold(scored, top)
 
     # Concept-lattice semantic reranking (same logic as cmd_query)
-    LATTICE_SCRIPT = Path(_os_sri.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
+    LATTICE_SCRIPT = Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
     AMBIGUITY_GAP = 0.12
     LATTICE_BOOST = 0.15
     if len(scored) >= 2:
         gap = scored[0][0] - scored[1][0]
-        if should_semantic_fallback(scored, AMBIGUITY_GAP, query_token_count=len(q_tokens)) and LATTICE_SCRIPT.exists():
+        if gap < AMBIGUITY_GAP and LATTICE_SCRIPT.exists():
             try:
                 _lat = subprocess.run(
                     [sys.executable, str(LATTICE_SCRIPT), "--query", query_text, "--top-k", "5"],
@@ -1039,19 +945,17 @@ def cmd_query(query_text: str):
     ]
     scored = list(zip([score for score in scored], skills))
     scored.sort(key=lambda x: -x[0])
-    scored = mobius_correct_scores(scored)
     _score_threshold, _result_top = _adaptive_bm25_threshold(scored, 5)
 
-    # ── Semantic reranking: concept-lattice fallback when BM25 is ambiguous
-    #    OR routing-score entropy is high (Cover–Thomas; hard core).
-    LATTICE_SCRIPT = Path(_os_sri.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
+    # ── Semantic reranking: concept-lattice fallback when BM25 is ambiguous ──
+    LATTICE_SCRIPT = Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes"))) / "scripts" / "concept-lattice-index.py"
     AMBIGUITY_GAP  = 0.12
     LATTICE_BOOST  = 0.15
     semantic_reranked = False
 
     if len(scored) >= 2:
         gap = scored[0][0] - scored[1][0]
-        if should_semantic_fallback(scored, AMBIGUITY_GAP, query_token_count=len(q_tokens)) and LATTICE_SCRIPT.exists():
+        if gap < AMBIGUITY_GAP and LATTICE_SCRIPT.exists():
             try:
                 _lat_result = subprocess.run(
                     [sys.executable, str(LATTICE_SCRIPT),
@@ -1246,19 +1150,13 @@ def cmd_check():
     flags.sort(reverse=True)
     if not flags:
         print("No high-overlap pairs found. Library routing diversity looks healthy.")
-    else:
-        print(f"Found {len(flags)} high-overlap pairs:\n")
-        for sim, a, b in flags:
-            print(f"  {sim:.3f}  {a}  <->  {b}")
-        print(f"\n(These pairs may confuse routing — consider tightening descriptions or merging)")
+        return
 
-    dups = flag_near_duplicate_triggers(skills, min_dist=5)
-    if dups:
-        print(f"\nNear-duplicate trigger phrases (token edit distance < 5): {len(dups)}")
-        for d, a, b in dups[:20]:
-            print(f"  dist={d}  {a}  <->  {b}")
-    else:
-        print("\nNo trigger pairs with token edit distance < 5.")
+    print(f"Found {len(flags)} high-overlap pairs:\n")
+    for sim, a, b in flags:
+        print(f"  {sim:.3f}  {a}  <->  {b}")
+
+    print(f"\n(These pairs may confuse routing — consider tightening descriptions or merging)")
 
 
 def _print_worked_example() -> None:
@@ -1276,41 +1174,6 @@ def _print_worked_example() -> None:
     print(f"  m (observations)        = {m:.0f}")
 
 
-def _router_self_test() -> int:
-    failures: list[str] = []
-    # Entropy: uniform scores → high H → fallback even if gap is large-ish
-    dummy = {"tokens": ["a"], "name": "x", "description": "y"}
-    uniform = [(1.0, dummy), (0.99, dummy), (0.98, dummy), (0.97, dummy)]
-    peaked = [(5.0, dummy), (0.1, dummy), (0.05, dummy)]
-    if not high_entropy_routing(uniform):
-        failures.append("uniform scores should be high-entropy")
-    if high_entropy_routing(peaked):
-        failures.append("peaked scores should not be high-entropy")
-    if not should_semantic_fallback([(0.5, dummy), (0.49, dummy)]):
-        failures.append("small gap should fallback")
-    if not should_semantic_fallback(uniform, gap_thresh=0.001):
-        failures.append("high entropy should fallback regardless of gap")
-
-    # Möbius: sum preserved
-    a = {"tokens": ["foo"], "name": "a"}
-    b = {"tokens": ["foo", "bar"], "name": "b"}  # b subsumes a
-    scored = [(2.0, a), (5.0, b)]
-    corr = mobius_correct_scores(scored)
-    s0 = sum(s for s, _ in scored)
-    s1 = sum(s for s, _ in corr)
-    if abs(s0 - s1) > 1e-9:
-        failures.append(f"Möbius sum {s1} != original {s0}")
-
-    # Hamming/edit distance
-    if token_edit_distance(["use", "when", "routing"], ["use", "when", "routing"]) != 0:
-        failures.append("identical phrases dist != 0")
-    if token_edit_distance(["aaaa", "bbbb", "cccc", "dddd", "eeee"],
-                           ["aaaa", "bbbb", "cccc", "dddd", "ffff"]) >= 5:
-        failures.append("1-token substitution should be dist 1")
-    print(json.dumps({"ok": not failures, "failures": failures}, indent=2))
-    return 0 if not failures else 1
-
-
 def main():
     parser = argparse.ArgumentParser(description="SkillRouter: semantic index over Hermes skill descriptions")
     group = parser.add_mutually_exclusive_group(required=False)
@@ -1323,8 +1186,6 @@ def main():
                        help="Record skill outcome (e.g. 'my-skill:success' or 'my-skill:failure'); updates Beta posterior")
     group.add_argument("--compile-patterns", action="store_true",
                        help="SIP-4: Compile trigger descriptions as regex patterns; report backtracking risks")
-    group.add_argument("--self-test", action="store_true",
-                       help="Wave 18 property tests: entropy fallback, Möbius sum, edit-distance")
     parser.add_argument("--json", action="store_true", dest="as_json",
                         help="With --query: print results as JSON array instead of table")
     parser.add_argument("--incremental", action="store_true",
@@ -1334,7 +1195,7 @@ def main():
     # Cron compatibility: scheduler doesn't pass CLI args to scripts (scheduler_script.py §326)
     # When HERMES_CRON_BUILD=1 is set in job env, default to --build behavior.
     import os as _os_main
-    if not any([args.build, args.query, args.check, args.pattern_check, args.feedback, args.compile_patterns, args.self_test]):
+    if not any([args.build, args.query, args.check, args.pattern_check, args.feedback, args.compile_patterns]):
         if _os_main.environ.get("HERMES_CRON_BUILD", "") == "1":
             args.build = True
 
@@ -1351,8 +1212,6 @@ def main():
         cmd_pattern_check()
     elif args.compile_patterns:
         cmd_compile_patterns()
-    elif args.self_test:
-        raise SystemExit(_router_self_test())
     elif args.feedback:
         skill_name, _, outcome = args.feedback.partition(":")
         if skill_name and outcome in ("success", "failure"):
