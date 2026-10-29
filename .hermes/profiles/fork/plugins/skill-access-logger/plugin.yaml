@@ -1,0 +1,12 @@
+name: skill-access-logger
+version: "1.0.0"
+description: >
+  post_tool_call shadow hook: logs skill_view calls to cache/skill-access.log
+  for co-occurrence graph construction. H-I7 compliant: never raises. Fail-open.
+provides_hooks:
+  - post_tool_call
+hooks:
+  - post_tool_call
+settings:
+  enabled: true
+  max_log_bytes: 102400
