@@ -1,5 +1,5 @@
-import os
 #!/usr/bin/env python3
+import os
 """
 omni_skill_scan.py — Scheduled GEPA Omni continuous improvement driver.
 
