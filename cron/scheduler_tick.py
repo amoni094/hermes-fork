@@ -165,6 +165,21 @@ def _tick_admitted(
             _sched._sweep_mcp_orphans()
             return 0
 
+        # EDF-priority catch-up ordering: sort by urgency = lateness / cadence (descending).
+        # Weekly jobs overdue by 22h rank far above hourly jobs overdue by 5 min,
+        # so the thread-pool fills with the most-critical jobs first during catch-up bursts.
+        # Jobs with unknown cadence (urgency=0) sort last — they fire next tick anyway.
+        def _edf_urgency(job: dict) -> float:
+            try:
+                from cron.jobs import _schedule_cadence_seconds
+                lateness = job.get("last_dispatch", {}).get("lateness_seconds", 0.0) or 0.0
+                cadence = _schedule_cadence_seconds(job.get("schedule", {}))
+                return lateness / cadence if cadence else 0.0
+            except Exception:
+                return 0.0
+
+        due_jobs = sorted(due_jobs, key=_edf_urgency, reverse=True)
+
         _max_workers = _sched._resolve_max_parallel_workers()
         if verbose:
             _sched.logger.info(
