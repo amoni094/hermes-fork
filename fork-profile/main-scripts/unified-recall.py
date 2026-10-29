@@ -624,6 +624,14 @@ def fuse_results(
         item["enriched_weight"] = round(item["rrf_score"] * _decay * _trust_weight, 4)
         item["enriched_distance"] = round(1.0 - item["enriched_weight"], 4)
         item["_age_days"] = round(_age_days, 1)
+        # Anderson (1994) retrieval-induced forgetting: inhibition_weight stored in lifecycle.db
+        # by memory-inhibition-cron.py. High inhibition_weight = weak competitor of a strong
+        # memory — down-rank so strong memories dominate. Formula: score / (1 + inhibition_weight).
+        # inhibition_weight=0 (default) leaves score unchanged.
+        _iw = float(item.get("inhibition_weight") or 0.0)
+        if _iw > 0.0:
+            item["enriched_weight"] = round(item["enriched_weight"] / (1.0 + _iw), 4)
+            item["_inhibition_weight"] = _iw
 
     _src_used = list({s for k in list(scores.keys())[:top] for s in sources.get(k, [])})
     log_recall_query(query, _src_used, _q_type)
@@ -943,6 +951,28 @@ def recall(
         except Exception:
             pass  # index not yet built or import failed — never block recall
 
+    # Wyner-Ziv side-information filter: suppress facts already deducible from session
+    # context (caller's side information). Saves context tokens without information loss.
+    # side-info-memory-filter.py does bigram Jaccard + containment checks; fail-open.
+    try:
+        import importlib.util as _ilu_si, sys as _sys_si
+        _si_key = "side-info-memory-filter"
+        if _si_key not in _sys_si.modules:
+            _si_path = str(_hermes_root() / "profiles" / "fork" / "scripts" / "side-info-memory-filter.py")
+            _si_spec = _ilu_si.spec_from_file_location(_si_key, _si_path)
+            if _si_spec and _si_spec.loader:
+                _si_mod = _ilu_si.module_from_spec(_si_spec)
+                _sys_si.modules[_si_key] = _si_mod
+                _si_spec.loader.exec_module(_si_mod)  # type: ignore[union-attr]
+            else:
+                raise ImportError("side-info-memory-filter spec unavailable")
+        else:
+            _si_mod = _sys_si.modules[_si_key]
+        if hasattr(_si_mod, "filter_redundant"):
+            fused = _si_mod.filter_redundant(fused, query)
+    except Exception:
+        pass  # side-info filter is best-effort; never block recall
+
     return fused
 
 
@@ -957,7 +987,16 @@ def record_query_access(fused: list[dict]) -> None:
         return
     now = datetime.now(timezone.utc).isoformat()
     try:
-        with sqlite3.connect(str(db)) as conn:
+        with sqlite3.connect(str(db), timeout=5.0) as conn:
+            # SQLite WAL paper (Howard & Bhattacharjee): WAL allows concurrent readers
+            # during writes. synchronous=NORMAL is safe under WAL and ~3x faster than FULL.
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA wal_autocheckpoint=100")
+            # BEGIN IMMEDIATE: acquire write lock upfront to avoid SQLITE_BUSY when multiple
+            # cron jobs and recall paths race to update access_count simultaneously.
+            # Fails fast (timeout=5s) rather than silently discarding updates (DEFERRED default).
+            conn.execute("BEGIN IMMEDIATE")
             for item in fused:
                 text = (item.get("_full_text") or item.get("text") or "").strip()
                 if len(text) < 20:
@@ -1099,7 +1138,10 @@ def search_pending_activefacts(query: str, limit: int = 5) -> list[dict]:
     where = " AND ".join(["lower(fact_text) LIKE ?" for _ in terms])
     params = [f"%{t}%" for t in terms]
     try:
-        with sqlite3.connect(str(db)) as conn:
+        with sqlite3.connect(str(db), timeout=5.0) as conn:
+            # WAL mode: concurrent readers during writes, NORMAL sync safe under WAL.
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
             rows = conn.execute(
                 f"""SELECT fact_text, access_count FROM fact_lifecycle
                     WHERE memory_status='pending' AND COALESCE(fact_track,'active')='active'

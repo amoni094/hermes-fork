@@ -46,6 +46,20 @@ STAGING_PATH = FACTS_DIR / "staging.md"
 PURGE_LOG = FACTS_DIR / "purge_log.jsonl"
 STALENESS_LOG = FACTS_DIR / "staleness_log.jsonl"  # sweep 24: FAMA-style tracking
 
+
+def _open_lifecycle_db(path: Path = LIFECYCLE_DB, timeout: float = 5.0) -> sqlite3.Connection:
+    """Open lifecycle.db with WAL mode and concurrent-read-safe pragmas.
+
+    SQLite WAL paper: WAL allows concurrent readers during writes; synchronous=NORMAL
+    is safe with WAL and ~3x faster than FULL while preserving crash safety.
+    busy_timeout avoids SQLITE_BUSY when cron jobs access the DB concurrently.
+    """
+    conn = sqlite3.connect(str(path), timeout=timeout)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA wal_autocheckpoint=100")
+    return conn
+
 # TTL policy per volatility class
 # Sweep 24: volatile TTL is now type-conditioned (see TYPE_CONDITIONED_TTL below)
 # SLOTINE-CH7 (MRAS): Fixed TTL is equivalent to open-loop control.
@@ -268,7 +282,7 @@ def log_staleness_event(memory_ids: set[str], expired: list[dict]) -> None:
         return
     stale_reuse = []
     try:
-        with sqlite3.connect(str(LIFECYCLE_DB)) as conn:
+        with _open_lifecycle_db() as conn:
             conn.row_factory = sqlite3.Row
             for mid in memory_ids:
                 row = conn.execute(
@@ -437,7 +451,7 @@ def main():
         print("[memory-ttl-purge] lifecycle.db does not exist yet — nothing to purge.")
         return 0
 
-    with sqlite3.connect(str(LIFECYCLE_DB)) as conn:
+    with _open_lifecycle_db() as conn:
         expired = load_expired(conn)
         # Freshness warn runs on every purge, including when no volatiles expired.
         stale_constraints = check_constraint_freshness(
@@ -463,7 +477,7 @@ def main():
     removed = remove_from_staging(expired_ids, args.dry_run, args.verbose)
     print(f"[memory-ttl-purge] Removed {removed} lines from staging.md")
 
-    with sqlite3.connect(str(LIFECYCLE_DB)) as conn:
+    with _open_lifecycle_db() as conn:
         mark_purged(conn, expired_ids, args.dry_run)
 
     append_purge_log(expired, expired_ids, args.dry_run)

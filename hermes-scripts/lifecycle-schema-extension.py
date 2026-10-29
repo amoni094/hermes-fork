@@ -26,6 +26,13 @@ DDL = (
       step_num INTEGER NOT NULL,
       state_json TEXT,
       timestamp TEXT DEFAULT (datetime('now')))""",
+    """CREATE TABLE IF NOT EXISTS cbf_log(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts TEXT NOT NULL,
+      raw_signal REAL,
+      safe_signal REAL,
+      constrained INTEGER DEFAULT 0,
+      emergency_stop INTEGER DEFAULT 0)""",
 )
 
 
