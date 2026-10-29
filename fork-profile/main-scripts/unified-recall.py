@@ -98,6 +98,74 @@ def _parse_inhibition_weight(raw) -> float:
     return min(iw, 1.0)
 
 
+# PRIMA/Curino 2008: known-safe fact_lifecycle columns when schema lookup fails.
+_SAFE_LIFECYCLE_COLUMNS = [
+    "memory_id", "fact_text", "fact_type", "volatility_class", "valid_from",
+    "valid_to", "superseded_by", "access_count", "last_accessed",
+    "interference_count", "last_interfered", "retention_score", "memory_status",
+    "inserted_at", "updated_at", "grant_id", "source_type", "action_id",
+    "session_id", "last_accessed_turn", "fact_track",
+    "quality_score", "inhibition_weight", "competitor_of", "strength",
+    "block_id", "source", "_path", "created_at", "last_accessed_at",
+]
+
+
+def _lifecycle_columns(conn) -> list:
+    """Version-aware fact_lifecycle column list (PRIMA/Curino 2008).
+
+    Reads schema_migrations (best-effort provenance) then PRAGMA table_info.
+    Falls back to a known-safe column list if either lookup fails.
+    """
+    try:
+        try:
+            conn.execute("SELECT version FROM schema_migrations LIMIT 1")
+        except Exception:
+            pass
+        rows = conn.execute("PRAGMA table_info(fact_lifecycle)").fetchall()
+        cols = []
+        for row in rows:
+            name = row[1] if row else None
+            if isinstance(name, str) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
+                cols.append(name)
+        if cols:
+            return cols
+    except Exception:
+        pass
+    return list(_SAFE_LIFECYCLE_COLUMNS)
+
+
+def _lifecycle_select_list(conn, wanted: list) -> list:
+    """Intersect requested columns with the live schema, preserving order."""
+    present = set(_lifecycle_columns(conn))
+    return [c for c in wanted if c in present]
+
+
+def _self_test_lifecycle_columns() -> int:
+    """In-memory schema fixtures: live PRAGMA vs fallback column list."""
+    import tempfile as _tf
+
+    d = Path(_tf.mkdtemp(prefix="ur-lc-"))
+    db = d / "t.db"
+    conn = sqlite3.connect(str(db), timeout=30)
+    conn.execute("CREATE TABLE schema_migrations (version TEXT)")
+    conn.execute("INSERT INTO schema_migrations(version) VALUES ('1')")
+    conn.execute(
+        "CREATE TABLE fact_lifecycle (fact_text TEXT, access_count INT, strength REAL)"
+    )
+    conn.commit()
+    cols = _lifecycle_columns(conn)
+    assert "fact_text" in cols and "strength" in cols, cols
+    sel = _lifecycle_select_list(conn, ["fact_text", "inhibition_weight", "access_count"])
+    assert sel == ["fact_text", "access_count"], sel
+    conn.close()
+    conn2 = sqlite3.connect(str(d / "empty.db"), timeout=30)
+    fallback = _lifecycle_columns(conn2)
+    assert "memory_id" in fallback and "fact_text" in fallback, fallback
+    conn2.close()
+    print(json.dumps({"ok": True, "cols": cols, "sel": sel}))
+    return 0
+
+
 def _load_inhibition_weights() -> dict:
     """Map fact_text[:80] → inhibition_weight from lifecycle.db. Fail-open."""
     db = _hermes_root() / "memory-facts" / "lifecycle.db"
@@ -107,11 +175,12 @@ def _load_inhibition_weights() -> dict:
     try:
         with sqlite3.connect(str(db), timeout=5.0) as conn:
             conn.execute("PRAGMA journal_mode=WAL")
-            cols = [r[1] for r in conn.execute("PRAGMA table_info(fact_lifecycle)")]
-            if "inhibition_weight" not in cols:
+            wanted = _lifecycle_select_list(conn, ["fact_text", "inhibition_weight"])
+            if "fact_text" not in wanted or "inhibition_weight" not in wanted:
                 return {}
+            col_sql = ", ".join(wanted)
             rows = conn.execute(
-                "SELECT fact_text, inhibition_weight FROM fact_lifecycle "
+                "SELECT " + col_sql + " FROM fact_lifecycle "
                 "WHERE COALESCE(inhibition_weight, 0) > 0"
             ).fetchall()
             for text, iw in rows:
@@ -1092,11 +1161,16 @@ def record_query_access(fused: list[dict]) -> None:
                     )
                 # Sweep 27 FAMA genGap: if fact is old at retrieval, annotate item for SEU/RDM
                 try:
-                    row = conn.execute(
-                        "SELECT valid_from, volatility_class FROM fact_lifecycle "
-                        "WHERE fact_text LIKE ? LIMIT 1",
-                        (key + "%",),
-                    ).fetchone()
+                    wanted = _lifecycle_select_list(conn, ["valid_from", "volatility_class"])
+                    if "valid_from" not in wanted:
+                        row = None
+                    else:
+                        col_sql = ", ".join(wanted)
+                        row = conn.execute(
+                            "SELECT " + col_sql + " FROM fact_lifecycle "
+                            "WHERE fact_text LIKE ? LIMIT 1",
+                            (key + "%",),
+                        ).fetchone()
                     if row and row[0]:
                         t0 = datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
                         gap = (datetime.now(timezone.utc) - t0).total_seconds() / 86400.0
@@ -1210,8 +1284,12 @@ def search_pending_activefacts(query: str, limit: int = 5) -> list[dict]:
             # WAL mode: concurrent readers during writes, NORMAL sync safe under WAL.
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
+            wanted = _lifecycle_select_list(conn, ["fact_text", "access_count"])
+            if "fact_text" not in wanted or "access_count" not in wanted:
+                return []
+            col_sql = ", ".join(wanted)
             rows = conn.execute(
-                f"""SELECT fact_text, access_count FROM fact_lifecycle
+                f"""SELECT {col_sql} FROM fact_lifecycle
                     WHERE memory_status='pending' AND COALESCE(fact_track,'active')='active'
                       AND {where}
                     ORDER BY COALESCE(access_count,0) DESC LIMIT ?""",
@@ -1331,7 +1409,8 @@ Examples:
   %(prog)s "trading stops" --json
         """,
     )
-    p.add_argument("query", help="Natural language query")
+    p.add_argument("--self-test", action="store_true", help="Test version-aware lifecycle column selection")
+    p.add_argument("query", nargs="?", default="", help="Natural language query")
     p.add_argument("--top", type=int, default=DEFAULT_TOP, help="Max results (default: 10)")
     p.add_argument("--min-score", type=float, default=0.0, help="Min RRF score 0-1 (default: 0)")
     p.add_argument("--json", action="store_true", dest="as_json", help="Output JSON")
@@ -1346,6 +1425,9 @@ Examples:
     p.add_argument("--hindsight-only", action="store_true")
     p.add_argument("--graphiti-only", action="store_true")
     args = p.parse_args()
+
+    if args.self_test:
+        sys.exit(_self_test_lifecycle_columns())
 
     if not args.query.strip():
         p.print_help()
