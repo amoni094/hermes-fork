@@ -724,6 +724,8 @@ def recover_interrupted_executions() -> int:
                 < HANDOFF_ADOPTION_GRACE_SECONDS
             ):
                 continue
+            # The SELECT ran outside a write transaction and the liveness probe takes time: the
+            # owner may have stamped progress since, so act only on the snapshot that was judged.
             try:
                 cas_gen = _require_generation(
                     conn, row["id"], int(row["generation"] or 0)
@@ -740,9 +742,11 @@ def recover_interrupted_executions() -> int:
                    WHERE id=? AND status=? AND process_id=? AND pid=?
                      AND handoff_pending=?
                      AND handoff_started_at IS ?
-                     AND generation=?""",
+                     AND generation=?
+                     AND claimed_at=? AND progress_at IS ?""",
                 (now, reason, duration_s, row["id"], row["status"], row["process_id"], row["pid"],
-                 row["handoff_pending"], row["handoff_started_at"], cas_gen),
+                 row["handoff_pending"], row["handoff_started_at"], cas_gen,
+                 row["claimed_at"], row["progress_at"]),
             )
             changed += cur.rowcount
             if cur.rowcount:
