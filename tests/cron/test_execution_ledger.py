@@ -299,6 +299,7 @@ def test_restart_marks_interrupted_execution_unknown_without_requeue(tmp_path):
 
 def test_generic_submit_failure_finishes_attempt_and_releases_guard(monkeypatch):
     from cron import scheduler
+    from cron import scheduler_tick
 
     class BrokenPool:
         def submit(self, _callable):
@@ -316,6 +317,7 @@ def test_generic_submit_failure_finishes_attempt_and_releases_guard(monkeypatch)
     monkeypatch.setattr(scheduler, "get_due_jobs", lambda: [{"id": "submit-fail"}])
     monkeypatch.setattr(scheduler, "claim_job_for_fire", lambda _job_id: True)
     monkeypatch.setattr(scheduler, "_get_parallel_pool", lambda _workers: BrokenPool())
+    monkeypatch.setattr(scheduler_tick, "_get_sita_pool", lambda _kind, _k: BrokenPool())
 
     assert scheduler.tick(verbose=False, sync=False) == 0
     assert finished == [
