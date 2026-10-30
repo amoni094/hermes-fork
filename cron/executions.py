@@ -259,7 +259,7 @@ def _initialize_schema(conn: sqlite3.Connection) -> None:
     add_column_if_missing(
         conn, "executions", "generation", "generation INTEGER NOT NULL DEFAULT 0"
     )
-    add_column_if_missing(conn, "executions", "duration_s", "REAL")
+    add_column_if_missing(conn, "executions", "duration_s", "duration_s REAL")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_executions_occurrence "
         "ON executions(job_id, scheduled_instant) WHERE status='completed'"

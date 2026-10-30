@@ -3106,28 +3106,15 @@ def _fast_forward_missed_recurring(d: _DueJob, grace: int) -> bool:
     d.scan.persist(d.job["id"], next_run_at=new_next)
     # An explicit per-job grace_minutes is the user's catch-up limit for THIS job: past it the
     # miss is skipped even while the global cron.catch_up_missed default still runs it once.
-    # Also skip catch-up when globally disabled OR when the job fires more than once per 3 hours
-    # (frequent jobs — every N minutes, hourly, etc. — don't need makeup runs; infrequent
-    # nightly/daily jobs do).  3 h = 10 800 s matches the grace ceiling (2 h) with headroom.
-    if _instant_after(_ensure_aware(datetime.fromisoformat(new_next)), d.scan.now):
-        _CATCHUP_MIN_CADENCE_SECONDS = 10_800
-        _cadence = _schedule_cadence_seconds(d.schedule)
-        _frequent = _cadence is not None and _cadence < _CATCHUP_MIN_CADENCE_SECONDS
-        _disabled = not _cron_config_number("catch_up_missed", True, lambda value: value is not False)
-        _grace_override = jobs_time.grace_seconds_override(d.job.get("grace_minutes")) is not None
-        if _disabled or _frequent or _grace_override:
-            if _frequent and not _disabled:
-                _reason = "frequent schedule"
-            elif _grace_override:
-                _reason = "grace_minutes or cron.catch_up_missed=false"
-            else:
-                _reason = "cron.catch_up_missed is false"
-            logger.info(
-                "Job '%s' missed its scheduled time (%s, grace=%ds). "
-                "Skipping missed occurrence because %s; next run: %s",
-                d.label, d.next_run, grace, _reason, new_next)
-            d.scan.on_saved.append(lambda job=d.job: record_cron_missed(job))
-            return True
+    if (_instant_after(_ensure_aware(datetime.fromisoformat(new_next)), d.scan.now)
+            and (jobs_time.grace_seconds_override(d.job.get("grace_minutes")) is not None
+                 or not _cron_config_number("catch_up_missed", True, lambda value: value is not False))):
+        logger.info(
+            "Job '%s' missed its scheduled time (%s, grace=%ds). "
+            "Skipping missed occurrence (grace_minutes or cron.catch_up_missed=false); next run: %s",
+            d.label, d.next_run, grace, new_next)
+        d.scan.on_saved.append(lambda job=d.job: record_cron_missed(job))
+        return True
     logger.info(
         "Job '%s' missed its scheduled time (%s, grace=%ds). "
         "Running now; next run provisionally set to: %s (re-anchored on completion)",
