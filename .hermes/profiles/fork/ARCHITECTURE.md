@@ -175,9 +175,10 @@ Source: Denuto harness-and-memory-contract.md.
 - Appended to annotation output as: "Compaction advisory: aggressiveness=X.XX, focus=TOPIC".
 - Persists `cache/rd-compaction-advisory.json` (atomic). DPI property test flags plans that
   would drop pre-compact-annotate focus tokens (Cover–Thomas data-processing inequality).
-- WIRING (Wave 18): context-pressure-guard `on_pre_compress` reads aggressiveness and applies
-  it as compressor `lambda_` (monotone-increasing within a session) and writes
-  `cache/rd-lambda-target.json` for lambda-tuner (no hook parameter exposed).
+- WIRING (Wave 18 → ADV-022): context-pressure-guard registers `pre_compress` (not `on_pre_compress`)
+  and is invoked via `fire_pre_compress()` in `agent/compaction_events.py` → called from
+  `agent/conversation_compression.py` before `_pre_compress_memory_context`. Applies lyapunov-map
+  lambda (memoryless, not +0.05 per turn) and writes `cache/rd-lambda-target.json` for lambda-tuner.
   Proposal: `proposals/wave18-rd-compaction-wiring.json` (HIGH, plugin_update).
   Does not patch `agent/context_compressor.py`. Fail-open (H-I7).
   Hard core: `new_lambda = min(0.95, max(current, proposed, session_floor))`.

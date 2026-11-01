@@ -9,7 +9,7 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/shadow-gate-0001.sh",
       "no_agent": true,
       "description": "Nightly shadow flag evaluation",
-      "next_run_at": "2026-11-02T08:00:00+11:00",
+      "next_run_at": "2026-11-03T08:00:00+11:00",
       "env": {
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
@@ -18,13 +18,13 @@
       "enabled": true,
       "state": "scheduled",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T08:00:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 2984.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T08:00:00+11:00",
+        "dispatched_at": "2026-11-02T08:00:16.918644+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T08:49:54.921599+11:00",
+      "last_run_at": "2026-11-02T08:00:23.047320+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -120,7 +120,7 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/routing-weight-updater-0001.sh",
       "no_agent": true,
       "description": "Daily FTRL routing weight update (bottleneck #2)",
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-03T07:00:00+11:00",
       "env": {
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
@@ -130,13 +130,13 @@
       "enabled": true,
       "state": "scheduled",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T07:00:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 6584.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T07:00:00+11:00",
+        "dispatched_at": "2026-11-02T07:00:16.920500+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T08:50:01.354742+11:00",
+      "last_run_at": "2026-11-02T07:00:23.650773+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -158,19 +158,19 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/pre-compact-annotate-0001.sh",
       "no_agent": true,
       "description": "Every 15m R-D compaction advisory",
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-02T10:30:00+11:00",
       "env": {
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:30:00+11:00",
-        "dispatched_at": "2026-11-02T06:30:16.922006+11:00",
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
         "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:30:23.582493+11:00",
+      "last_run_at": "2026-11-02T10:00:23.759060+11:00",
       "last_status": "ok",
       "failure_streak": 0,
       "last_delivery_error": null,
@@ -346,18 +346,18 @@
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
       "display": "daily at 10:00",
-      "next_run_at": "2026-11-02T10:00:00+11:00",
+      "next_run_at": "2026-11-03T10:00:00+11:00",
       "profile": "fork",
       "enabled": true,
       "state": "scheduled",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T10:00:00+11:00",
-        "dispatched_at": "2026-11-01T10:03:31.218390+11:00",
-        "lateness_seconds": 211.2,
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
+        "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T10:17:56.239698+11:00",
+      "last_run_at": "2026-11-02T10:00:24.696161+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -420,15 +420,15 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-11-02T08:00:00+11:00",
+      "next_run_at": "2026-11-02T12:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:00:00+11:00",
-        "dispatched_at": "2026-11-02T06:00:16.888448+11:00",
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
         "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:00:24.383471+11:00",
+      "last_run_at": "2026-11-02T10:00:24.453718+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -652,15 +652,15 @@
       "schedule_display": "every 10m",
       "repeat": {
         "times": null,
-        "completed": 6968
+        "completed": 6987
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-06-26T11:06:08.602796+10:00",
-      "next_run_at": "2026-11-02T06:52:19.144414+11:00",
-      "last_run_at": "2026-11-02T06:42:19.144414+11:00",
+      "next_run_at": "2026-11-02T10:22:12.663392+11:00",
+      "last_run_at": "2026-11-02T10:12:12.663392+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -676,9 +676,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:41:18.836368+11:00",
-        "dispatched_at": "2026-11-02T06:42:16.919506+11:00",
-        "lateness_seconds": 58.1,
+        "scheduled_at": "2026-11-02T10:10:26.013672+11:00",
+        "dispatched_at": "2026-11-02T10:12:10.310835+11:00",
+        "lateness_seconds": 104.3,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -775,15 +775,15 @@
       "schedule_display": "every 245m",
       "repeat": {
         "times": null,
-        "completed": 378
+        "completed": 379
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-07-01T20:18:29.618545+10:00",
-      "next_run_at": "2026-11-02T09:24:31.805920+11:00",
-      "last_run_at": "2026-11-02T05:19:31.805920+11:00",
+      "next_run_at": "2026-11-02T13:30:35.890036+11:00",
+      "last_run_at": "2026-11-02T09:25:35.890036+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -794,9 +794,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T05:19:02.350192+11:00",
-        "dispatched_at": "2026-11-02T05:19:16.917629+11:00",
-        "lateness_seconds": 14.6,
+        "scheduled_at": "2026-11-02T09:24:31.805920+11:00",
+        "dispatched_at": "2026-11-02T09:25:16.918198+11:00",
+        "lateness_seconds": 45.1,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -834,15 +834,15 @@
       "schedule_display": "every 180m",
       "repeat": {
         "times": null,
-        "completed": 445
+        "completed": 446
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-07-09T19:28:37.783372+10:00",
-      "next_run_at": "2026-11-02T09:09:25.745939+11:00",
-      "last_run_at": "2026-11-02T06:09:25.745939+11:00",
+      "next_run_at": "2026-11-02T12:10:29.437332+11:00",
+      "last_run_at": "2026-11-02T09:10:29.437332+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -853,9 +853,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:09:01.753326+11:00",
-        "dispatched_at": "2026-11-02T06:09:16.920729+11:00",
-        "lateness_seconds": 15.2,
+        "scheduled_at": "2026-11-02T09:09:25.745939+11:00",
+        "dispatched_at": "2026-11-02T09:10:16.921749+11:00",
+        "lateness_seconds": 51.2,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -895,15 +895,15 @@
       "schedule_display": "0 9 * * *",
       "repeat": {
         "times": null,
-        "completed": 304
+        "completed": 305
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-07-09T19:28:48.500415+10:00",
-      "next_run_at": "2026-11-02T09:00:00+11:00",
-      "last_run_at": "2026-11-01T10:16:46.147946+11:00",
+      "next_run_at": "2026-11-03T09:00:00+11:00",
+      "last_run_at": "2026-11-02T09:00:29.005614+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -918,9 +918,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T09:00:00+11:00",
-        "dispatched_at": "2026-11-01T09:00:44.442127+11:00",
-        "lateness_seconds": 44.4,
+        "scheduled_at": "2026-11-02T09:00:00+11:00",
+        "dispatched_at": "2026-11-02T09:00:16.920633+11:00",
+        "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -932,7 +932,7 @@
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
       "canonical_completions": [
-        "3dd84213476c401d8eb95f06b4debf9c"
+        "c6b04753457a4b4fbc01cd5020c97b2f"
       ]
     },
     {
@@ -960,15 +960,15 @@
       "schedule_display": "every 220m",
       "repeat": {
         "times": null,
-        "completed": 293
+        "completed": 294
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-15T10:00:51.863995+10:00",
-      "next_run_at": "2026-11-02T08:08:03.668467+11:00",
-      "last_run_at": "2026-11-02T04:28:03.668467+11:00",
+      "next_run_at": "2026-11-02T11:48:21.556024+11:00",
+      "last_run_at": "2026-11-02T08:08:21.556024+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -979,9 +979,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T04:27:51.890303+11:00",
-        "dispatched_at": "2026-11-02T04:27:57.952475+11:00",
-        "lateness_seconds": 6.1,
+        "scheduled_at": "2026-11-02T08:08:03.668467+11:00",
+        "dispatched_at": "2026-11-02T08:08:16.919285+11:00",
+        "lateness_seconds": 13.3,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -1083,15 +1083,15 @@
       "schedule_display": "every 250m",
       "repeat": {
         "times": null,
-        "completed": 256
+        "completed": 257
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-18T22:21:31.548987+10:00",
-      "next_run_at": "2026-11-02T09:54:19.412728+11:00",
-      "last_run_at": "2026-11-02T05:44:19.412728+11:00",
+      "next_run_at": "2026-11-02T14:05:19.130152+11:00",
+      "last_run_at": "2026-11-02T09:55:19.130152+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -1105,9 +1105,9 @@
       "workdir": null,
       "fire_claim": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T05:43:48.854179+11:00",
-        "dispatched_at": "2026-11-02T05:44:16.916868+11:00",
-        "lateness_seconds": 28.1,
+        "scheduled_at": "2026-11-02T09:54:19.412728+11:00",
+        "dispatched_at": "2026-11-02T09:55:16.920006+11:00",
+        "lateness_seconds": 57.5,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -1214,15 +1214,15 @@
       "schedule_display": "every 230m",
       "repeat": {
         "times": null,
-        "completed": 216
+        "completed": 217
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-06T13:30:29.886527+10:00",
-      "next_run_at": "2026-11-02T08:38:19.451941+11:00",
-      "last_run_at": "2026-11-02T04:48:19.451941+11:00",
+      "next_run_at": "2026-11-02T12:29:19.259076+11:00",
+      "last_run_at": "2026-11-02T08:39:19.259076+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -1233,9 +1233,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T04:47:49.173084+11:00",
-        "dispatched_at": "2026-11-02T04:48:16.909275+11:00",
-        "lateness_seconds": 27.7,
+        "scheduled_at": "2026-11-02T08:38:19.451941+11:00",
+        "dispatched_at": "2026-11-02T08:39:16.919683+11:00",
+        "lateness_seconds": 57.5,
         "kind": "on_time"
       },
       "fire_claim": null,
@@ -1456,15 +1456,15 @@
       "schedule_display": "every 90m",
       "repeat": {
         "times": null,
-        "completed": 296
+        "completed": 298
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-30T12:47:26.633369+10:00",
-      "next_run_at": "2026-11-02T07:42:32.348335+11:00",
-      "last_run_at": "2026-11-02T06:12:32.348335+11:00",
+      "next_run_at": "2026-11-02T10:44:40.303688+11:00",
+      "last_run_at": "2026-11-02T09:14:40.303688+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -1475,9 +1475,9 @@
       "workdir": null,
       "fire_claim": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:11:27.807123+11:00",
-        "dispatched_at": "2026-11-02T06:12:16.919281+11:00",
-        "lateness_seconds": 49.1,
+        "scheduled_at": "2026-11-02T09:13:43.124825+11:00",
+        "dispatched_at": "2026-11-02T09:14:16.922021+11:00",
+        "lateness_seconds": 33.8,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -1615,8 +1615,8 @@
       "no_agent": true,
       "enabled": true,
       "created_at": "2026-09-22T04:46:17Z",
-      "last_run_at": "2026-11-02T03:07:52.144485+11:00",
-      "next_run_at": "2026-11-02T09:07:52.144485+11:00",
+      "last_run_at": "2026-11-02T09:08:21.868075+11:00",
+      "next_run_at": "2026-11-02T15:08:21.868075+11:00",
       "last_status": "ok",
       "timeout_seconds": 3600,
       "startup_jitter_seconds": 29,
@@ -1626,9 +1626,9 @@
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T03:07:07.646034+11:00",
-        "dispatched_at": "2026-11-02T03:07:46.292060+11:00",
-        "lateness_seconds": 38.6,
+        "scheduled_at": "2026-11-02T09:07:52.144485+11:00",
+        "dispatched_at": "2026-11-02T09:08:16.923169+11:00",
+        "lateness_seconds": 24.8,
         "kind": "on_time"
       },
       "fire_claim": null,
@@ -1667,14 +1667,14 @@
       },
       "state": "scheduled",
       "created_at": "2026-09-22T15:29:09.530109+10:00",
-      "next_run_at": "2026-11-02T06:58:21.558764+11:00",
-      "last_run_at": "2026-11-02T06:43:21.558764+11:00",
+      "next_run_at": "2026-11-02T10:27:16.966881+11:00",
+      "last_run_at": "2026-11-02T10:12:16.966881+11:00",
       "last_status": "ok",
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:42:21.637535+11:00",
-        "dispatched_at": "2026-11-02T06:43:16.923880+11:00",
-        "lateness_seconds": 55.3,
+        "scheduled_at": "2026-11-02T10:10:21.600386+11:00",
+        "dispatched_at": "2026-11-02T10:12:10.310835+11:00",
+        "lateness_seconds": 108.7,
         "kind": "on_time"
       },
       "fire_claim": null,
@@ -1703,15 +1703,15 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-11-02T07:21:21.716538+11:00",
+      "next_run_at": "2026-11-02T10:24:21.451242+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:20:22.094215+11:00",
-        "dispatched_at": "2026-11-02T06:21:16.924572+11:00",
-        "lateness_seconds": 54.8,
+        "scheduled_at": "2026-11-02T09:23:21.688207+11:00",
+        "dispatched_at": "2026-11-02T09:24:16.921870+11:00",
+        "lateness_seconds": 55.2,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:21:21.716538+11:00",
+      "last_run_at": "2026-11-02T09:24:21.451242+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -1893,15 +1893,15 @@
         "HERMES_PROFILE": "fork"
       },
       "enabled": true,
-      "next_run_at": "2026-11-02T09:07:52.518888+11:00",
+      "next_run_at": "2026-11-02T15:08:22.319833+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T03:07:17.862109+11:00",
-        "dispatched_at": "2026-11-02T03:07:46.292060+11:00",
-        "lateness_seconds": 28.4,
+        "scheduled_at": "2026-11-02T09:07:52.518888+11:00",
+        "dispatched_at": "2026-11-02T09:08:16.923169+11:00",
+        "lateness_seconds": 24.4,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T03:07:52.518888+11:00",
+      "last_run_at": "2026-11-02T09:08:22.319833+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -1995,15 +1995,15 @@
         "HERMES_PROFILE": "fork"
       },
       "enabled": true,
-      "next_run_at": "2026-11-02T08:51:52.513165+11:00",
+      "next_run_at": "2026-11-02T16:52:22.467403+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T00:51:37.537078+11:00",
-        "dispatched_at": "2026-11-02T00:51:46.286994+11:00",
-        "lateness_seconds": 8.7,
+        "scheduled_at": "2026-11-02T08:51:52.513165+11:00",
+        "dispatched_at": "2026-11-02T08:52:16.922274+11:00",
+        "lateness_seconds": 24.4,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T00:51:52.513165+11:00",
+      "last_run_at": "2026-11-02T08:52:22.467403+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -2029,15 +2029,15 @@
         "HERMES_PROFILE": "fork"
       },
       "enabled": true,
-      "next_run_at": "2026-11-02T08:51:52.744542+11:00",
+      "next_run_at": "2026-11-02T16:52:22.668987+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T00:51:37.288760+11:00",
-        "dispatched_at": "2026-11-02T00:51:46.286994+11:00",
-        "lateness_seconds": 9.0,
+        "scheduled_at": "2026-11-02T08:51:52.744542+11:00",
+        "dispatched_at": "2026-11-02T08:52:16.922274+11:00",
+        "lateness_seconds": 24.2,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T00:51:52.744542+11:00",
+      "last_run_at": "2026-11-02T08:52:22.668987+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -2145,17 +2145,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-11-02T07:21:19.537424+11:00",
-      "last_run_at": "2026-11-02T06:21:19.537424+11:00",
+      "next_run_at": "2026-11-02T10:24:19.739599+11:00",
+      "last_run_at": "2026-11-02T09:24:19.739599+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:20:19.811653+11:00",
-        "dispatched_at": "2026-11-02T06:21:16.924572+11:00",
-        "lateness_seconds": 57.1,
+        "scheduled_at": "2026-11-02T09:23:19.489071+11:00",
+        "dispatched_at": "2026-11-02T09:24:16.921870+11:00",
+        "lateness_seconds": 57.4,
         "kind": "on_time"
       },
       "last_failure": {
@@ -2187,17 +2187,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-11-02T07:21:19.738817+11:00",
-      "last_run_at": "2026-11-02T06:21:19.738817+11:00",
+      "next_run_at": "2026-11-02T10:24:19.489926+11:00",
+      "last_run_at": "2026-11-02T09:24:19.489926+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:20:19.958549+11:00",
-        "dispatched_at": "2026-11-02T06:21:16.924572+11:00",
-        "lateness_seconds": 57.0,
+        "scheduled_at": "2026-11-02T09:23:19.786379+11:00",
+        "dispatched_at": "2026-11-02T09:24:16.921870+11:00",
+        "lateness_seconds": 57.1,
         "kind": "on_time"
       },
       "last_failure": {
@@ -2229,17 +2229,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-11-02T07:22:24.338431+11:00",
-      "last_run_at": "2026-11-02T06:22:24.338431+11:00",
+      "next_run_at": "2026-11-02T10:25:22.733658+11:00",
+      "last_run_at": "2026-11-02T09:25:22.733658+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:21:23.054310+11:00",
-        "dispatched_at": "2026-11-02T06:22:16.919144+11:00",
-        "lateness_seconds": 53.9,
+        "scheduled_at": "2026-11-02T09:24:23.872865+11:00",
+        "dispatched_at": "2026-11-02T09:25:16.918198+11:00",
+        "lateness_seconds": 53.0,
         "kind": "on_time"
       },
       "last_failure": {
@@ -2267,17 +2267,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-11-02T07:22:23.633238+11:00",
-      "last_run_at": "2026-11-02T06:22:23.633238+11:00",
+      "next_run_at": "2026-11-02T10:25:23.350992+11:00",
+      "last_run_at": "2026-11-02T09:25:23.350992+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:21:23.272917+11:00",
-        "dispatched_at": "2026-11-02T06:22:16.919144+11:00",
-        "lateness_seconds": 53.6,
+        "scheduled_at": "2026-11-02T09:24:23.471175+11:00",
+        "dispatched_at": "2026-11-02T09:25:16.918198+11:00",
+        "lateness_seconds": 53.4,
         "kind": "on_time"
       },
       "last_failure": {
@@ -2305,18 +2305,18 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-11-02T06:54:23.461326+11:00",
-      "last_run_at": "2026-11-02T06:24:23.461326+11:00",
+      "next_run_at": "2026-11-02T10:42:16.523486+11:00",
+      "last_run_at": "2026-11-02T10:12:16.523486+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:23:23.136014+11:00",
-        "dispatched_at": "2026-11-02T06:24:16.922365+11:00",
-        "lateness_seconds": 53.8,
-        "kind": "on_time"
+        "scheduled_at": "2026-11-02T10:00:23.972015+11:00",
+        "dispatched_at": "2026-11-02T10:12:10.310835+11:00",
+        "lateness_seconds": 706.3,
+        "kind": "late"
       },
       "last_failure": {
         "at": "2026-10-28T11:07:08.558404+11:00",
@@ -2373,20 +2373,20 @@
       },
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/real-options-fanout-gate-0001.sh",
       "description": "Applies real-options theory to gate/defer subagent fan-out decisions. GAP-4 wiring fix.",
-      "next_run_at": "2026-11-02T06:54:24.051518+11:00",
+      "next_run_at": "2026-11-02T10:42:18.405597+11:00",
       "no_agent": true,
       "env": {
         "HERMES_HOME": "/var/home/rainbow/.hermes/profiles/fork",
         "HERMES_PROFILE": "fork"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:23:24.169561+11:00",
-        "dispatched_at": "2026-11-02T06:24:16.922365+11:00",
-        "lateness_seconds": 52.8,
-        "kind": "on_time"
+        "scheduled_at": "2026-11-02T10:00:23.482803+11:00",
+        "dispatched_at": "2026-11-02T10:12:10.310835+11:00",
+        "lateness_seconds": 706.8,
+        "kind": "late"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:24:24.051518+11:00",
+      "last_run_at": "2026-11-02T10:12:18.405597+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -2460,14 +2460,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T07:22:23.088487+11:00",
+      "next_run_at": "2026-11-02T10:25:29.650907+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:21:24.530528+11:00",
-        "dispatched_at": "2026-11-02T06:22:16.919144+11:00",
-        "lateness_seconds": 52.4,
+        "scheduled_at": "2026-11-02T09:24:22.630449+11:00",
+        "dispatched_at": "2026-11-02T09:25:16.918198+11:00",
+        "lateness_seconds": 54.3,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-02T06:22:23.088487+11:00",
+      "last_run_at": "2026-11-02T09:25:29.650907+11:00",
       "schedule_display": "every 60m",
       "skills": [],
       "skill": null,
@@ -2502,14 +2502,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T09:30:00+11:00",
+      "next_run_at": "2026-11-03T09:30:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T09:30:00+11:00",
-        "dispatched_at": "2026-11-01T10:03:31.218390+11:00",
-        "lateness_seconds": 2011.2,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T09:30:00+11:00",
+        "dispatched_at": "2026-11-02T09:30:16.921793+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
-      "last_run_at": "2026-11-01T10:18:49.690391+11:00",
+      "last_run_at": "2026-11-02T09:30:30.269627+11:00",
       "last_failure": {
         "at": "2026-10-28T10:36:48.202337+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/governance-conflict-detector.py — not re-executing on host"
@@ -2582,14 +2582,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T07:10:24.124890+11:00",
+      "next_run_at": "2026-11-02T11:12:23.565194+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T05:09:52.587385+11:00",
-        "dispatched_at": "2026-11-02T05:10:16.890195+11:00",
-        "lateness_seconds": 24.3,
+        "scheduled_at": "2026-11-02T09:11:23.905742+11:00",
+        "dispatched_at": "2026-11-02T09:12:16.921303+11:00",
+        "lateness_seconds": 53.0,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-02T05:10:24.124890+11:00",
+      "last_run_at": "2026-11-02T09:12:23.565194+11:00",
       "last_failure": {
         "at": "2026-10-28T10:36:50.353934+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/loop-model-comparison.py — not re-executing on host"
@@ -2662,14 +2662,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T07:10:24.507344+11:00",
+      "next_run_at": "2026-11-02T11:12:23.981502+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T05:09:52.994762+11:00",
-        "dispatched_at": "2026-11-02T05:10:16.890195+11:00",
-        "lateness_seconds": 23.9,
+        "scheduled_at": "2026-11-02T09:11:24.474682+11:00",
+        "dispatched_at": "2026-11-02T09:12:16.921303+11:00",
+        "lateness_seconds": 52.4,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-02T05:10:24.507344+11:00",
+      "last_run_at": "2026-11-02T09:12:23.981502+11:00",
       "last_failure": {
         "at": "2026-10-28T10:36:51.168273+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/nyquist-timescale-bridge.py — not re-executing on host"
@@ -2703,14 +2703,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T07:10:23.216853+11:00",
+      "next_run_at": "2026-11-02T11:12:23.023523+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T05:09:54.786668+11:00",
-        "dispatched_at": "2026-11-02T05:10:16.890195+11:00",
-        "lateness_seconds": 22.1,
+        "scheduled_at": "2026-11-02T09:11:24.266466+11:00",
+        "dispatched_at": "2026-11-02T09:12:16.921303+11:00",
+        "lateness_seconds": 52.7,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-02T05:10:23.216853+11:00",
+      "last_run_at": "2026-11-02T09:12:23.023523+11:00",
       "last_failure": {
         "at": "2026-10-28T10:36:51.364338+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/loop-cusum-changepoint.py — not re-executing on host"
@@ -2744,14 +2744,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T06:54:24.226615+11:00",
+      "next_run_at": "2026-11-02T10:42:22.540822+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:23:24.348843+11:00",
-        "dispatched_at": "2026-11-02T06:24:16.922365+11:00",
-        "lateness_seconds": 52.6,
-        "kind": "on_time"
+        "scheduled_at": "2026-11-02T10:00:29.286919+11:00",
+        "dispatched_at": "2026-11-02T10:12:10.310835+11:00",
+        "lateness_seconds": 701.0,
+        "kind": "late"
       },
-      "last_run_at": "2026-11-02T06:24:24.226615+11:00",
+      "last_run_at": "2026-11-02T10:12:22.540822+11:00",
       "last_failure": {
         "at": "2026-10-28T11:07:10.076845+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/wave21c-alarm-bridge.py — not re-executing on host"
@@ -2785,14 +2785,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T08:15:00+11:00",
+      "next_run_at": "2026-11-03T08:15:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T08:15:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 2084.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T08:15:00+11:00",
+        "dispatched_at": "2026-11-02T08:15:16.917357+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
-      "last_run_at": "2026-11-01T08:51:56.823213+11:00",
+      "last_run_at": "2026-11-02T08:15:21.426874+11:00",
       "last_failure": {
         "at": "2026-10-28T08:19:17.223257+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/sprt-falsifiability-handshake.py — not re-executing on host"
@@ -2826,14 +2826,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T09:45:00+11:00",
+      "next_run_at": "2026-11-03T09:45:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T09:45:00+11:00",
-        "dispatched_at": "2026-11-01T10:03:31.218390+11:00",
-        "lateness_seconds": 1111.2,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T09:45:00+11:00",
+        "dispatched_at": "2026-11-02T09:45:16.918111+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
-      "last_run_at": "2026-11-01T10:18:59.324455+11:00",
+      "last_run_at": "2026-11-02T09:45:21.719528+11:00",
       "last_failure": {
         "at": "2026-10-28T10:36:54.176714+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/governance-conflict-epistemic.py — not re-executing on host"
@@ -2867,14 +2867,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T07:10:28.860269+11:00",
+      "next_run_at": "2026-11-02T11:12:28.683776+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T05:09:59.173604+11:00",
-        "dispatched_at": "2026-11-02T05:10:16.890195+11:00",
-        "lateness_seconds": 17.7,
+        "scheduled_at": "2026-11-02T09:11:29.973040+11:00",
+        "dispatched_at": "2026-11-02T09:12:16.921303+11:00",
+        "lateness_seconds": 46.9,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-02T05:10:28.860269+11:00",
+      "last_run_at": "2026-11-02T09:12:28.683776+11:00",
       "last_failure": {
         "at": "2026-10-28T10:36:54.454889+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/pid-passivity-index.py — not re-executing on host"
@@ -2908,14 +2908,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T07:10:31.152765+11:00",
+      "next_run_at": "2026-11-02T11:12:30.363412+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T05:09:59.495234+11:00",
-        "dispatched_at": "2026-11-02T05:10:16.890195+11:00",
-        "lateness_seconds": 17.4,
+        "scheduled_at": "2026-11-02T09:11:31.147857+11:00",
+        "dispatched_at": "2026-11-02T09:12:16.921303+11:00",
+        "lateness_seconds": 45.8,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-02T05:10:31.152765+11:00",
+      "last_run_at": "2026-11-02T09:12:30.363412+11:00",
       "last_failure": {
         "at": "2026-10-28T10:36:56.558041+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/pid-circle-criterion.py — not re-executing on host"
@@ -2949,14 +2949,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T08:35:00+11:00",
+      "next_run_at": "2026-11-03T08:35:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T08:35:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 884.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T08:35:00+11:00",
+        "dispatched_at": "2026-11-02T08:35:16.920724+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
-      "last_run_at": "2026-11-01T08:52:04.561074+11:00",
+      "last_run_at": "2026-11-02T08:35:22.485089+11:00",
       "last_failure": {
         "at": "2026-10-28T08:35:28.719242+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/ltl-promotion-invariant.py — not re-executing on host"
@@ -2990,14 +2990,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T07:10:30.756526+11:00",
+      "next_run_at": "2026-11-02T11:12:30.114687+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T05:10:01.235899+11:00",
-        "dispatched_at": "2026-11-02T05:10:16.890195+11:00",
-        "lateness_seconds": 15.7,
+        "scheduled_at": "2026-11-02T09:11:30.902501+11:00",
+        "dispatched_at": "2026-11-02T09:12:16.921303+11:00",
+        "lateness_seconds": 46.0,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-02T05:10:30.756526+11:00",
+      "last_run_at": "2026-11-02T09:12:30.114687+11:00",
       "last_failure": {
         "at": "2026-10-28T10:36:57.293163+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/loop-rollout-horizon.py — not re-executing on host"
@@ -3031,14 +3031,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T08:10:00+11:00",
+      "next_run_at": "2026-11-03T08:10:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T08:10:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 2384.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T08:10:00+11:00",
+        "dispatched_at": "2026-11-02T08:10:16.922032+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
-      "last_run_at": "2026-11-01T08:52:10.271474+11:00",
+      "last_run_at": "2026-11-02T08:10:22.221707+11:00",
       "last_failure": {
         "at": "2026-10-28T08:19:20.023463+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/sprt-measurement-tamper.py — not re-executing on host"
@@ -3072,14 +3072,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T07:10:34.121946+11:00",
+      "next_run_at": "2026-11-02T11:12:34.506983+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T05:10:04.625703+11:00",
-        "dispatched_at": "2026-11-02T05:10:16.890195+11:00",
-        "lateness_seconds": 12.3,
+        "scheduled_at": "2026-11-02T09:11:34.558211+11:00",
+        "dispatched_at": "2026-11-02T09:12:16.921303+11:00",
+        "lateness_seconds": 42.4,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-02T05:10:34.121946+11:00",
+      "last_run_at": "2026-11-02T09:12:34.506983+11:00",
       "last_failure": {
         "at": "2026-10-28T10:36:57.492836+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/soares-halt-liveness.py — not re-executing on host"
@@ -3113,14 +3113,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T07:11:21.482155+11:00",
+      "next_run_at": "2026-11-02T11:13:21.446867+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T05:10:52.353204+11:00",
-        "dispatched_at": "2026-11-02T05:11:16.908257+11:00",
-        "lateness_seconds": 24.6,
+        "scheduled_at": "2026-11-02T09:12:21.546170+11:00",
+        "dispatched_at": "2026-11-02T09:13:16.908974+11:00",
+        "lateness_seconds": 55.4,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-02T05:11:21.482155+11:00",
+      "last_run_at": "2026-11-02T09:13:21.446867+11:00",
       "last_failure": {
         "at": "2026-10-28T10:36:59.611851+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/cusum-gain-freeze.py — not re-executing on host"
@@ -3154,14 +3154,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T08:20:00+11:00",
+      "next_run_at": "2026-11-03T08:20:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T08:20:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 1784.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T08:20:00+11:00",
+        "dispatched_at": "2026-11-02T08:20:16.920512+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
-      "last_run_at": "2026-11-01T08:52:19.881121+11:00",
+      "last_run_at": "2026-11-02T08:20:21.441757+11:00",
       "last_failure": {
         "at": "2026-10-28T08:20:29.411098+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/sprt-inner-outer-alignment.py — not re-executing on host"
@@ -3195,14 +3195,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T06:54:28.109731+11:00",
+      "next_run_at": "2026-11-02T10:42:22.931120+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:23:27.629144+11:00",
-        "dispatched_at": "2026-11-02T06:24:16.922365+11:00",
-        "lateness_seconds": 49.3,
-        "kind": "on_time"
+        "scheduled_at": "2026-11-02T10:00:30.955333+11:00",
+        "dispatched_at": "2026-11-02T10:12:10.310835+11:00",
+        "lateness_seconds": 699.4,
+        "kind": "late"
       },
-      "last_run_at": "2026-11-02T06:24:28.109731+11:00",
+      "last_run_at": "2026-11-02T10:12:22.931120+11:00",
       "last_failure": {
         "at": "2026-10-28T11:08:08.778299+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/iss-justification-gate.py — not re-executing on host"
@@ -3268,15 +3268,15 @@
       "timeout_seconds": 1800,
       "priority": 3,
       "name": "routing-pac-bayes-bound",
-      "next_run_at": "2026-11-02T07:30:00+11:00",
+      "next_run_at": "2026-11-03T07:30:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T07:30:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 4784.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T07:30:00+11:00",
+        "dispatched_at": "2026-11-02T07:30:16.918666+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T08:52:25.234498+11:00",
+      "last_run_at": "2026-11-02T07:30:23.172035+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -3305,15 +3305,15 @@
       "timeout_seconds": 1800,
       "priority": 3,
       "name": "routing-fano-bound",
-      "next_run_at": "2026-11-02T07:45:00+11:00",
+      "next_run_at": "2026-11-03T07:45:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T07:45:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 3884.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T07:45:00+11:00",
+        "dispatched_at": "2026-11-02T07:45:16.927983+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T08:52:30.369911+11:00",
+      "last_run_at": "2026-11-02T07:45:24.624574+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -3342,15 +3342,15 @@
       "timeout_seconds": 1800,
       "priority": 3,
       "name": "routing-graph-bandit-update",
-      "next_run_at": "2026-11-02T08:30:00+11:00",
+      "next_run_at": "2026-11-03T08:30:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T08:30:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 1184.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T08:30:00+11:00",
+        "dispatched_at": "2026-11-02T08:30:16.925940+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T08:52:29.813391+11:00",
+      "last_run_at": "2026-11-02T08:30:23.921982+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -3379,15 +3379,15 @@
       "timeout_seconds": 1800,
       "priority": 3,
       "name": "routing-exp3-adversarial",
-      "next_run_at": "2026-11-02T09:00:00+11:00",
+      "next_run_at": "2026-11-03T09:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T09:00:00+11:00",
-        "dispatched_at": "2026-11-01T09:00:44.442127+11:00",
-        "lateness_seconds": 44.4,
+        "scheduled_at": "2026-11-02T09:00:00+11:00",
+        "dispatched_at": "2026-11-02T09:00:16.920633+11:00",
+        "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T10:16:51.222415+11:00",
+      "last_run_at": "2026-11-02T09:00:23.003307+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -3524,14 +3524,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T08:12:00+11:00",
+      "next_run_at": "2026-11-03T08:12:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T08:12:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 2264.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T08:12:00+11:00",
+        "dispatched_at": "2026-11-02T08:12:16.918542+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
-      "last_run_at": "2026-11-01T08:52:39.790748+11:00",
+      "last_run_at": "2026-11-02T08:12:21.481923+11:00",
       "last_failure": {
         "at": "2026-10-28T08:19:25.635748+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/sprt-truncation-gate.py — not re-executing on host"
@@ -3565,14 +3565,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T08:40:00+11:00",
+      "next_run_at": "2026-11-03T08:40:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T08:40:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 584.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T08:40:00+11:00",
+        "dispatched_at": "2026-11-02T08:40:16.920181+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
-      "last_run_at": "2026-11-01T08:52:41.189546+11:00",
+      "last_run_at": "2026-11-02T08:40:21.975181+11:00",
       "last_failure": {
         "at": "2026-10-28T08:40:29.175755+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/promotion-at-most-once.py — not re-executing on host"
@@ -3606,14 +3606,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-02T08:25:00+11:00",
+      "next_run_at": "2026-11-03T08:25:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T08:25:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 1484.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T08:25:00+11:00",
+        "dispatched_at": "2026-11-02T08:25:16.923759+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
-      "last_run_at": "2026-11-01T08:52:44.687148+11:00",
+      "last_run_at": "2026-11-02T08:25:21.519574+11:00",
       "last_failure": {
         "at": "2026-10-28T08:25:28.918518+11:00",
         "detail": "Script exited with code 1\nstderr:\nError:   × unknown field 'network_policies.hermes_https_outbound.localhost_policy' in\n  │ authored policy\n\nERROR: SANDBOX_FAIL openshell exit 1 for /var/home/rainbow/.hermes/profiles/fork/scripts/sprt-effective-decision.py — not re-executing on host"
@@ -3638,15 +3638,15 @@
       "timeout_seconds": 1800,
       "priority": 3,
       "name": "routing-azuma-concentration",
-      "next_run_at": "2026-11-02T07:25:00+11:00",
+      "next_run_at": "2026-11-03T07:25:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T07:25:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 5084.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T07:25:00+11:00",
+        "dispatched_at": "2026-11-02T07:25:16.919173+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T08:52:46.817949+11:00",
+      "last_run_at": "2026-11-02T07:25:21.539002+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -3675,15 +3675,15 @@
       "timeout_seconds": 1800,
       "priority": 3,
       "name": "routing-graph-independence",
-      "next_run_at": "2026-11-02T08:40:00+11:00",
+      "next_run_at": "2026-11-03T08:40:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T08:40:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 584.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T08:40:00+11:00",
+        "dispatched_at": "2026-11-02T08:40:16.920181+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T08:52:49.751671+11:00",
+      "last_run_at": "2026-11-02T08:40:22.974751+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -3712,15 +3712,15 @@
       "timeout_seconds": 1800,
       "priority": 3,
       "name": "routing-ips-offpolicy",
-      "next_run_at": "2026-11-02T09:18:00+11:00",
+      "next_run_at": "2026-11-03T09:18:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T09:18:00+11:00",
-        "dispatched_at": "2026-11-01T10:03:31.218390+11:00",
-        "lateness_seconds": 2731.2,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T09:18:00+11:00",
+        "dispatched_at": "2026-11-02T09:18:16.917847+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T10:19:08.851057+11:00",
+      "last_run_at": "2026-11-02T09:18:21.576866+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -3749,15 +3749,15 @@
       "timeout_seconds": 1800,
       "priority": 3,
       "name": "routing-mutual-information",
-      "next_run_at": "2026-11-02T07:40:00+11:00",
+      "next_run_at": "2026-11-03T07:40:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T07:40:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 4184.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T07:40:00+11:00",
+        "dispatched_at": "2026-11-02T07:40:16.925173+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T08:52:53.803937+11:00",
+      "last_run_at": "2026-11-02T07:40:23.836192+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -3786,15 +3786,15 @@
       "timeout_seconds": 1800,
       "priority": 3,
       "name": "routing-switching-detector",
-      "next_run_at": "2026-11-02T08:10:00+11:00",
+      "next_run_at": "2026-11-03T08:10:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T08:10:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 2384.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T08:10:00+11:00",
+        "dispatched_at": "2026-11-02T08:10:16.922032+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T08:52:54.746432+11:00",
+      "last_run_at": "2026-11-02T08:10:22.684442+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -3823,15 +3823,15 @@
       "timeout_seconds": 1800,
       "priority": 3,
       "name": "routing-wald-sprt",
-      "next_run_at": "2026-11-02T08:55:00+11:00",
+      "next_run_at": "2026-11-03T08:55:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T08:55:00+11:00",
-        "dispatched_at": "2026-11-01T08:55:44.409239+11:00",
-        "lateness_seconds": 44.4,
+        "scheduled_at": "2026-11-02T08:55:00+11:00",
+        "dispatched_at": "2026-11-02T08:55:16.920877+11:00",
+        "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T10:16:29.209726+11:00",
+      "last_run_at": "2026-11-02T08:55:21.564685+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -3853,15 +3853,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-02T10:30:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:30:00+11:00",
-        "dispatched_at": "2026-11-02T06:30:16.922006+11:00",
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
         "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:30:23.377173+11:00",
+      "last_run_at": "2026-11-02T10:00:30.295356+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -3952,15 +3952,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-02T11:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:00:00+11:00",
-        "dispatched_at": "2026-11-02T06:00:16.888448+11:00",
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
         "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:00:31.894614+11:00",
+      "last_run_at": "2026-11-02T10:00:30.968519+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4051,15 +4051,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-02T11:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:00:00+11:00",
-        "dispatched_at": "2026-11-02T06:00:16.888448+11:00",
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
         "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:00:36.368626+11:00",
+      "last_run_at": "2026-11-02T10:00:32.547075+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4084,15 +4084,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-02T11:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:00:00+11:00",
-        "dispatched_at": "2026-11-02T06:00:16.888448+11:00",
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
         "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:00:37.396517+11:00",
+      "last_run_at": "2026-11-02T10:00:36.079806+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4282,15 +4282,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-02T10:30:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:30:00+11:00",
-        "dispatched_at": "2026-11-02T06:30:16.922006+11:00",
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
         "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:30:24.093885+11:00",
+      "last_run_at": "2026-11-02T10:00:36.969569+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4348,15 +4348,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-02T10:30:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:30:00+11:00",
-        "dispatched_at": "2026-11-02T06:30:16.922006+11:00",
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
         "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:30:29.512211+11:00",
+      "last_run_at": "2026-11-02T10:00:38.697049+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4381,15 +4381,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-02T10:30:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:30:00+11:00",
-        "dispatched_at": "2026-11-02T06:30:16.922006+11:00",
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
         "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:30:29.253206+11:00",
+      "last_run_at": "2026-11-02T10:00:41.419879+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4414,15 +4414,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-02T10:30:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:30:00+11:00",
-        "dispatched_at": "2026-11-02T06:30:16.922006+11:00",
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
         "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:30:30.904196+11:00",
+      "last_run_at": "2026-11-02T10:00:42.793344+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4447,15 +4447,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-02T10:30:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:30:00+11:00",
-        "dispatched_at": "2026-11-02T06:30:16.922006+11:00",
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
         "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:30:35.135343+11:00",
+      "last_run_at": "2026-11-02T10:00:44.697900+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4546,15 +4546,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-02T10:30:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:30:00+11:00",
-        "dispatched_at": "2026-11-02T06:30:16.922006+11:00",
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
         "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:30:36.603987+11:00",
+      "last_run_at": "2026-11-02T10:00:46.934901+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4777,15 +4777,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-02T10:30:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:30:00+11:00",
-        "dispatched_at": "2026-11-02T06:30:16.922006+11:00",
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
         "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:30:37.414159+11:00",
+      "last_run_at": "2026-11-02T10:00:48.590096+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4843,15 +4843,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:20:00+11:00",
+      "next_run_at": "2026-11-03T07:20:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T07:20:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 5384.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T07:20:00+11:00",
+        "dispatched_at": "2026-11-02T07:20:16.921136+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T08:54:14.109976+11:00",
+      "last_run_at": "2026-11-02T07:20:21.469602+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4876,15 +4876,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:35:00+11:00",
+      "next_run_at": "2026-11-03T07:35:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T07:35:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 4484.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T07:35:00+11:00",
+        "dispatched_at": "2026-11-02T07:35:16.920606+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T08:54:16.113823+11:00",
+      "last_run_at": "2026-11-02T07:35:21.423114+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4909,15 +4909,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:50:00+11:00",
+      "next_run_at": "2026-11-03T07:50:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T07:50:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 3584.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T07:50:00+11:00",
+        "dispatched_at": "2026-11-02T07:50:16.920359+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T08:54:18.936186+11:00",
+      "last_run_at": "2026-11-02T07:50:21.454080+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4942,15 +4942,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T07:55:00+11:00",
+      "next_run_at": "2026-11-03T07:55:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T07:55:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 3284.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T07:55:00+11:00",
+        "dispatched_at": "2026-11-02T07:55:16.927562+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T08:54:21.982022+11:00",
+      "last_run_at": "2026-11-02T07:55:22.322792+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4975,15 +4975,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T08:45:00+11:00",
+      "next_run_at": "2026-11-03T08:45:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T08:45:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 284.8,
+        "scheduled_at": "2026-11-02T08:45:00+11:00",
+        "dispatched_at": "2026-11-02T08:45:16.922642+11:00",
+        "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T08:54:45.409240+11:00",
+      "last_run_at": "2026-11-02T08:45:42.437180+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -5008,15 +5008,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T09:05:00+11:00",
+      "next_run_at": "2026-11-03T09:05:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T09:05:00+11:00",
-        "dispatched_at": "2026-11-01T10:03:31.218390+11:00",
-        "lateness_seconds": 3511.2,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T09:05:00+11:00",
+        "dispatched_at": "2026-11-02T09:05:16.920665+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T10:19:13.523743+11:00",
+      "last_run_at": "2026-11-02T09:05:21.495982+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -5041,15 +5041,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T09:10:00+11:00",
+      "next_run_at": "2026-11-03T09:10:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T09:10:00+11:00",
-        "dispatched_at": "2026-11-01T10:03:31.218390+11:00",
-        "lateness_seconds": 3211.2,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T09:10:00+11:00",
+        "dispatched_at": "2026-11-02T09:10:16.921749+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T10:19:18.279138+11:00",
+      "last_run_at": "2026-11-02T09:10:22.088619+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -5074,15 +5074,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-02T09:12:00+11:00",
+      "next_run_at": "2026-11-03T09:12:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T09:12:00+11:00",
-        "dispatched_at": "2026-11-01T10:03:31.218390+11:00",
-        "lateness_seconds": 3091.2,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T09:12:00+11:00",
+        "dispatched_at": "2026-11-02T09:12:16.921303+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-01T10:19:23.066211+11:00",
+      "last_run_at": "2026-11-02T09:12:34.987446+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -5291,15 +5291,15 @@
       "timeout_seconds": 120,
       "priority": 3,
       "name": "routing-alarm-bridge",
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-02T10:30:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:30:00+11:00",
-        "dispatched_at": "2026-11-02T06:30:16.922006+11:00",
+        "scheduled_at": "2026-11-02T10:00:00+11:00",
+        "dispatched_at": "2026-11-02T10:00:16.919333+11:00",
         "lateness_seconds": 16.9,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:30:42.067187+11:00",
+      "last_run_at": "2026-11-02T10:00:49.977654+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -5333,15 +5333,15 @@
       "schedule_display": "0 8 * * *",
       "repeat": {
         "times": null,
-        "completed": 23
+        "completed": 24
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-10-09T11:59:45.396726+11:00",
-      "next_run_at": "2026-11-02T08:00:00+11:00",
-      "last_run_at": "2026-11-01T08:55:09.348781+11:00",
+      "next_run_at": "2026-11-03T08:00:00+11:00",
+      "last_run_at": "2026-11-02T08:00:50.986349+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -5356,10 +5356,10 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T08:00:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 2984.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T08:00:00+11:00",
+        "dispatched_at": "2026-11-02T08:00:16.918644+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
       "env": {
@@ -5390,15 +5390,15 @@
       "schedule_display": "every 60m",
       "repeat": {
         "times": null,
-        "completed": 255
+        "completed": 258
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-10-09T11:59:45.592461+11:00",
-      "next_run_at": "2026-11-02T07:22:27.930169+11:00",
-      "last_run_at": "2026-11-02T06:22:27.930169+11:00",
+      "next_run_at": "2026-11-02T10:25:29.452464+11:00",
+      "last_run_at": "2026-11-02T09:25:29.452464+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -5413,9 +5413,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:21:27.963482+11:00",
-        "dispatched_at": "2026-11-02T06:22:16.919144+11:00",
-        "lateness_seconds": 49.0,
+        "scheduled_at": "2026-11-02T09:24:27.185226+11:00",
+        "dispatched_at": "2026-11-02T09:25:16.918198+11:00",
+        "lateness_seconds": 49.7,
         "kind": "on_time"
       },
       "fire_claim": null,
@@ -5801,15 +5801,15 @@
       "created_at": "2026-10-28T23:16:49.212507+11:00",
       "next_run_at": "2026-12-01T10:00:00+11:00",
       "last_run_at": "2026-11-01T10:19:31.033016+11:00",
-      "last_status": "blocked_config",
-      "last_error": "[blocked_config] delivery platform 'telegram' has no gateway credentials configured (not connected). Configure it via `hermes setup` or change the job's `deliver` target.",
+      "last_status": "ok",
+      "last_error": "[streak cleared 2026-11-01: deliver=local set, prompt fixed]",
       "last_delivery_error": "platform 'telegram' not configured/enabled",
       "last_delivery_unverified": null,
       "last_failure": {
         "at": "2026-11-01T10:19:31.033016+11:00",
         "detail": "[blocked_config] delivery platform 'telegram' has no gateway credentials configured (not connected). Configure it via `hermes setup` or change the job's `deliver` target."
       },
-      "failure_streak": 1,
+      "failure_streak": 0,
       "deliver": "local",
       "origin": {
         "platform": "local",
@@ -5828,7 +5828,7 @@
         "kind": "on_time"
       },
       "fire_claim": null,
-      "preflight_alerted": true,
+      "preflight_alerted": false,
       "canonical_completions": [
         "ae10442d50304592b67b494991dcd1cd"
       ]
@@ -5876,7 +5876,7 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cbf-loop-constraint.py",
       "no_agent": true,
       "description": "CBF gate between loop-PID output and irreversible actions",
-      "next_run_at": "2026-11-02T07:07:00+11:00",
+      "next_run_at": "2026-11-02T10:37:00+11:00",
       "env": {
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
@@ -5885,13 +5885,13 @@
       "enabled": true,
       "state": "scheduled",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T06:37:00+11:00",
-        "dispatched_at": "2026-11-02T06:37:16.918146+11:00",
-        "lateness_seconds": 16.9,
-        "kind": "on_time"
+        "scheduled_at": "2026-11-02T10:07:00+11:00",
+        "dispatched_at": "2026-11-02T10:12:10.310835+11:00",
+        "lateness_seconds": 310.3,
+        "kind": "late"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-02T06:37:19.407310+11:00",
+      "last_run_at": "2026-11-02T10:12:21.041812+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -6112,7 +6112,7 @@
         "at": "2026-11-02T03:03:46.983105+11:00",
         "detail": "Script exited with code 1\nstderr:\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.kde.Platform/x86_64/6.11 is already installed: No such ref 'runtime/org.kde.Platform/x86_64/6.11' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.kde.Platform/x86_64/6.10 is already installed: No such ref 'runtime/org.kde.Platform/x86_64/6.10' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.kde.Platform.Locale/x86_64/6.11 is already installed: No such ref 'runtime/org.kde.Platform.Locale/x86_64/6.11' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.kde.Platform.Locale/x86_64/6.10 is already installed: No such ref 'runtime/org.kde.Platform.Locale/x86_64/6.10' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.kde.KStyle.Adwaita/x86_64/6.11 is already installed: No such ref 'runtime/org.kde.KStyle.Adwaita/x86_64/6.11' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.kde.KStyle.Adwaita/x86_64/6.10 is already installed: No such ref 'runtime/org.kde.KStyle.Adwaita/x86_64/6.10' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.gtk.Gtk3theme.adw-gtk3-dark/x86_64/3.22 is already installed: No such ref 'runtime/org.gtk.Gtk3theme.adw-gtk3-dark/x86_64/3.22' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.gnome.Platform/x86_64/50 is already installed: No such ref 'runtime/org.gnome.Platform/x86_64/50' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.gnome.Platform.Locale/x86_64/50 is already installed: No such ref 'runtime/org.gnome.Platform.Locale/x86_64/50' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform.codecs-extra/x86_64/25.08-extra is already installed: No such ref 'runtime/org.freedesktop.Platform.codecs-extra/x86_64/25.08-extra' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform.VAAPI.Intel/x86_64/25.08 is already installed: No such ref 'runtime/org.freedesktop.Platform.VAAPI.Intel/x86_64/25.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform.GL.default/x86_64/25.08-extra is already installed: No such ref 'runtime/org.freedesktop.Platform.GL.default/x86_64/25.08-extra' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform.GL.default/x86_64/25.08 is already installed: No such ref 'runtime/org.freedesktop.Platform.GL.default/x86_64/25.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freeciv.sdl2.Locale/x86_64/stable is already installed: No such ref 'runtime/org.freeciv.sdl2.Locale/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freeciv.gtk322.Locale/x86_64/stable is already installed: No such ref 'runtime/org.freeciv.gtk322.Locale/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.chromium.Chromium.Locale/x86_64/stable is already installed: No such ref 'runtime/org.chromium.Chromium.Locale/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.chromium.Chromium.Codecs/x86_64/stable is already installed: No such ref 'runtime/org.chromium.Chromium.Codecs/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/com.github.PintaProject.Pinta.Locale/x86_64/stable is already installed: No such ref 'runtime/com.github.PintaProject.Pinta.Locale/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since app/org.freeciv.sdl2/x86_64/stable is already installed: No such ref 'app/org.freeciv.sdl2/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since app/org.freeciv.gtk322/x86_64/stable is already installed: No such ref 'app/org.freeciv.gtk322/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since app/org.flameshot.Flameshot/x86_64/stable is already installed: No such ref 'app/org.flameshot.Flameshot/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since app/org.chromium.Chromium/x86_64/stable is already installed: No such ref 'app/org.chromium.Chromium/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since app/eu.vcmi.VCMI/x86_64/stable is already installed: No such ref 'app/eu.vcmi.VCMI/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since app/com.github.PintaProject.Pinta/x86_64/stable is already installed: No such ref 'app/com.github.PintaProject.Pinta/x86_64/stable' in remote flathub\nError updating: Error updating appstream2: No such ref 'appstream2/x86_64' in remote flathub; Error updating appstream: No such ref 'appstream/x86_64' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.videolan.VLC.Locale/x86_64/stable is already installed: No such ref 'runtime/org.videolan.VLC.Locale/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.mozilla.firefox.Locale/x86_64/stable is already installed: No such ref 'runtime/org.mozilla.firefox.Locale/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.libreoffice.LibreOffice.Locale/x86_64/stable is already installed: No such ref 'runtime/org.libreoffice.LibreOffice.Locale/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.kde.WaylandDecoration.QAdwaitaDecorations/x86_64/5.15-25.08 is already installed: No such ref 'runtime/org.kde.WaylandDecoration.QAdwaitaDecorations/x86_64/5.15-25.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.kde.Platform/x86_64/5.15-25.08 is already installed: No such ref 'runtime/org.kde.Platform/x86_64/5.15-25.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.kde.Platform.Locale/x86_64/5.15-25.08 is already installed: No such ref 'runtime/org.kde.Platform.Locale/x86_64/5.15-25.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.kde.KStyle.Adwaita/x86_64/5.15-25.08 is already installed: No such ref 'runtime/org.kde.KStyle.Adwaita/x86_64/5.15-25.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.gtk.Gtk3theme.adw-gtk3-dark/x86_64/3.22 is already installed: No such ref 'runtime/org.gtk.Gtk3theme.adw-gtk3-dark/x86_64/3.22' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.gnome.Platform/x86_64/51 is already installed: No such ref 'runtime/org.gnome.Platform/x86_64/51' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.gnome.Platform.Locale/x86_64/51 is already installed: No such ref 'runtime/org.gnome.Platform.Locale/x86_64/51' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Sdk/x86_64/25.08 is already installed: No such ref 'runtime/org.freedesktop.Sdk/x86_64/25.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Sdk.Locale/x86_64/25.08 is already installed: No such ref 'runtime/org.freedesktop.Sdk.Locale/x86_64/25.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform/x86_64/26.08 is already installed: No such ref 'runtime/org.freedesktop.Platform/x86_64/26.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform/x86_64/25.08 is already installed: No such ref 'runtime/org.freedesktop.Platform/x86_64/25.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform.codecs-extra/x86_64/26.08-extra is already installed: No such ref 'runtime/org.freedesktop.Platform.codecs-extra/x86_64/26.08-extra' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform.codecs-extra/x86_64/25.08-extra is already installed: No such ref 'runtime/org.freedesktop.Platform.codecs-extra/x86_64/25.08-extra' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform.VAAPI.Intel/x86_64/26.08 is already installed: No such ref 'runtime/org.freedesktop.Platform.VAAPI.Intel/x86_64/26.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform.VAAPI.Intel/x86_64/25.08 is already installed: No such ref 'runtime/org.freedesktop.Platform.VAAPI.Intel/x86_64/25.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform.Locale/x86_64/26.08 is already installed: No such ref 'runtime/org.freedesktop.Platform.Locale/x86_64/26.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform.Locale/x86_64/25.08 is already installed: No such ref 'runtime/org.freedesktop.Platform.Locale/x86_64/25.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform.GL.default/x86_64/26.08-extra is already installed: No such ref 'runtime/org.freedesktop.Platform.GL.default/x86_64/26.08-extra' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform.GL.default/x86_64/26.08 is already installed: No such ref 'runtime/org.freedesktop.Platform.GL.default/x86_64/26.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform.GL.default/x86_64/25.08-extra is already installed: No such ref 'runtime/org.freedesktop.Platform.GL.default/x86_64/25.08-extra' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/org.freedesktop.Platform.GL.default/x86_64/25.08 is already installed: No such ref 'runtime/org.freedesktop.Platform.GL.default/x86_64/25.08' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/md.obsidian.Obsidian.Locale/x86_64/stable is already installed: No such ref 'runtime/md.obsidian.Obsidian.Locale/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since runtime/com.protonvpn.www.Locale/x86_64/stable is already installed: No such ref 'runtime/com.protonvpn.www.Locale/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since app/org.videolan.VLC/x86_64/stable is already installed: No such ref 'app/org.videolan.VLC/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since app/org.telegram.desktop/x86_64/stable is already installed: No such ref 'app/org.telegram.desktop/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since app/org.mozilla.firefox/x86_64/stable is already installed: No such ref 'app/org.mozilla.firefox/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since app/org.libreoffice.LibreOffice/x86_64/stable is already installed: No such ref 'app/org.libreoffice.LibreOffice/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since app/md.obsidian.Obsidian/x86_64/stable is already installed: No such ref 'app/md.obsidian.Obsidian/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since app/com.visualstudio.code/x86_64/stable is already installed: No such ref 'app/com.visualstudio.code/x86_64/stable' in remote flathub\nF: Warning: Treating remote fetch error as non-fatal since app/com.protonvpn.www/x86_64/stable is already installed: No such ref 'app/com.protonvpn.www/x86_64/stable' in remote flathub\nUpdating and loading repositories:\n Fedora 44 - x86_64 - Updates           100% |  10.0 KiB/s |  42.5 KiB |  00m04s\n Fedora 44 openh264 (From Cisco) - x86_ 100% | 231.0   B/s | 986.0   B |  00m04s\n Fedora 44 - x86_64                     100% |  11.7 KiB/s |  50.0 KiB |  00m04s\nRepositories loaded.\nTotal size of inbound packages is 2 MiB. Need to download 2 MiB.\nAfter this operation, 100 B will be freed (install 4 MiB, remove 4 MiB).\n[1/3] libgcc-0:16.2.1-3.fc44.x86_64     100% | 364.0 KiB/s | 139.8 KiB |  00m00s\n[2/3] libgomp-0:16.2.1-3.fc44.x86_64    100% | 930.9 KiB/s | 401.2 KiB |  00m00s\n[3/3] libstdc++-0:16.2.1-3.fc44.x86_64  100% |   1.9 MiB/s |   1.0 MiB |  00m01s\n--------------------------------------------------------------------------------\n[3/3] Total                             100% |   3.0 MiB/s |   1.5 MiB |  00m01s\nRunning transaction\n[1/8] Verify package files              100% | 214.0   B/s |   3.0   B |  00m00s\n[2/8] Prepare transaction               100% | 150.0   B/s |   6.0   B |  00m00s\n[3/8] Upgrading libgcc-0:16.2.1-3.fc44. 100% |  13.3 MiB/s | 272.3 KiB |  00m00s\n[4/8] Upgrading libstdc++-0:16.2.1-3.fc 100% | 103.0 MiB/s |   3.1 MiB |  00m00s\n[5/8] Upgrading libgomp-0:16.2.1-3.fc44 100% |  29.8 MiB/s | 578.9 KiB |  00m00s\n[6/8] Removing libstdc++-0:16.2.1-2.fc4 100% |   2.8 KiB/s |  31.0   B |  00m00s\n[7/8] Removing libgcc-0:16.2.1-2.fc44.x 100% |   1.1 KiB/s |  11.0   B |  00m00s\n[8/8] Removing libgomp-0:16.2.1-2.fc44. 100% |   8.0   B/s |   9.0   B |  00m01s\nComplete!\nFrom https://github.com/jesterG1979/hello_agent\n - [deleted]             (none)               -> origin/claude/customer-only-review\n - [deleted]             (none)               -> origin/codex/ci-throughput\n - [deleted]             (none)               -> origin/cursor/conformed-review-state-errors-548e\n - [deleted]             (none)               -> origin/cursor/dead-unreferenced-helpers-548e\n - [deleted]             (none)               -> origin/cursor/ocr-callback-idempotency-548e\n - [deleted]             (none)               -> origin/cursor/purge-governance-log-548e\n - [deleted]             (none)               -> origin/cursor/round1-dead-and-fail-closed-548e\n - [deleted]             (none)               -> origin/cursor/round2-fail-closed-workers-548e\n - [deleted]             (none)               -> origin/cursor/round4-shared-coerce-context-548e\n - [deleted]             (none)               -> origin/cursor/simplify-dead-and-dup-548e\n - [deleted]             (none)               -> origin/fix/ocr-release-path\n + d4f790968...3765b4342 amoni094/library-primitives -> origin/amoni094/library-primitives  (forced update)\n + 4fde5846d...218f461a2 amoni094/runtime-changes-env-gated -> origin/amoni094/runtime-changes-env-gated  (forced update)\n * [new branch]          codex/move-ci-to-mac -> origin/codex/move-ci-to-mac\n + 23b2c3863...ff6fc8423 cursor/admin-config-load-errors-548e -> origin/cursor/admin-config-load-errors-548e  (forced update)\n + 911129750...a6fe11738 cursor/contribute-question-count-errors-548e -> origin/cursor/contribute-question-count-errors-548e  (forced update)\n + 0752a8d28...2f781f555 cursor/deal-document-list-errors-548e -> origin/cursor/deal-document-list-errors-548e  (forced update)\n + 0fd5db10b...2e65e5a69 cursor/eval-trace-attach-log-548e -> origin/cursor/eval-trace-attach-log-548e  (forced update)\n + 454a0470e...893651516 cursor/fail-closed-review-paths-548e -> origin/cursor/fail-closed-review-paths-548e  (forced update)\n * [new branch]          cursor/fix-browser-port-busy-4316 -> origin/cursor/fix-browser-port-busy-4316\n + 2efac2f2c...1678b7430 cursor/kernel-interpretation-parse-log-548e -> origin/cursor/kernel-interpretation-parse-log-548e  (forced update)\n + 1547d1229...8b6755ca3 cursor/review-poll-errors-548e -> origin/cursor/review-poll-errors-548e  (forced update)\n + b0fe60c64...614007b34 cursor/round-context-validation-errors-548e -> origin/cursor/round-context-validation-errors-548e  (forced update)\n + 56bef5e58...c0fb10aaf cursor/round3-fail-closed-trust-compare-548e -> origin/cursor/round3-fail-closed-trust-compare-548e  (forced update)\n + 12c4e06e5...0ad671b5e cursor/share-parse-json-object-548e -> origin/cursor/share-parse-json-object-548e  (forced update)\n   6fdd8e6e1..bb08a79e9  integration/main     -> origin/integration/main\n   0481a95ba..d09311a0b  main                 -> origin/main\nFrom https://github.com/firecrawl/firecrawl\n   85f67ca6c..20f96aed8  capy/fb-stack-2-caller-branches -> origin/capy/fb-stack-2-caller-branches\n   d07239a4d..971815474  capy/fb-stack-3-service-direct-branches -> origin/capy/fb-stack-3-service-direct-branches\n   c47528ca1..edaa5460f  capy/fb-stack-4-provisioning -> origin/capy/fb-stack-4-provisioning\n   8d14bce5a..01ac764c9  capy/fb-stack-5-autumn-health -> origin/capy/fb-stack-5-autumn-health\nFrom https://github.com/Agent-Analytics/awesome-multi-agent-orchestrators\n   3b948bf..527aa2b  main       -> origin/main\nFrom https://github.com/NVIDIA/SkillSpector\n   9adb1a6..6d0b7c8  main       -> origin/main\nRunning as unit: reboot-required-notify.service; invocation ID: 50dde3d9015e4e90bcf19a6df0518c2f\nstdout:\n[2026-11-02T03:01:34+11:00] Starting daily update sweep\n[2026-11-02T03:01:34+11:00] Waiting up to 120s for network availability before initial update sweep\n[2026-11-02T03:01:34+11:00] Network is available; continuing with initial update sweep\n2 metadata, 0 content objects fetched; 828 B transferred in 77 seconds; 0 bytes content written\nReceiving metadata objects: 1/(estimating) 3 bytes/s 236 bytes...done\nChecking out tree 3d7544c...done\nEnabled rpm-md repositories: fedora-cisco-openh264 copr:copr.fedorainfracloud.org:phracek:PyCharm updates fedora rpmfusion-nonfree-nvidia-driver rpmfusion-nonfree-steam copr:copr.fedorainfracloud.org:tofik:nwg-shell coprdep:copr.fedorainfracloud.org:tofik:sway coprdep:copr.fedorainfracloud.org:mochaa:gtk-session-lock coprdep:copr.fedorainfracloud.org:erikreider:SwayNotificationCenter tailscale-stable updates-archive\nImporting rpm-md...done\nrpm-md repo 'fedora-cisco-openh264' (cached); generated: 2026-03-24T10:37:04Z solvables: 3\nrpm-md repo 'copr:copr.fedorainfracloud.org:phracek:PyCharm' (cached); generated: 2026-10-30T03:34:11Z solvables: 5\nrpm-md repo 'updates' (cached); generated: 2026-11-01T01:40:57Z solvables: 31351\nrpm-md repo 'fedora' (cached); generated: 2026-04-22T13:34:32Z solvables: 76354\nrpm-md repo 'rpmfusion-nonfree-nvidia-driver' (cached); generated: 2026-09-21T07:15:39Z solvables: 19\nrpm-md repo 'rpmfusion-nonfree-steam' (cached); generated: 2026-08-12T19:25:52Z solvables: 2\nrpm-md repo 'copr:copr.fedorainfracloud.org:tofik:nwg-shell' (cached); generated: 2026-08-21T06:05:41Z solvables: 64\nrpm-md repo 'coprdep:copr.fedorainfracloud.org:tofik:sway' (cached); generated: 2026-02-06T20:46:56Z solvables: 36\nrpm-md repo 'coprdep:copr.fedorainfracloud.org:mochaa:gtk-session-lock' (cached); generated: 2026-02-06T22:42:36Z solvables: 5\nrpm-md repo 'coprdep:copr.fedorainfracloud.org:erikreider:SwayNotificationCenter' (cached); generated: 2026-09-26T22:18:00Z solvables: 14\nrpm-md repo 'tailscale-stable' (cached); generated: 2026-10-28T23:20:12Z solvables: 154\nrpm-md repo 'updates-archive' (cached); generated: 2026-10-31T02:21:19Z solvables: 50850\nResolving dependencies...done\nNo upgrade available.\n[2026-11-02T03:03:00+11:00] rpm-ostree upgrade completed\n[2026-11-02T03:03:00+11:00] rpm-ostree reports a newly staged or pending deployment; reboot will be required\n[2026-11-02T03:03:00+11:00] Running user Flatpak update\n[2026-11-02T03:03:00+11:00] Suspending killswitch for user Flatpak update (VPN tunnel stays up)\nConnection 'pvpn-killswitch-ipv6' successfully deactivated (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/24)\nLooking for updates…\n\nNothing to update.\nUpdating appstream data for user remote flathub\n[2026-11-02T03:03:03+11:00] Re-arming killswitch after user Flatpak update\nConnection successfully activated (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/30)\n[2026-11-02T03:03:04+11:00] User Flatpak update completed\n[2026-11-02T03:03:04+11:00] Running system Flatpak update\n[2026-11-02T03:03:04+11:00] Suspending killswitch for system Flatpak update (VPN tunnel stays up)\nConnection 'pvpn-killswitch-ipv6' successfully deactivated (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/30)\n\nNothing to update.\n[2026-11-02T03:03:10+11:00] Re-arming killswitch after system Flatpak update\nConnection successfully activated (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/31)\n[2026-11-02T03:03:10+11:00] System Flatpak update completed\n[2026-11-02T03:03:10+11:00] Running toolbox DNF upgrade in fedora-toolbox-44\nPackage                Arch   Version         Repository      Size\nUpgrading:\n libgcc                x86_64 0:16.2.1-3.fc44 updates    270.6 KiB\n   replacing libgcc    x86_64 0:16.2.1-2.fc44 updates    270.6 KiB\n libgomp               x86_64 0:16.2.1-3.fc44 updates    577.5 KiB\n   replacing libgomp   x86_64 0:16.2.1-2.fc44 updates    577.5 KiB\n libstdc++             x86_64 0:16.2.1-3.fc44 updates      3.1 MiB\n   replacing libstdc++ x86_64 0:16.2.1-2.fc44 updates      3.1 MiB\n\nTransaction Summary:\n Upgrading:          3 packages\n Replacing:          3 packages\n\n[2026-11-02T03:03:22+11:00] Toolbox DNF upgrade completed\n[2026-11-02T03:03:22+11:00] Checking Hermes for updates\n→ Update channel: stable\n✓ No newer release: stable v0.22.5; this checkout is newer and waits for the next release (`hermes update --set-channel main` follows every commit).\n[2026-11-02T03:03:28+11:00] Hermes update check returned an unrecognized result; leaving Hermes unchanged\n[2026-11-02T03:03:28+11:00] Checking driver and firmware update surfaces\n[2026-11-02T03:03:28+11:00] Refreshing fwupd metadata\nIdle…\nUpdating lvfs\nDownloading…\nDownloading…: 36.6%\nDownloading…: 73.2%\nDownloading…: 91.6%\nDownloading…: 100.0%\nDownloading…: 0.0%\nDownloading…: 0.3%\nDownloading…: 0.3%\nDownloading…: 0.4%\nDownloading…: 0.5%\nDownloading…: 0.8%\nDownloading…: 1.6%\nDownloading…: 2.4%\nDownloading…: 3.2%\nDownloading…: 4.1%\nDownloading…: 4.9%\nDownloading…: 5.7%\nDownloading…: 6.5%\nDownloading…: 7.3%\nDownloading…: 8.2%\nDownloading…: 9.0%\nDownloading…: 9.8%\nDownloading…: 10.6%\nDownloading…: 11.4%\nDownloading…: 12.2%\nDownloading…: 13.1%\nDownloading…: 13.9%\nDownloading…: 14.7%\nDownloading…: 15.5%\nDownloading…: 16.3%\nDownloading…: 17.2%\nDownloading…: 18.0%\nDownloading…: 18.8%\nDownloading…: 19.6%\nDownloading…: 20.1%\nDownloading…: 20.9%\nDownloading…: 21.7%\nDownloading…: 22.5%\nDownloading…: 23.4%\nDownloading…: 24.2%\nDownloading…: 25.0%\nDownloading…: 25.8%\nDownloading…: 26.6%\nDownloading…: 27.4%\nDownloading…: 28.3%\nDownloading…: 29.1%\nDownloading…: 29.9%\nDownloading…: 30.7%\nDownloading…: 31.5%\nDownloading…: 32.4%\nDownloading…: 33.2%\nDownloading…: 34.0%\nDownloading…: 34.8%\nDownloading…: 35.6%\nDownloading…: 36.4%\nDownloading…: 37.3%\nDownloading…: 38.1%\nDownloading…: 38.9%\nDownloading…: 39.7%\nDownloading…: 40.5%\nDownloading…: 41.4%\nDownloading…: 42.2%\nDownloading…: 43.8%\nDownloading…: 43.8%\nDownloading…: 44.6%\nDownloading…: 45.5%\nDownloading…: 46.3%\nDownloading…: 47.1%\nDownloading…: 47.9%\nDownloading…: 48.7%\nDownloading…: 50.1%\nDownloading…: 50.9%\nDownloading…: 51.7%\nDownloading…: 52.6%\nDownloading…: 53.4%\nDownloading…: 54.2%\nDownloading…: 55.0%\nDownloading…: 55.8%\nDownloading…: 56.7%\nDownloading…: 57.5%\nDownloading…: 58.3%\nDownloading…: 59.1%\nDownloading…: 59.9%\nDownloading…: 60.7%\nDownloading…: 61.6%\nDownloading…: 63.2%\nDownloading…: 63.2%\nDownloading…: 64.0%\nDownloading…: 64.8%\nDownloading…: 65.7%\nDownloading…: 66.5%\nDownloading…: 67.3%\nDownloading…: 68.1%\nDownloading…: 68.9%\nDownloading…: 69.8%\nDownloading…: 70.6%\nDownloading…: 71.4%\nDownloading…: 72.2%\nDownloading…: 73.0%\nDownloading…: 73.8%\nDownloading…: 74.7%\nDownloading…: 75.5%\nDownloading…: 76.3%\nDownloading…: 77.1%\nDownloading…: 77.9%\nDownloading…: 78.5%\nDownloading…: 79.3%\nDownloading…: 80.1%\nDownloading…: 81.0%\nDownloading…: 81.8%\nDownloading…: 82.6%\nDownloading…: 83.4%\nDownloading…: 84.2%\nDownloading…: 85.0%\nDownloading…: 85.9%\nDownloading…: 86.7%\nDownloading…: 87.5%\nDownloading…: 88.3%\nDownloading…: 89.1%\nDownloading…: 90.0%\nDownloading…: 90.8%\nDownloading…: 91.6%\nDownloading…: 92.4%\nDownloading…: 93.2%\nDownloading…: 94.0%\nDownloading…: 94.9%\nDownloading…: 95.7%\nDownloading…: 96.5%\nDownloading…: 97.3%\nDownloading…: 98.1%\nDownloading…: 99.0%\nDownloading…: 99.8%\nDownloading…: 100.0%\nSuccessfully downloaded new metadata:\n • 26 devices are updatable\n • 7 devices are supported in the enabled remotes (an update has been published)\nDownloading…: 45.3%\nDownloading…: 90.8%\nDownloading…: 100.0%\nDownloading…: 0.0%\nDownloading…: 100.0%\nUpdate failure is a known issue, visit this URL for more information: https://github.com/fwupd/fwupd/wiki/LVFS-Triaged-Issue:-dbx-does-not-apply-on-reboot\nSuccessfully uploaded report\n[2026-11-02T03:03:34+11:00] Applying firmware updates via fwupdmgr\nIdle…\nDevices with the latest available firmware version:\n • Embedded Controller\n • Intel Management Engine\n • Prometheus\n • System Firmware\n • UEFI CA\n • UEFI Device Firmware\n • UEFI dbx\nDevices with no available firmware updates:\n • Internal SPI Controller (BIOS)\n • Internal SPI Controller (Embedded Controller)\n • Windows Production PCA\n • KEK CA\n • KEK CA\n • Option ROM UEFI CA\n • PM981a NVMe Samsung 512GB\n • Prometheus (IOTA Config)\n • SBAT\n • ThinkPad Product CA\n • UEFI CA\n • UEFI Device Firmware\n • UEFI Device Firmware\n • UEFI Device Firmware\n • UEFI Device Firmware\n • UEFI Device Firmware\n • UEFI Device Firmware\n • UEFI Device Firmware\n • UEFI Device Firmware\n • UEFI Device Firmware\n • UEFI Device Firmware\n • UEFI Device Firmware\n[2026-11-02T03:03:34+11:00] fwupdmgr update completed\n[2026-11-02T03:03:34+11:00] No NVIDIA userspace detected; no vendor-specific GPU driver check added\n[2026-11-02T03:03:34+11:00] Driver and firmware check completed\n[2026-11-02T03:03:34+11:00] Checking host DNF update surface\n[2026-11-02T03:03:34+11:00] Host DNF is not installed on this Atomic host; no host-side DNF update surface to check\n[2026-11-02T03:03:34+11:00] Host DNF check completed\n[2026-11-02T03:03:34+11:00] Checking managed Git repos for updates\n[2026-11-02T03:03:34+11:00] Checking managed repo policy-dashboard for updates\n[2026-11-02T03:03:34+11:00] Skipping managed repo update for policy-dashboard: checkout is dirty\n[2026-11-02T03:03:34+11:00] Managed repo step completed for policy-dashboard\n[2026-11-02T03:03:34+11:00] Checking managed repo repo1 for updates\n[2026-11-02T03:03:34+11:00] Skipping managed repo update for repo1: checkout is dirty\n[2026-11-02T03:03:34+11:00] Managed repo step completed for repo1\n[2026-11-02T03:03:34+11:00] Checking managed repo camofox-browser for updates\n[2026-11-02T03:03:34+11:00] Skipping managed repo update for camofox-browser: checkout is dirty\n[2026-11-02T03:03:34+11:00] Managed repo step completed for camofox-browser\n[2026-11-02T03:03:34+11:00] Checking managed repo CLI-Anything for updates\n[2026-11-02T03:03:35+11:00] Managed repo CLI-Anything already matches origin/main\n[2026-11-02T03:03:35+11:00] Managed repo step completed for CLI-Anything\n[2026-11-02T03:03:35+11:00] Checking managed repo graphiti for updates\n[2026-11-02T03:03:35+11:00] Skipping managed repo update for graphiti: checkout is dirty\n[2026-11-02T03:03:35+11:00] Managed repo step completed for graphiti\n[2026-11-02T03:03:35+11:00] Checking managed repo harness for updates\n[2026-11-02T03:03:36+11:00] Managed repo harness already matches origin/main\n[2026-11-02T03:03:36+11:00] Managed repo step completed for harness\n[2026-11-02T03:03:36+11:00] Checking managed repo hello_agent for updates\n[2026-11-02T03:03:38+11:00] Skipping managed repo update for hello_agent: origin/refactor/chain-retrieval-cache-scoring not found\n[2026-11-02T03:03:38+11:00] Managed repo step completed for hello_agent\n[2026-11-02T03:03:38+11:00] Checking managed repo hermes-agent-self-evolution for updates\n[2026-11-02T03:03:38+11:00] Managed repo hermes-agent-self-evolution already matches origin/main\n[2026-11-02T03:03:38+11:00] Managed repo step completed for hermes-agent-self-evolution\n[2026-11-02T03:03:38+11:00] Checking managed repo hermes-agent-spec for updates\n[2026-11-02T03:03:39+11:00] Managed repo hermes-agent-spec already matches origin/main\n[2026-11-02T03:03:39+11:00] Managed repo step completed for hermes-agent-spec\n[2026-11-02T03:03:39+11:00] Checking managed repo honcho for updates\n[2026-11-02T03:03:40+11:00] Managed repo honcho already matches origin/main\n[2026-11-02T03:03:40+11:00] Managed repo step completed for honcho\n[2026-11-02T03:03:40+11:00] Checking managed repo OBLITERATUS for updates\n[2026-11-02T03:03:41+11:00] Managed repo OBLITERATUS already matches origin/main\n[2026-11-02T03:03:41+11:00] Managed repo step completed for OBLITERATUS\n[2026-11-02T03:03:41+11:00] Checking managed repo openwhispr for updates\n[2026-11-02T03:03:41+11:00] Managed repo openwhispr already matches origin/main\n[2026-11-02T03:03:41+11:00] Managed repo step completed for openwhispr\n[2026-11-02T03:03:41+11:00] Checking managed repo firecrawl for updates\n[2026-11-02T03:03:43+11:00] Managed repo firecrawl already matches origin/main\n[2026-11-02T03:03:43+11:00] Managed repo step completed for firecrawl\n[2026-11-02T03:03:43+11:00] Checking managed repo thoth-repo for updates\n[2026-11-02T03:03:44+11:00] Managed repo thoth-repo already matches origin/main\n[2026-11-02T03:03:44+11:00] Managed repo step completed for thoth-repo\n[2026-11-02T03:03:44+11:00] Checking managed repo awesome-multi-agent-orchestrators for updates\n[2026-11-02T03:03:45+11:00] Fast-forwarding managed repo awesome-multi-agent-orchestrators to origin/main\nUpdating 3b948bf..527aa2b\nFast-forward\n README.md                                  |   1 +\n public/images/players/joxo/joxo-board.webp | Bin 0 -> 24474 bytes\n public/logos/joxo.png                      | Bin 0 -> 4703 bytes\n src/data/github-stars.json                 | 184 +++++++++++++++--------------\n src/data/orchestrators.ts                  |  69 +++++++++++\n 5 files changed, 164 insertions(+), 90 deletions(-)\n create mode 100644 public/images/players/joxo/joxo-board.webp\n create mode 100644 public/logos/joxo.png\n[2026-11-02T03:03:45+11:00] Managed repo step completed for awesome-multi-agent-orchestrators\n[2026-11-02T03:03:45+11:00] Checking managed repo SkillSpector for updates\n[2026-11-02T03:03:46+11:00] Skipping managed repo update for SkillSpector: local and origin/main have diverged\n[2026-11-02T03:03:46+11:00] Managed repo step completed for SkillSpector\n[2026-11-02T03:03:46+11:00] Checking managed repo flowstate-qmd for updates\n[2026-11-02T03:03:46+11:00] Managed repo flowstate-qmd already matches origin/main\n[2026-11-02T03:03:46+11:00] Managed repo step completed for flowstate-qmd\n[2026-11-02T03:03:46+11:00] Checking managed repo stealth-browser-mcp for updates\n[2026-11-02T03:03:46+11:00] Skipping managed repo update for stealth-browser-mcp: checkout is dirty\n[2026-11-02T03:03:46+11:00] Managed repo step completed for stealth-browser-mcp\n[2026-11-02T03:03:46+11:00] Daily update sweep finished\n[2026-11-02T03:03:46+11:00] Reboot is required; launching desktop notification instead of auto reboot"
       },
-      "failure_streak": 2,
+      "failure_streak": 0,
       "deliver": "local",
       "origin": {
         "platform": "local",
@@ -6131,7 +6131,8 @@
         "lateness_seconds": 46.3,
         "kind": "on_time"
       },
-      "fire_claim": null
+      "fire_claim": null,
+      "preflight_alerted": false
     },
     {
       "id": "c717dce99079",
@@ -6368,14 +6369,14 @@
       "repeat": {
         "times": null,
         "until": null,
-        "completed": 3
+        "completed": 4
       },
       "state": "scheduled",
-      "last_run_at": "2026-11-01T09:01:25.386241+11:00",
+      "last_run_at": "2026-11-02T07:00:46.024831+11:00",
       "last_status": "ok",
       "last_duration_ms": null,
       "last_error": null,
-      "next_run_at": "2026-11-02T07:00:00+11:00",
+      "next_run_at": "2026-11-03T07:00:00+11:00",
       "created_at": "2026-10-29T14:00:00+11:00",
       "updated_at": "2026-10-29T14:00:00+11:00",
       "last_ack_at": null,
@@ -6393,10 +6394,10 @@
       "timeout_seconds": 180,
       "priority": 3,
       "last_dispatch": {
-        "scheduled_at": "2026-11-01T07:00:00+11:00",
-        "dispatched_at": "2026-11-01T08:49:44.839585+11:00",
-        "lateness_seconds": 6584.8,
-        "kind": "late"
+        "scheduled_at": "2026-11-02T07:00:00+11:00",
+        "dispatched_at": "2026-11-02T07:00:16.920500+11:00",
+        "lateness_seconds": 16.9,
+        "kind": "on_time"
       },
       "fire_claim": null,
       "failure_streak": 0,
@@ -6473,9 +6474,9 @@
       },
       "fire_claim": null,
       "last_run_at": "2026-11-02T03:02:52.169731+11:00",
-      "last_status": "error",
-      "last_error": "**Cron Scheduler Overload — Data Collection Script Failed**\n\nThe cron task-set utilisation script exited with code 1 after reporting a critically overloaded schedule.\n\n**Summary**\n\n| Metric | Value |\n|--------|-------|\n| Total utilisation | **2.29×** (229% of capacity) |\n| EDF bound | 1.0 |\n| RM bound | 0.695 |\n| Periodic tasks | 128 (36 excluded) |\n| Status | 🔴 **OVERLOADED** |\n\nEDF schedulability requires U ≤ 1.0; the current load is **2.3×** that bound. Under Rate Monotonic, even the theoretical maximum (≈0.693 for large task sets) is exceeded by a factor of **3.3×**. No fixed-priority scheduler can meet all deadlines in this state.\n\n**Top 5 utilisation contributors** (each consuming 16.7% of a single CPU — all hitting the 300 s / 1800 s ceiling):\n\n| ID | Quality Score |\n|----|--------------|\n| `pre-compact-annotate-0001` | 0.5 |\n| `memory-sprt-commit-0001` | 0.5 |\n| `wave21a-alarm-bridge-ev15` | 0.5 |\n| `memory-sanov-ld-ev30` | 0.5 |\n| `memory-optional-stopping-ev30` | 0.5 |\n\nAll five have a quality score of only 0.5, meaning they are contributing heavily to overload while delivering mediocre value.\n\n**Recommended actions**\n\n1. **Cull low-quality jobs** — the five above (and likely others at q=0.5) are strong candidates for suspension or removal. A job at 16.7% utilisation with q=0.5 costs twice what a q=1.0 job would justify.\n2. **Increase cadence** — stretching the 1800 s period to ≥ 3600 s for any job that tolerates it halves its utilisation contribution.\n3. **Reduce timeout** — the 300 s timeout equals 16.7% utilisation at 1800 s cadence; even a 150 s cap on these jobs would immediately halve their budgeted load.\n4. **Target U ≤ 0.70** — to satisfy RM schedulability for the full 128-task set, bring total utilisation below ~0.695.",
-      "failure_streak": 3,
+      "last_status": "ok",
+      "last_error": "[streak cleared 2026-11-01: advisory monitor exits 0 now]",
+      "failure_streak": 0,
       "last_delivery_error": null,
       "canonical_completions": [
         "99302c6e83394048870784355baf7332"
@@ -6484,7 +6485,8 @@
       "last_failure": {
         "at": "2026-11-02T03:02:52.169731+11:00",
         "detail": "**Cron Scheduler Overload — Data Collection Script Failed**\n\nThe cron task-set utilisation script exited with code 1 after reporting a critically overloaded schedule.\n\n**Summary**\n\n| Metric | Value |\n|--------|-------|\n| Total utilisation | **2.29×** (229% of capacity) |\n| EDF bound | 1.0 |\n| RM bound | 0.695 |\n| Periodic tasks | 128 (36 excluded) |\n| Status | 🔴 **OVERLOADED** |\n\nEDF schedulability requires U ≤ 1.0; the current load is **2.3×** that bound. Under Rate Monotonic, even the theoretical maximum (≈0.693 for large task sets) is exceeded by a factor of **3.3×**. No fixed-priority scheduler can meet all deadlines in this state.\n\n**Top 5 utilisation contributors** (each consuming 16.7% of a single CPU — all hitting the 300 s / 1800 s ceiling):\n\n| ID | Quality Score |\n|----|--------------|\n| `pre-compact-annotate-0001` | 0.5 |\n| `memory-sprt-commit-0001` | 0.5 |\n| `wave21a-alarm-bridge-ev15` | 0.5 |\n| `memory-sanov-ld-ev30` | 0.5 |\n| `memory-optional-stopping-ev30` | 0.5 |\n\nAll five have a quality score of only 0.5, meaning they are contributing heavily to overload while delivering mediocre value.\n\n**Recommended actions**\n\n1. **Cull low-quality jobs** — the five above (and likely others at q=0.5) are strong candidates for suspension or removal. A job at 16.7% utilisation with q=0.5 costs twice what a q=1.0 job would justify.\n2. **Increase cadence** — stretching the 1800 s period to ≥ 3600 s for any job that tolerates it halves its utilisation contribution.\n3. **Reduce timeout** — the 300 s timeout equals 16.7% utilisation at 1800 s cadence; even a 150 s cap on these jobs would immediately halve their budgeted load.\n4. **Target U ≤ 0.70** — to satisfy RM schedulability for the full 128-task set, bring total utilisation below ~0.695."
-      }
+      },
+      "preflight_alerted": false
     },
     {
       "id": "schema-evolution-weekly-001",
@@ -6674,5 +6676,5 @@
       "state": "scheduled"
     }
   ],
-  "updated_at": "2026-11-02T06:43:21.561298+11:00"
+  "updated_at": "2026-11-02T10:12:22.932192+11:00"
 }

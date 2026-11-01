@@ -66,6 +66,11 @@ def _on_post_tool_call(
             'session': str(session_id or '')[:36],
         })
         with open(str(log_path), 'a') as f:
+            try:
+                import fcntl
+                fcntl.flock(f, fcntl.LOCK_EX)
+            except Exception:
+                pass
             f.write(entry + '\n')
     except Exception as exc:
         logger.debug('skill-access-logger: %s', exc)

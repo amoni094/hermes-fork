@@ -70,7 +70,8 @@ def _load_corpus() -> list[str]:
             db_path = base / "profiles" / "fork" / "memory.db"
         if not db_path.exists():
             return []
-        with sqlite3.connect(str(db_path), timeout=2) as con:
+        with sqlite3.connect(str(db_path), timeout=5) as con:
+            con.execute("PRAGMA journal_mode=WAL")
             rows = con.execute(
                 "SELECT value FROM memories ORDER BY rowid DESC LIMIT 200"
             ).fetchall()
