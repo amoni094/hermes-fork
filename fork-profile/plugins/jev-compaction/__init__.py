@@ -1649,7 +1649,7 @@ def register(ctx: Any) -> None:
         logger.warning("jev-compaction: failed to register pre_compress: %s", exc)
 
     try:
-        ctx.register_hook("on_session_end", on_session_end)
-        logger.debug("jev-compaction: registered on_session_end hook")
+        ctx.register_hook("on_session_finalize", on_session_end)
+        logger.debug("jev-compaction: registered on_session_finalize hook")
     except Exception as exc:
-        logger.debug("jev-compaction: on_session_end registration skipped: %s", exc)
+        logger.debug("jev-compaction: on_session_finalize registration skipped: %s", exc)

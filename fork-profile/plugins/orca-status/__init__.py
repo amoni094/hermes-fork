@@ -141,7 +141,10 @@ def _payload_for_event(event_name: str, kwargs: dict[str, Any]) -> dict[str, Any
 
 def _make_hook(event_name: str) -> Callable[..., None]:
     def _hook(**kwargs: Any) -> None:
-        _post_to_orca(_payload_for_event(event_name, kwargs))
+        try:
+            _post_to_orca(_payload_for_event(event_name, kwargs))
+        except Exception:
+            pass
 
     return _hook
 
