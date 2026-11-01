@@ -185,6 +185,20 @@ run_system_flatpak_update() {
     return "$LAST_RUN_RC"
   fi
 
+  # If the ONLY non-warning stderr lines are appstream metadata failures, treat as success.
+  # flathub periodically removes stale appstream2/appstream refs causing a cosmetic
+  # exit 1 even when no user apps failed to update.
+  if [ -n "$LAST_RUN_STDERR" ]; then
+    local real_errors
+    real_errors=$(printf '%s' "$LAST_RUN_STDERR" \
+      | grep -Ev '^(F: Warning: Treating remote fetch error as non-fatal|Error updating: Error updating appstream)' \
+      || true)
+    if [ -z "$real_errors" ]; then
+      log 'System Flatpak update: only appstream metadata refs missing (non-fatal); treating as success'
+      return 0
+    fi
+  fi
+
   if [ -n "$LAST_RUN_STDERR" ] && ! printf '%s' "$LAST_RUN_STDERR" | grep -Eiq 'Flatpak system operation Deploy not allowed for user|polkit|not allowed'; then
     return "$LAST_RUN_RC"
   fi
@@ -298,13 +312,13 @@ if toolbox list --containers 2>/dev/null | awk '{print $2}' | grep -Fxq "$TOOLBO
     log 'Toolbox DNF upgrade completed'
   elif [ "$LAST_RUN_KIND" = 'sudo' ]; then
     log "Skipping toolbox DNF upgrade: ${need_sudo_msg}"
-    overall_status=1
+    # sudo unavailability is expected in unattended mode; not a hard failure
   else
     overall_status=1
   fi
 else
   log "Skipping toolbox DNF upgrade: toolbox container ${TOOLBOX_NAME} not found"
-  overall_status=1
+  # container absence is expected if toolbox is not configured; not a hard failure
 fi
 
 run_managed_repo_update() {
