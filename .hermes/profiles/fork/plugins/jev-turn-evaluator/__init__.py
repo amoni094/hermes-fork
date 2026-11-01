@@ -77,7 +77,7 @@ EPS_DP = 0.0
 
 _HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _HP = os.environ.get("HERMES_PROFILE", "")
-_PROFILE_ROOT = (_HH / "profiles" / _HP) if _HP else _HH
+_PROFILE_ROOT = (_HH / "profiles" / _HP) if (_HP and "profiles" not in str(_HH)) else _HH
 
 # Telemetry output (append-only)
 _SCORES_LOG = _PROFILE_ROOT / "cache" / "jev-turn-scores.jsonl"
@@ -178,9 +178,14 @@ def _evaluate_turn(
         f"Assistant response (truncated): {response_snippet}"
     )
 
-    # Import atomic_subquestions lazily (avoids A4 sys.path cost at module load)
+    # Import auxiliary_client lazily (avoids A4 sys.path cost at module load).
+    # ADV-022: _HH may be the profile dir when HERMES_HOME=profiles/fork (gateway session).
+    # Use the true hermes root (peel 'profiles/<name>' suffix if present).
     try:
-        _ha = str(_HH / "hermes-agent")
+        _hh = _HH
+        if _HP and str(_hh).endswith(f"profiles/{_HP}"):
+            _hh = _hh.parent.parent
+        _ha = str(_hh / "hermes-agent")
         if _ha not in sys.path:
             sys.path.insert(0, _ha)
         from agent.auxiliary_client import call_llm  # noqa: PLC0415

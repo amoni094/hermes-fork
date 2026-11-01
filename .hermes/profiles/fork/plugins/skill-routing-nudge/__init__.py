@@ -41,10 +41,17 @@ STOPWORDS = {
 
 
 def _router_script_path() -> Path:
-    """Canonical live router script path."""
+    """Canonical live router script path.
+
+    ADV-022: When HERMES_HOME is the profile dir (gateway fork session), the path
+    base/profiles/<profile>/scripts/ would double-nest. Detect and peel.
+    """
     base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
     profile = os.environ.get('HERMES_PROFILE', '')
     if profile:
+        # If base already ends with profiles/<profile>, skip the nesting.
+        if str(base).endswith(f'profiles/{profile}'):
+            return base / 'scripts' / 'skill-router-index.py'
         return base / 'profiles' / profile / 'scripts' / 'skill-router-index.py'
     return base / 'scripts' / 'skill-router-index.py'
 
@@ -183,6 +190,9 @@ def _on_pre_llm_call(
 
 def register(ctx: Any) -> None:
     """Register with Hermes plugin context. Fail-open on registration error."""
+    if not ctx.get_config("enabled", True):
+        logger.info("skill-routing-nudge: disabled via config; not registering")
+        return
     try:
         ctx.register_hook('pre_llm_call', _on_pre_llm_call)
         logger.debug('skill-routing-nudge: registered pre_llm_call hook')

@@ -4,7 +4,7 @@ Patterns ported from Denuto (jesterG1979/hello_agent) + Hermes-native patterns.
 This is the authoritative single source of truth for how Hermes is structured,
 what rules are enforced, and what the invariants are.
 
-Last updated: 2026-10-29 Wave 25 saturation (14 plugins, 151 cron jobs, lifecycle.db inventory + inter-script edges)
+Last updated: 2026-11-02 Wave 25 + upstream merge (fork-profile: 6 plugins, 55 cron jobs; profiles/fork: 16 plugins, ~164 cron jobs; lifecycle.db inventory + inter-script edges)
 
 ---
 
@@ -251,20 +251,22 @@ Six books ingested as fork skills to formally ground bottleneck reasoning:
 
 Live plugins under ~/.hermes/profiles/fork/plugins/, enabled in config.yaml plugins.enabled:
 
-  context-pressure-guard - pre_llm_call + pre_compress: injects [CONTEXT PRESSURE HIGH] at consecutive_high >= 2; nudges compressor lambda +0.05 per turn at cap
+  context-pressure-guard - pre_llm_call + pre_compress: injects [CONTEXT PRESSURE HIGH] at consecutive_high >= 2; applies lyapunov-map lambda (memoryless, not +0.05 per turn). pre_compress registered; fire site in agent/conversation_compression.py (agent= kwarg wired since Wave 25 cold audit fix)
   tool-result-audit      - post_tool_call: tool-auth-shim.py injection-risk audit on EXTERNAL-tier tool results (shadow; never blocks)
-  jev-compaction         - pre_compress + on_session_end: per-message RR/Jev relevance scoring; prunes low-RR tool results before compression
+  jev-compaction         - on_session_end + pre_compress: per-message RR/Jev relevance scoring; prunes low-RR tool results before compression. pre_compress registered; agent= kwarg wired (Wave 25 cold audit fix)
   cobra-guard            - pre_tool_call / post_tool_call / on_session_start: wraps cobra-skip-guard.py probe-cache logic; WARN-only, fail-open (HERMES_COBRA_GUARD=0 disables)
   orca-status            - posts agent lifecycle events to ORCA_AGENT_HOOK_ENDPOINT; silent no-op when unset
-  tool-auth-gate         - pre_tool_call Agentao-style proposal/authorize split (arXiv:2608.13574); DENY_ALWAYS / DENY_IN_CONTEXT / ALLOW against escalate_tools and deny_tools
+  tool-auth-gate         - pre_tool_call Agentao-style proposal/authorize split (arXiv:2608.13574); DENY_ALWAYS / DENY_IN_CONTEXT / ALLOW against escalate_tools and deny_tools; does NOT cover execute_code/terminal or hermes-fork/plugins paths
   hindsight              - long-term memory plugin (enabled)
-  governance-hard-block  - H-I8 fail-closed pre_tool_call; LIVE in plugins.enabled (deployed Wave 18 via CLI; proposal prop_d16153f3 deployed)
+  governance-hard-block  - H-I8 fail-closed pre_tool_call; DISABLED (plugin.yaml + config.yaml settings.enabled: false; register() early-returns; hook never registered; tool-auth-gate is NOT a full substitute — see coverage gap note above)
   jev-turn-evaluator     - in plugins.enabled (shadow gate, shadow_jev_evaluator=true; Wave 19 GATE CLOSED)
   memory-ransac-gate     - post_tool_call RANSAC outlier gate; rejects tool results that are geometric outliers relative to memory corpus; fail-open (Wave 18 ADV-001 fixed)
   camofox                - Camofox anti-detection browser tools over camofox-browser REST (browser_navigate/snapshot/click/type/...)
   deductive-verifier     - pre_tool_call semantic predicate gate; blocks CRITICAL command patterns (complements governance-hard-block)
   post-tool-compliance   - post_tool_call observation-only compliance scorer; writes cache/compliance-scores.jsonl (fail-open)
   decision-audit         - post_tool_call resolvability logger; every 10 calls writes decision-audit-log.jsonl + delegation_audit (fail-open)
+  skill-access-logger    - post_tool_call shadow hook; logs skill access events to cache/skill-access.log (fail-open, no active consumer yet)
+  skill-routing-nudge    - pre_llm_call nudge; companion skill-router-index.py at profiles/fork/scripts/; _router_script_path() peels HERMES_HOME==profile_dir correctly (ADV-022 fix)
 
 ---
 
@@ -663,7 +665,7 @@ Recursive 3-pass + cold adversarial on H-I8 bypass (temp+rename) and ssl_guard s
 
   Plugin: `~/.hermes/profiles/fork/plugins/governance-hard-block/`
   Proposal: prop_d16153f3 HIGH pending_review.
-  **LIVE in plugins.enabled** — governance-hard-block enforcing (Wave 18). Proposals deployed.
+  **DISABLED** — governance-hard-block plugin.yaml settings.enabled: false; hook is inactive. prop_d16153f3 pending_review. tool-auth-gate covers the primary DENY surface.
   Bootstrap exception: `plugins/governance-hard-block/**` only.
   Adversarial: `mv /tmp/x config.yaml` and `os.replace` are matched via rename primitives
   + path regex. Residual: execute_code that builds the dest path at runtime with no
@@ -1479,7 +1481,7 @@ New scripts (stdlib only, H-I6 compliant):
 Remaining gaps (not closed this wave):
   - No live stepper: synthetic history is a bootstrap, not a session loop.
     Something must call loop-pid.py step between turns or the file goes stale.
-  - History cap 20 in cmd_step: Lyapunov/CUSUM/passivity need a longer ring buffer (or side log).
+  - CLOSED: History cap raised 20→200 in cmd_step (Lyapunov/CUSUM/passivity need longer ring buffer).
   - Gain mismatch: lyapunov-check uses default Kp/Ki/Kd, not the plant's actual gains.
   - CLOSED: SPRT alpha overshoot — A_boot wired into shadow-gate-sprt / sprt-effective-decision.
   - CLOSED: ISS n=0 fail-closed (iss-justification-gate.py).
@@ -1609,7 +1611,7 @@ Veto producer before effective merge before consumers:
 
 ## Wave 25 — Coherence, Consistency & Wiring Audit (2026-10-28)
 
-Full-stack audit: runtime, scripts (562 total), cron (151 jobs), plugins (14 enabled), skills (224), openshell policy, governance plugin.
+Full-stack audit: runtime, scripts (562 total), cron (165 jobs), plugins (16 enabled), skills (224), openshell policy, governance plugin.
 
 Last updated: 2026-10-28
 
@@ -1637,7 +1639,7 @@ All items below were offline due to SANDBOX_FAIL caused by C1. With openshell po
 
 - **block-bootstrap-sprt.json A_boot**: A_boot=11.94 confirmed present (audit concern was false). shadow-gate-sprt will use the correct bootstrap threshold.
 - **All 562 scripts**: compile clean.
-- **All 14 enabled plugins**: compile clean, hook names valid, no phantom entries.
+- **All 16 enabled plugins**: compile clean, hook names valid, no phantom entries.
 - **HERMES_PROFILE=fork env on all 151 cron jobs**: confirmed.
 
 ### Low Findings Fixed
@@ -3204,7 +3206,7 @@ Three root causes confirmed by adversarial audit (Wave 0, 25 findings):
 | Trim script | Applied to 169 skills; idempotent |
 | Textbook category | Live on next session (prompt_builder reads frontmatter `category:` field; textbook skills demoted to names-only in focus+coding posture via `_NON_CODING_SKILL_CATEGORIES`) |
 | skill-access-logger | ENABLED in config.yaml; wired to post_tool_call |
-| skill-routing-nudge | Created, NOT enabled; pending governance approval |
+| skill-routing-nudge | ENABLED in config.yaml; pre_llm_call hook; companion script at profiles/fork/scripts/skill-router-index.py |
 | memory-consolidate-cron | Script created; NOT scheduled as cron; run manually with --apply |
 
 ### Canonical Script Location

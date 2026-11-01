@@ -130,7 +130,14 @@ def _job_cadence_seconds(job: dict) -> Optional[float]:
         return None
     kind = schedule.get("kind", "")
     if kind == "interval":
-        return float(schedule.get("seconds", 0)) or None
+        # ADV-022: jobs use schedule.minutes, not schedule.seconds
+        secs = schedule.get("seconds")
+        mins = schedule.get("minutes")
+        if secs is not None:
+            return float(secs) or None
+        if mins is not None:
+            return float(mins) * 60.0 or None
+        return None
     if kind == "cron":
         return _parse_cron_cadence(schedule.get("expr", ""))
     return None
@@ -140,15 +147,17 @@ def _job_timeout_seconds(job: dict) -> float:
     """Get job timeout as C_i. Falls back to DEFAULT_TIMEOUT_SECONDS.
 
     ADV-013 fix: timeout=0 undercounts load. Use DEFAULT_TIMEOUT_SECONDS instead.
+    ADV-022 fix: most jobs use timeout_seconds, not timeout. Check both; timeout_seconds wins.
     """
-    t = job.get("timeout")
-    if t is not None:
-        try:
-            tv = float(t)
-            # ADV-013: timeout <= 0 is inadmissible; treat as default worst-case
-            return tv if tv > 0 else DEFAULT_TIMEOUT_SECONDS
-        except (TypeError, ValueError):
-            pass
+    for key in ("timeout_seconds", "timeout"):
+        t = job.get(key)
+        if t is not None:
+            try:
+                tv = float(t)
+                # ADV-013: timeout <= 0 is inadmissible; treat as default worst-case
+                return tv if tv > 0 else DEFAULT_TIMEOUT_SECONDS
+            except (TypeError, ValueError):
+                pass
     return DEFAULT_TIMEOUT_SECONDS
 
 
