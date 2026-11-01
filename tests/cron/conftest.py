@@ -19,6 +19,30 @@ from uuid import uuid4
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _stub_payload_manifest(monkeypatch):
+    """Suppress ``pm.environments._payload_manifest`` filesystem probes in cron tests.
+
+    ``build_subprocess_env`` calls ``_payload_manifest(root)`` to discover
+    whether the process is running from a packaged payload (it reads
+    ``root/manifest.json`` and ``root.parent/manifest.json``). In a live
+    developer session, ``root.parent`` resolves to the real ``~/.hermes``
+    directory, which trips the ``home_io_guard`` autouse fixture installed by
+    the top-level conftest — even though there is no relevant payload manifest
+    in a checkout.
+
+    Returning ``None`` here is always correct for cron unit tests: they execute
+    ``_run_job_script`` in-process against a tmp dir, never inside a packaged
+    payload, so the subprocess environment builder's payload-strip path is
+    unreachable regardless.
+    """
+    try:
+        import pm.environments as _pm_env
+        monkeypatch.setattr(_pm_env, "_payload_manifest", lambda _root: None)
+    except (ImportError, AttributeError):
+        pass  # pm not available — guard is moot
+
+
 @pytest.fixture()
 def make_cron_provider():
     """Factory for minimal CronScheduler test doubles.
@@ -72,12 +96,25 @@ def _reset_session_context_vars():
     share the pytest context. ``run_job`` intentionally clears ordinary session
     variables to explicit empty values, which would otherwise shadow legacy env
     fallbacks used by later approval tests in the same process.
+
+    The fork's ``get_hermes_home_override()`` ContextVar is also reset: tests
+    that call ``_install_fire_secret_scope`` / ``set_hermes_home_override`` and
+    raise mid-run may leave it pointing at the live profile, causing subsequent
+    tests' ``cron.executions._transaction()`` to resolve the wrong DB path.
     """
     from gateway.session_context import _UNSET, _VAR_MAP
+    _HERMES_HOME_OVERRIDE = None
+    _HH_UNSET = None
+    try:
+        from hermes_constants import _HERMES_HOME_OVERRIDE, _UNSET as _HH_UNSET
+    except ImportError:
+        pass
 
     def _reset_all():
         for var in _VAR_MAP.values():
             var.set(_UNSET)
+        if _HERMES_HOME_OVERRIDE is not None and _HH_UNSET is not None:
+            _HERMES_HOME_OVERRIDE.set(_HH_UNSET)
 
     _reset_all()
     yield
