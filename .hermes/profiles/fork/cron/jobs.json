@@ -652,15 +652,15 @@
       "schedule_display": "every 10m",
       "repeat": {
         "times": null,
-        "completed": 6989
+        "completed": 6990
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-06-26T11:06:08.602796+10:00",
-      "next_run_at": "2026-11-02T11:49:10.793101+11:00",
-      "last_run_at": "2026-11-02T11:39:10.793101+11:00",
+      "next_run_at": "2026-11-02T12:00:10.173369+11:00",
+      "last_run_at": "2026-11-02T11:50:10.173369+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -676,10 +676,10 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T10:33:12.920197+11:00",
-        "dispatched_at": "2026-11-02T11:39:07.936889+11:00",
-        "lateness_seconds": 3955.0,
-        "kind": "catch_up"
+        "scheduled_at": "2026-11-02T11:49:10.793101+11:00",
+        "dispatched_at": "2026-11-02T11:50:07.966869+11:00",
+        "lateness_seconds": 57.2,
+        "kind": "on_time"
       },
       "profile": "fork",
       "timeout_seconds": 480,
@@ -960,15 +960,15 @@
       "schedule_display": "every 220m",
       "repeat": {
         "times": null,
-        "completed": 294
+        "completed": 295
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-15T10:00:51.863995+10:00",
-      "next_run_at": "2026-11-02T11:48:21.556024+11:00",
-      "last_run_at": "2026-11-02T08:08:21.556024+11:00",
+      "next_run_at": "2026-11-02T15:29:12.861743+11:00",
+      "last_run_at": "2026-11-02T11:49:12.861743+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -979,9 +979,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T08:08:03.668467+11:00",
-        "dispatched_at": "2026-11-02T08:08:16.919285+11:00",
-        "lateness_seconds": 13.3,
+        "scheduled_at": "2026-11-02T11:48:21.556024+11:00",
+        "dispatched_at": "2026-11-02T11:49:07.965100+11:00",
+        "lateness_seconds": 46.4,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -6140,7 +6140,7 @@
       "model": null,
       "provider": null,
       "base_url": null,
-      "script": "lifecycle-db-migrate.py",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/lifecycle-db-migrate.py",
       "no_agent": true,
       "monitor_script": null,
       "monitor_url": null,
@@ -6455,7 +6455,7 @@
         "expr": "0 3 * * *"
       },
       "timeout": 60,
-      "script": "cron-sandboxed/cron-admission-control.sh",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/cron-admission-control.sh",
       "enabled": true,
       "tags": [
         "audit",
@@ -6491,7 +6491,7 @@
         "expr": "0 4 * * 0"
       },
       "timeout": 120,
-      "script": "cron-sandboxed/schema-evolution-tracker.sh",
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/schema-evolution-tracker.sh",
       "enabled": true,
       "tags": [
         "schema",
@@ -6670,5 +6670,5 @@
       "state": "scheduled"
     }
   ],
-  "updated_at": "2026-11-02T11:40:28.091748+11:00"
+  "updated_at": "2026-11-02T11:50:10.174449+11:00"
 }

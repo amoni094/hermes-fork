@@ -412,7 +412,7 @@ Live plugins under ~/.hermes/profiles/fork/plugins/, enabled in config.yaml plug
     SEMANTIC/FATAL remain in-process only — fixing those requires redesigning callers.
 
   rd-compaction-advisor wired via pre_compress: aggressiveness is persisted to
-    cache/rd-compaction-advisory.json; context-pressure-guard.on_pre_compress applies
+    cache/rd-compaction-advisory.json; context-pressure-guard pre_compress hook applies
     it as monotone lambda and writes cache/rd-lambda-target.json for lambda-tuner.
     context_compressor.py is not patched. DPI focus-token gate in the advisor.
     Proposal: proposals/wave18-rd-compaction-wiring.json.
@@ -654,7 +654,7 @@ Recursive 3-pass + cold adversarial on H-I8 bypass (temp+rename) and ssl_guard s
 |---|---|---|---|
 | Memory | Markov kernels; lenses GetPut; Curry/Robinson sheaf glue | Restriction to overlap agrees; nonzero Čech H¹ = locally ok, globally inconsistent | `sheaf-memory-gluing.py` |
 | Scheduler / cron | Bregman Lagrangian; MDP (Puterman); Lyapunov | Named energy non-increase on the loop | `loop-pid.py cmd_lyapunov_check` (pre-existing) |
-| Compressor | DPI / Fano; rate-distortion | I(dec;Y) ≤ I(dec;X); lambda monotone; focus tokens survive | `rd-compaction-advisor.py --self-test`; `context-pressure-guard.on_pre_compress` |
+| Compressor | DPI / Fano; rate-distortion | I(dec;Y) ≤ I(dec;X); lambda monotone; focus tokens survive | `rd-compaction-advisor.py --self-test`; `context-pressure-guard pre_compress hook` |
 | Plugins / tool dispatch | Honda session types; Lynch I/O automata; Jacobs coalgebra | AG(tool_call → pre_hook_complete); AF(request → response) under fairness | `docs/agent-loop-io-automata.md`; `governance-hard-block` |
 | Skill routing | Pearl do-calculus; Schölkopf CRL | Refuse causal claims that are only observational | `skill-routing-causal-audit.py` |
 | Governance | Lamport crash-boundary; OCC | Illegal transition raises; HIGH write needs approved proposal | `improvement_governance.py` + `governance-hard-block` |

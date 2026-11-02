@@ -9,7 +9,6 @@ providers:
     api: https://api.openai.com/v1
     key_env: OPENAI_API_KEY
     context_length: 128000
-    max_output_tokens: 16384
     api_mode: chat_completions
     models:
       gpt-5.4:
@@ -324,7 +323,8 @@ plugins:
     - tool-result-audit
   entries:
     cobra-guard:
-      allow_tool_override: false
+      settings:
+        allow_tool_override: false
     jev-turn-evaluator:
       settings:
         shadow_jev_evaluator: true
@@ -341,6 +341,14 @@ plugins:
           system: 1.0
           tool_result: 0.55
           user: 0.72
+    governance-hard-block:
+      settings:
+        enabled: false
+    tool-auth-gate:
+      settings:
+        escalate_tools: []
+        deny_tools: []
+        delegation_depth: 0
   disabled: []
 cron:
   allow_agent_scheduling: false
