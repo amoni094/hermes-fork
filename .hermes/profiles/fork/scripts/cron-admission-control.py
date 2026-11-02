@@ -373,9 +373,28 @@ def main() -> int:
     else:
         report = compute_utilisation(jobs)
 
-    # Save report
+    # Save report to omni/ (always)
     REPORT_FILE.parent.mkdir(parents=True, exist_ok=True)
     REPORT_FILE.write_text(json.dumps(report, indent=2))
+
+    # Write an alarm file to the profile cache so alarm-aggregator picks it up
+    # when status is OVERLOADED. Remove it when load is acceptable.
+    _alarm_path = HERMES_HOME / "cache" / "cron-admission-alarm.json"
+    _alarm_path.parent.mkdir(parents=True, exist_ok=True)
+    if report.get("status") == "OVERLOADED":
+        _alarm_path.write_text(json.dumps({
+            "source": "cron-admission-control",
+            "severity": "HIGH",
+            "status": report["status"],
+            "total_utilisation": report["total_utilisation"],
+            "edf_bound": report["edf_bound"],
+            "ts": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+        }))
+    elif _alarm_path.exists():
+        try:
+            _alarm_path.unlink()
+        except OSError:
+            pass
 
     print(json.dumps({
         k: report[k] for k in [

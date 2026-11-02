@@ -173,9 +173,12 @@ def run() -> dict:
         xs_new = xs
         n_after = len(xs)
     elif n_seen == len(xs) and not state.get('fresh_start'):
-        # ADV-022: ring is full and n_seen matches cap; new samples have rotated in
-        # but n_seen never advances past len(xs). Re-process the last window to
-        # detect changes in the most-recent samples (safe: CUSUM accumulates).
+        # ADV-022 rev2: ring is full; xs[n_seen:] is always empty so no new samples
+        # were ever being processed. Correct fix: reset S+/S− to 0, then run CUSUM
+        # over the full ring as a fresh window. This detects mean shifts visible in
+        # the current ring without accumulating old S values (double-count prevention).
+        state['S_pos'] = 0.0
+        state['S_neg'] = 0.0
         xs_new = xs
         n_after = len(xs)
     else:
