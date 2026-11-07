@@ -1349,16 +1349,19 @@ def check_execute_code_guard(code: str, env_type: str, has_host_access: bool = F
     # on every execute_code call. Ask-mode still takes this path even with INTERACTIVE set (how gateway/smart tests
     # and messaging ask-mode drive whole-script approval); when that leaks into a CLI with no notify callback, the
     # engine falls through to the CLI Dangerous Command panel instead of a silent pending_approval.
-    # A gateway-run local CLI/TUI/Desktop session's own turns keep the interactive-CLI rule: the script's terminal()
-    # calls reach the session's own prompt per call. Fork does not auto-approve that path — execute_code can call
-    # subprocess/os.system directly (bypassing terminal() guards), so the hardline/dangerous-command check still runs.
-    if (not is_gateway and not is_ask) or _is_local_viewer_turn():
-        # CLI / local-viewer path: still run the standard dangerous-command check rather than auto-approving.
+    # A gateway-run local CLI/TUI/Desktop session's own turns keep that interactive-CLI rule: the script's terminal()
+    # calls reach the session's own prompt per call, so no whole-script prompt. Injected and automation turns keep the
+    # gate (cron/-q resolved above; messaging/API unchanged).
+    # Fork CLI (not gateway, not ask): still run the standard dangerous-command check rather than auto-approving.
+    # execute_code can call subprocess/os.system directly (bypassing terminal() guards), so the hardline floor applies.
+    if not is_gateway and not is_ask:
         _cli_command = f"execute_code <<'PY'\n{code}\nPY"
         return check_dangerous_command(
             _cli_command, env_type, approval_callback=approval_callback,
             has_host_access=has_host_access,
         )
+    if _is_local_viewer_turn():
+        return _approved()
 
     session_key = get_current_session_key()
     # Built only past the early-return gates so common paths don't copy a potentially-large script into this string.
