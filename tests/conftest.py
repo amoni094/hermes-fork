@@ -456,6 +456,22 @@ def _isolate_hermes_home(_hermetic_environment):
 
 
 @pytest.fixture(autouse=True)
+def _stub_payload_manifest(monkeypatch):
+    """Checkout tests never run inside a packaged payload.
+
+    ``pm.environments._payload_manifest`` reads ``manifest.json`` next to the
+    install root; in a developer session ``root.parent`` is the real
+    ``~/.hermes`` and trips ``home_io_guard``. Returning None is always
+    correct for unit tests.
+    """
+    try:
+        import pm.environments as _pm_env
+        monkeypatch.setattr(_pm_env, "_payload_manifest", lambda _root: None)
+    except (ImportError, AttributeError):
+        pass
+
+
+@pytest.fixture(autouse=True)
 def _reset_foreground_exit_fence():
     """A test that drives a hard-exit path raises the one-way foreground-spawn fence; lower it after."""
     yield
