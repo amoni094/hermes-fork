@@ -108,6 +108,8 @@ def _install_plugin_debug_handler(force: bool = False) -> None:
 
 _install_plugin_debug_handler()
 
+# The function that fires each name is listed in website/docs/developer-guide/plugins/index.md
+# ("Where each hook fires"); add a row there when you add a hook.
 VALID_HOOKS: set[str] = {
     "pre_tool_call", "post_tool_call", "transform_terminal_output", "transform_tool_result",
     # transform_llm_output: return a replacement string (first non-None wins) or None.
@@ -143,6 +145,8 @@ VALID_HOOKS: set[str] = {
     # (BoN diversity, arXiv:2608.11065). Kwargs: agent_results, parent_session_id,
     # exchange_round. Hooks may mutate agent_results in place.
     "pre_agent_exchange",
+    # on_session_open: local session created/opened, before its first turn. Kwargs: session_id, platform, reason.
+    "on_session_open",
     # on_skill_lifecycle: successful skill lifecycle facts (local skill name visible to plugins).
     "on_skill_lifecycle", "subagent_start", "subagent_stop",
     # pre_gateway_dispatch: once per incoming MessageEvent, after the internal-event guard, BEFORE
@@ -1053,6 +1057,21 @@ def has_hook(hook_name: str) -> bool:
     Lazy-discovers first — same gate-before-invoke rationale as :func:`has_middleware` (tracking #64178).
     """
     return _delivery_manager().has_hook(hook_name)
+
+
+def hook_unused_nowait(hook_name: str) -> bool:
+    """True when this home's plugins are loaded and none handles *hook_name*. Never discovers or
+    waits (an unloaded home, or one whose (re)load is still running on another thread, answers False:
+    unknown, not unused), so it is safe on an event loop."""
+    manager = get_plugin_manager()
+    # ``_discovered`` is set before a sweep finishes and a force reload clears ``_hooks`` first, so a
+    # sweep in flight could read as "no consumer": treat a held discovery lock as unknown.
+    if not manager._discovery_lock.acquire(blocking=False):
+        return False
+    try:
+        return manager._discovered and not manager.has_hook(hook_name)
+    finally:
+        manager._discovery_lock.release()
 
 
 def iter_hook_callbacks(hook_name: str) -> tuple[Callable, ...]:
