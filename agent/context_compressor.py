@@ -846,6 +846,49 @@ def _is_summary_stub(content: str) -> bool:
 # user answer is never re-summarized away on a later prune pass.
 _PRUNE_MIN_CHARS = 200
 
+# Fork: message text helper and fact-extraction constants for entropy / ledger.
+def _message_text_for_entropy(msg: Any) -> str:
+    """Best-effort plaintext from a chat message. Fail-open to empty string."""
+    try:
+        if not isinstance(msg, dict):
+            return ""
+        content = msg.get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for part in content:
+                if isinstance(part, str):
+                    parts.append(part)
+                elif isinstance(part, dict):
+                    text = part.get("text")
+                    if isinstance(text, str):
+                        parts.append(text)
+            return " ".join(parts)
+        return ""
+    except Exception:
+        return ""
+
+
+_CAUSAL_TOOLS: frozenset[str] = frozenset({
+    "execute_code", "write_file", "patch", "terminal", "delegate_task", "web_extract",
+})
+_NOISE_TOOLS: frozenset[str] = frozenset({"read_file", "search_files", "web_search", "skill_view"})
+_CHEAP_REACQ_TOOLS: frozenset[str] = frozenset({
+    "read_file", "search_files", "web_extract", "skill_view", "web_search",
+})
+_REACQ_EXPENSIVE_MARKERS = ("FAILED", "error:", "fixed")
+_REACQ_NUM4_RE = re.compile(r"\b\d{4,}\b")
+_FACT_PATH_RE = re.compile(r"/[\w./\-]+\.(?:py|yaml|yml|json)")
+_FACT_ARXIV_RE = re.compile(r"\d{4}\.\d{4,5}")
+_FACT_MODEL_RE = re.compile(r"(?:haiku|sonnet|grok|mistral|claude)[\w.-]*", re.I)
+_FACT_NUM_RE = re.compile(r"\b\d{3,6}\b")
+_FACT_SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
+_FACT_NAMED_MARKERS = (
+    "result:", "found:", "fixed:", "error:", "PASSED", "FAILED",
+    "LIVITANYI", "MACLANE", "SA-", "spike:", "phase ", "Phase ",
+)
+
 # Ghost-skill defense: the ONE canonical prune marker; emit sites and presence
 # checks must use the same string so they cannot drift.
 # Ghost-skill defense (#32106): when compaction reduces an old ``skill_view`` result to a 1-line metadata
@@ -2310,6 +2353,8 @@ class ContextCompressor(
         self._last_compression_telemetry = self._active_compression_telemetry = None
         self._compression_telemetry_seed = None
         self._reset_proactive_prune_rearm()
+        self._last_ratio = None
+        self._last_complexity_score = None
 
     def bind_session_state(self, session_db: Any = None, session_id: str = "") -> None:
         """Bind the current session row so durable cooldowns can round-trip."""
@@ -2798,6 +2843,37 @@ class ContextCompressor(
             return max(1, min(trigger_cap, effective_window - 1))
         return floored
 
+    # --- Adaptive compression plugin API (fork) ---------------------------------
+    #: Built-in profiles that plugins can reference by name.
+    COMPRESSION_PROFILES: "dict[str, dict]" = {
+        "research": {
+            "threshold_percent": 0.45,
+            "proactive_prune_tokens": 40_000,
+            "protect_last_n": 22,
+        },
+        "code": {
+            "threshold_percent": 0.55,
+            "proactive_prune_tokens": 28_000,
+            "protect_last_n": 28,
+        },
+        "mixed": {
+            "threshold_percent": 0.50,
+            "proactive_prune_tokens": 32_000,
+            "protect_last_n": 20,
+        },
+        "entropy-adaptive": {
+            "threshold_percent": 0.50,
+            "proactive_prune_tokens": 32_000,
+            "protect_last_n": 20,
+        },
+    }
+    _PROFILE_THRESHOLD_MIN = 0.20
+    _PROFILE_THRESHOLD_MAX = 0.85
+    _PROFILE_PROTECT_LAST_N_MAX = 128
+    _PROFILE_KEYS = ("threshold_percent", "proactive_prune_tokens", "protect_last_n")
+    _FORK_SESSION_PROFILES = ("research", "code", "mixed")
+    _CLASSIFIER_MESSAGE_WINDOW = 30
+
     def __init__(
         self, model: str, threshold_percent: float = 0.50, protect_first_n: int = 3, protect_last_n: int = 20,
         summary_target_ratio: float = 0.20, quiet_mode: bool = False, summary_model_override: str | None = None,
@@ -2893,6 +2969,15 @@ class ContextCompressor(
         # Terminal summary failures (access/quota, network, empty content, finish_reason=length): compress()
         # must ABORT and preserve the session regardless of abort_on_summary_failure (see _TERMINAL_SUMMARY_FAILURES).
         self._clear_terminal_summary_failures()
+        # Fork plugin API state
+        self._active_compression_profile: str | None = None
+        self._profile_source: str | None = None
+        self._session_type: str | None = None
+        self._routing_hint: dict | None = None
+        self.current_intent: str | None = None
+        self.importance_biased_prune_enabled: bool = False
+        self._last_ratio: float | None = None
+        self._last_complexity_score: float | None = None
 
     def update_from_response(self, usage: dict[str, Any]):
         """Update tracked token usage from API response."""
@@ -4220,7 +4305,9 @@ Write only the summary body. Do not include any preamble or prefix."""
 
     @staticmethod
     def _starts_with_summary_prefix(text: str) -> bool:
-        """Return True if *text* begins with any known handoff prefix."""
+        """Return True if *text* begins with any known handoff prefix (including FACT LEDGER header)."""
+        if text.startswith("FACT LEDGER"):
+            return True
         return text.startswith((SUMMARY_PREFIX, LEGACY_SUMMARY_PREFIX, *_HISTORICAL_SUMMARY_PREFIXES))
 
     @classmethod
@@ -4229,6 +4316,14 @@ Write only the summary body. Do not include any preamble or prefix."""
         Returns ``"standalone"`` (whole message is a handoff), ``"merged"`` (preserved content +
         delimiter + summary body), or None."""
         text = _content_text_for_contains(content).lstrip()
+        # Strip a leading FACT LEDGER block (fork) so the prefix check sees the SUMMARY_PREFIX.
+        if text.startswith("FACT LEDGER"):
+            # Find the first line that starts with the summary prefix marker.
+            for line_start in range(len(text)):
+                rest = text[line_start:]
+                if cls._starts_with_summary_prefix(rest):
+                    text = rest
+                    break
         # Merged summaries carry the handoff prefix after the delimiter; detect it there too.
         if _MERGED_SUMMARY_DELIMITER in text:
             after = text.split(_MERGED_SUMMARY_DELIMITER, 1)[1].lstrip()
@@ -4580,48 +4675,239 @@ Write only the summary body. Do not include any preamble or prefix."""
             idx += 1
         return idx
 
-    def _restart_handoff_probe_bounds(self, messages: list[dict[str, Any]]) -> tuple[int, int]:
-        """Return the bounded transcript region that can indicate restart decay."""
-        if not messages or self.protect_first_n <= 0:
-            return 0, 0
-        first_non_system = 1 if messages[0].get("role") == "system" else 0
-        return first_non_system, min(len(messages), first_non_system + self.protect_first_n + _RESTART_HANDOFF_PROBE_EXTRA_MESSAGES)
+    # --- Adaptive compression plugin API (fork methods) -------------------------
 
-    def _effective_protect_first_n(self, messages: Optional[list[dict[str, Any]]] = None) -> int:
-        """``protect_first_n``, decayed to 0 once the session has been compressed so early turns don't fossilize.
-        After a restart the decayed state is inferred from handoff summaries in the resumed head."""
-        if self.compression_count >= 1 or self._previous_summary:
-            return 0
-        if messages and self.protect_first_n > 0:
-            # Probe only the early resumed-handoff shape; summary-like tail content must not decay protection.
-            probe_start, probe_end = self._restart_handoff_probe_bounds(messages)
-            if any(map(self._is_context_summary_message, messages[probe_start:probe_end])):
-                return 0
-        return self.protect_first_n
+    def _fork_policy_set_exists(self) -> bool:
+        """True when named fork profiles (research/code/mixed) are registered."""
+        profiles = getattr(self, "COMPRESSION_PROFILES", None) or {}
+        return all(name in profiles for name in self._FORK_SESSION_PROFILES)
 
-    def _protect_head_size(self, messages: list[dict[str, Any]]) -> int:
-        """Head messages to protect: the system prompt (if present) plus the decaying ``protect_first_n`` extra rows.
+    @property
+    def routing_hint(self) -> "dict | None":
+        """Last computed routing hint, or None if the classifier has not run."""
+        return getattr(self, "_routing_hint", None)
 
-        The ``protect_first_n`` portion DECAYS after the first compression (see _effective_protect_first_n)
-        so early user turns don't fossilize across repeated compactions (#11996).
+    @property
+    def last_compression_ratio(self) -> "float | None":
+        """Remaining-token ratio (after/pre) from the last successful compress.
 
-        Billion-context first-user pin: the first real user message is never dropped
-        even after decay (strict providers need ≥1 user message). Fail-open.
+        Returns a positive float; typically in (0, 1] but may exceed 1.0 if the
+        compressor expanded context (e.g. long summaries). Returns None if this
+        session has not completed a successful compress, or if the stored value
+        is non-positive or non-numeric. Plugins must read this, not ``_last_ratio``.
         """
-        head = 1 if messages and messages[0].get("role") == "system" else 0
-        protected = head + self._effective_protect_first_n(messages)
+        value = getattr(self, "_last_ratio", None)
         try:
-            from agent.billion_context import first_user_index
-            idx = first_user_index(messages)
-            if 0 <= idx < len(messages):
-                protected = max(protected, idx + 1)
-        except Exception:
-            logger.debug("billion-context first-user pin skipped", exc_info=True)
-        return protected
+            ratio = float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+        if ratio is None or ratio <= 0.0:
+            return None
+        return ratio
 
+    @property
+    def last_complexity_score(self) -> "float | None":
+        """Last plugin-written complexity score in [0, 1], or None."""
+        value = getattr(self, "_last_complexity_score", None)
+        try:
+            return float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @last_complexity_score.setter
+    def last_complexity_score(self, value: "float | None") -> None:
+        self._last_complexity_score = value
+
+    def set_compression_profile(
+        self,
+        profile: "str | dict",
+        **kwargs: Any,
+    ) -> None:
+        """Apply a named or custom compression profile between turns.
+
+        Safe to call from ``pre_llm_call`` hooks: each compression pass re-reads
+        these attributes from scratch, so a change takes effect on the next
+        compression event that starts *after* this hook returns.
+
+        Fail-open: unknown names, bad types, and out-of-range values are logged
+        and ignored (or clamped) rather than raised.
+
+        Args:
+            profile: A key from :attr:`COMPRESSION_PROFILES` (``\"research\"``,
+                ``\"code\"``, ``\"mixed\"``, ``\"entropy-adaptive\"``) **or** a dict
+                with any subset of keys ``threshold_percent``,
+                ``proactive_prune_tokens``, ``protect_last_n``.
+            **kwargs: ``_source`` is an informational log label; anything else
+                is dropped.
+        """
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
+        _source = kwargs.pop("_source", "plugin")
+
+        if isinstance(profile, str):
+            if profile not in self.COMPRESSION_PROFILES:
+                _log.warning(
+                    "context_compressor: unknown profile %r from %s (valid: %s) — ignored",
+                    profile, _source, list(self.COMPRESSION_PROFILES),
+                )
+                return
+            settings = dict(self.COMPRESSION_PROFILES[profile])
+            self._active_compression_profile = profile
+            self._profile_source = str(_source) if _source is not None else "plugin"
+            if profile in self._FORK_SESSION_PROFILES:
+                self._session_type = profile
+        elif isinstance(profile, dict):
+            settings = {k: profile[k] for k in self._PROFILE_KEYS if k in profile}
+            if not settings:
+                _log.warning(
+                    "context_compressor: empty/unknown-key dict profile from %s — ignored",
+                    _source,
+                )
+                return
+            self._active_compression_profile = "custom"
+            self._profile_source = str(_source) if _source is not None else "plugin"
+        else:
+            _log.warning(
+                "context_compressor: profile must be str or dict, got %s from %s — ignored",
+                type(profile).__name__, _source,
+            )
+            return
+
+        if "threshold_percent" in settings:
+            try:
+                pct = float(settings["threshold_percent"])
+            except (TypeError, ValueError):
+                _log.warning(
+                    "context_compressor: invalid threshold_percent %r from %s — skipped",
+                    settings["threshold_percent"], _source,
+                )
+            else:
+                pct = min(self._PROFILE_THRESHOLD_MAX, max(self._PROFILE_THRESHOLD_MIN, pct))
+                pct = self._effective_threshold_percent(
+                    getattr(self, "_resolved_context_length", 0) or 0, pct
+                )
+                self.threshold_percent = pct
+                self._base_threshold_percent = pct
+                self._threshold_tokens = None
+                self._tail_token_budget = None
+        if "proactive_prune_tokens" in settings:
+            try:
+                new_floor = max(0, int(settings["proactive_prune_tokens"]))
+            except (TypeError, ValueError):
+                _log.warning(
+                    "context_compressor: invalid proactive_prune_tokens %r from %s — skipped",
+                    settings["proactive_prune_tokens"], _source,
+                )
+            else:
+                old_floor = self.proactive_prune_tokens
+                self.proactive_prune_tokens = new_floor
+                current_rearm = getattr(self, "_proactive_prune_rearm_tokens", 0) or 0
+                if new_floor < old_floor and new_floor < current_rearm:
+                    self._proactive_prune_rearm_tokens = max(new_floor + 1, 0)
+        if "protect_last_n" in settings:
+            try:
+                n = int(settings["protect_last_n"])
+            except (TypeError, ValueError):
+                _log.warning(
+                    "context_compressor: invalid protect_last_n %r from %s — skipped",
+                    settings["protect_last_n"], _source,
+                )
+            else:
+                self.protect_last_n = max(1, min(n, self._PROFILE_PROTECT_LAST_N_MAX))
+
+        _log.debug(
+            "context_compressor: profile applied by %s — %s",
+            _source,
+            {k: getattr(self, k) for k in self._PROFILE_KEYS},
+        )
+
+    def _extract_fact_ledger(self, turns_to_summarize: "list[dict[str, Any]]") -> str:
+        """Harvest named facts from compacted turns and format a head ledger. Deduped, capped."""
+        facts: list[str] = []
+        seen: set[str] = set()
+
+        def _add(item: str) -> None:
+            text = " ".join((item or "").split())
+            if not text or text in seen:
+                return
+            seen.add(text)
+            facts.append(text)
+
+        for msg in turns_to_summarize or []:
+            if not isinstance(msg, dict):
+                continue
+            content = _message_text_for_entropy(msg)
+            if not content:
+                continue
+            for match in _FACT_PATH_RE.findall(content):
+                _add(match)
+            for match in _FACT_ARXIV_RE.findall(content):
+                _add(match)
+            for match in _FACT_MODEL_RE.findall(content):
+                _add(match)
+            for match in _FACT_SHA_RE.findall(content):
+                _add(match)
+            for match in _FACT_NUM_RE.finditer(content):
+                start, end = match.span()
+                if (start > 0 and content[start - 1] == ".") or (end < len(content) and content[end] == "."):
+                    continue
+                window = content[max(0, start - 40): min(len(content), end + 40)]
+                if re.search(r"[A-Za-z]{2,}", window):
+                    line_start = content.rfind("\n", 0, start) + 1
+                    line_end = content.find("\n", end)
+                    if line_end == -1:
+                        line_end = len(content)
+                    ctx_line = content[line_start:line_end].strip()[:120]
+                    if ctx_line:
+                        _add(ctx_line)
+            for line in content.splitlines():
+                if any(marker in line for marker in _FACT_NAMED_MARKERS):
+                    _add(line.strip()[:240])
+            if len(facts) >= 80:
+                break
+        del facts[80:]
+        if not facts:
+            return ""
+        lines: list[str] = []
+        used = 0
+        budget_chars = 6000
+        for fact in facts:
+            extra = len(fact) + 1
+            if used + extra > budget_chars:
+                break
+            lines.append(fact)
+            used += extra
+        if not lines:
+            return ""
+        return "FACT LEDGER\n" + "\n".join(lines)
+
+    def _prepend_fact_ledger(self, summary: str, turns_to_summarize: "list[dict[str, Any]]") -> str:
+        """Put the fact ledger at the summary head so named facts survive Lost-in-the-Middle.
+
+        Order-invariant: if a compaction prefix is already attached, strip it, prepend
+        the ledger, then reattach the prefix *after* the ledger so eval head_hit_rate
+        (first HEAD_HIT_CHARS of content) sees named facts.
+        """
+        body = summary or ""
+        if body.lstrip().startswith("FACT LEDGER"):
+            return body
+        ledger = self._extract_fact_ledger(turns_to_summarize)
+        if not ledger:
+            return body
+        if len(ledger) > 2000:
+            ledger = ledger[:2000].rstrip()
+        prefix = ""
+        rest = body
+        for p in (SUMMARY_PREFIX, LEGACY_SUMMARY_PREFIX, *_HISTORICAL_SUMMARY_PREFIXES):
+            if rest.startswith(p):
+                prefix = p
+                rest = rest[len(p):].lstrip("\n")
+                break
+        if prefix:
+            return ledger + "\n" + prefix + ("\n" + rest if rest else "")
+        return ledger + "\n" + body
 
     def _align_boundary_backward(self, messages: list[dict[str, Any]], idx: int) -> int:
-        """Pull a compress-end boundary back so a tool group is not split (orphaned tail results would be dropped)."""
         if idx <= 0 or idx >= len(messages):
             return idx
         check = next((i for i in range(idx - 1, -1, -1) if messages[i].get("role") != "tool"), -1)
