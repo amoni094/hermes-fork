@@ -25,8 +25,8 @@ from agent.skill_utils import (
     EXCLUDED_SKILL_DIRS, SKILL_SUPPORT_DIRS,
     TIER_LOCAL, clip_skill_description, extract_skill_conditions, extract_skill_description,
     get_disabled_skill_names, get_skill_search_roots,
-    iter_skill_index_files, parse_frontmatter, skill_matches_apps, skill_matches_environment,
-    skill_matches_platform, skill_matches_platform_list,
+    iter_skill_index_files, parse_frontmatter, skill_is_model_invocable, skill_matches_apps,
+    skill_matches_environment, skill_matches_platform, skill_matches_platform_list,
 )
 from tools.threat_patterns import scan_for_threats as _scan_for_threats
 from utils import atomic_json_write, file_cache_version
@@ -1085,8 +1085,9 @@ _SKILLS_PROMPT_CACHE_MAX = 32
 _SKILLS_PROMPT_CACHE: OrderedDict[tuple, str] = OrderedDict()
 _SKILLS_PROMPT_CACHE_LOCK = threading.Lock()
 # v2 added org provenance fields (org_id/org_author); v4 adds ``rel`` (SKILL.md path relative to its root) for
-# duplicate-name resolution; v5 stores descriptions clipped at a word boundary. Older snapshots are rebuilt.
-_SKILLS_SNAPSHOT_VERSION = 5
+# duplicate-name resolution; v5 stores descriptions clipped at a word boundary; v6 persists ``disable_model_invocation``
+# so the fast-path can enforce the offer-time gate without re-reading SKILL.md. Older snapshots are rebuilt.
+_SKILLS_SNAPSHOT_VERSION = 6
 
 
 def _skills_prompt_snapshot_path() -> Path:
@@ -1157,6 +1158,8 @@ def _build_snapshot_entry(skill_file: Path, skills_dir: Path, frontmatter: dict,
         "description": description, "platforms": [str(p).strip() for p in platforms if str(p).strip()],
         "conditions": extract_skill_conditions(frontmatter),
         "requires_apps": _requires_apps_list(frontmatter),
+        # Persisted so the snapshot fast-path can re-evaluate this offer-time gate without re-reading the file.
+        "disable_model_invocation": not skill_is_model_invocable(frontmatter),
     }
     return entry
 
@@ -1167,7 +1170,8 @@ def _parse_skill_file(skill_file: Path) -> tuple[bool, dict, str]:
         raw = skill_file.read_text(encoding="utf-8-sig")
         frontmatter, _ = parse_frontmatter(raw)
         # Host-platform / runtime-environment gates are offer-time only; explicit loads bypass them.
-        if not skill_matches_platform(frontmatter) or not skill_matches_environment(frontmatter) or not skill_matches_apps(frontmatter):
+        if (not skill_matches_platform(frontmatter) or not skill_matches_environment(frontmatter)
+                or not skill_matches_apps(frontmatter) or not skill_is_model_invocable(frontmatter)):
             return False, frontmatter, extract_skill_description(frontmatter)
         return True, frontmatter, extract_skill_description(frontmatter)
     except Exception as e:
@@ -1216,7 +1220,7 @@ def _plugin_skill_prompt_rows(
                 continue
             frontmatter = meta.get("frontmatter") or {}
             if not (skill_matches_platform(frontmatter) and skill_matches_environment(frontmatter)
-                    and skill_matches_apps(frontmatter)):
+                    and skill_matches_apps(frontmatter) and skill_is_model_invocable(frontmatter)):
                 continue
             if not _skill_should_show(extract_skill_conditions(frontmatter), available_tools,
                                       available_toolsets, session_platform):
@@ -1417,8 +1421,10 @@ def _build_skills_system_prompt_inner(
     # Disk snapshot (fast path) vs. full scan: both yield (entry, is_compatible) pairs so labeling runs identically.
     if snapshot is not None:
         # Platforms and app presence are host facts that change without SKILL.md changing: re-evaluate both.
+        # disable_model_invocation is a SKILL.md-declared flag persisted in the snapshot entry.
         candidates = [(entry, skill_matches_platform_list(entry.get("platforms") or [])
-                       and skill_matches_apps({"requires_apps": entry.get("requires_apps") or []}))
+                       and skill_matches_apps({"requires_apps": entry.get("requires_apps") or []})
+                       and not entry.get("disable_model_invocation", False))
                       for entry in snapshot.get("skills", []) if isinstance(entry, dict)]
     else:
         candidates = []

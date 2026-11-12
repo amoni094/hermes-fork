@@ -12,6 +12,7 @@ hook, so plugins learn about every compaction the model will see without inferri
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import logging
 import threading
@@ -236,9 +237,30 @@ def provider_native_payload(*, session_id: str, compression_count: Any = None) -
     )
 
 
+def fire_pre_compress(
+    *, session_id: str, turn_count: int = 0, context_tokens: int = 0, trigger_reason: str = "auto",
+    agent: Any = None,
+) -> None:
+    """The ``pre_compress`` plugin hook, fired BEFORE ContextCompressor.compress() begins.
+    Callbacks are isolated by the dispatcher. Non-blocking: wrapped in contextlib.suppress."""
+    from hermes_cli.lifecycle import has_hook, invoke_hook
+
+    if has_hook("pre_compress"):
+        with contextlib.suppress(Exception):
+            invoke_hook(
+                "pre_compress",
+                session_id=session_id,
+                turn_count=turn_count,
+                context_tokens=context_tokens,
+                trigger_reason=trigger_reason,
+                agent=agent,
+            )
+
+
 def fire_post_compaction(
     *, session_id: str, old_session_id: str = "", kind: str | None, reason: str | None,
     before_tokens: int | None, after_tokens: int | None, messages_removed: int | None,
+    agent: Any = None,
 ) -> None:
     """The ``post_compaction`` plugin hook, gated on a listener. Callbacks are isolated by the dispatcher."""
     from hermes_cli.lifecycle import has_hook, invoke_hook
@@ -247,22 +269,24 @@ def fire_post_compaction(
         invoke_hook(
             "post_compaction", session_id=session_id, old_session_id=old_session_id, kind=kind, reason=reason,
             before_tokens=before_tokens, after_tokens=after_tokens, messages_removed=messages_removed,
+            agent=agent,
         )
 
 
-def _fire_for(payload: dict[str, Any], session_id: str) -> None:
+def _fire_for(payload: dict[str, Any], session_id: str, agent: Any = None) -> None:
     before, after = payload["messages_before"], payload["messages_after"]
     fire_post_compaction(
         session_id=session_id, old_session_id=payload["session_id"] if payload["session_id"] != session_id else "",
         kind=payload["kind"], reason=payload["trigger"], before_tokens=payload["tokens_before"],
         after_tokens=payload["tokens_after"],
         messages_removed=before - after if before is not None and after is not None else None,
+        agent=agent,
     )
 
 
 def _publish(
     build: Any, *args: Any, turn_session_id: str | None = None, require_target_session_id: str | None = None,
-    live_session_id: str | None = None, **kwargs: Any,
+    live_session_id: str | None = None, agent: Any = None, **kwargs: Any,
 ) -> None:
     """Build one record, fire ``post_compaction`` for a committed one, and fan it out to the built-in Relay
     integration. ``live_session_id`` is the session holding the compacted transcript now (a rotating commit
@@ -283,7 +307,7 @@ def _publish(
         payload = build(*args, **kwargs)
         name = event_name(payload)
         if hook and name == COMPACTION_MARK:
-            _fire_for(payload, live_session_id or payload["session_id"])
+            _fire_for(payload, live_session_id or payload["session_id"], agent=agent)
         if not relay:
             return
         from agent.relay_compaction import emit_compaction_mark
@@ -312,7 +336,7 @@ def publish_attempt(agent: Any, record: dict[str, Any]) -> None:
     if _publishes_for(agent):
         _publish(lambda: attempt_payload(
             record, compression_count=getattr(getattr(agent, "context_compressor", None), "compression_count", None),
-        ), turn_session_id=_turn_session_id(agent), live_session_id=getattr(agent, "session_id", None))
+        ), turn_session_id=_turn_session_id(agent), live_session_id=getattr(agent, "session_id", None), agent=agent)
 
 
 def publish_micro(record: dict[str, Any], *, turn_session_id: str | None = None) -> None:
@@ -328,10 +352,10 @@ def publish_prune(agent: Any, messages: list, pruned: list, tool_results_pruned:
     turn_session_id = _turn_session_id(agent)
     if _publishes_for(agent):
         _publish(lambda: prune_payload(
-            session_id=session_id, tokens_before=estimate_messages_tokens_rough(messages),
-            tokens_after=estimate_messages_tokens_rough(pruned), messages=len(pruned),
-            tool_results_pruned=tool_results_pruned,
-        ), turn_session_id=turn_session_id, require_target_session_id=session_id)
+        session_id=session_id, tokens_before=estimate_messages_tokens_rough(messages),
+        tokens_after=estimate_messages_tokens_rough(pruned), messages=len(pruned),
+        tool_results_pruned=tool_results_pruned,
+        ), turn_session_id=turn_session_id, require_target_session_id=session_id, agent=agent)
 
 
 def publish_provider_native(agent: Any) -> None:
@@ -341,4 +365,5 @@ def publish_provider_native(agent: Any) -> None:
             provider_native_payload, session_id=getattr(agent, "session_id", None) or "",
             compression_count=getattr(getattr(agent, "context_compressor", None), "compression_count", None),
             turn_session_id=_turn_session_id(agent),
+            agent=agent,
         )

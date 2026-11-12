@@ -490,3 +490,70 @@ class TestBOMToleranceSiblingSites:
         assert fm is not None
         assert fm.get("name") == "bp"
 
+
+# ── skill_is_model_invocable ───────────────────────────────────────────────
+
+
+class TestSkillIsModelInvocable:
+    """``metadata.hermes.disable_model_invocation: true`` hides a skill from
+    the auto-load index while leaving explicit skill_view() access open."""
+
+    def test_absent_flag_is_invocable(self):
+        from agent.skill_utils import skill_is_model_invocable
+        assert skill_is_model_invocable({}) is True
+        assert skill_is_model_invocable({"metadata": {}}) is True
+        assert skill_is_model_invocable({"metadata": {"hermes": {}}}) is True
+
+    def test_flag_false_is_invocable(self):
+        from agent.skill_utils import skill_is_model_invocable
+        fm = {"metadata": {"hermes": {"disable_model_invocation": False}}}
+        assert skill_is_model_invocable(fm) is True
+
+    def test_flag_true_is_not_invocable(self):
+        from agent.skill_utils import skill_is_model_invocable
+        fm = {"metadata": {"hermes": {"disable_model_invocation": True}}}
+        assert skill_is_model_invocable(fm) is False
+
+    def test_parse_skill_file_returns_incompatible_for_disabled_skill(self, tmp_path):
+        """_parse_skill_file must return is_compatible=False for disable_model_invocation skills."""
+        from agent.prompt_builder import _parse_skill_file
+        skill_dir = tmp_path / "setup-wizard"
+        skill_dir.mkdir()
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text(
+            "---\nname: setup-wizard\ndescription: Wizard for env setup.\n"
+            "metadata:\n  hermes:\n    disable_model_invocation: true\n---\n\n# Setup Wizard\n"
+        )
+        is_compat, fm, desc = _parse_skill_file(skill_file)
+        assert is_compat is False, "disable_model_invocation skill must be incompatible for auto-load"
+        assert fm.get("name") == "setup-wizard"
+        assert desc  # description is still extracted (used by skill_view listing)
+
+    def test_snapshot_entry_persists_disable_flag(self, tmp_path):
+        """_build_snapshot_entry must set disable_model_invocation=True so the fast-path can filter."""
+        from agent.prompt_builder import _build_snapshot_entry
+        skill_file = tmp_path / "SKILL.md"
+        skill_file.write_text(
+            "---\nname: setup-wizard\ndescription: Wizard for env setup.\n"
+            "metadata:\n  hermes:\n    disable_model_invocation: true\n---\n"
+        )
+        fm = {"name": "setup-wizard", "description": "Wizard for env setup.",
+              "metadata": {"hermes": {"disable_model_invocation": True}}}
+        # Signature: (skill_file, skills_dir, frontmatter, description)
+        entry = _build_snapshot_entry(skill_file, tmp_path, fm, "Wizard for env setup.")
+        assert entry.get("disable_model_invocation") is True, (
+            "Snapshot entry must persist disable_model_invocation so fast-path can filter without re-reading file")
+
+    def test_snapshot_entry_enabled_skill_not_flagged(self, tmp_path):
+        """_build_snapshot_entry must set disable_model_invocation=False for a normal skill."""
+        from agent.prompt_builder import _build_snapshot_entry
+        skill_file = tmp_path / "SKILL.md"
+        skill_file.write_text(
+            "---\nname: normal-skill\ndescription: A normal skill.\n---\n"
+        )
+        fm = {"name": "normal-skill", "description": "A normal skill."}
+        entry = _build_snapshot_entry(skill_file, tmp_path, fm, "A normal skill.")
+        assert entry.get("disable_model_invocation") is False, (
+            "Normal skill must have disable_model_invocation=False in snapshot entry")
+
+

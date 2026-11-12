@@ -2305,6 +2305,8 @@ class ContextCompressor(
         self._last_compress_aborted = self._last_compress_refused_would_grow = False
         self._context_probed = self._context_probe_persistable = False
         self._reset_real_usage_pairing()
+        self.last_compression_token_count = 0
+        self.last_compress_covered = (0, 0)
         self._last_compression_telemetry = self._active_compression_telemetry = None
         self._compression_telemetry_seed = None
         self._reset_proactive_prune_rearm()
@@ -2881,6 +2883,7 @@ class ContextCompressor(
         self._log_init_summary = not quiet_mode
         self._context_probed = False  # True after a step-down from context error
         self.last_prompt_tokens = self.last_completion_tokens = 0
+        self.last_compression_token_count = 0
         self._reset_real_usage_pairing()
         self.summary_model = summary_model_override or ""
         self._session_db: Any = None
@@ -3000,6 +3003,23 @@ class ContextCompressor(
             return False, None
         if self._automatic_compression_blocked():
             return False, self._compression_block_reason() or "blocked"
+        # Billion-context growth gate: skip redundant auto-compress until the
+        # consumed increment since the last *successful* (under-threshold)
+        # compression exceeds a window-scaled floor. Fail-open on any error.
+        try:
+            from agent.billion_context import should_skip_for_growth
+            if should_skip_for_growth(
+                tokens=int(tokens or 0),
+                last_compression_token_count=int(getattr(self, "last_compression_token_count", 0) or 0),
+                threshold_tokens=int(self.threshold_tokens),
+                context_limit=self,
+            ):
+                # Reason stays None: a named reason is treated as a *blocked*
+                # over-threshold skip (cooldown/ineffective) and would warn every
+                # turn while waiting for growth_floor.
+                return False, None
+        except Exception:
+            logger.debug("billion-context growth gate skipped", exc_info=True)
         return True, None
 
     def _compression_block_reason(self, *, ignore_cooldown: bool = False) -> str | None:
@@ -4240,21 +4260,31 @@ Write only the summary body. Do not include any preamble or prefix."""
         if cls._is_context_summary_message(message):
             return True
         text = _content_text_for_contains(message.get("content")).strip()
-        # Recovery nudges are scaffolding, not human turns; lazy import avoids an import cycle.
-        from agent.conversation_loop import (
-            _CODEX_ACK_CONTINUATION_NUDGE, _CODEX_INCOMPLETE_NUDGE, _DEGENERATE_FINAL_NUDGE,
-            _DROPPED_TOOLCALL_NUDGE_CONTENT, _EMPTY_TOOL_RESPONSE_NUDGE, _LENGTH_CONTINUATION_DROPPED_TOOLS_PREFIX,
-            _LEGACY_LENGTH_CONTINUATION_NETWORK_STUB, _LENGTH_CONTINUATION_NETWORK_STUB,
-            _LENGTH_CONTINUATION_OUTPUT_LIMIT,
-        )
+        # Recovery nudges are scaffolding, not human turns. Lazy import avoids an import cycle;
+        # fail-open if conversation_loop cannot load (tests' home_io_guard, missing deps).
+        extra: set[str] = set()
+        extra_prefixes: tuple[str, ...] = ()
+        try:
+            from agent.conversation_loop import (
+                _CODEX_ACK_CONTINUATION_NUDGE, _CODEX_INCOMPLETE_NUDGE, _DEGENERATE_FINAL_NUDGE,
+                _DROPPED_TOOLCALL_NUDGE_CONTENT, _EMPTY_TOOL_RESPONSE_NUDGE, _LENGTH_CONTINUATION_DROPPED_TOOLS_PREFIX,
+                _LEGACY_LENGTH_CONTINUATION_NETWORK_STUB, _LENGTH_CONTINUATION_NETWORK_STUB,
+                _LENGTH_CONTINUATION_OUTPUT_LIMIT,
+            )
+            extra = {
+                _CODEX_INCOMPLETE_NUDGE, _CODEX_ACK_CONTINUATION_NUDGE, _DEGENERATE_FINAL_NUDGE,
+                _DROPPED_TOOLCALL_NUDGE_CONTENT, _EMPTY_TOOL_RESPONSE_NUDGE,
+                _LENGTH_CONTINUATION_NETWORK_STUB, _LEGACY_LENGTH_CONTINUATION_NETWORK_STUB,
+                _LENGTH_CONTINUATION_OUTPUT_LIMIT,
+            }
+            extra_prefixes = (_LENGTH_CONTINUATION_DROPPED_TOOLS_PREFIX,)
+        except Exception:
+            logger.debug("synthetic-user-turn: conversation_loop constants unavailable", exc_info=True)
         return text in {
             COMPRESSION_CONTINUATION_USER_CONTENT, _LEGACY_COMPRESSION_CONTINUATION_USER_CONTENT,
-            MAX_ITERATIONS_SUMMARY_REQUEST, _CODEX_INCOMPLETE_NUDGE, _CODEX_ACK_CONTINUATION_NUDGE,
-            _DEGENERATE_FINAL_NUDGE, _DROPPED_TOOLCALL_NUDGE_CONTENT, _EMPTY_TOOL_RESPONSE_NUDGE,
-            _LENGTH_CONTINUATION_NETWORK_STUB, _LEGACY_LENGTH_CONTINUATION_NETWORK_STUB,
-            _LENGTH_CONTINUATION_OUTPUT_LIMIT,
-        } or text.startswith((
-            _BACKGROUND_PROCESS_NOTIFICATION_PREFIX, TODO_INJECTION_HEADER + "\n", _LENGTH_CONTINUATION_DROPPED_TOOLS_PREFIX,
+            MAX_ITERATIONS_SUMMARY_REQUEST,
+        } | extra or text.startswith((
+            _BACKGROUND_PROCESS_NOTIFICATION_PREFIX, TODO_INJECTION_HEADER + "\n", *extra_prefixes,
         ))
 
     @staticmethod
@@ -4549,6 +4579,46 @@ Write only the summary body. Do not include any preamble or prefix."""
         while idx < len(messages) and messages[idx].get("role") == "tool":
             idx += 1
         return idx
+
+    def _restart_handoff_probe_bounds(self, messages: list[dict[str, Any]]) -> tuple[int, int]:
+        """Return the bounded transcript region that can indicate restart decay."""
+        if not messages or self.protect_first_n <= 0:
+            return 0, 0
+        first_non_system = 1 if messages[0].get("role") == "system" else 0
+        return first_non_system, min(len(messages), first_non_system + self.protect_first_n + _RESTART_HANDOFF_PROBE_EXTRA_MESSAGES)
+
+    def _effective_protect_first_n(self, messages: Optional[list[dict[str, Any]]] = None) -> int:
+        """``protect_first_n``, decayed to 0 once the session has been compressed so early turns don't fossilize.
+        After a restart the decayed state is inferred from handoff summaries in the resumed head."""
+        if self.compression_count >= 1 or self._previous_summary:
+            return 0
+        if messages and self.protect_first_n > 0:
+            # Probe only the early resumed-handoff shape; summary-like tail content must not decay protection.
+            probe_start, probe_end = self._restart_handoff_probe_bounds(messages)
+            if any(map(self._is_context_summary_message, messages[probe_start:probe_end])):
+                return 0
+        return self.protect_first_n
+
+    def _protect_head_size(self, messages: list[dict[str, Any]]) -> int:
+        """Head messages to protect: the system prompt (if present) plus the decaying ``protect_first_n`` extra rows.
+
+        The ``protect_first_n`` portion DECAYS after the first compression (see _effective_protect_first_n)
+        so early user turns don't fossilize across repeated compactions (#11996).
+
+        Billion-context first-user pin: the first real user message is never dropped
+        even after decay (strict providers need ≥1 user message). Fail-open.
+        """
+        head = 1 if messages and messages[0].get("role") == "system" else 0
+        protected = head + self._effective_protect_first_n(messages)
+        try:
+            from agent.billion_context import first_user_index
+            idx = first_user_index(messages)
+            if 0 <= idx < len(messages):
+                protected = max(protected, idx + 1)
+        except Exception:
+            logger.debug("billion-context first-user pin skipped", exc_info=True)
+        return protected
+
 
     def _align_boundary_backward(self, messages: list[dict[str, Any]], idx: int) -> int:
         """Pull a compress-end boundary back so a tool group is not split (orphaned tail results would be dropped)."""
@@ -5413,9 +5483,10 @@ Write only the summary body. Do not include any preamble or prefix."""
         # Unpruned copy for no-op/abort returns (history stays lossless) and finalize; head/tail are
         # assembled and measured from the pruned copy (#61932).
         canonical_messages = self._drop_blank_echoes(messages)
-        # Phases 1-2: prune (cheap, no LLM call), drop blank echoes, determine boundaries on the pruned
-        # copy so a pressure-demoted tail can compress (#61932)
-        messages, pruned_count, compress_start, compress_end = self._plan_compaction_window(messages)
+        # Phases 1-2: prune (cheap, no LLM call), drop blank echoes, determine boundaries on the
+        # canonical copy so a pressure-demoted tail can compress (#61932). Crush runs *after*
+        # the window is known so it targets the summariser middle, not a larger BC raw zone.
+        messages, pruned_count, compress_start, compress_end = self._plan_compaction_window(canonical_messages)
         if pruned_count and not self.quiet_mode:
             logger.info("Pre-compression: pruned %d old tool result(s)", pruned_count)
         n_messages = len(messages)
@@ -5435,6 +5506,22 @@ Write only the summary body. Do not include any preamble or prefix."""
         )
         if prepared:
             compress_end = prepared.compress_end
+        # Crush the planned middle only (copies tool dicts). Abort still returns canonical.
+        try:
+            from agent.billion_context import crush_message_list, note_compress_covered
+            messages = crush_message_list(
+                messages,
+                protect_head=int(compress_start),
+                crush_end=int(compress_end),
+            )
+            self.last_compress_covered = (int(compress_start), int(compress_end))
+            note_compress_covered(
+                getattr(self, "_session_id", "") or "",
+                int(compress_start),
+                int(compress_end),
+            )
+        except Exception:
+            logger.debug("billion-context crush pre-pass skipped", exc_info=True)
         turns_to_summarize = messages[compress_start:compress_end]
         # Lean mode demotes stale tail tool results before summary generation so stubs exist even if it aborts.
         if getattr(self, "tail_mode", "lean") == "lean":

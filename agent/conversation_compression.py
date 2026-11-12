@@ -190,7 +190,7 @@ _COMPRESSOR_ATTEMPT_STATE_FIELDS = (
     "_last_aux_model_failure_error", "_last_aux_model_failure_model", "_last_aux_resolved_model",
     "_summary_model_fallen_back", "summary_model",
     "_last_compression_telemetry", "_active_compression_telemetry", "_compression_telemetry_seed",
-    "_proactive_prune_rearm_tokens",
+    "_proactive_prune_rearm_tokens", "last_compression_token_count",
 )
 
 _COMPRESSOR_COOLDOWN_STATE_FIELDS = ("_summary_failure_cooldown_until", "_last_summary_error", "_cooldown_persist_failed")
@@ -3409,6 +3409,7 @@ def _finish_compaction_boundary(
         compressed, system_prompt=new_system_prompt or "", tools=agent.tools or None
     )
     compressor.last_compression_rough_tokens = _compressed_est
+    compressor.last_compression_token_count = int(_compressed_est or 0)
     compressor.last_prompt_tokens = -1
     compressor.last_completion_tokens = 0
     compressor.awaiting_real_usage_after_compression = True
@@ -3901,6 +3902,14 @@ def _begin_compression_attempt(
         from hermes_cli.observability.shared_metrics_events import begin_compression_attempt
 
         begin_compression_attempt(trigger, approx_tokens or getattr(agent.context_compressor, "last_prompt_tokens", None))
+        from agent.compaction_events import fire_pre_compress
+        fire_pre_compress(
+            session_id=getattr(agent, "session_id", None) or "",
+            context_tokens=approx_tokens or getattr(agent.context_compressor, "last_prompt_tokens", None) or 0,
+            trigger_reason=trigger,
+            turn_count=len(getattr(agent, "conversation_history", None) or []),
+            agent=agent,
+        )
     return _Attempt(snapshot, generation, started_at, seed)
 
 

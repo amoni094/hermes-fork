@@ -144,6 +144,8 @@ VALID_HOOKS: set[str] = {
     # pre_agent_exchange: before delegated agent results are passed to the parent
     # (BoN diversity, arXiv:2608.11065). Kwargs: agent_results, parent_session_id,
     # exchange_round. Hooks may mutate agent_results in place.
+    # Planned only: invoke_hook_for_exchange does not exist yet; registered
+    # callbacks will not run until that helper is wired. Harmless in VALID_HOOKS.
     "pre_agent_exchange",
     # on_session_open: local session created/opened, before its first turn. Kwargs: session_id, platform, reason.
     "on_session_open",

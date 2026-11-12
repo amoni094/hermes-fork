@@ -174,6 +174,17 @@ def skill_matches_environment(frontmatter: dict[str, Any]) -> bool:
     return any(_detect_environment(tag) for tag in tags if tag)
 
 
+def skill_is_model_invocable(frontmatter: dict[str, Any]) -> bool:
+    """False when ``metadata.hermes.disable_model_invocation: true`` is set.
+
+    User-invoked-only skills (setup wizards, slash-only flows) set this flag so
+    they are excluded from the auto-load ``<available_skills>`` index while remaining
+    fully accessible via explicit ``skill_view()`` calls. Offer-time filter only —
+    explicit loads always succeed regardless of this flag.
+    """
+    return not bool(_hermes_metadata(frontmatter).get("disable_model_invocation"))
+
+
 def skill_matches_apps(frontmatter: dict[str, Any]) -> bool:
     """True when every app named in ``requires_apps:`` has a registered declaration this host satisfies.
 
@@ -900,3 +911,20 @@ def parse_qualified_name(name: str) -> tuple[Optional[str], str]:
 def is_valid_namespace(candidate: Optional[str]) -> bool:
     """Check whether *candidate* is a valid namespace (``[a-zA-Z0-9_-]+``)."""
     return bool(candidate) and bool(_NAMESPACE_RE.match(candidate))
+
+
+def should_retrieve_skill(
+    query: str,
+    top_score: float,
+    *,
+    tool_name_match: Optional[bool] = None,
+) -> str:
+    """Mallen adaptive skill-retrieval posture: skip | names_only | full.
+
+    Fail-open to ``full``. Implementation lives in ``agent.adaptive_retrieval``.
+    """
+    try:
+        from agent.adaptive_retrieval import should_retrieve_skill as _gate
+        return _gate(query, top_score, tool_name_match=tool_name_match)
+    except Exception:
+        return "full"

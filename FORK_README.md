@@ -167,7 +167,8 @@ High complexity (>0.7) raises `protect_last_n` by 5 (cap 40); low complexity (<0
 
 ## Multi-agent diversity (pre_agent_exchange hook)
 
-`invoke_hook_for_exchange` fires `pre_agent_exchange` with `agent_results`, `parent_session_id`, and `exchange_round` so plugins can diversify Best-of-N samples before parent aggregation (arXiv:2608.11065); hooks may mutate the list in place and the helper fail-opens.
+`invoke_hook_for_exchange` is planned to fire `pre_agent_exchange` with `agent_results`, `parent_session_id`, and `exchange_round` so plugins can diversify Best-of-N samples before parent aggregation (arXiv:2608.11065); hooks may mutate the list in place and the helper will fail-open.
+(not yet implemented: invoke_hook_for_exchange does not exist; register_hook callbacks will not run until this helper is wired)
 `PluginContext.filter_duplicate_results` keeps the first of each near-duplicate cluster using `difflib.SequenceMatcher` (default key `content`, threshold 0.85).
 Callers that skip the hook still get the original `agent_results` unchanged.
 

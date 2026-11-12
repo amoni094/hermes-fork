@@ -49,11 +49,13 @@ _HOOK_TIMEOUT_BOUNDED_HOOKS: set[str] = {
     "pre_command",
     # Fires inside the compression commit window (lease held): a hung plugin must not wedge the session.
     "post_compaction",
+    # Fires at compression start (before ContextCompressor.compress): a hung plugin must not wedge the compressor.
+    "pre_compress",
 }
 # Hooks whose calls are told apart by another payload field: one session's commands are one
 # sequence, so a still-running callback skips that session's next command, not another session's.
 _HOOK_CALL_IDENTITY_FIELDS: dict[str, tuple[str, ...]] = {
-    "pre_command": ("session_key",), "post_compaction": ("session_id",), "on_session_open": ("session_id",),
+    "pre_command": ("session_key",), "post_compaction": ("session_id",), "on_session_open": ("session_id",), "pre_compress": ("session_id",),
 }
 
 # Policy hooks: timeout / still-running must fail closed (block the tool).
