@@ -881,7 +881,7 @@ _REACQ_EXPENSIVE_MARKERS = ("FAILED", "error:", "fixed")
 _REACQ_NUM4_RE = re.compile(r"\b\d{4,}\b")
 _FACT_PATH_RE = re.compile(r"/[\w./\-]+\.(?:py|yaml|yml|json)")
 _FACT_ARXIV_RE = re.compile(r"\d{4}\.\d{4,5}")
-_FACT_MODEL_RE = re.compile(r"(?:haiku|sonnet|grok|mistral|claude)[\w.-]*", re.I)
+_FACT_MODEL_RE = re.compile(r"(?:haiku|sonnet|grok|mistral|claude)[\w.-]*", re.IGNORECASE)
 _FACT_NUM_RE = re.compile(r"\b\d{3,6}\b")
 _FACT_SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
 _FACT_NAMED_MARKERS = (
@@ -1414,7 +1414,7 @@ def _content_text_for_contains(content: Any) -> str:
 # stripped, which over-counts the request and keeps the conservative anchor.
 _GATEWAY_REPLY_POINTER_RE = re.compile(
     r'\A(?:\[Triggering message id: [^\n]*\]\n\n)?'
-    r'\[Replying to(?: your previous message)?: ".*?"\]\n\n',
+    r'\[Replying to(?: your previous message| an earlier scheduled cron delivery \([^)\n]*\))?: ".*?"\]\n\n',
     re.DOTALL,
 )
 

@@ -81,7 +81,7 @@ class PluginContext(PluginCapabilityCtxMixin):
         return _facade().manifest_key(self.manifest)
 
     @property
-    def compressor(self) -> "Any | None":
+    def compressor(self) -> Any | None:
         """Live :class:`ContextCompressor` for this session, or ``None`` if not yet set.
 
         Always re-reads ``agent.context_compressor`` (never caches the instance).
@@ -275,7 +275,7 @@ class PluginContext(PluginCapabilityCtxMixin):
         if c is not None:
             c.current_intent = str(text)[:500]  # bounded; why 500: matches hint file cap
 
-    def emit_episode(self, text: str, tags: list = None) -> None:
+    def emit_episode(self, text: str, tags: list | None = None) -> None:
         """Emit an EXG episode via ``agent.emit_memory``. Fail-open.
 
         Resolves the live agent through ``PluginManager._agent`` (weakref). If the
@@ -1041,6 +1041,16 @@ class PluginContext(PluginCapabilityCtxMixin):
             return 0
         _facade().logger.debug("Plugin %s registered %d redaction pattern(s)", self.manifest.name, count)
         return count
+
+    def redact_text(self, text: str, *, force: bool = False) -> str:
+        """Return *text* with credentials replaced by Hermes's non-reusable sentinel (``«redacted:sk-…»``,
+        no key characters), credential assignments masked, and URL credentials (userinfo and
+        credential-named query params) removed, since a stored or uploaded link would otherwise still
+        work. Honours ``security.redact_secrets`` unless ``force``; use ``force=True`` for text that
+        leaves the machine."""
+        from agent.redact import redact_sensitive_text
+        return redact_sensitive_text(text, force=force, file_read=True, secret_file=True,
+                                     redact_url_credentials=True)
 
     def register_locale(
         self, lang: str, source: str | Path | Mapping[str, Any], *, endonym: Optional[str] = None,

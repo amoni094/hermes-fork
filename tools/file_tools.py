@@ -18,7 +18,7 @@ import time
 from contextlib import ExitStack
 from pathlib import Path, PurePosixPath
 
-from agent.file_safety import get_nt_namespace_error, get_read_block_error
+from agent.file_safety import get_nt_namespace_error, get_read_block_error, is_blocked_device_path
 from agent.tool_result_classification import GUARDRAIL_REFUSAL_KEY
 from tools.binary_extensions import has_binary_extension
 from tools.skill_provenance import is_background_review
@@ -146,8 +146,6 @@ _BLOCKED_PROC_EXPLICIT = frozenset({
 
 # Prefixes under /proc/self/fd/ cover arbitrary open file descriptors (e.g. /proc/self/fd/5).
 _BLOCKED_PROC_FD_PREFIX = "/proc/self/fd/"
-
-
 def _file_ops_uses_host_paths(file_ops) -> bool:
     """True when *file_ops* targets the host filesystem (only then may we stat paths
     or rewrite V4A headers to host-absolute paths; sandboxes have their own namespace)."""
@@ -198,6 +196,8 @@ def _rewrite_v4a_patch_paths_for_host(patch: str, path_to_resolved: dict, path_t
     return _V4A_MOVE_HEADER_RE.sub(
         lambda m: m.group(0) if _as_written(m)
         else f"{m.group(1)}{_res(m.group(2), entry=True)} -> {_res(m.group(3), entry=True)}", patch)
+
+
 
 
 def _is_blocked_device_path(path: str) -> bool:
@@ -254,7 +254,7 @@ def _is_blocked_device(filepath: str, base_dir: str | Path | None = None) -> boo
     if base_dir is not None and not os.path.isabs(expanded):
         expanded = os.path.join(os.fspath(base_dir), expanded)
     normalized = os.path.normpath(expanded)
-    if _is_blocked_device_path(normalized):
+    if is_blocked_device_path(normalized):
         return True
     if hosted_scope() is not None:
         return False  # a sandbox path: its symlinks are not this host's to follow
@@ -269,7 +269,7 @@ def _is_blocked_device(filepath: str, base_dir: str | Path | None = None) -> boo
         if not os.path.isabs(target):
             target = os.path.join(os.path.dirname(current), target)
         target = os.path.normpath(target)
-        if _is_blocked_device_path(target):
+        if is_blocked_device_path(target):
             return True
         if target in seen:
             break
@@ -280,7 +280,7 @@ def _is_blocked_device(filepath: str, base_dir: str | Path | None = None) -> boo
         resolved = os.path.normpath(os.path.realpath(normalized))
     except (OSError, ValueError):
         return False
-    return _is_blocked_device_path(resolved)
+    return is_blocked_device_path(resolved)
 
 
 def _resolved_match_path(path: str, task_id: str) -> str:
