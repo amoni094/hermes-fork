@@ -22,9 +22,13 @@ import argparse
 import datetime
 from pathlib import Path
 
-_HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
-SHADOW_REGISTRY = _HERMES_HOME / "profiles/fork/logs/skill-shadow-registry.jsonl"
-FORGET_LOG = _HERMES_HOME / "profiles/fork/logs/forgetting-guard.jsonl"
+_hh = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+if _hh.name == "fork" and _hh.parent.name == "profiles":
+    _FORK_ROOT = _hh
+else:
+    _FORK_ROOT = _hh / "profiles" / "fork"
+SHADOW_REGISTRY = _FORK_ROOT / "logs/skill-shadow-registry.jsonl"
+FORGET_LOG = _FORK_ROOT / "logs/forgetting-guard.jsonl"
 FORGET_LOG.parent.mkdir(parents=True, exist_ok=True)
 
 SECTION_HEADER_RE = re.compile(r'^#{2,4}\s+(.+)$', re.MULTILINE)
