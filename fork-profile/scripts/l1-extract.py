@@ -40,6 +40,7 @@ _HERMES_HOME = _bind_profile_home()
 LOCK = _HERMES_HOME / ".l1-extract-running"
 _HERE = Path(__file__).resolve().parent
 _PYC_CANDIDATES = [
+    _HERE / "__pycache__" / "l1-extract.cpython-315.pyc",
     # Direct references/ in same scripts dir (works for both default and fork profile paths)
     _HERE / "references" / "l1-extract.cpython-314.pyc.bak",
     # Default profile scripts/references (absolute fallback)

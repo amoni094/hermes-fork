@@ -46,6 +46,7 @@ METACOG_DB = Path(
 )
 _HERE = Path(__file__).resolve().parent
 _PYC_CANDIDATES = [
+    _HERE / "__pycache__" / "l1-promote.cpython-315.pyc",
     # cpython-314 first: payload compiled for 3.14, re-exec fires if running 3.11
     _HERE / "__pycache__" / "l1-promote.cpython-314.pyc",
     _HERE.parent.parent.parent / "scripts" / "references" / "l1-promote.cpython-314.pyc.bak",
