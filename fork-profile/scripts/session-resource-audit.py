@@ -19,10 +19,14 @@ import sqlite3
 from pathlib import Path
 
 _HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+if _HERMES_HOME.name == "fork" and _HERMES_HOME.parent.name == "profiles":
+    _FORK_ROOT = _HERMES_HOME
+else:
+    _FORK_ROOT = _HERMES_HOME / "profiles" / "fork"
 LIFECYCLE_DB = _HERMES_HOME / "memory-facts/lifecycle.db"
-CRON_JOBS = _HERMES_HOME / "profiles/fork/cron/jobs.json"
-EXEC_LOG = _HERMES_HOME / "profiles/fork/logs/exec-integrity.jsonl"
-AUDIT_LOG = _HERMES_HOME / "profiles/fork/logs/session-resource-audit.jsonl"
+CRON_JOBS = _FORK_ROOT / "cron/jobs.json"
+EXEC_LOG = _FORK_ROOT / "logs/exec-integrity.jsonl"
+AUDIT_LOG = _FORK_ROOT / "logs/session-resource-audit.jsonl"
 AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
 
 
