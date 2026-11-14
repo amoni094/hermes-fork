@@ -1216,7 +1216,7 @@ def _write_experience_cache(query: str, fused: list) -> None:
     tmp_path = cache_path.with_suffix(".tmp")
     try:
         tmp_path.write_text(json.dumps(entries, indent=2))
-        tmp_path.rename(cache_path)
+        os.replace(tmp_path, cache_path)
     except Exception as e:
         print(f"[unified-recall] experience cache write failed: {e}", file=sys.stderr)
 
