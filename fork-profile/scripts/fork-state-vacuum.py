@@ -13,8 +13,12 @@ import sqlite3
 import sys
 import pathlib
 
-HERMES_HOME = pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes")))
-FORK_DB = HERMES_HOME / "profiles" / "fork" / "state.db"
+_hh = pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes")))
+if _hh.name == "fork" and _hh.parent.name == "profiles":
+    _FORK_ROOT = _hh
+else:
+    _FORK_ROOT = _hh / "profiles" / "fork"
+FORK_DB = _FORK_ROOT / "state.db"
 
 
 def main() -> int:
