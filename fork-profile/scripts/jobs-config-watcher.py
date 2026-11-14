@@ -172,12 +172,14 @@ def check_for_changes(*, write_sentinel: bool = True) -> dict:
         )
         if write_sentinel:
             RELOAD_SENTINEL.parent.mkdir(parents=True, exist_ok=True)
-            RELOAD_SENTINEL.write_text(json.dumps({
+            _tmp = RELOAD_SENTINEL.with_suffix(".tmp")
+            _tmp.write_text(json.dumps({
                 "detected_at": time.time(),
                 "added": added,
                 "removed": removed,
                 "modified": modified,
             }, indent=2))
+            os.replace(_tmp, RELOAD_SENTINEL)
             logger.info("Wrote reload sentinel: %s", RELOAD_SENTINEL)
 
     # Always update state after a stat change (even if no job-level diff)
