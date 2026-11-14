@@ -20,8 +20,12 @@ import datetime
 import hashlib
 from pathlib import Path
 
-_HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
-LOG_PATH = _HERMES_HOME / "profiles/fork/logs/exec-integrity.jsonl"
+_hh = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+if _hh.name == "fork" and _hh.parent.name == "profiles":
+    _FORK_ROOT = _hh
+else:
+    _FORK_ROOT = _hh / "profiles" / "fork"
+LOG_PATH = _FORK_ROOT / "logs/exec-integrity.jsonl"
 LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 FABRICATION_SIGNALS = [
