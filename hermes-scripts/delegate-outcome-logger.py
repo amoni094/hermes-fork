@@ -9,12 +9,13 @@ _hermes_profile = os.environ.get('HERMES_PROFILE', '')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 import argparse
+import fcntl
 import json
 import sqlite3
 import sys
 import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 CACHE = _hermes_root / 'cache'
 OUT_JSONL = CACHE / 'delegation-outcomes.jsonl'
@@ -22,7 +23,7 @@ LIFECYCLE_DB = _hermes_base / 'memory-facts' / 'lifecycle.db'
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def log_outcome(episode_id, subtask_count, success_rate, flags='[]', token_cost=0,
@@ -41,7 +42,8 @@ def log_outcome(episode_id, subtask_count, success_rate, flags='[]', token_cost=
         'quality_proxy': float(success_rate),
     }
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), timeout=30)
+    conn.execute('PRAGMA journal_mode=WAL')
     try:
         conn.execute(
             'INSERT INTO delegation_audit(ts, episode_id, subtask_count, success_rate, audit_flags) '
@@ -52,17 +54,21 @@ def log_outcome(episode_id, subtask_count, success_rate, flags='[]', token_cost=
     finally:
         conn.close()
     jsonl_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(jsonl_path, 'a', encoding='utf-8') as fh:
-        fh.write(json.dumps(rec) + '\n')
+    lock = jsonl_path.with_suffix('.lock')
+    with open(lock, 'w') as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        with open(jsonl_path, 'a', encoding='utf-8') as fh:
+            fh.write(json.dumps(rec) + '\n')
     return rec
 
 
 def _self_test() -> int:
     import shutil
-    td = Path(tempfile.mkdtemp(prefix='dol-%s-' % uuid.uuid4().hex[:8]))
+    td = Path(tempfile.mkdtemp(prefix=f'dol-{uuid.uuid4().hex[:8]}-'))
     try:
         db = td / 'lifecycle.db'
         conn = sqlite3.connect(str(db))
+        conn.execute('PRAGMA journal_mode=WAL')
         conn.execute(
             'CREATE TABLE delegation_audit ('
             'id INTEGER PRIMARY KEY, ts TEXT, episode_id TEXT, '
@@ -71,7 +77,7 @@ def _self_test() -> int:
         conn.commit()
         conn.close()
         jsonl = td / 'delegation-outcomes.jsonl'
-        rec = log_outcome(
+        _ = log_outcome(
             episode_id='ep-test',
             subtask_count=3,
             success_rate=0.8,
@@ -81,6 +87,7 @@ def _self_test() -> int:
             jsonl_path=jsonl,
         )
         conn = sqlite3.connect(str(db))
+        conn.execute('PRAGMA journal_mode=WAL')
         rows = conn.execute('SELECT episode_id, subtask_count, success_rate FROM delegation_audit').fetchall()
         conn.close()
         assert len(rows) == 1, rows
@@ -99,6 +106,59 @@ def _self_test() -> int:
         shutil.rmtree(td, ignore_errors=True)
 
 
+
+def _cron_default() -> dict:
+    """Bare cron mode: ingest pending JSONL if present; report table counts. Never requires flags."""
+    pending = CACHE / 'pending-delegation-outcomes.jsonl'
+    ingested = 0
+    errors = 0
+    if pending.exists():
+        try:
+            for line in pending.read_text(encoding='utf-8', errors='replace').splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except Exception:
+                    errors += 1
+                    continue
+                if not row.get('episode_id'):
+                    errors += 1
+                    continue
+                try:
+                    log_outcome(
+                        episode_id=row.get('episode_id'),
+                        subtask_count=int(row.get('subtask_count') or 0),
+                        success_rate=float(row.get('success_rate') or 0.0),
+                        flags=row.get('audit_flags', '[]'),
+                        token_cost=int(row.get('token_cost_estimate') or row.get('token_cost') or 0),
+                    )
+                    ingested += 1
+                except Exception:
+                    errors += 1
+        except Exception as exc:
+            return {'status': 'error', 'reason': str(exc), 'ingested': ingested}
+    n_rows = None
+    if LIFECYCLE_DB.exists():
+        conn = sqlite3.connect(str(LIFECYCLE_DB), timeout=30)
+        try:
+            conn.execute('PRAGMA journal_mode=WAL')
+            try:
+                n_rows = conn.execute('SELECT COUNT(*) FROM delegation_audit').fetchone()[0]
+            except sqlite3.OperationalError:
+                n_rows = None
+        finally:
+            conn.close()
+    return {
+        'status': 'ok',
+        'mode': 'cron-default',
+        'ingested': ingested,
+        'errors': errors,
+        'pending_path': str(pending),
+        'table_rows': n_rows,
+    }
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument('--self-test', action='store_true')
@@ -112,11 +172,11 @@ def main() -> None:
         try:
             sys.exit(_self_test())
         except Exception as exc:
-            print('[delegate-outcome-logger] --self-test FAIL: %s' % exc)
+            print(f'[delegate-outcome-logger] --self-test FAIL: {exc}')
             sys.exit(1)
     try:
         if not args.episode_id or args.subtask_count is None or args.success_rate is None:
-            print(json.dumps({'status': 'error', 'reason': 'missing required args'}))
+            print(json.dumps(_cron_default()))
             return
         rec = log_outcome(
             episode_id=args.episode_id,

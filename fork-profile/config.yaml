@@ -1,5 +1,4 @@
 model:
-  context_length: 200000
   default: claude-sonnet-4-6
   provider: anthropic
 providers:
@@ -9,7 +8,6 @@ providers:
     api: https://api.openai.com/v1
     key_env: OPENAI_API_KEY
     context_length: 128000
-    max_output_tokens: 16384
     api_mode: chat_completions
     models:
       gpt-5.4:
@@ -297,6 +295,8 @@ skills:
     run_on_skill_update: true
     script: ~/.hermes/profiles/fork/scripts/occam-skill-ranker.py
     subcommand: mdl-dedup
+  external_dirs:
+    - ~/.hermes/skills
 approvals:
   mode: smart
   destructive_slash_confirm: false
@@ -322,9 +322,17 @@ plugins:
     - skill-routing-nudge
     - tool-auth-gate
     - tool-result-audit
+    - delegation-audit-hook
+    - formal-verify-plugin
+    - compliance-score-hook
+    - turn-behavior-logger
+    - skill-latency-logger
+    - billion-context
+    - compaction-gate
   entries:
     cobra-guard:
-      allow_tool_override: false
+      settings:
+        allow_tool_override: false
     jev-turn-evaluator:
       settings:
         shadow_jev_evaluator: true
@@ -341,6 +349,17 @@ plugins:
           system: 1.0
           tool_result: 0.55
           user: 0.72
+    governance-hard-block:
+      settings:
+        enabled: false
+    tool-auth-gate:
+      settings:
+        escalate_tools: []
+        deny_tools: []
+        delegation_depth: 0
+    skill-routing-nudge:
+      settings:
+        enabled: true
   disabled: []
 cron:
   allow_agent_scheduling: false
@@ -367,7 +386,10 @@ hooks:
   on_session_finalize:
     - command: /var/home/rainbow/.hermes/profiles/fork/hooks/stop.sh
       timeout: 10
-_config_version: 52
+  pre_compress:
+    - command: /var/home/rainbow/.hermes/profiles/fork/hooks/pre-compact.sh
+      timeout: 10
+_config_version: 53
 adaptive_reasoning:
   adaptive_sc:
     cost_model: cached
@@ -810,3 +832,7 @@ _left_core_installed:
   - camofox
 _left_core_used:
   - camofox
+gateway:
+  restart_loop_guard:
+    max_restarts: 5
+    max_gap_seconds: 120
