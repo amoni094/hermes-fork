@@ -21,10 +21,14 @@ import os
 import datetime
 from pathlib import Path
 
-_HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
-MCP_LOG = _HERMES_HOME / "profiles/fork/logs/mcp-calls.jsonl"
-DRIFT_LOG = _HERMES_HOME / "profiles/fork/logs/mcp-auth-drift.jsonl"
-CONFIG_PATH = _HERMES_HOME / "profiles/fork/config.yaml"
+_hh = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+if _hh.name == "fork" and _hh.parent.name == "profiles":
+    _FORK_ROOT = _hh
+else:
+    _FORK_ROOT = _hh / "profiles" / "fork"
+MCP_LOG = _FORK_ROOT / "logs/mcp-calls.jsonl"
+DRIFT_LOG = _FORK_ROOT / "logs/mcp-auth-drift.jsonl"
+CONFIG_PATH = _FORK_ROOT / "config.yaml"
 DRIFT_LOG.parent.mkdir(parents=True, exist_ok=True)
 
 SESSION_WINDOW_HOURS = 8  # max session window for auth validity
