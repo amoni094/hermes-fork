@@ -100,6 +100,7 @@ def rules(tool: str, query: str, context_tools: list[str], context_chars: int) -
     # disabled until context_tools is extended to carry (tool, query) pairs. Left in place
     # as a stub; do not rely on it for real duplicate detection.
     # TODO: extend --context-has-tool to accept "toolname:query" pairs, then re-enable.
+    # NOT IMPLEMENTED: Rule 3 context-has-tool check -- disabled pending gateway session integration
     if False and (tool in ("read_file", "search_files", "session_search", "skills_list")
             and tool in context_tools
             and query and any(query in ct for ct in context_tools)):

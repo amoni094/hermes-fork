@@ -350,7 +350,9 @@ def main() -> int:
 
     # Save report
     REPORT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_FILE.write_text(json.dumps(report, indent=2))
+    _tmp = REPORT_FILE.with_suffix(".tmp")
+    _tmp.write_text(json.dumps(report, indent=2))
+    os.replace(_tmp, REPORT_FILE)
 
     print(json.dumps({
         k: report[k] for k in [
