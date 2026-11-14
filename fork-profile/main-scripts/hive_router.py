@@ -11,6 +11,7 @@ Usage:
   python3 hive_router.py --list                    # list active agent mailboxes
   python3 hive_router.py --status                  # show routing topology
 """
+# NOT IMPLEMENTED: shell only, no working implementation -- pending gateway session integration
 import argparse, json, os, pathlib, sys, time
 
 HERMES_HOME = pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes")))

@@ -10,6 +10,7 @@ Usage:
   python3 feature_watch_run.py --watch REPO [--interval 3600]
   python3 feature_watch_run.py --status
 """
+# NOT IMPLEMENTED: shell only, no working implementation -- pending gateway session integration
 import argparse, json, os, pathlib, sys, time
 
 HERMES_HOME = pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes")))

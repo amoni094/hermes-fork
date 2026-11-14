@@ -10,6 +10,7 @@ Usage:
   python3 pr_lens_render.py --pr PR_NUMBER [--repo OWNER/REPO]
   python3 pr_lens_render.py --diagram ARCH_FILE
 """
+# NOT IMPLEMENTED: shell only, no working implementation -- pending gateway session integration
 import argparse, os, pathlib, sys
 
 HERMES_HOME = pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes")))
