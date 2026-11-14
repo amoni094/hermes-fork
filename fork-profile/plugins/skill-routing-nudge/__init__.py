@@ -22,6 +22,18 @@ import importlib.util, json, logging, math, os, re, sys
 from pathlib import Path
 from typing import Any
 
+import re as _nudge_re
+_SAFE_NAME = _nudge_re.compile(r'[^A-Za-z0-9._/\-]')
+
+
+def _san_name(s):
+    return _SAFE_NAME.sub('_', str(s))[:64]
+
+
+def _san_desc(s):
+    s = str(s).replace('[', '(').replace(']', ')').replace('\n', ' ').replace('\r', '')
+    return s.strip()[:80]
+
 logger = logging.getLogger('skill-routing-nudge')
 
 ISS_GAIN = 0.3
@@ -44,6 +56,8 @@ def _router_script_path() -> Path:
     """Canonical live router script path."""
     base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
     profile = os.environ.get('HERMES_PROFILE', '')
+    if base.name != '.hermes' and base.parent.name == 'profiles':
+        base = base.parent.parent
     if profile:
         return base / 'profiles' / profile / 'scripts' / 'skill-router-index.py'
     return base / 'scripts' / 'skill-router-index.py'
@@ -166,10 +180,8 @@ def _on_pre_llm_call(
             'Top skill matches for this query:',
         ]
         for i, (score, skill) in enumerate(results, 1):
-            name = skill.get('name', '')
-            desc = (skill.get('description') or '').strip()
-            if len(desc) > 80:
-                desc = desc[:77] + '...'
+            name = _san_name(skill.get('name', ''))
+            desc = _san_desc((skill.get('description') or '').strip())
             lines.append(f'  {i}. {name} ({score:.2f}) - {desc}')
         lines.append("Load with skill_view(name=\'...\') if relevant.")
         lines.append('[END HINT]')

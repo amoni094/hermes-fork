@@ -95,8 +95,7 @@ def rules(tool: str, query: str, context_tools: list[str], context_chars: int) -
     # Read-only local tools with identical query return the same result; skip the repeat.
     # context_tools entries may be plain "toolname" or "toolname:query" pairs.
     # Rule 3 fires only when a "toolname:query" entry matches both tool and query exactly.
-    _READ_ONLY_TOOLS = {"read_file", "search_files", "session_search", "skills_list",
-                        "web_extract", "web_search"}
+    _READ_ONLY_TOOLS = {"read_file", "search_files", "session_search", "skills_list"}
     if tool in _READ_ONLY_TOOLS and query:
         for ct in context_tools:
             if ":" in ct:

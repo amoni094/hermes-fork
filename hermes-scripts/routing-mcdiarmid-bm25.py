@@ -167,7 +167,7 @@ def main():
         print(json.dumps(run(), indent=2))
     except Exception:
         print(json.dumps({'error': 'shadow_path_failed'}))
-        sys.exit(0)
+        sys.exit(1)
 
 
 if __name__ == '__main__':

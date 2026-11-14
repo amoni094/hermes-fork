@@ -55,13 +55,17 @@ def _cache_dir() -> Path:
 
 
 def _atomic_write(path: Path, obj) -> None:
+    tmp = path.with_suffix(".tmp")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(obj, indent=2, default=str), encoding="utf-8")
         os.replace(tmp, path)
     except Exception:
-        pass
+        try:
+            tmp.unlink(missing_ok=True)
+        except Exception:
+            pass
+        raise
 
 
 def _apply_state_path() -> Path:
@@ -307,7 +311,14 @@ def compute(now=None) -> dict:
             "ts": now.isoformat(),
             "entries": scored,
         }
-        _atomic_write(_cache_dir() / "memory-access-decay.json", rec)
+        out_path = _cache_dir() / "memory-access-decay.json"
+        if n == 0 and out_path.exists() and out_path.stat().st_size > 0:
+            print(
+                "WARN: skip empty overwrite of existing memory-access-decay cache",
+                file=sys.stderr,
+            )
+        else:
+            _atomic_write(out_path, rec)
         return rec
     except Exception as exc:
         return {"ok": False, "skipped": True, "reason": str(exc), "n": 0, "entries": []}

@@ -25,7 +25,7 @@ from pathlib import Path
 import os
 _hermes_base_sri = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _hermes_profile_sri = os.environ.get("HERMES_PROFILE", "")
-_hermes_root_sri = (_hermes_base_sri / "profiles" / _hermes_profile_sri) if _hermes_profile_sri and "profiles" not in str(_hermes_base_sri) else _hermes_base_sri
+_hermes_root_sri = (_hermes_base_sri / "profiles" / _hermes_profile_sri) if _hermes_profile_sri and "profiles" not in Path(_hermes_base_sri).parts else _hermes_base_sri
 # When HERMES_HOME itself points at a profile dir (.../profiles/<name>), derive the true
 # hermes root (2 levels up) so _HERMES_MAIN_SKILLS resolves to the real skills library.
 _parts = _hermes_base_sri.parts
@@ -482,10 +482,9 @@ def cosine(vec1: dict, vec2: dict) -> float:
 
 
 def scan_skills() -> list[dict]:
-    """Scan all SKILL.md files in SKILLS_ROOT, following symlinks.
+    """Scan all SKILL.md files in SKILLS_ROOT without following directory symlinks.
 
-    Category dirs in skills/ are symlinks to ~/.hermes/skills/<category>/; pathlib.rglob
-    does NOT follow symlinks, so we use os.walk(followlinks=True) instead.
+    os.walk(followlinks=False) avoids escaping the skills tree via a planted symlink.
     W2-C fix (2026-09-22): symlink follow + dual-dir scan with fork priority.
     """
     import os as _os_scan
@@ -502,7 +501,7 @@ def scan_skills() -> list[dict]:
     for skills_dir in scan_roots:  # fork first, then main; first-seen wins
         if not skills_dir.is_dir():
             continue
-        for root, dirs, files in _os_scan.walk(str(skills_dir), followlinks=True):
+        for root, dirs, files in _os_scan.walk(str(skills_dir), followlinks=False):
             dirs[:] = [d for d in dirs if not d.startswith(".")]
             if "SKILL.md" not in files:
                 continue
@@ -660,7 +659,7 @@ def cmd_build(incremental: bool = False):
 
     # Strip tfidf from the JSON (rebuild at query time from tokens)
     index = {
-        "built_at": datetime.now(_dt.UTC).isoformat(),
+        "built_at": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
         "total": len(skills),
         "skills": [
             {
@@ -676,15 +675,18 @@ def cmd_build(incremental: bool = False):
     INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
     _tmp_i = INDEX_PATH.with_suffix('.tmp')
     _tmp_i.write_text(json.dumps(index, indent=2))
-    _tmp_i.rename(INDEX_PATH)
+    try:
+        os.replace(str(_tmp_i), str(INDEX_PATH))
+    except Exception:
+        _tmp_i.unlink(missing_ok=True)
+        raise
     print(f"Index written to {INDEX_PATH}")
     print(f"Total skills indexed: {len(skills)}")
 
 
 def load_index_with_tfidf():
     if not INDEX_PATH.exists():
-        print("ERROR: index not found. Run --build first.", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError("skill-router index not found. Run --build first.")
     index = json.loads(INDEX_PATH.read_text())
     skills = index["skills"]
     skills, idf = build_tfidf(skills)

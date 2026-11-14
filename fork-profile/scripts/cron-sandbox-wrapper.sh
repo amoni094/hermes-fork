@@ -82,6 +82,9 @@ if command -v flock >/dev/null 2>&1; then
       exit 75
     fi
   fi
+else
+  _log "ERROR: flock not found -- overlap safety unavailable, refusing"
+  exit 75
 fi
 
 if ! cd "$SCRATCH_DIR"; then
@@ -137,11 +140,10 @@ if [[ -f "$_GATE_PY" ]]; then
 fi
 unset _GATE_PY
 
-# HERMES_NO_SANDBOX=1: bypass openshell and run directly on host.
-# Use for scripts that need access to paths outside the sandbox (e.g. SecondBrain vault).
+# HERMES_NO_SANDBOX=1 used to host-exec before the openshell check (ADV-B-001).
+# That env bypass is a security hole: log a warning and continue into the sandbox.
 if [[ "${HERMES_NO_SANDBOX:-}" == "1" ]]; then
-  _log "NO_SANDBOX: running on host (HERMES_NO_SANDBOX=1)"
-  exec "${INNER[@]}" "$@"
+  _log "WARN: HERMES_NO_SANDBOX=1 ignored — continuing through openshell sandbox"
 fi
 
 if [[ -z "${OPENSHELL_BIN:-}" || ! -x "$OPENSHELL_BIN" ]]; then
@@ -199,6 +201,8 @@ for _k in "${_API_KEYS[@]}"; do
   # Prefer live env (already exported by daemon) over .env file value
   _live="${!_k:-}"
   if [[ -n "$_live" ]]; then
+    # KNOWN LIMITATION (ADV-B-009): env vars passed on argv visible in /proc/PID/cmdline.
+    # openshell does not support --env-file. Do not pass secrets via HERMES_JOB_ENV.
     ENV_FROM+=(--env "$_k=$_live")
   elif [[ -n "${_ENV_VALS[$_k]:-}" ]]; then
     ENV_FROM+=(--env "$_k=${_ENV_VALS[$_k]}")

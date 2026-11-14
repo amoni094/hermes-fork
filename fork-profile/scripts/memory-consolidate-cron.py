@@ -18,7 +18,7 @@ def _mem_path() -> Path:
     base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
     profile = os.environ.get('HERMES_PROFILE', 'fork')
     # If base already includes the profile path, don't double-nest
-    if profile and 'profiles' not in str(base):
+    if profile and 'profiles' not in Path(base).parts:
         candidate = base / 'profiles' / profile / 'memories' / 'MEMORY.md'
         if candidate.exists():
             return candidate

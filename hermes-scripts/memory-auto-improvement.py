@@ -415,7 +415,7 @@ def review(days: int = 7) -> dict:
         _atomic_write(_cache_dir() / "memory-auto-improvement.json", rec)
         return rec
     except Exception as exc:
-        return {"ok": True, "applied": False, "n_proposals": 0, "proposals": [], "fail_open": str(exc)}
+        return {"ok": False, "applied": False, "n_proposals": 0, "proposals": [], "fail_open": str(exc)}
 
 
 def self_test() -> int:
@@ -515,7 +515,7 @@ def main() -> int:
         print(json.dumps(rec, indent=2, default=str))
         return 0
     except Exception as exc:
-        print(json.dumps({"ok": True, "applied": False, "proposals": [], "fail_open": str(exc)}))
+        print(json.dumps({"ok": False, "applied": False, "proposals": [], "fail_open": str(exc)}))
         return 0
 
 

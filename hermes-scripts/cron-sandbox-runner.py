@@ -161,12 +161,9 @@ def _extract_shim_inner(shim: Path) -> str | None:
 
 def _is_shim_path(script: str, shim_dir: Path) -> bool:
     try:
-        p = Path(script)
-        if str(p).startswith(str(shim_dir)):
-            return True
-        return p.resolve() == shim_dir.resolve() or p.parent.resolve() == shim_dir.resolve()
-    except OSError:
-        return str(script).startswith(str(shim_dir))
+        return Path(script).resolve().is_relative_to(shim_dir.resolve())
+    except (OSError, ValueError):
+        return False
 
 
 def _resolve_job_script(script: str) -> Path | None:
@@ -180,6 +177,16 @@ def _resolve_job_script(script: str) -> Path | None:
     try:
         p = p.resolve()
     except OSError:
+        pass
+    try:
+        _allowed_scripts = _scripts_dir().resolve()
+        if not p.is_relative_to(_allowed_scripts):
+            print(
+                f'ERROR: job script {p} is outside allowed dir {_allowed_scripts}',
+                file=sys.stderr,
+            )
+            return None
+    except Exception:
         pass
     if p.is_file():
         return p
@@ -388,8 +395,8 @@ def cmd_wrap_jobs() -> int:
                 'exec %s %s "$@"\n'
             ) % (
                 timeout_sec,
-                json.dumps(str(wrapper)),
-                json.dumps(str(resolved)),
+                shlex.quote(str(wrapper)),
+                shlex.quote(str(resolved)),
             )
             _atomic_write(shim, body)
             os.chmod(shim, os.stat(shim).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)

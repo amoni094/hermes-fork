@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 _TRUTHY_OFF = {"0", "false", "off", "no", "disable", "disabled"}
 
 _state_lock = threading.Lock()
-_state: Dict[str, Any] = {"tools": [], "chars": 0}
+_state: dict[str, Any] = {"tools": [], "chars": 0}
 
 _guard_mod = None
 _logger_mod = None
@@ -37,14 +37,13 @@ def _enabled() -> bool:
 
 def _scripts_dir() -> Path:
     env = os.environ.get("HERMES_HOME", "").strip()
-    candidates = []
-    if env:
-        candidates.append(Path(env) / "scripts")
-    candidates.append(Path.home() / ".hermes" / "scripts")
-    for c in candidates:
-        if (c / "cobra-skip-guard.py").is_file():
-            return c
-    return candidates[0]
+    p = Path(env) if env else Path.home() / ".hermes"
+    if p.name != ".hermes" and p.parent.name == "profiles":
+        p = p.parent.parent
+    for candidate in [p / "hermes-scripts", p / "scripts", p / "profiles" / "fork" / "scripts"]:
+        if (candidate / "cobra-skip-guard.py").is_file():
+            return candidate
+    return p / "hermes-scripts"
 
 
 def _load_script(filename: str):
@@ -114,7 +113,7 @@ def evaluate_skip(tool_name: str, args: Any) -> tuple[bool, str]:
         return False, f"rules error: {exc}"
 
 
-def pre_tool_call(tool_name: str = "", args: Any = None, **_kwargs) -> Optional[Dict[str, Any]]:
+def pre_tool_call(tool_name: str = "", args: Any = None, **_kwargs) -> Optional[dict[str, Any]]:
     """Warn-only pre-flight. Always returns None so dispatch is never blocked."""
     if not _enabled() or not tool_name:
         return None
@@ -147,6 +146,8 @@ def post_tool_call(
             prior = list(_state["tools"])
             ctx_chars = int(_state["chars"])
             _state["tools"].append(tool_name)
+            if query:
+                _state["tools"].append(f"{tool_name}:{query}")
             _state["chars"] = ctx_chars + rlen
         _, logger_mod = _mods()
         if logger_mod is not None and hasattr(logger_mod, "_append"):

@@ -28,10 +28,15 @@ import sys
 from datetime import datetime, timezone, UTC
 from pathlib import Path
 
-HOME      = Path.home()
-CACHE_DIR = HOME / "cache" / "monitors"
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
-OUT_FILE  = CACHE_DIR / "adversarial-robustness-report.json"
+import os as _art_os
+_art_base = Path(_art_os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_art_profile = _art_os.environ.get("HERMES_PROFILE", "")
+if _art_profile and "profiles" not in _art_base.parts:
+    _art_root = _art_base / "profiles" / _art_profile
+else:
+    _art_root = _art_base
+CACHE_DIR = _art_root / "cache" / "monitors"
+OUT_FILE = CACHE_DIR / "adversarial-robustness-report.json"
 
 DECEPTION_THRESHOLD    = 0.35   # alarm if deception delta > 0.35
 CONFIDENCE_FLOOR       = 0.50   # only test responses claiming ≥ 50% confidence
@@ -167,6 +172,7 @@ def run(response: str | None, query: str | None, dry_run: bool) -> int:
         print("ALARM: no — responses are adversarially robust")
 
     if not dry_run:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
         _tmp_out_file = OUT_FILE.with_suffix('.tmp')
         _tmp_out_file.write_text(json.dumps({"ts": now, "results": results}, indent=2))
         _tmp_out_file.replace(OUT_FILE)

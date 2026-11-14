@@ -7,7 +7,13 @@ import os
 import sys
 from pathlib import Path
 
-SKILLS_ROOT = Path("/var/home/rainbow/.hermes/profiles/fork/skills")
+_tsb_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_tsb_profile = os.environ.get("HERMES_PROFILE", "")
+if _tsb_profile and "profiles" not in _tsb_base.parts:
+    _tsb_root = _tsb_base / "profiles" / _tsb_profile
+else:
+    _tsb_root = _tsb_base
+SKILLS_ROOT = _tsb_root / "skills"
 STUB_LINE = "<!-- textbook-stub: see source PDF -->"
 
 BOILERPLATE_MARKERS = [
@@ -26,6 +32,14 @@ OPERATIONAL_MARKERS = [
     "## Causal Claim Detection Gate",
     "## Routing Rules",
     "## Operational Summary",
+    "## Algorithm",
+    "## Lessons",
+    "## Decision rules",
+    "## Script",
+    "## Steps",
+    "## Usage",
+    "## Configuration",
+    "## Implementation",
 ]
 
 
@@ -101,6 +115,17 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     root = args.root
+    try:
+        chosen = root.resolve()
+        allowed = SKILLS_ROOT.parent.resolve()
+        chosen.relative_to(allowed)
+        root = chosen
+    except (OSError, ValueError):
+        print(
+            f"ERROR: root {root} is outside allowed hermes tree {SKILLS_ROOT.parent}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     if not root.is_dir():
         print(f"ERROR: skills root missing: {root}", file=sys.stderr)
         return 2

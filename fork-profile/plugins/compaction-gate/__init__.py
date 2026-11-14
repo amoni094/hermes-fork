@@ -28,14 +28,8 @@ _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+|\n+")
 _WORD_RE = re.compile(r"[a-z0-9]{2,}")
 
 _CTX: Any = None
-_LOG_PATH = (
-    Path.home()
-    / ".hermes"
-    / "profiles"
-    / "fork"
-    / "cache"
-    / "compaction-gate-log.jsonl"
-)
+# _LOG_PATH is derived dynamically via _log_path(); this module-level constant is unused.
+# Kept for backward compatibility with any external references but _log_path() is authoritative.
 
 
 def _profile_root() -> Path:
@@ -155,6 +149,16 @@ def _score_facts(
     flagged: list[dict[str, Any]] = []
     if not facts:
         return scored, flagged
+    if len(facts) == 1:
+        # Singleton: cannot be redundant with respect to other facts.
+        item = {
+            "text": facts[0][:400],
+            "mdl_saving": 1.0,
+            "bytes": len(facts[0].encode("utf-8")),
+            "redundant": False,
+            "reason": "",
+        }
+        return [item], []
     joined = "\n".join(facts)
     l_all = _zlib_len(joined)
     kept_words: list[set[str]] = []
