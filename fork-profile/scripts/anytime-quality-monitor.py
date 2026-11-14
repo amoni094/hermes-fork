@@ -304,7 +304,10 @@ def _self_test() -> int:
         "updated_at": "2026-10-29T02:00:00+00:00",
         "status": "partial",
     }
-    (d / "slow-job.json").write_text(json.dumps(slow), encoding="utf-8")
+    _cp = d / "slow-job.json"
+    _tmp = _cp.with_suffix(".tmp")
+    _tmp.write_text(json.dumps(slow), encoding="utf-8")
+    os.replace(_tmp, _cp)
     report = monitor(checkpoint_dir=d, expected_rate=100.0)
     assert report["jobs"][0]["below_half_expected"] is True
     assert report["jobs"][0]["items_per_hour"] == 5.0
