@@ -23,7 +23,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import os
-import random
 _hermes_base_sri = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _hermes_profile_sri = os.environ.get("HERMES_PROFILE", "")
 _hermes_root_sri = (_hermes_base_sri / "profiles" / _hermes_profile_sri) if _hermes_profile_sri and "profiles" not in str(_hermes_base_sri) else _hermes_base_sri
@@ -151,8 +150,6 @@ def record_skill_outcome(skill_name: str, success: bool, decay: float = 0.99) ->
 _MIN_SAMPLES = 30  # Chernoff bound: posterior unreliable until alpha+beta >= 30
                    # P(|X̄-μ| > ε) ≤ 2·exp(-2nε²); at n=30, ε=0.1 → error ≤ 0.36
                    # (Motwani & Raghavan, Randomized Algorithms, §4.1)
-# Thompson sampling mode: set HERMES_SKILL_TS=1 to sample theta~Beta(a,b) instead of posterior mean
-_TS_MODE = os.environ.get("HERMES_SKILL_TS", "0") == "1"
 
 
 def beta_posterior_mean(skill_name, state):
@@ -173,26 +170,6 @@ def beta_posterior_mean(skill_name, state):
     if n_obs < _MIN_SAMPLES or (alpha + beta_val) <= 0:
         return 0.5  # insufficient evidence — neutral weight
     return alpha / (alpha + beta_val)
-
-
-def beta_posterior_sample(skill_name, state, rng=None):
-    """Draw theta ~ Beta(alpha, beta). Lattimore & Szepesvari (2020) Bandit Algorithms section 36.1.
-
-    Samples from Beta(alpha, beta) for ALL n, including the prior Beta(1,1) at n=0.
-    The Chernoff guard (freeze at 0.5 until n>=30) belongs only in beta_posterior_mean
-    (the point estimate); applying it here defeats Thompson exploration.
-    """
-    entry = state.get(skill_name, {})
-    try:
-        alpha = float(entry.get("alpha", 1.0) or 1.0)
-        beta_val = float(entry.get("beta", 1.0) or 1.0)
-    except (TypeError, ValueError):
-        return 0.5  # malformed state — neutral fallback only
-    _rng = rng or random
-    try:
-        return _rng.betavariate(alpha, beta_val)
-    except (ValueError, ZeroDivisionError):
-        return alpha / (alpha + beta_val)
 
 
 def _beta_wald_ci(alpha: float, beta: float, z: float = 1.96) -> tuple[float, float, float]:
@@ -765,7 +742,7 @@ def route(query_text: str, top: int = 5) -> list[dict]:
     scored = [
         (
             (
-                (0.6 * cosine(q_vec, s["tfidf"]) + 0.4 * (beta_posterior_sample(s["name"], beta_state) if _TS_MODE else beta_posterior_mean(s["name"], beta_state)))
+                (0.6 * cosine(q_vec, s["tfidf"]) + 0.4 * beta_posterior_mean(s["name"], beta_state))
                 if beta_active else cosine(q_vec, s["tfidf"])
             ) + cross_domain_boost(query_text, s.get("description", ""))
         ) * float(routing_weights.get(
@@ -936,28 +913,11 @@ def route(query_text: str, top: int = 5) -> list[dict]:
                 results = [{"ensemble_suggestions": ensemble_suggestions, "score": 0.0,
                             "name": "", "description": "", "category": ""}]
 
-    if os.environ.get("HERMES_BPS", "0") == "1":
-        try:
-            import importlib.util
-            _bps_path = Path(__file__).resolve().parent / "bps-skill-portfolio.py"
-            spec = importlib.util.spec_from_file_location(
-                "bps_skill_portfolio", str(_bps_path)
-            )
-            if spec is not None and spec.loader is not None:
-                _bps = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(_bps)
-                _pairs = [(float(r.get("score", 0.0) or 0.0), r) for r in results]
-                results = _bps.filter_scored_skills(_pairs, budget=top)
-        except ImportError:
-            pass
-        except Exception:
-            pass
-
     return results
 
 
 def cmd_query(query_text: str):
-    skills, _idf, _index = load_index_with_tfidf()
+    skills, _idf, _ = load_index_with_tfidf()
     q_tokens = tokenize(query_text)
     # Query vectorisation: use BM25 TF to match document scoring.
     # For short queries, length normalisation (b) is set to 0 (avgdl=dl=1 → no length penalty).
@@ -978,7 +938,7 @@ def cmd_query(query_text: str):
     beta_active = bool(beta_state)  # H5 fix: only blend if writer has produced data
     scored = [
         (
-            (0.6 * cosine(q_vec, s["tfidf"]) + 0.4 * (beta_posterior_sample(s["name"], beta_state) if _TS_MODE else beta_posterior_mean(s["name"], beta_state)))
+            (0.6 * cosine(q_vec, s["tfidf"]) + 0.4 * beta_posterior_mean(s["name"], beta_state))
             if beta_active else cosine(q_vec, s["tfidf"])
         ) + cross_domain_boost(query_text, s.get("description", ""))
         for s in skills
@@ -1178,7 +1138,7 @@ def cmd_compile_patterns():
 
 
 def cmd_check():
-    skills, _idf, _index = load_index_with_tfidf()
+    skills, _idf, _ = load_index_with_tfidf()
     print(f"Checking {len(skills)} skills for high-overlap pairs (threshold={OVERLAP_THRESHOLD})...\n")
     flags = []
     for i in range(len(skills)):
