@@ -52,6 +52,7 @@ GOLD RULES (most important):
 
 QUESTION RULES:
 - No questions about the system prompt, generic behavior, or meta-conversation.
+- REJECT trivial or yes/no questions (e.g. "Did X happen?", "Is Y true?", "Was Z used?"). Ask for a specific identifier, value, path, error, or outcome instead.
 - Spread across the WHOLE span (early, middle, late sections).
 - Prefer facts that matter for continuing the work: what was decided, what failed, what the user asked for, what tool call returned what.
 - Tag difficulty: "easy" = short identifier a summary head should keep; "medium" = decision or outcome phrase; "hard" = buried tool-output or error detail.
@@ -126,17 +127,21 @@ HEAD_HIT_CHARS = 15000  # FACT LEDGER + summary body after stripping legalese pr
 OUTPUT_TOKENS_PER_RECALL_POINT_TARGET = 1200
 _PREAMBLE_START_RE = re.compile(
     r"\[CONTEXT COMPACTION[^\n]*\]|CONTEXT COMPACTION —|Conversation Summary",
-    re.I,
+    re.IGNORECASE,
 )
 _PREAMBLE_END_RE = re.compile(
     r"avoid repeating it:\s*",
-    re.I,
+    re.IGNORECASE,
 )
 _BACKTICK_RE = re.compile(r"`([^`]{3,200})`")
 _QUOTED_IDENT_RE = re.compile(r"'([A-Za-z0-9_./#-]{4,120})'")
 
 
 _TERM_RE = re.compile(r"[A-Za-z0-9_#./-]{3,}")
+_YES_NO_Q_RE = re.compile(
+    r"^\s*(did|does|do|is|are|was|were|can|could|should|will|would|has|have|had)\b.*\?\s*$",
+    re.IGNORECASE,
+)
 _RRF_K = 60
 # Cap for ArchiveIndex to avoid OOM on very large full-lineage corpora.
 # At ~150 chars/message average, 200K messages ~ 30M chars ~ 7.5M tokens.
@@ -603,21 +608,43 @@ def decorate_arm_metrics(summary: dict, n: int, head_hit_rate: float | None = No
     return summary
 
 
+def _is_trivial_or_yes_no(question: str) -> bool:
+    """True for empty, yes/no, or explicitly binary questions."""
+    s = (question or "").strip()
+    if not s:
+        return True
+    low = s.lower()
+    if "yes or no" in low or "yes/no" in low or "true or false" in low:
+        return True
+    return bool(_YES_NO_Q_RE.match(s))
+
+
 def validate_questions(questions, messages) -> tuple[int, list, dict]:
-    """Literal-span gate: each question's `where` must appear in the transcript."""
+    """Literal-span gate: each question's `where` must appear in the transcript.
+
+    Also rejects trivial / yes-no questions so the bank stays identifier-level.
+    """
     corpus = flatten_transcript_text(messages).lower()
     invalid = []
     valid = 0
     valid_by_tier: dict[str, int] = {}
     for i, qa in enumerate(questions):
         qid = qa.get("id", i)
+        qtext = qa.get("q", "") or ""
+        if _is_trivial_or_yes_no(qtext):
+            invalid.append({
+                "id": qid,
+                "reason": "trivial or yes-no question",
+                "q": qtext[:120],
+            })
+            continue
         where = qa.get("where")
         diff = qa.get("difficulty") or "untiered"
         if not where or not str(where).strip():
             invalid.append({
                 "id": qid,
                 "reason": "missing where field",
-                "q": qa.get("q", "")[:120],
+                "q": qtext[:120],
             })
             continue
         if str(where).lower() not in corpus:
@@ -625,7 +652,7 @@ def validate_questions(questions, messages) -> tuple[int, list, dict]:
                 "id": qid,
                 "reason": "where span not found in transcript (literal-span gate)",
                 "where": where,
-                "q": qa.get("q", "")[:120],
+                "q": qtext[:120],
             })
             continue
         valid += 1
@@ -1444,23 +1471,22 @@ def main():
         f"{args.transcript}|mtime={_tstat.st_mtime}|size={_tstat.st_size}|n={args.questions}|cap={args.cap_tokens}|esm={args.exam_sample_msgs}".encode()
     ).hexdigest()[:10]
     qcache = Path(args.questions_cache) if args.questions_cache else (out_dir / f"questions-{tid}.json")
-    _cache_existed = qcache.exists()
     questions = generate_questions(messages, args.questions, qcache,
                                    exam_sample_msgs=args.exam_sample_msgs)
     print(f"{len(questions)} questions ready ({qcache})")
 
-    # Auto-validate on fresh generation (no cache); --validate-questions forces it always.
-    if not _cache_existed or args.validate_questions:
-        raw_messages = load_transcript(args.transcript, cap_tokens=None)
-        valid, invalid, valid_by_tier = validate_questions(questions, raw_messages)
-        ok = report_question_validation(valid, invalid, valid_by_tier, questions)
-        _pass_rate = valid / max(len(questions), 1)
-        if _pass_rate < 0.60:
-            print(f"WARNING: literal-span pass rate {_pass_rate:.0%} < 60% — "
-                  "question quality low; consider busting cache (delete questions-*.json) "
-                  "and re-running after the improved QUESTION_PROMPT takes effect.")
-        if not ok and args.validate_questions:
-            sys.exit(1)
+    # Always validate after generate_questions (cached or fresh). No extra CLI
+    # invocation. --validate-questions still aborts when the gate fails.
+    raw_messages = load_transcript(args.transcript, cap_tokens=None)
+    valid, invalid, valid_by_tier = validate_questions(questions, raw_messages)
+    ok = report_question_validation(valid, invalid, valid_by_tier, questions)
+    _pass_rate = valid / max(len(questions), 1)
+    if _pass_rate < 0.60:
+        print(f"WARNING: literal-span pass rate {_pass_rate:.0%} < 60% — "
+              "question quality low; consider busting cache (delete questions-*.json) "
+              "and re-running after the improved QUESTION_PROMPT takes effect.")
+    if not ok and args.validate_questions:
+        sys.exit(1)
 
     summaries = []
     if args.also_uncompacted:

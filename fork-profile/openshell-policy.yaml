@@ -1,0 +1,161 @@
+# OpenShell sandbox policy for hermes-fork cron jobs (v0.1.5 schema).
+# Paths are Landlock-enforced inside the sandbox. Unlisted paths are inaccessible.
+version: 1
+
+filesystem_policy:
+  include_workdir: false
+  read_only:
+    - /usr
+    - /usr/local
+    - /lib
+    - /lib64
+    - /bin
+    - /sbin
+    - /etc
+    - /proc
+    - /dev/urandom
+    - /var/log
+    - /usr/local/bin
+    - /var/home/rainbow/.local/bin
+    - /var/home/rainbow/.local/lib
+    - /var/home/rainbow/.local/lib/python3.14
+    - /var/home/rainbow/.local/lib/python3.14/site-packages
+    - /var/home/rainbow/.local/lib/python3.14/site-packages/**
+    - /var/home/rainbow/.hermes/hermes-scripts
+    - /var/home/rainbow/.hermes/scripts
+    - /var/home/rainbow/.hermes/profiles/fork/scripts
+    - /var/home/rainbow/.hermes/profiles/fork/lib
+    - /var/home/rainbow/.hermes/profiles/fork/skills
+    - /var/home/rainbow/.hermes/profiles/fork/hooks
+    - /var/home/rainbow/.hermes/profiles/fork/sessions
+    - /var/home/rainbow/.hermes/sessions
+    - /var/home/rainbow/.hermes/profiles/fork/logs
+    - /var/home/rainbow/.hermes/profiles/fork/cron
+    - /var/home/rainbow/.hermes/profiles/fork/state.db
+    - /var/home/rainbow/.hermes/profiles/fork/state.db-wal
+    - /var/home/rainbow/.hermes/profiles/fork/state.db-shm
+    - /var/home/rainbow/.hermes/profiles/fork/memories
+    - /var/home/rainbow/.hermes/memories
+    - /var/home/rainbow/Documents
+    - /var/home/rainbow/Documents/SecondBrain
+  read_write:
+    - /tmp
+    - /var/tmp
+    - /dev/null
+    - /var/home/rainbow/.hermes/profiles/fork/cache
+    - /var/home/rainbow/.hermes/profiles/fork/memory-facts
+    - /var/home/rainbow/.hermes/profiles/fork/logs
+    - /var/home/rainbow/.hermes/omni
+    - /var/home/rainbow/.hermes/profiles/fork/omni
+    - /var/home/rainbow/.hermes/cache
+    - /var/home/rainbow/.hermes/logs
+landlock:
+  compatibility: hard_requirement
+
+network_policies:
+  hermes_https_outbound:
+    endpoints:
+      - host: api.anthropic.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: api.openai.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: api.x.ai
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: openrouter.ai
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: api.openrouter.ai
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: arxiv.org
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: export.arxiv.org
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: huggingface.co
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: paperswithcode.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: api.semanticscholar.org
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: api.openalex.org
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: api.crossref.org
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: api.archives-ouvertes.fr
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: api.aminer.org
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: news.ycombinator.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: reuters.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: technologyreview.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+      - host: theguardian.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+    binaries:
+      - path: /usr/bin/python3
+      - path: /usr/bin/curl
+      - path: /usr/bin/bash
+      - path: /usr/bin/sh
+      - path: /bin/bash
+      - path: /bin/sh
+      - path: /usr/bin/**
+      - path: /var/home/rainbow/.hermes/hermes-scripts/**
+      - path: /var/home/rainbow/.hermes/scripts/**
+      - path: /var/home/rainbow/.hermes/profiles/fork/scripts/**
+      - path: /var/home/rainbow/.hermes/profiles/fork/lib/**
+      - path: /var/home/rainbow/.local/bin/**
+      - path: /usr/local/bin/**
