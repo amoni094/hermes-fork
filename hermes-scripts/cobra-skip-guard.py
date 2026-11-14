@@ -63,8 +63,7 @@ def rules(tool: str, query: str, context_tools: list[str], context_chars: int) -
     context_chars: total chars of context already retrieved this turn
     """
     query_tokens = len(query.split()) if query else 0
-    tool_info = TOOL_COSTS.get(tool, {})
-    tool_class = tool_info.get("class", "unknown")
+    # tool_info available for future rules: TOOL_COSTS.get(tool, {})
 
     # Rule 1: web_search after hindsight_recall already returned sufficient context
     # Counterfactual: if hindsight already returned >5000 chars, marginal benefit
@@ -94,22 +93,20 @@ def rules(tool: str, query: str, context_tools: list[str], context_chars: int) -
 
     # Rule 3: exact duplicate tool+query — same tool AND same query already in context.
     # Read-only local tools with identical query return the same result; skip the repeat.
-    # NOTE: context_tools contains tool NAMES only, not prior queries. This rule can only
-    # fire when the caller passes both prior tool names AND a query string that exactly
-    # matches one of the tool name strings — which is almost never true. Rule is effectively
-    # disabled until context_tools is extended to carry (tool, query) pairs. Left in place
-    # as a stub; do not rely on it for real duplicate detection.
-    # TODO: extend --context-has-tool to accept "toolname:query" pairs, then re-enable.
-    # NOT IMPLEMENTED: Rule 3 context-has-tool check -- disabled pending gateway session integration
-    if False and (tool in ("read_file", "search_files", "session_search", "skills_list")
-            and tool in context_tools
-            and query and any(query in ct for ct in context_tools)):
-        return True, (
-            f"{tool} skipped: identical call already made this turn. "
-            "Re-calling with the same query returns the same output (CoBRA Rule 3). "
-            "Use a different path/query if you need different data.\n"
-            "(NOTE: Rule 3 is currently disabled — context_tools only carries tool names.)"
-        )
+    # context_tools entries may be plain "toolname" or "toolname:query" pairs.
+    # Rule 3 fires only when a "toolname:query" entry matches both tool and query exactly.
+    _READ_ONLY_TOOLS = {"read_file", "search_files", "session_search", "skills_list",
+                        "web_extract", "web_search"}
+    if tool in _READ_ONLY_TOOLS and query:
+        for ct in context_tools:
+            if ":" in ct:
+                ct_tool, ct_query = ct.split(":", 1)
+                if ct_tool == tool and ct_query == query:
+                    return True, (
+                        f"{tool} skipped: identical call (tool+query) already made this turn. "
+                        "Re-calling with the same query returns the same output (CoBRA Rule 3). "
+                        "Use a different path/query if you need different data."
+                    )
 
     # Rule 4: web_search when context_chars already exceeds 20k
     # Context is already saturated; additional web_search is likely noise.
@@ -218,7 +215,7 @@ def main():
     parser.add_argument("--tool", default="", help="Tool name to evaluate (required unless --train-probe-only)")
     parser.add_argument("--query", default="", help="Query/intent for the tool call")
     parser.add_argument("--context-has-tool", action="append", default=[], dest="context_tools",
-                        help="Tool already called this turn (repeat for multiple)")
+                        help="Tool already called this turn; optionally 'toolname:query' for Rule 3 (repeat for multiple)")
     parser.add_argument("--context-chars", type=int, default=0,
                         help="Total chars already in context this turn")
     parser.add_argument("--probe", action="store_true",

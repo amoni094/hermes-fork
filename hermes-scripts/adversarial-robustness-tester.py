@@ -29,7 +29,7 @@ from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
-CACHE_DIR = _HH / "cache" / "monitors"
+CACHE_DIR = HOME / "cache" / "monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE  = CACHE_DIR / "adversarial-robustness-report.json"
 
