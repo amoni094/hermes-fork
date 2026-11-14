@@ -2187,7 +2187,7 @@
       "script": "/var/home/rainbow/.hermes/scripts/skill-beta-feedback.py",
       "schedule": {
         "type": "interval",
-        "seconds": 21600
+        "minutes": 360
       },
       "deliver": "local",
       "no_agent": true,
@@ -2251,7 +2251,7 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/staleness-monitor.py",
       "schedule": {
         "type": "interval",
-        "interval_seconds": 3600
+        "minutes": 60
       },
       "priority": 1,
       "startup_jitter_seconds": 20,
