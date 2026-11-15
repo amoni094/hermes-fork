@@ -29,7 +29,7 @@ from tools.approval_context import (
     get_current_session_key,
 )
 from tools.approval_detection import (
-    _approval_key_aliases, _check_sudo_stdin_guard, detect_content_rule_keys, detect_dangerous_command,
+    _SCAN_INCOMPLETE_DESCRIPTION, _approval_key_aliases, _check_sudo_stdin_guard, detect_content_rule_keys, detect_dangerous_command,
     detect_hardline_command,
 )
 from tools.approval_floors import (
@@ -655,6 +655,25 @@ def _blocked(message: str, *, pattern_key: str, description: str) -> dict:
     return {"approved": False, "message": message, "pattern_key": pattern_key, "description": description}
 
 
+_SCAN_INCOMPLETE_BLOCK_MESSAGE = (
+    "BLOCKED: this command is too long or complex for the approval guard to read to the end, so "
+    "only a human may approve it, and {why}. Split it into smaller commands the guard can read, "
+    "or ask the user to run it themselves. Do not run it from a file to get around this check."
+)
+
+
+def _scan_incomplete_block(why: str) -> dict:
+    """Refusal for a command the hardline scan could not finish where no human reviews it (YOLO,
+    ``approvals.mode: off``, cron / -q / unattended approve-mode, no prompt surface). Its hardline
+    coverage is only the linear fallback, so nothing but a person may wave it through."""
+    return _blocked(_SCAN_INCOMPLETE_BLOCK_MESSAGE.format(why=why),
+                    pattern_key=_SCAN_INCOMPLETE_DESCRIPTION, description=_SCAN_INCOMPLETE_DESCRIPTION)
+
+
+_NO_REVIEWER_BYPASS = "approvals are bypassed (--yolo, /yolo or approvals.mode: off)"
+_NO_REVIEWER_PRESENT = "no human is present to review it"
+
+
 def _user_approved(session_key: str, description: str) -> dict:
     """A human approval (incl. ESCALATE-then-approve or a smart-DENY owner
     override) resets the consecutive-denial tally."""
@@ -852,6 +871,17 @@ class _GateSpec:
     cli_timeout: str          # {breaker}
     cli_denied: str           # {description}{breaker}
     smart_log: str            # {command}{description}{session_key}
+
+
+_CHOICE_ALIASES = {"approve": "once", "approved": "once", "allow": "once"}
+
+
+def canonical_approval_choice(choice):
+    """Normalize a platform adapter's approval answer onto the canonical vocabulary."""
+    if not isinstance(choice, str):
+        return ""  # a JSON list/object/number is no decision; "" is refused, and hashable for the checks
+    normalized = choice.strip().lower()
+    return _CHOICE_ALIASES.get(normalized, normalized)
 
 
 _STOP_COMMAND = (
