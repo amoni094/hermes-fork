@@ -1530,6 +1530,19 @@ def check_execute_code_guard(code: str, env_type: str, has_host_access: bool = F
     # Built only past the early-return gates so common paths don't copy a potentially-large script into this string.
     command = f"execute_code <<'PY'\n{code}\nPY"
 
+    # Scan-incomplete: script too long for the hardline scanner to finish.  Force
+    # human-only (no smart auto-approve, no session/always persist) the same way
+    # check_dangerous_command does for terminal() commands.
+    unread = hardline_scan_incomplete(command)
+    if unread:
+        return _human_decision(
+            _EXECUTE_CODE_GATE, command=command, description=description, pattern_key=pattern_key,
+            pattern_keys=[pattern_key, _SCAN_INCOMPLETE_DESCRIPTION], session_key=session_key,
+            approval_callback=approval_callback, is_cli=is_cli, is_gateway=is_gateway, is_ask=is_ask,
+            smart=False,
+            pending_body=lambda: f"**Code (too long to fully scan):**\n```python\n{code[:200]}…\n```",
+        )
+
     # Without this, "Approve session" / "Always" choices are stored but never
     # consulted, so every execute_code call re-prompts (#39275).
     if is_approved(session_key, pattern_key):

@@ -635,13 +635,15 @@ def record_missed_occurrences(
     execution_id = uuid.uuid4().hex
     pid = os.getpid()
     with _transaction() as conn:
+        from cron.jobs_error_text import sanitize_persisted_error
+        safe_detail = sanitize_persisted_error(str(detail)) if detail else ""
         conn.execute(
             """INSERT INTO executions
                (id, job_id, source, process_id, pid, process_started_at,
                 status, claimed_at, finished_at, error, scheduled_instant)
                VALUES (?, ?, 'scheduler', ?, ?, ?, 'missed', ?, ?, ?, ?)""",
             (execution_id, str(job_id), _PROCESS_ID, pid, _process_start_time(pid), now, now,
-             f"missed \u00d7{count} ({detail})", canonical_instant(first_instant)),
+             f"missed \u00d7{count} ({safe_detail})", canonical_instant(first_instant)),
         )
         _prune_unlocked(conn)
         record = _fetch(conn, execution_id)
@@ -670,12 +672,17 @@ def recover_receipted_execution(execution_id, job_id, *, success, error=None, de
         ).fetchone()
         started_at = started_row["started_at"] if started_row else None
         duration_s = _compute_duration_s(started_at, now)
-        conn.execute(
+        cur = conn.execute(
             """UPDATE executions SET status=?, finished_at=?, error=?, handoff_pending=0,
                handoff_started_at=NULL, delivery_outcome=?, duration_s=?, generation = generation + 1
                WHERE id=? AND generation=?""",
             ('completed' if success else 'failed', now, detail,
              delivery_outcome, duration_s, execution_id, cas_gen))
+        if cur.rowcount != 1:
+            # Concurrent writer (adopt/terminalize/give_up) already bumped generation;
+            # our recovery update hit 0 rows.  Return None so the caller does not
+            # unlink the receipt journal against a row we did not update.
+            return None
         _prune_unlocked(conn)
         record = _fetch(conn, execution_id)
     _emit_execution_state(record, delivery_outcome=delivery_outcome)
@@ -855,7 +862,7 @@ def terminalize_dead_owner(execution_id: str, *, reason: str) -> bool:
     with _transaction() as conn:
         row = conn.execute(
             """SELECT id, status, process_id, pid, process_started_at,
-                      handoff_pending, handoff_started_at, generation
+                      handoff_pending, handoff_started_at, generation, started_at
                FROM executions WHERE id=?""",
             (execution_id,),
         ).fetchone()
@@ -880,9 +887,11 @@ def terminalize_dead_owner(execution_id: str, *, reason: str) -> bool:
             """UPDATE executions
                SET status='unknown', finished_at=?, error=?,
                    handoff_pending=0, handoff_started_at=NULL,
+                   duration_s=?,
                    generation = generation + 1
                WHERE id=? AND status=? AND process_id=? AND pid=? AND generation=?""",
-            (now, reason, row["id"], row["status"], row["process_id"], row["pid"], cas_gen),
+            (now, reason, _compute_duration_s(row["started_at"], now),
+             row["id"], row["status"], row["process_id"], row["pid"], cas_gen),
         )
         if cur.rowcount != 1:
             return False
@@ -903,13 +912,20 @@ def give_up_execution(execution_id: str, *, reason: str) -> bool:
         stored_gen = _read_generation(conn, str(execution_id))
         if stored_gen is None:
             return False
+        started_row = conn.execute(
+            "SELECT started_at FROM executions WHERE id=?",
+            (str(execution_id),),
+        ).fetchone()
+        started_at = started_row["started_at"] if started_row else None
         cur = conn.execute(
             """UPDATE executions SET status='unknown', finished_at=?, error=?,
                    handoff_pending=0, handoff_started_at=NULL,
+                   duration_s=?,
                    generation = generation + 1
                WHERE id=? AND status IN ('claimed','running') AND process_id=? AND pid=?
                  AND generation=?""",
-            (now, reason, str(execution_id), _PROCESS_ID, os.getpid(), stored_gen))
+            (now, reason, _compute_duration_s(started_at, now),
+             str(execution_id), _PROCESS_ID, os.getpid(), stored_gen))
         if cur.rowcount != 1:
             return False
         record = _fetch(conn, str(execution_id))
