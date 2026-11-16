@@ -1,6 +1,27 @@
 {
   "jobs": [
     {
+      "id": "compliance-label-bridge-0001",
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 5 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/compliance-label-bridge-0001.sh",
+      "no_agent": true,
+      "description": "Join turn-behavior success labels onto compliance scores (before collector 06:00)",
+      "next_run_at": "2026-11-17T05:30:00+11:00",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes"
+      },
+      "profile": "fork",
+      "enabled": true,
+      "state": "scheduled",
+      "timeout_seconds": 1800,
+      "priority": 3,
+      "name": "compliance-label-bridge"
+    },
+    {
       "id": "shadow-gate-0001",
       "schedule": {
         "kind": "cron",
