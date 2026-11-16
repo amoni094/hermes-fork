@@ -25,6 +25,10 @@ _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile 
 
 IMPROVE_GAP = 0.15
 EPS = 1e-15
+# Beta(2,1) after one success has mean 2/3 → "error" 0.33. That is a prior,
+# not BM25 retrieval error. Require real mass before IMPROVEMENT_POSSIBLE.
+MIN_OBS = 5.0          # alpha+beta; skip Laplace / single-success priors
+MIN_INFORMATIVE = 8    # skills with MIN_OBS before error is actionable
 
 
 def _cache_dir() -> Path:
@@ -41,7 +45,7 @@ def _atomic_write_json(path: Path, obj) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(path.suffix + '.tmp')
-        tmp.write_text(json.dumps(obj, indent=2) + '\n')
+        tmp.write_text(json.dumps(obj, indent=2) + '\n', encoding='utf-8')
         os.replace(str(tmp), str(path))
     except Exception:
         try:
@@ -54,7 +58,7 @@ def _atomic_write_json(path: Path, obj) -> None:
 
 def _load_json(path: Path, default):
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, FileNotFoundError, json.JSONDecodeError):
         return default
 
@@ -62,7 +66,7 @@ def _load_json(path: Path, default):
 def _load_jsonl(path: Path) -> list:
     rows = []
     try:
-        for line in path.read_text().splitlines():
+        for line in path.read_text(encoding='utf-8').splitlines():
             line = line.strip()
             if not line:
                 continue
@@ -147,10 +151,16 @@ def estimate_h_s_given_q(index: dict, calib_rows: list, n_skills: int) -> tuple:
     return sum(hs) / len(hs), 'bm25_self_query'
 
 
-def current_error(beta: dict) -> float:
+def current_error(beta: dict, min_obs: float = MIN_OBS) -> tuple:
+    """Return (error, n_informative, n_total).
+
+    error = 1 - mean posterior mean over skills with alpha+beta >= min_obs.
+    Cold-start Beta(2,1) is excluded so Fano does not alarm on priors.
+    """
     if not isinstance(beta, dict) or not beta:
-        return 0.5
+        return 0.5, 0, 0
     means = []
+    n_total = 0
     for v in beta.values():
         if not isinstance(v, dict):
             continue
@@ -159,10 +169,13 @@ def current_error(beta: dict) -> float:
             b = float(v.get('beta', 1.0))
         except (TypeError, ValueError):
             continue
+        n_total += 1
+        if (a + b) < min_obs:
+            continue
         means.append(a / max(a + b, EPS))
     if not means:
-        return 0.5
-    return 1.0 - (sum(means) / len(means))
+        return 0.5, 0, n_total
+    return 1.0 - (sum(means) / len(means)), len(means), n_total
 
 
 def fano_bound(h_s_q: float, n: int) -> float:
@@ -180,8 +193,11 @@ def compute(index: dict, beta: dict, calib_rows: list) -> dict:
     n = max(len(skills), 1)
     h, src = estimate_h_s_given_q(index if isinstance(index, dict) else {}, calib_rows, n)
     lb = fano_bound(h, n)
-    err = current_error(beta if isinstance(beta, dict) else {})
-    if err + 1e-12 < lb:
+    err, n_inf, n_beta = current_error(beta if isinstance(beta, dict) else {})
+    insufficient = n_inf < MIN_INFORMATIVE
+    if insufficient:
+        status = 'OK'
+    elif err + 1e-12 < lb:
         status = 'IMPOSSIBLE'
     elif err > lb + IMPROVE_GAP:
         status = 'IMPROVEMENT_POSSIBLE'
@@ -194,6 +210,9 @@ def compute(index: dict, beta: dict, calib_rows: list) -> dict:
         'H_source': src,
         'fano_lower_bound': round(lb, 6),
         'current_error': round(err, 6),
+        'n_informative': n_inf,
+        'n_beta': n_beta,
+        'insufficient_observations': insufficient,
         'status': status,
         'alarm': status in ('IMPROVEMENT_POSSIBLE', 'IMPOSSIBLE'),  # ADV21-007
         'impossible': status == 'IMPOSSIBLE',
@@ -235,13 +254,24 @@ def self_test() -> dict:
     except Exception as e:
         failures.append(f'status: {e}')
     try:
-        # force IMPROVEMENT_POSSIBLE: low H, high error
-        r = compute({'skills': [{'name': 'only', 'tokens': ['unique']}]},
-                    {'only': {'alpha': 1.0, 'beta': 9.0}}, [])
-        # n=1 bound 0, error 0.9 => IMPROVEMENT_POSSIBLE
+        # force IMPROVEMENT_POSSIBLE: low H, high error, enough observations
+        idx = {'skills': [{'name': f's{i}', 'tokens': [f'uniq{i}']} for i in range(10)]}
+        beta = {f's{i}': {'alpha': 1.0, 'beta': 9.0} for i in range(10)}
+        r = compute(idx, beta, [])
+        # bound ~0, error 0.9, n_informative=10 => IMPROVEMENT_POSSIBLE
         assert r['status'] == 'IMPROVEMENT_POSSIBLE', r
     except Exception as e:
         failures.append(f'improve: {e}')
+    try:
+        # cold-start Beta(2,1) must not raise IMPROVEMENT_POSSIBLE
+        cold = {f's{i}': {'alpha': 2.0, 'beta': 1.0} for i in range(20)}
+        idx = {'skills': [{'name': f's{i}', 'tokens': [f'uniq{i}']} for i in range(20)]}
+        r = compute(idx, cold, [])
+        assert r['insufficient_observations'] is True, r
+        assert r['status'] == 'OK', r
+        assert r['alarm'] is False, r
+    except Exception as e:
+        failures.append(f'coldstart: {e}')
     try:
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)
