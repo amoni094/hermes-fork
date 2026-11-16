@@ -23,14 +23,14 @@ import sqlite3
 import sys
 import uuid
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 CACHE = _hermes_root / 'cache'
 OUT_PATH = CACHE / 'decision_audit_state.json'
 Z_WILSON = 1.96
 CONTRAST_EPS = 0.05
 DET_MAX = 0.10
-SIM_MAX = 0.15
+SIM_MAX = 0.20   # spec: width<0.20 -> resolvable_simulation; width>=0.20 -> structurally_ambiguous
 AMB_MIN = 0.20
 
 
@@ -45,7 +45,7 @@ LIFECYCLE_DB = _true_home(_hermes_base) / 'memory-facts' / 'lifecycle.db'
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _coerce_float(v, default=0.0) -> float:
@@ -209,12 +209,15 @@ def summarize(episodes: list) -> dict:
     det = sum(1 for e in episodes if e['verdict'] == 'resolvable_deterministic')
     sim = sum(1 for e in episodes if e['verdict'] == 'resolvable_simulation')
     amb = sum(1 for e in episodes if e['verdict'] == 'structurally_ambiguous')
+    n = len(episodes)
+    rate = ((det + sim) / n) if n else None
     return {
         'ts': _now(),
-        'n_decisions': len(episodes),
+        'n_decisions': n,
         'resolvable_det': det,
         'resolvable_sim': sim,
         'ambiguous': amb,
+        'decision_audit_resolvability_rate': rate,
         'episodes': [{'episode_id': e['episode_id'], 'verdict': e['verdict'],
                       'interval_width': e['interval_width']} for e in episodes],
     }
@@ -262,7 +265,7 @@ def layer1_demo(rng=None) -> dict:
         channel = [0.0] * n_skills
         channel[0] = 1.0
         rec = {
-            'episode_id': 'det-%02d' % i,
+            'episode_id': f'det-{i:02d}',
             'kind': 'deterministic',
             'observation_channel': channel,
             'value_contrast': 0.90,
@@ -276,7 +279,7 @@ def layer1_demo(rng=None) -> dict:
     for i in range(15):
         channel = multinomial_channel(peaked, 2000, rng)
         rec = {
-            'episode_id': 'sim-%02d' % i,
+            'episode_id': f'sim-{i:02d}',
             'kind': 'simulation',
             'observation_channel': channel,
             'value_contrast': 0.55,
@@ -290,7 +293,7 @@ def layer1_demo(rng=None) -> dict:
     for i in range(15):
         channel = multinomial_channel(uniform, 2000, rng)
         rec = {
-            'episode_id': 'amb-%02d' % i,
+            'episode_id': f'amb-{i:02d}',
             'kind': 'ambiguous',
             'observation_channel': channel,
             'value_contrast': 0.0,
@@ -348,7 +351,7 @@ def _self_test() -> int:
         tmp.unlink(missing_ok=True)
         lp = tmp.with_suffix(tmp.suffix + '.lock')
         lp.unlink(missing_ok=True)
-    print('[delegation-blind-spot-audit] --self-test PASS n=50 det=%s sim=%s amb=%s' % (
+    print('[delegation-blind-spot-audit] --self-test PASS n=50 det={} sim={} amb={}'.format(
         demo['summary']['resolvable_det'], demo['summary']['resolvable_sim'], demo['summary']['ambiguous']))
     return 0
 
@@ -362,7 +365,7 @@ def main() -> int:
         try:
             return _self_test()
         except Exception as exc:
-            print('[delegation-blind-spot-audit] --self-test FAIL: %s' % exc)
+            print(f'[delegation-blind-spot-audit] --self-test FAIL: {exc}')
             return 1
     try:
         state = run_live(OUT_PATH)

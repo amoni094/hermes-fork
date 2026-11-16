@@ -29,7 +29,6 @@ filesystem_policy:
     - /var/home/rainbow/.hermes/profiles/fork/hooks
     - /var/home/rainbow/.hermes/profiles/fork/sessions
     - /var/home/rainbow/.hermes/sessions
-    - /var/home/rainbow/.hermes/profiles/fork/logs
     - /var/home/rainbow/.hermes/profiles/fork/cron
     - /var/home/rainbow/.hermes/profiles/fork/state.db
     - /var/home/rainbow/.hermes/profiles/fork/state.db-wal

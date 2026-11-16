@@ -1727,7 +1727,7 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `compaction-rd-converse.py` | compaction-rd-converse.py — Shannon rate-distortion converse for compaction. | --self-test | cache/context-channel-capacity.json, cache/compaction-rd-converse.json |
 | `concept-lattice-index.py` | concept-lattice-index.py — ContextRAG-style nightly concept lattice over Hindsight facts. | CLI | cache/concept-lattice.json |
 | `conformal-ai-text-screener.py` | Two conformal constructions for AI-text screening. | --self-test | cache/conformal-ai-text-screener.json |
-| `conformal-changepoint-detector.py` | (eval-only) Conformal martingale changepoint on eval scores. | --self-test | cache/conformal-changepoint.json |
+| `conformal-changepoint-detector.py` | Conformal martingale changepoint on turn-behavior vectors + eval scores. | --self-test, --kill-test | cache/conformal-changepoint.json, cache/changepoint-state.json |
 | `consensus-convergence-monitor.py` | consensus-convergence-monitor.py | CLI | cache/consensus-state.json, cache/consensus-alarm.json |
 | `consensus-reward-scorer.py` | consensus-reward-scorer.py | CLI |  |
 | `consistency_scorer.py` | Consistency-sampled calibrated confidence scorer for Hermes. | CLI | cache/calibration-log.json |
@@ -1966,7 +1966,7 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `ripple-mem-expander.py` | ripple-mem-expander.py — RippleMem-inspired associative memory expansion. | CLI | cache/ripple-mem-graph.json |
 | `robust-multiagent-coordinator.py` | Robust multiagent coordinator. | --self-test |  |
 | `robustness-cost-governance-router.py` | robustness-cost-governance-router.py | CLI |  |
-| `rolling-conformal-predictor.py` | Rolling-window conformal prediction; Wasserstein mode absorbed. | --self-test, --mode wasserstein | cache/rolling-conformal-state.json, cache/wasserstein-calibration.json |
+| `rolling-conformal-predictor.py` | Rolling-window conformal prediction; Wasserstein mode absorbed. Bare cron ingests eval scores. | --self-test, --mode wasserstein | cache/rolling-conformal-state.json, cache/wasserstein-calibration.json, cache/rolling-calibration.db |
 | `route-preemption-scheduler.py` | route-preemption-scheduler.py | CLI |  |
 | `routing-alarm-bridge.py` | routing-alarm-bridge.py — promote routing JSON `alarm` flags to *-alarm.json. | --self-test | cache/routing-conflicts.json, cache/routing-conflicts-alarm.json, cache/routing-alarm-bridge.json, cache/skill-descripti |
 | `routing-azuma-concentration.py` | routing-azuma-concentration.py — Azuma-Hoeffding tail on routing regret. | --self-test | cache/routing-regret-log.json, cache/routing-azuma-concentration.json |
@@ -2031,6 +2031,7 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `skill-wiki.py` | skill-wiki.py — WikiSkill pattern: co-evolve agent skills with a persistent wiki. | --text/stdin |  |
 | `skill-yield-tracker.py` | SYNAPSE — Skill Yield Normalization and Adaptive Pruning | --json/stdin |  |
 | `skill_confidence_calibration.py` | Conformal + bagged skill success intervals. | --self-test, --B | cache/skill_confidence_intervals.json, cache/routing-calibrated-posterior.json |
+| `skill-variance-regularization.py` | Rerank skills by empirical CI width (variance regularizer). | --self-test | cache/skill-confidence.json |
 | `skill_prune_audit.py` | skill_prune_audit.py — AutoRefine-inspired skill library health check. | --json/stdin |  |
 | `skillopt_score.py` | skillopt_score.py — SkillOpt-inspired skill quality scorer for Hermes. | CLI |  |
 | `skillspector_guard.py` |  | CLI | cache/skill-integrity.json, cache/skill-merkle.json |

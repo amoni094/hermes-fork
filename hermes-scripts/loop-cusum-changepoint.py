@@ -170,6 +170,15 @@ def run() -> dict:
     if n_seen < 0 or n_seen > len(xs):
         xs_new = xs
         n_after = len(xs)
+    elif n_seen == len(xs) and not state.get('fresh_start'):
+        # ADV-022 rev2: ring is full; xs[n_seen:] is always empty so no new samples
+        # were ever being processed. Correct fix: reset S+/S− to 0, then run CUSUM
+        # over the full ring as a fresh window. This detects mean shifts visible in
+        # the current ring without accumulating old S values (double-count prevention).
+        state['S_pos'] = 0.0
+        state['S_neg'] = 0.0
+        xs_new = xs
+        n_after = len(xs)
     else:
         xs_new = xs[n_seen:]
         n_after = len(xs)
@@ -249,11 +258,11 @@ def self_test() -> int:
     _atomic_write(cal_p, {'h_star': 17.9, 'hit_target': True, 'k': 0.25})
     stale_mtime = time.time() - 80 * 3600
     os.utime(cal_p, (stale_mtime, stale_mtime))
-    h_stale, cal_warn, k_stale = load_h_effective(cal_p)
+    h_stale, cal_warn, _k_stale = load_h_effective(cal_p)
     if h_stale != H_DEFAULT or not cal_warn:
         failures.append('stale calibration must warn and use H_DEFAULT')
     os.utime(cal_p, None)
-    h_fresh, cal_warn_fresh, k_fresh = load_h_effective(cal_p)
+    h_fresh, cal_warn_fresh, _k_fresh = load_h_effective(cal_p)
     if abs(h_fresh - 17.9) > 1e-12 or cal_warn_fresh:
         failures.append('fresh h* should be used without warning')
     h_miss, cal_warn_miss, _k = load_h_effective(td / 'no-cal.json')
@@ -276,7 +285,7 @@ def main(argv=None) -> int:
     out = run()
     print(json.dumps({k: out.get(k) for k in (
         'n', 'alarm', 'alarm_index', 'recommendation', 'output')}))
-    return 1 if out.get('alarm') else 0
+    return 1 if out.get('write_error') else 0  # ADV2-017: alarm is not a process failure
 
 
 if __name__ == '__main__':

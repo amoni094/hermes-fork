@@ -2,6 +2,124 @@
   <img src="assets/banner.png" alt="Hermes Agent" width="100%">
 </p>
 
+# hermes-fork ☤
+
+> **This is a personal fork of [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent).** It tracks upstream and adds a layer of research-driven extensions on top. It is not an official Nous Research product — it's one person's daily driver. If you want the supported version, use the upstream repo.
+
+<p align="center">
+  <a href="https://hermes-agent.nousresearch.com/docs/"><img src="https://img.shields.io/badge/Docs-hermes--agent.nousresearch.com-FFD700?style=for-the-badge" alt="Documentation"></a>
+  <a href="https://discord.gg/NousResearch"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://github.com/NousResearch/hermes-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
+  <a href="https://nousresearch.com"><img src="https://img.shields.io/badge/Built%20by-Nous%20Research-blueviolet?style=for-the-badge" alt="Built by Nous Research"></a>
+</p>
+
+---
+
+## What this fork adds over upstream
+
+Upstream Hermes is already a capable self-improving agent. This fork extends it with a dense layer of academic-theory-grounded additions — primarily around evaluation, cron automation, plugin hardening, compaction quality, and data versioning. All additions live in `hermes-scripts/`, `fork-profile/`, and the plugin system; the core agent loop is not modified.
+
+### Evaluation pipeline
+
+**Compaction quality scoring** — `score-compaction-rouge.py` adds stdlib-only ROUGE-1 and ROUGE-L scoring (no pip deps) on top of the existing Jaccard distortion gate. Runs nightly as a cron job. Outputs:
+- `rouge1_recall` — coverage: fraction of source n-grams preserved in the compaction
+- `rouge1_precision` — fabrication guard: fraction of compaction n-grams that actually appeared in source
+- Alarms at fabrication < 0.3 or coverage < 0.2, appended to `cache/compaction-rouge-scores.jsonl`
+- ROUGE-L via LCS with large-input sampling (inputs >10k tokens sampled from both ends, denominators adjusted to sampled lengths)
+
+**Existing IT-based compaction metrics** — AEP typical-set coverage, chain-rule mutual information, rate-distortion advisor, distortion gate, all running on sub-hourly cron schedules.
+
+**JEV shadow evaluator** — `jev-turn-evaluator` plugin scores every LLM turn asynchronously via a shadow model. Gate promotes policy arms only when `scored_turns >= 20`, `mean_score >= 3.5`, `error_rate < 10%`.
+
+**CUSUM changepoint detection** — `loop-cusum-changepoint.py` with ADV-022 ring-full freeze fix: when `n_seen == len(xs)`, resets S+/S− and re-runs over the full ring rather than processing zero new samples.
+
+**Anytime evaluation** — anytime-eval-feeder, NSPI evaluator, skill Neyman allocation, and campaign-scorer feed a multi-arm eval scorecard updated throughout the day.
+
+### Data versioning (Dolt-inspired)
+
+**PK three-way merge** — `dolt-merge.py` implements Dolt's data merge semantics without Dolt itself:
+- Row-keyed by primary key; different PKs auto-merge; same PK different field → field-level merge; both sides changed same field from base → explicit conflict (not silent last-write-wins)
+- Conflict record: `{pk_val, field, base_val, ours_val, theirs_val}`; resolve via `strategy='ours'|'theirs'`
+- JSON/dict column values: one-level sub-key merge
+- Delete+modify = conflict; delete+unmodified = drop
+- CLI: `dolt-merge.py merge --base B.json --ours O.json --theirs T.json --pk job_id`
+
+**Cell changelog / blame** — `lifecycle-changelog.py` adds `fact_commits` + `fact_changelog` tables to `lifecycle.db` (append-only, never touches existing tables):
+- `new_commit()`, `log_change()`, `get_history()`, `time_travel()`, `blame()`
+- Read operations use `uri=ro` connections — no WAL pragma on read path
+- `time_travel(db, table, pk, as_of_commit)` replays I/U/D ops through commit ancestry
+- `blame(db, table, pk, field)` returns last commit that changed that field
+- Initialized against the canonical shared `~/.hermes/memory-facts/lifecycle.db`
+
+### Plugin hardening
+
+**openshell sandbox** — all cron scripts run inside an openshell policy sandbox. The policy file (`fork-profile/openshell-policy.yaml`) is maintained with clean RO/RW separation: `fork/logs` is write-only (RW), not duplicated in read-only. `HERMES_NO_SANDBOX=1` is explicitly blocked in the cron wrapper as a security boundary — bypass attempts are logged and ignored.
+
+**Governance hard-block** — `governance-hard-block` plugin enforces adversarial policy rules. Settings declared in `config.yaml` under `plugins.entries.governance-hard-block`.
+
+**compaction-gate** — `depth_threshold` and `mdl_min_saving` now explicitly declared in `plugins.entries.compaction-gate.settings` (were silently using hardcoded defaults).
+
+**Plugin wiring audits** — periodic cold adversarial pass covers: py_compile + importlib load of all 23 enabled plugins, VALID_HOOKS alignment, shadow post_llm_call compliance, HERMES_HOME path-doubling, SQLite connect patterns.
+
+### Cron infrastructure
+
+Over 100 cron jobs organized into categories: compaction eval, memory maintenance, skill evaluation, security audits, system updates, and research pipelines. Key additions over upstream:
+
+- **System update** (`daily-silverblue-update.sh`) — per-step timeouts: toolbox DNF (1200s), fwupdmgr (300s), git repos (60s each); flatpak appstream-only errors treated as non-fatal
+- **Skill index rebuild** — weekly rebuild now correctly passes `--build` to `skill-router-index.py` (was silently a no-op)
+- **ROUGE scorer** — nightly at 04:50, reads latest pre/post cache files, appends to `compaction-rouge-scores.jsonl`
+- **lifecycle-db-migrate** — idempotent schema migration, exits 0 on already-populated DB
+
+### Research scripts
+
+`hermes-scripts/` contains ~40 research scripts implementing: anytime algorithms (Zilberstein/Dean-Boddy), CUSUM changepoint detection, conformal prediction, LLM autoscaling, skill routing bandit (wave routing + NSPI), encoding ranking, campaign scoring, two-timescale convergence checks, moment-edge sampling, and skill confidence calibration.
+
+---
+
+## Upstream merge policy
+
+This fork rebases or merges from `NousResearch/hermes-agent` main periodically. Conflicts are resolved in favour of upstream on the core agent loop; fork additions win on scripts and plugins. Merge conflicts are recorded in git history.
+
+**Current base:** See `git log --oneline upstream/main..HEAD` for fork-only commits.
+
+---
+
+## Running this fork
+
+Same as upstream hermes, with the `fork` profile active:
+
+```bash
+hermes-fork          # start CLI on the fork profile
+hermes-fork doctor   # health check
+hermes-fork -z       # fork profile with zero context (fresh session)
+```
+
+The fork profile lives at `~/.hermes/profiles/fork/`. The binary at `~/.local/bin/hermes-fork` pins to the Py3.14 store interpreter (not the venv/bin/hermes 3.11 build — pydantic_core ABI mismatch).
+
+---
+
+## What is NOT different from upstream
+
+- The core agent loop, tool dispatch, and plugin API are unmodified
+- Installation procedure — same as upstream
+- Model provider support — same as upstream
+- MCP integration — same as upstream
+- Messaging gateway — same as upstream
+
+For anything not in this README, the upstream documentation applies: **[hermes-agent.nousresearch.com/docs](https://hermes-agent.nousresearch.com/docs/)**
+
+---
+
+## Original upstream README
+
+Everything below is the original Hermes Agent README.
+
+---
+
+<p align="center">
+  <img src="assets/banner.png" alt="Hermes Agent" width="100%">
+</p>
+
 # Hermes Agent ☤
 <p align="center">
   <a href="https://hermes-agent.nousresearch.com/">Hermes Agent</a> | <a href="https://hermes-agent.nousresearch.com/">Hermes Desktop</a>
@@ -168,20 +286,20 @@ All documentation lives at **[hermes-agent.nousresearch.com/docs](https://hermes
 | Section                                                                                             | What's Covered                                             |
 | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | [Quickstart](https://hermes-agent.nousresearch.com/docs/getting-started/quickstart)                 | Install → setup → first conversation in 2 minutes          |
-| [CLI Usage](https://hermes-agent.nousresearch.com/docs/user-guide/cli)                              | Commands, keybindings, personalities, sessions             |
-| [Configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration)                | Config file, providers, models, all options                |
-| [Messaging Gateway](https://hermes-agent.nousresearch.com/docs/user-guide/messaging)                | Telegram, Discord, Slack, WhatsApp, Signal, Home Assistant |
-| [Security](https://hermes-agent.nousresearch.com/docs/user-guide/security)                          | Command approval, DM pairing, container isolation          |
-| [Tools & Toolsets](https://hermes-agent.nousresearch.com/docs/user-guide/features/tools)            | 40+ tools, toolset system, terminal backends               |
-| [Skills System](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills)              | Procedural memory, Skills Hub, creating skills             |
-| [Memory](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory)                     | Persistent memory, user profiles, best practices           |
-| [MCP Integration](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp)               | Connect any MCP server for extended capabilities           |
-| [Cron Scheduling](https://hermes-agent.nousresearch.com/docs/user-guide/features/cron)              | Scheduled tasks with platform delivery                     |
-| [Context Files](https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files)       | Project context that shapes every conversation             |
-| [Architecture](https://hermes-agent.nousresearch.com/docs/developer-guide/architecture)             | Project structure, agent loop, key classes                 |
-| [Contributing](https://hermes-agent.nousresearch.com/docs/developer-guide/contributing)             | Development setup, PR process, code style                  |
-| [CLI Reference](https://hermes-agent.nousresearch.com/docs/reference/cli-commands)                  | All commands and flags                                     |
-| [Environment Variables](https://hermes-agent.nousresearch.com/docs/reference/environment-variables) | Complete env var reference                                 |
+| [CLI Usage](https://hermes-agent.nousresearch.com/docs/user-guide/cli)                             | Commands, keybindings, personalities, sessions             |
+| [Configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration)               | Config file, providers, models, all options                |
+| [Messaging Gateway](https://hermes-agent.nousresearch.com/docs/user-guide/messaging)               | Telegram, Discord, Slack, WhatsApp, Signal, Home Assistant |
+| [Security](https://hermes-agent.nousresearch.com/docs/user-guide/security)                         | Command approval, DM pairing, container isolation          |
+| [Tools & Toolsets](https://hermes-agent.nousresearch.com/docs/user-guide/features/tools)           | 40+ tools, toolset system, terminal backends               |
+| [Skills System](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills)             | Procedural memory, Skills Hub, creating skills             |
+| [Memory](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory)                    | Persistent memory, user profiles, best practices           |
+| [MCP Integration](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp)              | Connect any MCP server for extended capabilities           |
+| [Cron Scheduling](https://hermes-agent.nousresearch.com/docs/user-guide/features/cron)             | Scheduled tasks with platform delivery                     |
+| [Context Files](https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files)      | Project context that shapes every conversation             |
+| [Architecture](https://hermes-agent.nousresearch.com/docs/developer-guide/architecture)            | Project structure, agent loop, key classes                 |
+| [Contributing](https://hermes-agent.nousresearch.com/docs/developer-guide/contributing)            | Development setup, PR process, code style                  |
+| [CLI Reference](https://hermes-agent.nousresearch.com/docs/reference/cli-commands)                 | All commands and flags                                     |
+| [Environment Variables](https://hermes-agent.nousresearch.com/docs/reference/environment-variables)| Complete env var reference                                 |
 
 ---
 

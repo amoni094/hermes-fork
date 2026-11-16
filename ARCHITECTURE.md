@@ -448,6 +448,7 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `adaptive-context-mesh.py` | adaptive-context-mesh.py | CLI |  |
 | `adaptive-key-leakage-monitor.py` | adaptive-key-leakage-monitor.py | CLI |  |
 | `adaptive-leakage-accumulator.py` | adaptive-leakage-accumulator.py | CLI |  |
+| `adaptive-skill-weighting.py` | KT/xi* mixture of empirical vs prior skill weights | cache/skill-prior.json, routing-events | cache/skill-prior-weights.json |
 | `adversarial-allocation-auditor.py` | adversarial-allocation-auditor.py | CLI |  |
 | `adversarial-robustness-tester.py` | adversarial-robustness-tester.py | CLI |  |
 | `adversarial_quarantine_review.py` | Adversarial review helper for skillspector_guard pending-quarantine proposals. | CLI |  |
@@ -469,6 +470,7 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `bps-skill-selector.py` | bps-skill-selector.py — Best Prefix Selection for budget-aware skill selection. | CLI |  |
 | `browser_act_guard.py` | Browser-act helpers borrowed from browser-use patterns (no nested Agent). | --text/stdin, --json/stdin |  |
 | `callgraph-taint-audit.py` | callgraph-taint-audit.py — Intra-procedural taint tracking (abstract interpretation). | --self-test | cache/callgraph-taint-report.json, cache/out.json |
+| `campaign-scorer.py` | NSPI + signed primal integral campaign ranking | nspi-state, anytime_eval_runs | cache/campaign-metrics.json |
 | `canvas-offload.py` | canvas-offload.py — Mermaid canvas symbolic memory for Hermes sessions. | CLI |  |
 | `cascade-error-budget-allocator.py` | cascade-error-budget-allocator.py | CLI | cache/cascade-allocation.json, cache/cascade-risk.json |
 | `causal-memory-annotator.py` | causal-memory-annotator.py — Pearl causal ladder annotation for memory commits. | --self-test | cache/ue-blackbox-scores.json |
@@ -495,6 +497,7 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `continuity_token.py` | CONTINUITY signed context-token for delegate_task child construction. | CLI |  |
 | `corpus-consolidation-index.py` | corpus-consolidation-index.py — Unify the three Hermes research corpora. | CLI | cache/cs-interpretation-latest.json, cache/math-interpretation-latest.json |
 | `cost-aware-eval-framework.py` | Cost-aware evaluation: success rate minus alpha * normalized cost. | --self-test, --json/stdin | cache/cost-aware-eval.json |
+| `cost-aware-escalation.py` | Cost-aware low-confidence escalation thresholds | calibration-log, skill-latency | cache/escalation-state.json |
 | `cost-cutoff-task-router.py` | cost-cutoff-task-router.py | CLI |  |
 | `cot-injection-detector.py` | cot-injection-detector.py | CLI |  |
 | `counterfactual-context-filter.py` | counterfactual-context-filter.py — Decision-Aware Memory Cards (R3). | --json/stdin |  |
@@ -515,6 +518,7 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `embedding-based-context-compactor.py` | embedding-based-context-compactor.py | CLI |  |
 | `entropy-fidelity-stability-monitor.py` | entropy-fidelity-stability-monitor.py | lifecycle.db | cache/entropy-fidelity-alarm.json |
 | `epistemic-state-tracker.py` | epistemic-state-tracker.py — K/B/C epistemic state table. | --self-test | cache/epistemic-state.json, cache/epistemic-regressions.json, cache/consistency-scores.json |
+| `encoding-ranker.py` | Rank tool/skill encodings by latency and quality | skill-latency.jsonl | cache/encoding-scores.json |
 | `eval-compaction-data-bridge.py` | eval-compaction-data-bridge.py — wire compaction eval output into IT scripts. | --self-test | cache/current-token-count.json |
 | `eval-compaction-distortion-gate.py` | eval-compaction-distortion-gate.py — character-level Jaccard distortion gate. | --self-test |  |
 | `eval-hindsight-ingest.py` | Ingest needle lines into local hindsight-episodes.jsonl. | --self-test | cache/hindsight-episodes.json |
@@ -745,6 +749,7 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `run-header.py` | run-header.py — Content-addressed execution identity for Hermes cron runs | CLI |  |
 | `safety-metric-evaluator.py` | safety-metric-evaluator.py | CLI |  |
 | `save-primer-batch.py` | save-primer-batch.py | CLI |  |
+| `score-compaction-rouge.py` | score-compaction-rouge.py — stdlib-only ROUGE-1 / ROUGE-L compaction scorer. | --self-test | cache/compaction-rouge-scores.jsonl |
 | `se-gos-graphiti-bridge.py` | se-gos-graphiti-bridge.py — SE-GoS Graphiti skill-graph evolution bridge. | CLI |  |
 | `secure-message.py` | secure-message.py — AES-GCM (or XOR+HMAC fallback) message encryption/decryption. | CLI |  |
 | `semantic-triangulation-verifier.py` | semantic-triangulation-verifier.py | CLI | cache/triangulation-log.json |
@@ -762,14 +767,18 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `skill-composition-gf.py` | skill-composition-gf.py — ordinary generating function blow-up of skill DAG walks. | --self-test | cache/concept-lattice.json, cache/skill-router-index.json, cache/skill-composition-gf.json |
 | `skill-dependency-verifier.py` | skill-dependency-verifier.py | CLI |  |
 | `skill-description-entropy.py` | skill-description-entropy.py — character-level entropy of skill descriptions. | --self-test | cache/skill-description-entropy.json |
+| `skill-disagreement-allocation.py` | UCB eval budget by disagreement/coverage | anytime_eval_log, calibration-log | cache/skill-ucb-state.json |
 | `skill-embedding-geometry.py` | skill-embedding-geometry.py — VIL-1 + VIL-4 | CLI |  |
 | `skill-graph-reachability-verifier.py` | skill-graph-reachability-verifier.py | CLI |  |
+| `skill-hierarchical-routing.py` | Coarse-to-fine skill candidates from trajectory | skill-graph.json, routing-events | cache/skill-trajectory-state.json |
+| `skill-imbalance-reweight.py` | Sqrt-IRW rare-skill routing reweight | anytime_eval_log, routing-events | cache/skill-frequency.json, skill-cost-weights.json |
 | `skill-graph-walk.py` | skill-graph-walk.py — Graph-of-Skills dependency traversal for the Hermes skill library. | CLI | cache/provides-taxonomy.json |
 | `skill-gw-compare.py` | skill-gw-compare.py — OT-7 | CLI |  |
 | `skill-integrity-check.py` | skill-integrity-check.py — HMAC-SHA256 integrity baseline for all SKILL.md files. | CLI | cache/skill-integrity.json |
 | `skill-persistent-homology.py` | skill-persistent-homology.py — Persistent homology on the Hermes skill graph. | CLI |  |
 | `skill-ranker.py` | skill-ranker.py | CLI |  |
 | `skill-router-index.py` | skill-router-index.py — SkillRouter pattern: TF-IDF semantic index over Hermes skill descriptions. | --json/stdin, routing-events.jsonl | cache/skill-router-index.json, cache/skill-beta-state.json, cache/routing-events.json |
+| `skill-routing-table.py` | Condition-to-skill table + selection entropy | routing-events.jsonl | cache/routing-conditions.json |
 | `skill-routing-bounds.py` | skill-routing-bounds.py — ROY-9: tail-bounds for skill routing stability. | lifecycle.db | cache/loop-pid-state.json |
 | `skill-stacking.py` | ESL-5: nonnegative stacking weights on LOO skill predictions. | CLI |  |
 | `skill-state.py` | skill-state.py — SKILL.state runtime: mutable execution state for long-horizon skills. | CLI |  |
@@ -1066,6 +1075,7 @@ Runpy two-tier wrappers delegate to `hermes-scripts/<name>.py` when present. Wra
 | `routing-weight-updater.py` | routing-weight-updater.py — FTRL routing weight feedback loop closure. | wrapper-only |
 | `run-header.py` | run-header.py — Content-addressed execution identity for Hermes cron runs | wrapper+canonical |
 | `safety-metric-evaluator.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
+| `score-compaction-rouge.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `se-gos-graphiti-bridge.py` | Thin wrapper: SE-GoS lives in the skill scripts/ dir (host scripts/ is root-owned). | runpy-wrapper |
 | `semantic-early-stopping.py` | Convergence detector for iterative LLM agent loops. | wrapper-only |
 | `session-gc-probe.py` | Data collection hook for Self-GC retry. | wrapper-only |
