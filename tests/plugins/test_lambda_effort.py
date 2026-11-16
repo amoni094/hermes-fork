@@ -81,8 +81,20 @@ def _register(plugin) -> tuple[_FakeCtx, object]:
     return ctx, hook
 
 
+def _patch_scorer(monkeypatch, plugin, score_fn):
+    """Patch _get_scorer so every per-session scorer returns a fixed score."""
+    from types import SimpleNamespace
+    fake = SimpleNamespace(
+        score=score_fn,
+        update_recent=lambda text: None,
+        get_ema=lambda default=0.0: score_fn(""),
+    )
+    monkeypatch.setattr(plugin, "_get_scorer", lambda sid: fake)
+    return fake
+
+
 def test_greeter_maps_to_low(plugin, monkeypatch):
-    monkeypatch.setattr(plugin.DEFAULT_SCORER, "score", lambda text: 0.9)
+    _patch_scorer(monkeypatch, plugin, lambda text: 0.9)
     ctx, hook = _register(plugin)
     hook(session_id="greet-1", user_message="thanks")
     assert ctx.efforts[-1] == "low"
@@ -92,7 +104,7 @@ def test_greeter_maps_to_low(plugin, monkeypatch):
 
 
 def test_high_complexity_maps_to_xhigh_research(plugin, monkeypatch):
-    monkeypatch.setattr(plugin.DEFAULT_SCORER, "score", lambda text: 0.62)
+    _patch_scorer(monkeypatch, plugin, lambda text: 0.62)
     ctx, hook = _register(plugin)
     hook(
         session_id="research-1",
@@ -105,7 +117,18 @@ def test_ema_smoothing_prevents_thrash(plugin, monkeypatch):
     def fake_score(text: str) -> float:
         return 0.05 if "SPIKE" in text else 0.65
 
-    monkeypatch.setattr(plugin.DEFAULT_SCORER, "score", fake_score)
+    fake = _patch_scorer(monkeypatch, plugin, fake_score)
+    # EMA test: the hook reads _get_scorer(sid).get_ema(); patch get_ema with per-call state
+    calls: list[float] = []
+
+    def _dynamic_score(text: str) -> float:
+        v = fake_score(text)
+        calls.append(v)
+        return v
+
+    fake.score = _dynamic_score
+    fake.get_ema = lambda default=0.0: (sum(calls[-3:]) / max(len(calls[-3:]), 1)) if calls else default
+
     ctx, hook = _register(plugin)
     sid = "ema-1"
     hook(session_id=sid, user_message="please analyze this multi-step constraint then continue")
@@ -116,14 +139,14 @@ def test_ema_smoothing_prevents_thrash(plugin, monkeypatch):
 
 
 def test_code_session_no_bias(plugin, monkeypatch):
-    monkeypatch.setattr(plugin.DEFAULT_SCORER, "score", lambda text: 0.62)
+    _patch_scorer(monkeypatch, plugin, lambda text: 0.62)
     ctx, hook = _register(plugin)
     hook(session_id="code-1", user_message="fix the bug in the failing test")
     assert ctx.efforts[-1] == "high"
 
 
 def test_predicates_turn_complexity_score(plugin, monkeypatch):
-    monkeypatch.setattr(plugin.DEFAULT_SCORER, "score", lambda text: 0.42)
+    _patch_scorer(monkeypatch, plugin, lambda text: 0.42)
     ctx, hook = _register(plugin)
     hook(session_id="pred-1", user_message="what is the capital of France?")
     assert plugin.predicates.turn_complexity_score(ctx) == pytest.approx(0.42)
@@ -162,8 +185,8 @@ class _FakeCompressor:
 
 def test_high_complexity_overlay_survives_next_turn(plugin, monkeypatch):
     """Counterfactual: without overlay reapply, turn 2 resets protect_last_n to 28."""
-    monkeypatch.setattr(plugin.DEFAULT_SCORER, "score", lambda text: 0.85)
-    ctx, hook = _register(plugin)
+    _patch_scorer(monkeypatch, plugin, lambda text: 0.85)
+    _ctx, hook = _register(plugin)
     compressor = _FakeCompressor()
     agent = SimpleNamespace(context_compressor=compressor)
     hook(
@@ -182,7 +205,7 @@ def test_high_complexity_overlay_survives_next_turn(plugin, monkeypatch):
 
 def test_disabled_prune_stays_disabled_on_low_complexity(plugin, monkeypatch):
     """Totality: prune_tokens=0 must not be turned on by the low-complexity overlay."""
-    monkeypatch.setattr(plugin.DEFAULT_SCORER, "score", lambda text: 0.1)
+    _patch_scorer(monkeypatch, plugin, lambda text: 0.1)
 
     class _NoProfileCompressor(_FakeCompressor):
         def set_compression_profile(self, profile, **kwargs):
@@ -190,7 +213,7 @@ def test_disabled_prune_stays_disabled_on_low_complexity(plugin, monkeypatch):
             if isinstance(profile, dict) and "proactive_prune_tokens" in profile:
                 self.proactive_prune_tokens = int(profile["proactive_prune_tokens"])
 
-    ctx, hook = _register(plugin)
+    _ctx, hook = _register(plugin)
     compressor = _NoProfileCompressor()
     compressor.proactive_prune_tokens = 0
     agent = SimpleNamespace(context_compressor=compressor)
