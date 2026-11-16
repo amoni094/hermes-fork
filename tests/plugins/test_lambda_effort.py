@@ -223,3 +223,14 @@ def test_disabled_prune_stays_disabled_on_low_complexity(plugin, monkeypatch):
         agent=agent,
     )
     assert compressor.proactive_prune_tokens == 0
+
+
+def test_transform_tool_result_skips_unclassified_and_code(plugin):
+    """Unclassified and code sessions must not telegraphic-compress tool output."""
+    ctx = _FakeCtx()
+    plugin.register(ctx)
+    hook = ctx.hooks["transform_tool_result"][0]
+    blob = "stack trace:\n" + ("x" * 4000)
+    assert hook(result=blob, session_id="unknown-sid") == blob
+    plugin._fired["code-sid"] = {"type": "code", "confidence": 0.9}
+    assert hook(result=blob, session_id="code-sid") == blob
