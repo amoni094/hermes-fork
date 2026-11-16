@@ -59,7 +59,7 @@ def _atomic_write_json(path: Path, obj) -> None:
 
 def _load_json(path: Path, default):
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, FileNotFoundError, json.JSONDecodeError):
         return default
 

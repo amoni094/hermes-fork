@@ -56,7 +56,7 @@ def _atomic_write_json(path: Path, obj) -> None:
 
 def _load_json(path: Path, default):
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, FileNotFoundError, json.JSONDecodeError):
         return default
 
@@ -67,7 +67,7 @@ def _kl_categorical(q: list, p: list) -> float:
     for qi, pi in zip(q, p):
         if qi <= 0.0:
             continue
-        denom = pi if pi > EPS else EPS
+        denom = max(EPS, pi)
         kl += qi * math.log(qi / denom)
     return max(0.0, kl)
 

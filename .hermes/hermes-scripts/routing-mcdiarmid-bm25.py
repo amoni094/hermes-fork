@@ -54,7 +54,7 @@ def _atomic_write_json(path: Path, obj) -> None:
 
 def _load_json(path: Path, default):
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, FileNotFoundError, json.JSONDecodeError):
         return default
 
@@ -107,7 +107,7 @@ def compute(index):
     # Cosine BM25+ is 1-Lipschitz in a single query-token coordinate
     # up to ~2/sqrt(avgdl). Use typical query length, not n_skills.
     avgdl = max(1.0, sum(len(v) for v in token_map.values()) / n)
-    n_query = max(8, min(24, int(round(avgdl))))
+    n_query = max(8, min(24, round(avgdl)))
     c = 2.0 / math.sqrt(avgdl)
     rad = mcdiarmid_radius(n_query, c=c)
     alarm = gap < rad
