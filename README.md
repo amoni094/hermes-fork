@@ -123,6 +123,42 @@ Around 50 scheduled scripts maintain the health of the memory stores — detecti
 
 ---
 
+## Cognitive science foundations
+
+Several parts of the fork's memory and scheduling behaviour are grounded in specific cognitive science models. These are not theoretical decoration — each model is actively wired into how the agent stores, retrieves, and schedules work.
+
+### How memories compete and fade
+
+The fork models memory retrieval using two interlocking ideas from cognitive science.
+
+The first is that memories have **strength** that decays over time and is restored when a memory is used. A fact that hasn't been retrieved in weeks is weaker than one retrieved yesterday. When two memories are relevant to the same question, the stronger one wins — but its win also slightly suppresses the weaker one. This is not just passive competition: the suppression is active, meaning the stronger memory actively reduces the other's chances of being recalled next time.
+
+The second is about what this means for the memory stores. If the agent always retrieves the same recent facts, the older ones it never retrieves get progressively harder to reach — not because they're gone, but because they've been repeatedly passed over in favour of stronger competitors. The background maintenance jobs partially counteract this by periodically touching under-accessed memories to prevent them from fading entirely.
+
+In practice: the memory stores track a strength score per fact. A background job applies exponential decay to all facts on a schedule, and resets the score upward whenever a fact is retrieved. A second background job tracks pairs of facts that compete on the same topic and applies a small suppression penalty to the loser each time the winner is recalled.
+
+### Reminders are protected from pruning
+
+The fork makes a special exception for one category of memory: intended actions. When a fact contains a reminder or a pending task — something the agent is supposed to do in the future — it is protected from being pruned or down-ranked by the suppression mechanism above.
+
+This matters because the normal rules (decay, competition, recency bias) would otherwise make it possible for a reminder to get quietly crowded out by more recently active memories. The fork explicitly checks for reminder-style facts before applying suppression and pruning, and injects them before other retrieved facts regardless of their retrieval score.
+
+### Memory that matters for decisions
+
+When the agent has to decide what to keep under a memory budget, it prioritises facts that would change what action it takes next — not facts that are merely interesting or well-summarised. Two histories that would lead to the same next action can safely share the same compressed memory state. Two histories that would lead to different actions cannot.
+
+This principle — called decision-centric compression — guides what the memory pruner keeps when it has to discard something. Description is the first to go. Tool outputs, identifiers, paths, constraints, and outcomes that split possible actions are the last.
+
+### Scheduling that knows when to stop
+
+Background jobs don't all need to run to completion to be useful. The fork models each scheduled job as producing increasing quality over time, with diminishing returns: running for twice as long yields less than twice the improvement. Each job tracks a quality score that reflects how fresh and complete its last output was.
+
+The scheduler uses this score to decide whether to re-run a job or use its cached output. If the quality score is high enough and the job ran recently enough, it skips re-running. Under load, it prioritises jobs with the lowest quality scores — the ones that have degraded the most since they last ran.
+
+Each job also follows a checkpoint pattern: it writes partial results before doing expensive work, so that if it's interrupted it has already produced something useful rather than nothing.
+
+---
+
 ## Skill routing
 
 There are two completely separate routing layers: one that fires every turn (the nudge plugin), and a large set of background scripts that maintain an offline model.
