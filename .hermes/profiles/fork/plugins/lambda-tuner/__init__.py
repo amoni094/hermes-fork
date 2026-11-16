@@ -1144,6 +1144,14 @@ def register(ctx: Any) -> None:
         try:
             if not isinstance(result, str):
                 return result
+            # why: code/debug sessions need diffs, stack traces, and terminal output intact.
+            # Only apply telegraphic pre-compression in research/mixed sessions where the
+            # tool result is likely web content, not code output. Fail-open: if session_id
+            # is unknown (not yet classified), skip compression rather than guess.
+            from .predicates import session_type as _session_type_pred
+            stype = _session_type_pred(session_id)
+            if stype == "code":
+                return result
             from .complexity import _DEFAULT_TELEGRAPHIC
             if _DEFAULT_TELEGRAPHIC.should_compress("tool", result):
                 return _DEFAULT_TELEGRAPHIC.compress(result)
