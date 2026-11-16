@@ -478,6 +478,8 @@ The fork profile lives at `~/.hermes/profiles/fork/`. The binary at `~/.local/bi
 
 - Installation procedure, model provider support, MCP integration, messaging gateway, TUI/CLI interface
 
+The core conversation loop logic (turn sequencing, tool dispatch, compaction triggers) is intact. Where agent core files are modified it's for one of three reasons: bug fixes from adversarial passes (e.g. simplified timeout handling in `tool_executor.py`), small wiring additions required for fork plugins (e.g. forwarding the `agent` object to `on_session_start`), or one substantive hot-path addition in `tool_guardrails.py` where a governance pre-check fires on high-risk tool calls (`write_file`, `patch`, `terminal`, `execute_code`) that target critical paths. The fork does not replace or rewrite the loop itself.
+
 For anything not covered here: **[hermes-agent.nousresearch.com/docs](https://hermes-agent.nousresearch.com/docs/)**
 
 ---
