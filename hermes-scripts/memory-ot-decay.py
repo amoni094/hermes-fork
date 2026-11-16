@@ -84,6 +84,14 @@ def load_entries() -> list[dict]:
                         continue
                     if not isinstance(row, dict):
                         continue
+                    if row.get("calibration_exclude"):
+                        continue
+                    reason = str(row.get("reason") or "")
+                    if "empty_query" in reason or reason in (
+                        "empty_query_or_response",
+                        "no_ue_scores_fail_closed",
+                    ):
+                        continue
                     imp = row.get("composite_ue")
                     if imp is None:
                         imp = row.get("ue_score", row.get("ue", 0.0))
@@ -91,6 +99,8 @@ def load_entries() -> list[dict]:
                     ue = _clip01(imp)
                     importance = 1.0 - ue
                     eid = str(row.get("query_hash") or row.get("entry_id") or f"{name}:{i}")
+                    if eid == "e3b0c44298fc1c14":  # sha256("")[:16] — empty cue
+                        continue
                     entries.append({"entry_id": eid, "importance": importance, "ue": ue})
         except Exception:
             continue

@@ -103,6 +103,9 @@ def load_channel() -> dict:
 def compute(h_xy: float | None = None, alphabet: int | None = None) -> dict:
     try:
         ch = load_channel()
+        if alphabet is None:
+            alphabet = 256
+        logA = math.log2(max(int(alphabet), 2))
         if h_xy is None:
             if "h_x_given_y" in ch:
                 h_xy_total = float(ch["h_x_given_y"])
@@ -119,8 +122,10 @@ def compute(h_xy: float | None = None, alphabet: int | None = None) -> dict:
                 # ADV21-001: normalize to bits/byte so Fano with |A|=256 is well-formed
                 n_bytes = max(1, int(ch.get("n_pre_bytes") or (h_pre_total / 8.0) or 1))
                 h_xy = h_xy_total / n_bytes
-        if alphabet is None:
-            alphabet = 256
+        # Guard: leftover total-bit values (H(X|Y) cannot exceed log|A| nats/symbol).
+        if float(h_xy) > logA + 1.0:
+            n_bytes = max(1, int(ch.get("n_pre_bytes") or (float(h_xy) / logA) or 1))
+            h_xy = float(h_xy) / n_bytes
         rec = fano_pe_lower(float(h_xy), int(alphabet))
         rec["ts"] = time.time()
         rec["source"] = "context-channel-capacity" if ch else "cli"

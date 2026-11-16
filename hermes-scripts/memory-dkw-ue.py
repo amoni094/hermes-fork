@@ -95,6 +95,30 @@ def dkw_test(samples: list, alpha: float = ALPHA) -> dict:
     }
 
 
+_CALIB_SKIP_REASONS = frozenset({
+    'empty_query_or_response',
+    'no_ue_scores_fail_closed',
+    'unhandled',
+})
+
+
+def _ue_calibration_sample(row: dict):
+    """Return clipped UE or None if the row is a deny-audit, not a score."""
+    if not isinstance(row, dict):
+        return None
+    if row.get('calibration_exclude'):
+        return None
+    reason = str(row.get('reason') or '')
+    if reason in _CALIB_SKIP_REASONS or 'empty_query' in reason:
+        return None
+    if int(row.get('content_len') or 0) == 0 and _clip01(row.get('composite_ue')) >= 0.99:
+        return None
+    v = row.get('composite_ue')
+    if v is None:
+        return None
+    return _clip01(v)
+
+
 def load_ue() -> list:
     out = []
     cache = _cache_dir()
@@ -111,8 +135,9 @@ def load_ue() -> list:
                     row = json.loads(s)
                 except Exception:
                     continue
-                if isinstance(row, dict) and row.get('composite_ue') is not None:
-                    out.append(_clip01(row.get('composite_ue')))
+                sample = _ue_calibration_sample(row)
+                if sample is not None:
+                    out.append(sample)
         except Exception:
             continue
         if out:
@@ -142,6 +167,8 @@ def self_test() -> int:
     assert empty['n'] == 0
     # Massart: eps decreases in n
     assert dkw_eps(100) < dkw_eps(10)
+    assert _ue_calibration_sample({'composite_ue': 1.0, 'reason': 'empty_query_or_response', 'content_len': 0}) is None
+    assert _ue_calibration_sample({'composite_ue': 0.3}) == 0.3
     print('PASS memory-dkw-ue self-test')
     return 0
 
