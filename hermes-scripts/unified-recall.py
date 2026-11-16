@@ -511,9 +511,9 @@ def log_recall_query(query, sources_used, query_type):
         }
         log_path.parent.mkdir(parents=True, exist_ok=True)
         _log_lock = log_path.with_suffix(".lock")
-        with open(_log_lock, "w") as _lf:
+        with open(_log_lock, "w", encoding="utf-8") as _lf:
             fcntl.flock(_lf, fcntl.LOCK_EX)
-            with open(log_path, "a") as f:
+            with open(log_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry) + "\n")
     except Exception:
         pass
@@ -689,8 +689,7 @@ def fuse_results(
             if isinstance(_created, (int, float)):
                 _age_days = (_now - float(_created)) / 86400.0
             elif _created:
-                from datetime import datetime, timezone as _tz
-                _ts = datetime.fromisoformat(_created.replace("Z", "+00:00")).timestamp()
+                _ts = datetime.fromisoformat(_created).timestamp()
                 _age_days = (_now - _ts) / 86400.0
             else:
                 _age_days = 30.0
@@ -814,6 +813,119 @@ def apply_turn_distance_rdm(
     return sorted(fused, key=lambda x: x.get("rrf_score", 0.0), reverse=True)
 
 
+_QUERY_STOP = frozenset({
+    "the", "a", "an", "of", "and", "or", "to", "in", "for", "on", "with",
+    "is", "be", "as", "at", "by", "from", "this", "that", "it",
+})
+
+
+def expand_queries(query: str) -> list[str]:
+    """Lexical query expansion to raise I(query; memory) (Fano / SAM cues)."""
+    q = (query or "").strip()
+    if not q:
+        return []
+    out = [q]
+    alt = re.sub(r"[-_/]+", " ", q)
+    if alt != q:
+        out.append(alt)
+    toks = [t for t in re.findall(r"[a-z0-9]{3,}", q.lower()) if t not in _QUERY_STOP]
+    if len(toks) >= 2:
+        joined = " ".join(toks)
+        if joined not in {x.lower() for x in out}:
+            out.append(joined)
+    seen: set[str] = set()
+    dedup: list[str] = []
+    for item in out:
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        dedup.append(item)
+    return dedup[:3]
+
+
+def apply_sam_rif_correction(fused: list[dict]) -> list[dict]:
+    """SAM recall + Anderson RIF + inverse-propensity recency correction.
+
+    Recency-biased access (DKW/Sanov) under-retrieves older traces. Boost by
+    relative age. RIF: high access_count inhibits competitors — down-weight
+    frequently retrieved items so suppressed traces can surface.
+    """
+    if not fused:
+        return fused
+    ages = [float(it.get("_age_days") or 0.0) for it in fused]
+    max_age = max(ages) if ages else 1.0
+    accesses = [float(it.get("_access_count") or 0.0) for it in fused]
+    mean_acc = (sum(accesses) / len(accesses)) if accesses else 0.0
+    strengths: list[float] = []
+    for it, age, acc in zip(fused, ages, accesses):
+        overlap = float(it.get("rrf_score") or it.get("enriched_weight") or 0.0)
+        age_boost = 1.0 + 0.35 * (age / max_age if max_age > 0 else 0.0)
+        rif = 1.0 / (1.0 + 0.15 * max(0.0, acc - mean_acc))
+        s = max(1e-9, overlap * age_boost * rif)
+        it["_sam_strength"] = round(s, 6)
+        strengths.append(s)
+    peak = max(strengths) if strengths else 1.0
+    for it, s in zip(fused, strengths):
+        base = float(it.get("enriched_weight") or it.get("rrf_score") or 0.0)
+        it["enriched_weight"] = round(base * (0.7 + 0.3 * (s / peak)), 4)
+    return sorted(fused, key=lambda x: x.get("enriched_weight", 0), reverse=True)
+
+
+def apply_experience_rerank(fused: list[dict], query: str) -> list[dict]:
+    """Experience-amortized additive correction (Deng et al. arXiv:2608.22767)."""
+    if not fused or not query:
+        return fused
+    log_path = _hermes_root() / "cache" / "recall-feedback.jsonl"
+    if not log_path.exists():
+        return fused
+    cluster = hashlib.md5(query.lower().strip().encode("utf-8")).hexdigest()[:4]
+    deltas: dict[str, float] = {}
+    n_cluster = 0
+    try:
+        for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-5000:]:
+            s = line.strip()
+            if not s.startswith("{"):
+                continue
+            try:
+                row = json.loads(s)
+            except Exception:
+                continue
+            if not isinstance(row, dict) or row.get("cluster") != cluster:
+                continue
+            n_cluster += 1
+            cid = str(row.get("candidate_id") or "")
+            if cid:
+                deltas[cid] = deltas.get(cid, 0.0) + float(row.get("delta") or 0.0)
+    except Exception:
+        return fused
+    if n_cluster <= 0 or not deltas:
+        return fused
+    alpha = 0.1
+    for it in fused:
+        cid = str(it.get("id") or it.get("memory_id") or "")
+        if not cid:
+            continue
+        it["enriched_weight"] = round(
+            float(it.get("enriched_weight") or it.get("rrf_score") or 0.0)
+            + alpha * deltas.get(cid, 0.0) / n_cluster,
+            4,
+        )
+    return sorted(fused, key=lambda x: x.get("enriched_weight", 0), reverse=True)
+
+
+def _dedup_search_results(results: list[dict]) -> list[dict]:
+    seen: set[str] = set()
+    out: list[dict] = []
+    for item in results:
+        key = _md5(item.get("text") or "")
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Promote: expand specific L0 results to L2
 # ---------------------------------------------------------------------------
@@ -860,8 +972,23 @@ def recall(
     """
     # Normalize to set to avoid string-membership footgun (e.g. sources="hindsight")
     source_set = set(sources) if not isinstance(sources, str) else {sources}
-    h_results, h_err = hindsight_search(query, limit=top * 2) if "hindsight" in source_set else ([], False)
-    g_results, g_err = graphiti_search(query, limit=top * 2) if "graphiti" in source_set else ([], False)
+    queries = expand_queries(query) or [query]
+    h_results: list[dict] = []
+    g_results: list[dict] = []
+    h_err = False
+    g_err = False
+    if "hindsight" in source_set:
+        for q in queries:
+            h, e = hindsight_search(q, limit=top * 2)
+            h_results.extend(h)
+            h_err = h_err or e
+        h_results = _dedup_search_results(h_results)
+    if "graphiti" in source_set:
+        for q in queries:
+            g, e = graphiti_search(q, limit=top * 2)
+            g_results.extend(g)
+            g_err = g_err or e
+        g_results = _dedup_search_results(g_results)
     pending = search_pending_activefacts(query)
 
     if not h_results and not g_results and not pending:
@@ -869,7 +996,10 @@ def recall(
             raise RuntimeError("Both memory backends failed — services may be down.")
         return []
 
-    fused = fuse_results(h_results + pending, g_results, query, top=top, min_score=min_score)
+    fused = fuse_results(h_results + pending, g_results, query, top=max(top * 2, top), min_score=min_score)
+    fused = apply_sam_rif_correction(fused)
+    fused = apply_experience_rerank(fused, query)
+    fused = fused[:top]
     # Overlay local JSONL only when Hindsight is not in the retrieval chain (ADV-008).
     if "hindsight" not in source_set:
         fused = _overlay_local_fallback(query, fused, top)
@@ -1011,7 +1141,7 @@ def record_query_access(fused: list[dict]) -> None:
                         (key + "%",),
                     ).fetchone()
                     if row and row[0]:
-                        t0 = datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
+                        t0 = datetime.fromisoformat(str(row[0]))
                         gap = (datetime.now(UTC) - t0).total_seconds() / 86400.0
                         item["gen_gap_days"] = round(gap, 2)
                         item["vc"] = item.get("vc") or row[1]
@@ -1260,6 +1390,14 @@ def property_mcdiarmid(n: int = 12, trials: int = 40, seed: int = 0) -> dict:
 def main():
     if "--self-test" in sys.argv:
         r = property_mcdiarmid()
+        eq = expand_queries("memory-retrieval over write")
+        assert eq and eq[0] == "memory-retrieval over write"
+        assert any("memory retrieval" in x.lower() for x in eq)
+        ranked = apply_sam_rif_correction([
+            {"text": "old", "rrf_score": 0.5, "enriched_weight": 0.5, "_age_days": 90.0, "_access_count": 1},
+            {"text": "hot", "rrf_score": 0.5, "enriched_weight": 0.5, "_age_days": 1.0, "_access_count": 20},
+        ])
+        assert ranked[0]["text"] == "old"
         print(("PASS" if r["ok"] else "FAIL") + " unified-recall mcdiarmid " + json.dumps(r))
         sys.exit(0 if r["ok"] else 1)
     p = argparse.ArgumentParser(

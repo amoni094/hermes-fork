@@ -39,8 +39,12 @@ from pathlib import Path
 HOME         = Path.home()
 _hermes_home = Path(os.environ.get("HERMES_HOME", str(HOME / ".hermes")))
 _profile     = os.environ.get("HERMES_PROFILE", "fork")
-SESSIONS_DIR = _hermes_home / "profiles" / _profile / "sessions"
-CACHE_DIR    = _hermes_home / "cache" / "monitors"
+if _profile and "profiles" not in str(_hermes_home):
+    _root = _hermes_home / "profiles" / _profile
+else:
+    _root = _hermes_home
+SESSIONS_DIR = _root / "sessions"
+CACHE_DIR    = _root / "cache" / "monitors"
 # CACHE_DIR.mkdir deferred to run() to avoid side-effects at import time
 LEDGER_FILE  = CACHE_DIR / "experience-ledger.json"
 OUT_FILE     = CACHE_DIR / "experience-verification-report.json"
@@ -62,16 +66,38 @@ def fingerprint(text: str) -> dict:
     return {"hash": h, "sig": sig, "len": len(text)}
 
 
+def _append_outcome(outcomes: list[dict], session_stem: str, tool: str, call_id: str, args: str, result_text: str) -> None:
+    fp = fingerprint(str(result_text or ""))
+    outcomes.append({
+        "session": session_stem,
+        "tool": tool or "unknown",
+        "call_id": call_id or "",
+        "args": (args or "")[:200],
+        "fingerprint": fp,
+        "ts": datetime.now(UTC).isoformat(),
+    })
+
+
 def _extract_outcomes(session_path: Path) -> list[dict]:
-    """Extract tool call + result pairs from JSONL session."""
-    outcomes = []
-    lines = session_path.read_text().splitlines()
+    """Extract tool call + result pairs from JSONL session.
+
+    Supports Anthropic api_content blocks and Hermes role=tool JSONL.
+    """
+    outcomes: list[dict] = []
+    lines = session_path.read_text(encoding="utf-8", errors="replace").splitlines()
     pending_tool: dict | None = None
+    pending_by_id: dict[str, dict] = {}
+    stem = session_path.stem
 
     for line in lines:
         try:
             ev = json.loads(line)
-            content = ev.get("api_content", ev.get("content", ""))
+        except Exception:
+            continue
+        try:
+            content = ev.get("api_content")
+            if content is None:
+                content = ev.get("content", "")
 
             if isinstance(content, list):
                 for block in content:
@@ -83,24 +109,51 @@ def _extract_outcomes(session_path: Path) -> list[dict]:
                             "call_id": block.get("id", ""),
                             "args":    str(block.get("input", ""))[:200],
                         }
-                    elif block.get("type") == "tool_result" and pending_tool:
+                    elif block.get("type") == "tool_result" and pending_tool is not None:
                         result_content = block.get("content", "")
                         if isinstance(result_content, list):
                             result_content = " ".join(
                                 b.get("text", "") for b in result_content
                                 if isinstance(b, dict)
                             )
-                        result_text = str(result_content)
-                        fp = fingerprint(result_text)
-                        outcomes.append({
-                            "session":  session_path.stem,
-                            "tool":     pending_tool["tool"],
-                            "call_id":  pending_tool["call_id"],
-                            "args":     pending_tool["args"],
-                            "fingerprint": fp,
-                            "ts":       datetime.now(UTC).isoformat(),
-                        })
+                        pt = pending_tool
+                        _append_outcome(
+                            outcomes, stem,
+                            str(pt.get("tool", "unknown")),
+                            str(pt.get("call_id", "")),
+                            str(pt.get("args", "")),
+                            str(result_content),
+                        )
                         pending_tool = None
+                continue
+
+            role = ev.get("role")
+            if role == "assistant":
+                tcs = ev.get("tool_calls") or []
+                if isinstance(tcs, list):
+                    for tc in tcs:
+                        if not isinstance(tc, dict):
+                            continue
+                        raw_fn = tc.get("function")
+                        fn = raw_fn if isinstance(raw_fn, dict) else {}
+                        cid = str(tc.get("id") or tc.get("call_id") or "")
+                        pending_by_id[cid] = {
+                            "tool": str(fn.get("name") or tc.get("name") or "unknown"),
+                            "call_id": cid,
+                            "args": str(fn.get("arguments") or tc.get("arguments") or "")[:200],
+                        }
+            elif role == "tool":
+                cid = str(ev.get("tool_call_id") or "")
+                meta = pending_by_id.pop(cid, None) or {
+                    "tool": ev.get("tool_name") or "unknown",
+                    "call_id": cid,
+                    "args": "",
+                }
+                result_text = content if isinstance(content, str) else str(content or "")
+                _append_outcome(
+                    outcomes, stem, meta["tool"], meta["call_id"] or cid,
+                    meta["args"], result_text,
+                )
         except Exception:
             pass
 
