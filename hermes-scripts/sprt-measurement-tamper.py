@@ -83,7 +83,8 @@ def detect(
         if var < 0.001 and abs(mean - H1) < 0.05:
             flags.append('collapsed_at_h1')
     # W24-ADV-006: identically-zero uses sampled turns only (errors/error/had_error present)
-    if n_sampled >= 8 and n_zero_sampled == n_sampled:
+    # and requires actual numeric scores (None-scored rows are not zero-error evidence).
+    if len(scores) >= 8 and n_sampled >= 8 and n_zero_sampled == n_sampled:
         flags.append('identically_zero_error_rate')
     return {
         'n_scores': len(scores),
@@ -148,6 +149,10 @@ def _load_scores() -> tuple[list[float], int, int, int, int]:
             except json.JSONDecodeError:
                 continue
             if not isinstance(obj, dict):
+                continue
+            scores_dict = obj.get('scores')
+            if isinstance(scores_dict, dict) and all(v is None for v in scores_dict.values()):
+                # Insufficient data, not zero-error. Skip entirely.
                 continue
             n += 1
             scores.extend(_extract_numeric_scores(obj))
