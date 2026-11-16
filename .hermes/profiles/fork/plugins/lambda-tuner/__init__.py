@@ -16,7 +16,7 @@ import re
 import time
 import tempfile
 from collections import OrderedDict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
 
@@ -401,7 +401,7 @@ def _write_warm_start_cache(session_id: str, rec: dict[str, Any], turn_count: in
             "complexity_score": round(complexity_score, 4),
             "profile_applied": session_type,
             "turn_count": int(turn_count),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "reclassified": bool(reclassified),
         }
         intent = _pending_intent
@@ -1162,7 +1162,7 @@ def register(ctx: Any) -> None:
 
 
 # Export predicates for other plugins (lazy-read `_fired` at call time).
-from .predicates import (  # noqa: E402
+from .predicates import (
     is_code_session,
     is_greeter_turn,
     is_high_confidence,
@@ -1175,16 +1175,16 @@ from .predicates import (  # noqa: E402
 )
 
 __all__ = [
-    "register",
-    "is_research_session",
-    "is_code_session",
-    "is_high_confidence",
-    "is_greeter_turn",
-    "session_type",
-    "session_complexity",
-    "turn_complexity_score",
-    "recommended_effort",
-    "was_reclassified",
     "TaskComplexityScorer",
+    "is_code_session",
+    "is_greeter_turn",
+    "is_high_confidence",
+    "is_research_session",
+    "recommended_effort",
+    "register",
+    "session_complexity",
+    "session_type",
+    "turn_complexity_score",
+    "was_reclassified",
 ]
 
