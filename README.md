@@ -4,7 +4,7 @@
 
 # hermes-fork ☤
 
-> **This is a personal fork of [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent).** It tracks upstream and adds a layer of research-driven extensions on top. It is not an official Nous Research product — it's one person's daily driver. If you want the supported version, use the upstream repo.
+> **This is a personal fork of [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent).** It tracks upstream and layers a dense set of research-driven extensions on top. Not an official Nous Research product — one person's daily driver. For the supported version use the upstream repo.
 
 <p align="center">
   <a href="https://hermes-agent.nousresearch.com/docs/"><img src="https://img.shields.io/badge/Docs-hermes--agent.nousresearch.com-FFD700?style=for-the-badge" alt="Documentation"></a>
@@ -13,72 +13,351 @@
   <a href="https://nousresearch.com"><img src="https://img.shields.io/badge/Built%20by-Nous%20Research-blueviolet?style=for-the-badge" alt="Built by Nous Research"></a>
 </p>
 
+**227 commits ahead of upstream. 421 fork-only scripts. 25 active plugins. 145 core agent file changes.**
+
 ---
 
 ## What this fork adds over upstream
 
-Upstream Hermes is already a capable self-improving agent. This fork extends it with a dense layer of academic-theory-grounded additions — primarily around evaluation, cron automation, plugin hardening, compaction quality, and data versioning. All additions live in `hermes-scripts/`, `fork-profile/`, and the plugin system; the core agent loop is not modified.
+The fork's additions fall into nine areas. All extensions are additive (scripts, plugins, configuration) or bug fixes on upstream code. Plugins are fail-open unless noted.
 
-### Evaluation pipeline
+---
 
-**Compaction quality scoring** — `score-compaction-rouge.py` adds stdlib-only ROUGE-1 and ROUGE-L scoring (no pip deps) on top of the existing Jaccard distortion gate. Runs nightly as a cron job. Outputs:
-- `rouge1_recall` — coverage: fraction of source n-grams preserved in the compaction
-- `rouge1_precision` — fabrication guard: fraction of compaction n-grams that actually appeared in source
-- Alarms at fabrication < 0.3 or coverage < 0.2, appended to `cache/compaction-rouge-scores.jsonl`
-- ROUGE-L via LCS with large-input sampling (inputs >10k tokens sampled from both ends, denominators adjusted to sampled lengths)
+### 1. Memory system
 
-**Existing IT-based compaction metrics** — AEP typical-set coverage, chain-rule mutual information, rate-distortion advisor, distortion gate, all running on sub-hourly cron schedules.
+~65 scripts extending the upstream memory system with formal operations from information theory, signal processing, and statistics. These run as nightly/hourly cron jobs, not in the hot path.
 
-**JEV shadow evaluator** — `jev-turn-evaluator` plugin scores every LLM turn asynchronously via a shadow model. Gate promotes policy arms only when `scored_turns >= 20`, `mean_score >= 3.5`, `error_rate < 10%`.
+**Retention and decay**
+- `memory-ttl-purge.py` — time-to-live eviction with configurable floor
+- `memory-ttl-floor-merge.py` — merges TTL policy with recency signal
+- `memory-staleness.py` — staleness scoring against access history
+- `memory-mixing-ttl.py` — Markov mixing time as TTL proxy
+- `memory-hitting-time.py` — expected hitting time for rarely-accessed facts
+- `memory-conductance-ttl.py` — graph conductance as retention weight
+- `memory-access-decay.py` — exponential decay on access timestamps
 
-**CUSUM changepoint detection** — `loop-cusum-changepoint.py` with ADV-022 ring-full freeze fix: when `n_seen == len(xs)`, resets S+/S− and re-runs over the full ring rather than processing zero new samples.
+**Compression and distortion**
+- `memory-jl-distortion.py` — Johnson-Lindenstrauss projection distortion check on embeddings
+- `memory-eckart-young.py` — low-rank approximation gate (Eckart-Young theorem)
+- `memory-lp-dct-gate.py` — DCT energy compaction gate for text segments
+- `memory-bits-back.py` — bits-back argument estimator for latent compression efficiency
+- `memory-kraft-code.py` — Kraft inequality check on memory encoding
+- `memory-haar-mra.py` — Haar multi-resolution analysis for temporal memory structure
+- `memory-rough-signature.py` — rough path signature for sequential memory streams
 
-**Anytime evaluation** — anytime-eval-feeder, NSPI evaluator, skill Neyman allocation, and campaign-scorer feed a multi-arm eval scorecard updated throughout the day.
+**Retrieval and ranking**
+- `memory-adaptive-rank.py` — online rank adjustment from access patterns
+- `memory-query-router.py` — routes retrieval queries across backend strategies
+- `memory-signature-rerank.py` — reranking via rough path signatures
+- `memory-redundancy-gate.py` — blocks commits of near-duplicate facts
+- `memory-dkw-ue.py` — Dvoretzky-Kiefer-Wolfowitz uncertainty envelope on retrieval scores
+- `memory-sprt-commit.py` — SPRT-gated memory commit (stops accumulating when signal is clear)
+- `memory-ransac-commit.py` — RANSAC inlier gate before committing facts to long-term store
 
-### Data versioning (Dolt-inspired)
+**Graph and topology**
+- `memory-ontology-topology.py` — topological analysis of the memory knowledge graph
+- `memory-taxonomy-discover.py` — automated taxonomy discovery from memory clusters
+- `memory-coupling-merge.py` — merges tightly coupled memory nodes
+- `memory-relation-extractor.py` — extracts typed relations from free-text memories
+- `memory-bethe-free-energy.py` — Bethe free energy on the memory factor graph
+- `memory-doob-decompose.py` — Doob decomposition of memory value sequences
+- `memory-portmanteau.py` — Ljung-Box portmanteau test for memory access autocorrelation
 
-**PK three-way merge** — `dolt-merge.py` implements Dolt's data merge semantics without Dolt itself:
-- Row-keyed by primary key; different PKs auto-merge; same PK different field → field-level merge; both sides changed same field from base → explicit conflict (not silent last-write-wins)
+**Drift and anomaly**
+- `memory-auto-improvement.py` — nightly self-improvement pass on memory quality
+- `memory-gelman-shrink.py` — Gelman-Rubin shrinkage on multi-chain memory estimates
+- `memory-kalman-latent.py` — Kalman filter on latent memory state
+- `memory-wave18-adversarial.py` / `memory-wave18-invariants.py` — adversarial wave 18 memory invariants
+
+**L1 memory stack** (separate pipeline from conversational memory)
+- `l1-extract.py` / `l1-promote.py` — extract and promote high-value facts to L1
+- `l1-graphiti-write.py` / `l1-graphiti-reconcile.py` — sync L1 facts to Graphiti knowledge graph
+- `l1-gmemory-consolidation.py` — consolidate graph memory nodes
+- `l1-hypermem-promote.py` — hypergraph memory promotion
+- `l1-tracegrant.py` — TraceGrant provenance tracking for promoted facts
+- `unified-recall.py` — unified recall interface over L1, Graphiti, and session search
+- `dual-backend-memory-fuser.py` — fuses results from two memory backends
+- `hindsight-reembed.py` / `hindsight-watchdog.py` — re-embed and monitor hindsight memory
+
+---
+
+### 2. Skill routing
+
+~60 scripts implementing a multi-arm bandit skill routing layer on top of upstream's BM25-based retrieval. The goal is to learn which skills are actually useful given query context, not just lexically similar.
+
+**Bandit algorithms**
+- `routing-linucb.py` — LinUCB contextual bandit; updates on routing outcome
+- `routing-kl-ucb.py` — KL-UCB arm selection for skill routing
+- `routing-tsallis-inf.py` — Tsallis-INF algorithm for adversarial routing
+- `routing-exp3-adversarial.py` / `routing-exp4-contextual.py` — EXP3/EXP4 for adversarial/contextual skill selection
+- `routing-ips-offpolicy.py` — inverse propensity scoring for off-policy routing evaluation
+- `routing-pac-bayes-bound.py` — PAC-Bayes generalisation bound on routing policy
+- `routing-rademacher-bound.py` — Rademacher complexity bound on the routing model
+- `routing-weight-updater.py` — online weight update dispatcher
+
+**Concentration and monitoring**
+- `routing-azuma-concentration.py` — Azuma-Hoeffding concentration check on routing rewards
+- `routing-mcdiarmid-bm25.py` — McDiarmid inequality on BM25 score shifts
+- `routing-fano-bound.py` — Fano lower bound on routing mutual information
+- `routing-mutual-information.py` — MI between query features and skill selection
+- `routing-convergence-guard.py` — detects routing non-convergence and raises alarm
+- `routing-switching-detector.py` — CUSUM detection of routing regime switches
+- `routing-alarm-bridge.py` / `wave21a-alarm-bridge.py` / `wave21c-alarm-bridge.py` — alarm aggregators across routing waves
+
+**Graph and topology**
+- `routing-skill-markov.py` — Markov chain model of skill transition patterns
+- `routing-skill-percolation.py` — percolation threshold analysis of the skill graph
+- `routing-graph-bandit-update.py` — graph-structured bandit updates
+- `routing-graph-independence.py` — independence test on the routing graph
+- `routing-boolean-influence.py` — Boolean influence analysis of routing features
+- `routing-mobius-audit.py` — Möbius inversion audit of skill co-occurrence
+- `routing-hamming-audit.py` — Hamming distance audit on routing decisions
+- `routing-token-setcover.py` — set-cover routing for token budget allocation
+- `routing-precision-recall.py` — routing precision/recall tracking
+
+**Skill health and calibration**
+- `skill-monitor.py` — CUSUM health monitor per skill; excludes degraded skills from routing
+- `skill-lift-tracker.py` — lift metric: does routing a skill improve outcomes?
+- `skill-variance-regularization.py` — regularises high-variance skill estimates
+- `skill-disagreement-allocation.py` — Neyman allocation based on skill estimate disagreement
+- `skill-imbalance-reweight.py` — reweights under-explored skills
+- `skill_confidence_calibration.py` — calibration curves per skill
+- `skill-hierarchical-routing.py` — hierarchical skill routing via category tree
+- `bps-skill-selector.py` — BPS budget-aware skill selection
+- `kl-skill-prior.py` — KL-divergence prior update on skill utility distribution
+- `occam-skill-ranker.py` — Occam factor ranking (complexity-penalised skill utility)
+- `soft-bellman-skill-router.py` — soft Bellman routing for stochastic skill selection
+- `skill-admissibility.py` / `skill-dependency-verifier.py` / `skill-integrity-check.py` — skill graph health
+
+**Index and plugins**
+- `skill-router-index.py` — builds and updates the BM25+embedding routing index (255 skills)
+- `skill-routing-table.py` / `skill-routing-bounds.py` — routing table management and PAC bounds
+- `skill-access-logger` plugin — logs every skill access with query fingerprint and outcome
+- `skill-routing-nudge` plugin — mid-turn nudge when routing confidence drops below threshold
+- `skill-latency-logger` plugin — per-skill latency histogram
+
+---
+
+### 3. Compaction evaluation pipeline
+
+Upstream compaction is a heuristic. The fork adds a multi-axis quality measurement pipeline that runs every compaction and nightly.
+
+**JEV compaction** (`jev-compaction` plugin)
+- Entropy-weighted context compaction using joint evaluation voting
+- `pre-compact-annotate.py` — annotates context segments before compaction
+- `jev_compaction.py` / `jev_verify_fn.py` — JEV scorer and verifier
+- `jev-scores-staleness-check.py` — alarm if JEV scores haven't been updated
+
+**Information-theoretic metrics**
+- `compaction-aep-typical-set.py` — AEP typical set coverage (are compressed segments in the typical set?)
+- `compaction-chain-rule-mi.py` — chain rule mutual information between pre/post compaction
+- `compaction-rd-converse.py` — rate-distortion converse bound (lower bound on unavoidable distortion)
+- `rd-compaction-advisor.py` — advises on optimal compaction depth given R-D tradeoff
+- `eval-compaction-distortion-gate.py` — hard gate: reject compaction if distortion exceeds bound
+- `eval-compaction-data-bridge.py` — bridges compaction scores to the eval pipeline
+- `statecomp-compression-router.py` — StateComp span-readiness routing for compaction
+
+**ROUGE scorer** (stdlib, no pip deps)
+- `score-compaction-rouge.py` — ROUGE-1 (unigrams) and ROUGE-L (LCS) with:
+  - Case-insensitive tokenisation
+  - Sampled LCS for inputs >10k tokens (2500 from each end, denominators adjusted to sampled lengths)
+  - `alarm_fabrication` if precision < 0.3; `alarm_coverage` if recall < 0.2
+  - `--batch` mode for JSONL; `--self-test`; nightly cron at 04:50 → `cache/compaction-rouge-scores.jsonl`
+
+**compaction-gate plugin**
+- MDL-based gate: blocks compaction if `mdl_min_saving` not met at `depth_threshold`
+- Settings explicitly declared in `config.yaml` (were silently using hardcoded defaults)
+
+---
+
+### 4. Loop control and anytime algorithms
+
+**PID and control**
+- `loop-pid.py` — PID controller on a quality metric; adjusts compaction depth or model temperature
+- `loop-pid-cron-step.py` / `loop-pid-iss-wrapper.py` / `loop-pid-synthetic-step.py` — PID cron step, ISS (input-to-state stability) wrapper, synthetic test harness
+- `pid-circle-criterion.py` — circle criterion passivity check on the PID loop
+- `pid-passivity-index.py` — passivity index measurement
+
+**CUSUM changepoint detection**
+- `loop-cusum-changepoint.py` — CUSUM with ADV-022 ring-full freeze fix: when `n_seen == len(xs)`, resets S+/S− and re-runs over full ring rather than processing zero new samples
+- `cusum-h-calibrator.py` — calibrates CUSUM threshold h* from calibration file
+- `cusum-gain-freeze.py` — freeze-guard: suppresses false alarms during gain-change events
+- `conformal-changepoint-detector.py` — conformal prediction variant for changepoint detection
+- `rolling-conformal-predictor.py` — rolling conformal prediction intervals on quality metrics
+
+**Anytime evaluation** (Zilberstein/Dean-Boddy anytime framework)
+- `anytime-eval-feeder.py` — feeds evaluation jobs into the anytime queue
+- `anytime-nspi-evaluator.py` — NSPI (Normalised Score Per Instruction) evaluator
+- `anytime-skill-evaluator.py` — per-skill anytime quality profile
+- `anytime-quality-monitor.py` — monitors quality vs. time tradeoff across the session
+- `loop-rollout-horizon.py` — rollout horizon selection via anytime quality profile
+- `loop-model-comparison.py` — A/B comparison across models over rolling windows
+
+---
+
+### 5. Safety, alignment, and governance
+
+**Tool and approval hardening**
+- `tools/threat_patterns.py` — refined threat pattern set: removed 48 false-positive patterns that were blocking legitimate tool uses, added 4 precision patterns for actual injection vectors
+- `tools/approval.py` — restored and tightened grant allow-list; fixed scan-incomplete paths that could bypass approval on multi-step tool chains
+- `tool-auth-gate` plugin — inspection-game strategy: probabilistically audits tool auth tokens
+- `tool-result-audit` plugin — shadow post_tool_call: audits external-content tool results for prompt injection
+- `browser_act_guard.py` / `browser_orphan_watchdog.sh` — guards against browser tool runaway and orphan processes
+- `mcp-privilege-audit.py` — audits MCP server privilege assertions
+
+**Governance and alignment**
+- `governance-hard-block` plugin — hard-blocks policy violations before tool dispatch
+- `governance-conflict-detector.py` / `governance-conflict-epistemic.py` — detects governance rule conflicts; epistemic variant flags uncertainty in conflict resolution
+- `governance-falsifiability-lint.py` — lints governance rules for falsifiability (unfalsifiable rules are rejected)
+- `soares-halt-liveness.py` — Soares halt/liveness invariant check on agent decisions
+- `ltl-promotion-invariant.py` — LTL temporal logic invariant on memory promotion
+- `plan-enforcement-gate.py` / `plan-commitment.py` — enforces plan commitments; blocks mid-plan policy drift
+- `iss-justification-gate.py` — ISS (input-to-state stability) gate on agent justifications
+
+**COBRA guard** (`cobra-guard` plugin)
+- Tracks outcome of every agent decision; blocks repeat failures on the same decision type
+- `cobra-outcome-logger.py` / `cobra-skip-guard.py` — outcome logging and skip-guard enforcement
+
+**Adversarial robustness**
+- `adversarial-robustness-tester.py` — periodic adversarial probing of agent responses
+- `adversarial_quarantine_review.py` — quarantine review for flagged adversarial traces
+- `adversarial-allocation-auditor.py` — Neyman allocation audit of adversarial test coverage
+
+**SPRT-based gates** (sequential hypothesis testing)
+- `shadow-gate-sprt.py` / `shadow-gate-nightly.py` — SPRT gate on shadow model alignment; nightly batch pass
+- `sprt-falsifiability-handshake.py` — both parties must agree a claim is falsifiable before SPRT runs
+- `sprt-inner-outer-alignment.py` — inner/outer alignment SPRT check
+- `sprt-measurement-tamper.py` — detects measurement tampering in SPRT evidence
+- `sprt-truncation-gate.py` — prevents SPRT from running on truncated evidence
+
+---
+
+### 6. Uncertainty estimation and evaluation
+
+**Uncertainty estimation**
+- `ue-blackbox-scorer.py` — black-box UE scorer (no model internals required)
+- `ue-calibration-bridge.py` — bridges UE scores to the calibration pipeline
+- `ue-memory-gate.py` — gates memory commits on UE score (high-uncertainty facts not committed)
+- `ue-perplexity-proxy.py` — perplexity as a UE proxy for models without logprobs
+- `ue-semantic-density.py` / `ue-semantic-graph.py` — semantic density and graph-based UE
+- `uncertainty-calibration-monitor.py` — monitors UE calibration drift over time
+- `reasoning-ue-integrator.py` — integrates UE scores into reasoning trace confidence
+
+**Evaluation scaffolding**
+- `block-bootstrap-sprt.py` — block bootstrap + SPRT for statistically sound eval comparison
+- `eval-routing-linucb-features.py` — feeds LinUCB features from eval results back to routing
+- `hallucination-detector.py` — UE-based hallucination detection on tool outputs
+- `step-level-prm-scorer.py` — process reward model scorer at step level
+- `step-level-trajectory-auditor.py` — full trajectory audit with step-level PRM scores
+- `circuit-trajectory-scorer.py` — scores agent trajectories against expected circuit patterns
+
+---
+
+### 7. Cost and compute governance
+
+**Compute routing**
+- `dcr-compute-router.py` / `dcr-reconcile.py` — dual compute router with reconciliation pass
+- `cost-cutoff-task-router.py` — routes tasks to cheaper models when cost exceeds threshold
+- `pareto-phase-router.py` — Pareto-frontier router: quality vs. cost
+- `triple-objective-frontier-router.py` — three-objective (quality, cost, latency) frontier
+- `real-options-deployment-gate.py` — real options valuation gate for model upgrades
+
+**Budget control**
+- `token-budget-controller.py` — per-session token budget with hard cutoff
+- `cascade-error-budget-allocator.py` — allocates error budget across the tool cascade
+- `relay-routing-capacity-allocator.py` — capacity allocation for relay routing
+- `feedback-budget-optimizer.py` — optimises feedback-loop budget across eval arms
+- `cost-aware-escalation.py` / `cost-aware-eval-framework.py` — escalation and eval with cost constraints
+
+**Scaling and autoscaling**
+- `llm-autoscaler.py` — LLM autoscaler: adjusts parallel subagent count based on queue depth and cost
+- `spawning-utility-estimator.py` — estimates utility of spawning a subagent before dispatch
+- `campaign-scorer.py` — multi-arm campaign scorer for model A/B campaigns
+
+---
+
+### 8. Data versioning (Dolt-inspired)
+
+Implements Dolt's data merge semantics in Python on SQLite, without the Dolt binary or Prolly trees.
+
+**PK three-way merge** (`dolt-merge.py`)
+- Rows keyed by primary key; different PKs auto-merge
+- Same PK, different field, changed from base → field-level auto-merge
+- Both sides changed same field from base → explicit conflict (never silent last-write-wins)
 - Conflict record: `{pk_val, field, base_val, ours_val, theirs_val}`; resolve via `strategy='ours'|'theirs'`
-- JSON/dict column values: one-level sub-key merge
-- Delete+modify = conflict; delete+unmodified = drop
+- JSON/dict column values: one-level sub-key merge; delete+modify = conflict; delete+unmodified = drop
 - CLI: `dolt-merge.py merge --base B.json --ours O.json --theirs T.json --pk job_id`
+- Used for safe concurrent writes to `jobs.json` from multiple cron workers
 
-**Cell changelog / blame** — `lifecycle-changelog.py` adds `fact_commits` + `fact_changelog` tables to `lifecycle.db` (append-only, never touches existing tables):
-- `new_commit()`, `log_change()`, `get_history()`, `time_travel()`, `blame()`
-- Read operations use `uri=ro` connections — no WAL pragma on read path
-- `time_travel(db, table, pk, as_of_commit)` replays I/U/D ops through commit ancestry
+**Cell changelog / blame** (`lifecycle-changelog.py`)
+- Adds `fact_commits` + `fact_changelog` tables to the shared `~/.hermes/memory-facts/lifecycle.db` (append-only, no effect on existing tables)
+- Operations: `new_commit()`, `log_change()`, `get_history()`, `time_travel()`, `blame()`
+- Read operations use `uri=ro` SQLite connections — WAL pragma never issued on read path
+- `time_travel(db, table, pk, as_of_commit)` replays I/U/D operations through commit ancestry
 - `blame(db, table, pk, field)` returns last commit that changed that field
-- Initialized against the canonical shared `~/.hermes/memory-facts/lifecycle.db`
 
-### Plugin hardening
+---
 
-**openshell sandbox** — all cron scripts run inside an openshell policy sandbox. The policy file (`fork-profile/openshell-policy.yaml`) is maintained with clean RO/RW separation: `fork/logs` is write-only (RW), not duplicated in read-only. `HERMES_NO_SANDBOX=1` is explicitly blocked in the cron wrapper as a security boundary — bypass attempts are logged and ignored.
+### 9. System maintenance and infrastructure
 
-**Governance hard-block** — `governance-hard-block` plugin enforces adversarial policy rules. Settings declared in `config.yaml` under `plugins.entries.governance-hard-block`.
+**System update** (`daily-silverblue-update.sh`)
+- Per-step timeouts: toolbox DNF (1200s), fwupdmgr (300s), git repos (60s each)
+- Flatpak appstream-only errors treated as non-fatal (was causing full timeout on slow mirrors)
+- Login-trigger variant for systems where update needs an active session
 
-**compaction-gate** — `depth_threshold` and `mdl_min_saving` now explicitly declared in `plugins.entries.compaction-gate.settings` (were silently using hardcoded defaults).
+**Cron infrastructure**
+- 100+ managed cron jobs across compaction eval, memory maintenance, skill evaluation, security audits, system updates, and research pipelines
+- `cron-sandbox-runner.py` — sandboxed cron execution with openshell policy enforcement
+- `cron-admission-control.py` — admission control: drops low-priority cron jobs under load
+- Skill-index weekly rebuild correctly passes `--build` (was a silent no-op in upstream-inherited config)
+- `HERMES_NO_SANDBOX=1` explicitly blocked in cron wrapper as a security boundary
 
-**Plugin wiring audits** — periodic cold adversarial pass covers: py_compile + importlib load of all 23 enabled plugins, VALID_HOOKS alignment, shadow post_llm_call compliance, HERMES_HOME path-doubling, SQLite connect patterns.
+**Security monitoring**
+- `firewall-port-audit.sh` / `sysctl-verify.sh` — periodic firewall and sysctl audit
+- `mcp-auth-drift-check.py` — detects MCP authentication config drift
+- `secure-message.py` — message signing and verification utility
 
-### Cron infrastructure
+**openshell sandbox policy**
+- `openshell-policy.yaml` maintained with clean RO/RW separation
+- All cron scripts run inside the openshell sandbox; bypass attempts are logged and rejected
 
-Over 100 cron jobs organized into categories: compaction eval, memory maintenance, skill evaluation, security audits, system updates, and research pipelines. Key additions over upstream:
+---
 
-- **System update** (`daily-silverblue-update.sh`) — per-step timeouts: toolbox DNF (1200s), fwupdmgr (300s), git repos (60s each); flatpak appstream-only errors treated as non-fatal
-- **Skill index rebuild** — weekly rebuild now correctly passes `--build` to `skill-router-index.py` (was silently a no-op)
-- **ROUGE scorer** — nightly at 04:50, reads latest pre/post cache files, appends to `compaction-rouge-scores.jsonl`
-- **lifecycle-db-migrate** — idempotent schema migration, exits 0 on already-populated DB
+## Plugin summary
 
-### Research scripts
-
-`hermes-scripts/` contains ~40 research scripts implementing: anytime algorithms (Zilberstein/Dean-Boddy), CUSUM changepoint detection, conformal prediction, LLM autoscaling, skill routing bandit (wave routing + NSPI), encoding ranking, campaign scoring, two-timescale convergence checks, moment-edge sampling, and skill confidence calibration.
+| Plugin | Hook | Description |
+|---|---|---|
+| `jev-compaction` | `on_pre_compress` | Entropy-weighted compaction gate |
+| `compaction-gate` | `on_pre_compress` | MDL saving gate (depth_threshold, mdl_min_saving) |
+| `jev-turn-evaluator` | `post_llm_call` | Shadow model scores every LLM turn; gates policy arm promotion |
+| `governance-hard-block` | `pre_tool_call` | Hard-blocks policy violations |
+| `cobra-guard` | `post_tool_call` | Outcome tracking; blocks repeat decision failures |
+| `tool-auth-gate` | `post_tool_call` | Probabilistic inspection-game auth audit |
+| `tool-result-audit` | `post_tool_call` | Prompt injection detection on external tool results |
+| `memory-ransac-gate` | `post_tool_call` | RANSAC inlier gate before memory commit |
+| `context-pressure-guard` | `post_tool_call` | Alarm when context pressure exceeds threshold |
+| `decision-audit` | `post_tool_call` | Per-session tool resolvability accumulator; writes to lifecycle.db |
+| `delegation-audit-hook` | `post_tool_call` | Audits subagent delegation outcomes |
+| `deductive-verifier` | `post_llm_call` | Verifies reasoning chain deductive validity |
+| `formal-verify-plugin` | `post_tool_call` | Hard core enforcement on proof-state tool calls |
+| `compliance-score-hook` | `post_tool_call` | Red-flag and length compliance scoring |
+| `post-tool-compliance` | `post_tool_call` | Shadow compliance scorer (observation-only) |
+| `turn-behavior-logger` | `post_llm_call` | Logs turn-level behavior metrics |
+| `hindsight` | multiple | Long-term memory with knowledge graph and entity resolution |
+| `adaptive-retrieval` | retrieval | Adaptive retrieval strategy selection |
+| `billion-context` | compaction | Billion-context CCR compression |
+| `skill-access-logger` | skill | Logs skill accesses with query fingerprint |
+| `skill-routing-nudge` | skill | Mid-turn nudge on low-confidence routing |
+| `skill-latency-logger` | skill | Per-skill latency histogram |
+| `su-observability` | multiple | System-under-observation metrics |
+| `orca-status` | lifecycle | Lifecycle event reporting |
+| `camofox` | browser | Stealth browser integration |
 
 ---
 
 ## Upstream merge policy
 
-This fork rebases or merges from `NousResearch/hermes-agent` main periodically. Conflicts are resolved in favour of upstream on the core agent loop; fork additions win on scripts and plugins. Merge conflicts are recorded in git history.
+This fork rebases or merges from `NousResearch/hermes-agent` main periodically. Conflicts are resolved in favour of upstream on the core agent loop; fork additions win on scripts and plugins.
 
 **Current base:** See `git log --oneline upstream/main..HEAD` for fork-only commits.
 
@@ -86,7 +365,7 @@ This fork rebases or merges from `NousResearch/hermes-agent` main periodically. 
 
 ## Running this fork
 
-Same as upstream hermes, with the `fork` profile active:
+Same as upstream, with the `fork` profile active:
 
 ```bash
 hermes-fork          # start CLI on the fork profile
@@ -94,19 +373,15 @@ hermes-fork doctor   # health check
 hermes-fork -z       # fork profile with zero context (fresh session)
 ```
 
-The fork profile lives at `~/.hermes/profiles/fork/`. The binary at `~/.local/bin/hermes-fork` pins to the Py3.14 store interpreter (not the venv/bin/hermes 3.11 build — pydantic_core ABI mismatch).
+The fork profile lives at `~/.hermes/profiles/fork/`. The binary at `~/.local/bin/hermes-fork` pins to the Py3.14 store interpreter (not `venv/bin/hermes` 3.11 — pydantic_core ABI mismatch).
 
 ---
 
 ## What is NOT different from upstream
 
-- The core agent loop, tool dispatch, and plugin API are unmodified
-- Installation procedure — same as upstream
-- Model provider support — same as upstream
-- MCP integration — same as upstream
-- Messaging gateway — same as upstream
+- Installation procedure, model provider support, MCP integration, messaging gateway, TUI/CLI interface
 
-For anything not in this README, the upstream documentation applies: **[hermes-agent.nousresearch.com/docs](https://hermes-agent.nousresearch.com/docs/)**
+For anything not covered here: **[hermes-agent.nousresearch.com/docs](https://hermes-agent.nousresearch.com/docs/)**
 
 ---
 
