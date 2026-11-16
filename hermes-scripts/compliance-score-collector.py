@@ -22,13 +22,15 @@ import sqlite3
 import sys
 import tempfile
 import uuid
-from datetime import datetime, timezone, UTC
+from datetime import datetime, timedelta, timezone, UTC
 
 CACHE = _hermes_root / 'cache'
 OUT_PATH = CACHE / 'compliance-scores.jsonl'
 STATE_PATH = CACHE / 'compliance-score-collector-state.json'
+LABELED_PATH = CACHE / 'labeled_compliance.jsonl'
 LIFECYCLE_DB = _hermes_base / 'memory-facts' / 'lifecycle.db'
 DEFAULT_ROBUSTNESS = 0.8
+_MINUTE_OFFSETS = (0, -1, 1)
 
 
 def _now() -> str:
@@ -55,6 +57,170 @@ def _append_jsonl(path: Path, record: dict) -> None:
         fcntl.flock(lf.fileno(), fcntl.LOCK_EX)
         with open(str(path), 'a', encoding='utf-8') as f:
             f.write(json.dumps(record, default=str) + '\n')
+
+
+def _parse_ts(raw):
+    if raw is None:
+        return None
+    if isinstance(raw, datetime):
+        dt = raw
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt
+    s = str(raw).strip()
+    if not s:
+        return None
+    if s.endswith('Z'):
+        s = s[:-1] + '+00:00'
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt
+
+
+def _ts_minute(raw, offset_minutes: int = 0):
+    dt = _parse_ts(raw)
+    if dt is None:
+        return None
+    floored = dt.replace(second=0, microsecond=0)
+    if offset_minutes:
+        floored = floored + timedelta(minutes=int(offset_minutes))
+    return floored.isoformat()
+
+
+def _session_base(session_id) -> str:
+    sid = str(session_id or '').strip()
+    if not sid:
+        return ''
+    return sid.split(':', 1)[0]
+
+
+def _load_jsonl(path: Path) -> list:
+    if not path.exists():
+        return []
+    rows = []
+    try:
+        with path.open(encoding='utf-8', errors='replace') as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(obj, dict):
+                    rows.append(obj)
+    except OSError:
+        return []
+    return rows
+
+
+def load_labeled_index(path: Path | None = None) -> tuple:
+    """Index labeled_compliance.jsonl by session+tool+minute and tool+minute."""
+    path = path if path is not None else LABELED_PATH
+    session_index: dict = {}
+    tool_index: dict = {}
+    for row in _load_jsonl(path):
+        lab = row.get('label')
+        if lab is None:
+            continue
+        try:
+            lab_f = float(lab)
+        except (TypeError, ValueError):
+            continue
+        tool = str(row.get('tool_name') or '').strip()
+        mk = _ts_minute(row.get('ts'), 0)
+        if not tool or mk is None:
+            continue
+        sid = str(row.get('session_id') or '').strip()
+        item = lab_f
+        if sid:
+            session_index[(sid, tool, mk)] = item
+            base = _session_base(sid)
+            if base and base != sid:
+                session_index[(base, tool, mk)] = item
+        tool_index[(tool, mk)] = item
+    return session_index, tool_index
+
+
+def lookup_labeled(row: dict, session_index: dict, tool_index: dict):
+    """Return binary label from labeled_compliance, or None.
+
+    Match (session_id if present, tool_name, ts_minute); if session_id is
+    absent, (tool_name, ts_minute). Try exact minute then ±1.
+    """
+    if not session_index and not tool_index:
+        return None
+    tool = str(row.get('tool_name') or '').strip()
+    dt = _parse_ts(row.get('ts'))
+    if not tool or dt is None:
+        return None
+    sid = str(row.get('session_id') or '').strip()
+    base = _session_base(sid)
+    for off in _MINUTE_OFFSETS:
+        mk = _ts_minute(dt, off)
+        if mk is None:
+            continue
+        if sid:
+            if (sid, tool, mk) in session_index:
+                return session_index[(sid, tool, mk)]
+            if base and base != sid and (base, tool, mk) in session_index:
+                return session_index[(base, tool, mk)]
+        elif (tool, mk) in tool_index:
+            return tool_index[(tool, mk)]
+    return None
+
+
+def apply_labeled_bridge(row: dict, session_index: dict, tool_index: dict) -> bool:
+    """Fill label from labeled_compliance when the collector row is unlabeled."""
+    if row.get('label') is not None:
+        return False
+    lab = lookup_labeled(row, session_index, tool_index)
+    if lab is None:
+        return False
+    row['label'] = float(lab)
+    row['labeled'] = True
+    row['accuracy'] = float(lab)
+    row['label_source'] = 'turn_behavior'
+    return True
+
+
+def supplement_rows(rows: list, labeled_path: Path | None = None) -> int:
+    session_index, tool_index = load_labeled_index(labeled_path)
+    n = 0
+    for row in rows:
+        lab = lookup_labeled(row, session_index, tool_index)
+        if lab is not None:
+            if row.get('label') is None:
+                n += 1
+            row['label'] = float(lab)
+            row['labeled'] = True
+            row['accuracy'] = float(lab)
+            row['label_source'] = 'turn_behavior'
+        elif row.get('label') is not None:
+            row['labeled'] = True
+            if row.get('accuracy') is None:
+                try:
+                    row['accuracy'] = float(row['label'])
+                except (TypeError, ValueError):
+                    pass
+    return n
+
+
+def refresh_metrics_from_jsonl(
+    out_path: Path | None = None,
+    labeled_path: Path | None = None,
+    dest: Path | None = None,
+) -> dict:
+    """Recompute compliance-metrics.json from jsonl + labeled_compliance."""
+    out_path = out_path if out_path is not None else OUT_PATH
+    rows = _load_jsonl(out_path)
+    supplement_rows(rows, labeled_path)
+    return write_compliance_metrics(rows, dest=dest)
 
 
 def _connect(db_path: Path):
@@ -264,7 +430,13 @@ def on_post_tool_call(tool_name: str = '', args=None, result=None, session_id: s
         return None
 
 
-def collect(db_path: Path, out_path: Path, state_path: Path, limit: int = 200) -> dict:
+def collect(
+    db_path: Path,
+    out_path: Path,
+    state_path: Path,
+    limit: int = 200,
+    labeled_path: Path | None = None,
+) -> dict:
     if not db_path.exists():
         return {'status': 'insufficient_data', 'reason': 'missing_db', 'written': 0}
     state = {'last_id': 0}
@@ -291,9 +463,18 @@ def collect(db_path: Path, out_path: Path, state_path: Path, limit: int = 200) -
         if not rows:
             return {'status': 'insufficient_data', 'reason': 'no_new_rows', 'written': 0, 'last_id': last_id}
         cols = ['id', 'ts', 'session_id', 'tool_name', 'latency_ms', 'outcome', 'score', 'notes']
+        session_index, tool_index = load_labeled_index(
+            labeled_path if labeled_path is not None else LABELED_PATH
+        )
         batch = []
         for tup in rows:
             rec = score_from_review_row(dict(zip(cols, tup)))
+            lab = lookup_labeled(rec, session_index, tool_index)
+            if lab is not None:
+                rec['label'] = float(lab)
+                rec['labeled'] = True
+                rec['accuracy'] = float(lab)
+                rec['label_source'] = 'turn_behavior'
             batch.append(rec)
             last_id = int(tup[0])
         xs = []
@@ -353,7 +534,12 @@ def collect(db_path: Path, out_path: Path, state_path: Path, limit: int = 200) -
         except OSError:
             pass
         metrics_path = (out_path.parent if out_path is not None else CACHE) / 'compliance-metrics.json'
-        metrics = write_compliance_metrics(batch, dest=metrics_path)
+        write_compliance_metrics(batch, dest=metrics_path)
+        metrics = refresh_metrics_from_jsonl(
+            out_path=out_path,
+            labeled_path=labeled_path if labeled_path is not None else LABELED_PATH,
+            dest=metrics_path,
+        )
         _atomic_write(state_path, {'last_id': last_id, 'ts': _now()})
         return {
             'status': 'ok',
@@ -434,10 +620,41 @@ def _self_test() -> int:
         conn.commit()
         conn.close()
         state = td / 'state.json'
-        r = collect(db, out, state, limit=50)
+        r = collect(db, out, state, limit=50, labeled_path=td / 'no-labeled.jsonl')
         assert r.get('written') == 1, r
-        missing = collect(td / 'nope.db', out, state)
+        missing = collect(td / 'nope.db', out, state, labeled_path=td / 'no-labeled.jsonl')
         assert missing.get('status') == 'insufficient_data'
+        # labeled_compliance fills collector rows whose own label is None
+        unlabeled_row = {
+            'ts': '2026-11-16T10:00:30.000000+00:00',
+            'tool_name': 'read_file',
+            'session_id': 'bridge-sess',
+            'accuracy': None,
+            'label': None,
+            'labeled': False,
+            'uncalibrated_accuracy': 0.4,
+        }
+        lab_path = td / 'labeled_compliance.jsonl'
+        lab_path.write_text(
+            json.dumps({
+                'ts': '2026-11-16T10:00:12.000000+00:00',
+                'tool_name': 'read_file',
+                'session_id': 'bridge-sess',
+                'label': 1.0,
+            }) + '\n',
+            encoding='utf-8',
+        )
+        n_filled = supplement_rows([unlabeled_row], lab_path)
+        assert n_filled == 1, unlabeled_row
+        assert unlabeled_row['label'] == 1.0
+        assert unlabeled_row['labeled'] is True
+        assert unlabeled_row['accuracy'] == 1.0
+        filled_metrics = write_compliance_metrics(
+            [unlabeled_row] * 10,
+            dest=td / 'compliance-metrics.json',
+        )
+        assert filled_metrics['accuracy'] == 1.0
+        assert filled_metrics['n_labeled'] == 10
     finally:
         import shutil
         shutil.rmtree(td, ignore_errors=True)
@@ -453,6 +670,7 @@ def main() -> None:
     ap.add_argument('--out', default=str(OUT_PATH))
     ap.add_argument('--state', default=str(STATE_PATH))
     ap.add_argument('--limit', type=int, default=200)
+    ap.add_argument('--labeled', default=str(LABELED_PATH))
     args = ap.parse_args()
     if args.self_test:
         try:
@@ -461,7 +679,26 @@ def main() -> None:
             print(f'[compliance-score-collector] --self-test FAIL: {exc}')
             sys.exit(1)
     try:
-        result = collect(Path(args.db), Path(args.out), Path(args.state), limit=int(args.limit))
+        labeled = Path(args.labeled)
+        result = collect(
+            Path(args.db),
+            Path(args.out),
+            Path(args.state),
+            limit=int(args.limit),
+            labeled_path=labeled,
+        )
+        metrics_path = Path(args.out).parent / 'compliance-metrics.json'
+        refreshed = refresh_metrics_from_jsonl(
+            out_path=Path(args.out),
+            labeled_path=labeled,
+            dest=metrics_path,
+        )
+        result['metrics'] = {
+            'accuracy': refreshed.get('accuracy'),
+            'n_labeled': refreshed.get('n_labeled'),
+            'note': refreshed.get('note'),
+            'n_samples': refreshed.get('n_samples'),
+        }
         print(json.dumps(result, indent=2, default=str))
         sys.exit(0)
     except Exception as exc:
