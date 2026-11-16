@@ -1149,8 +1149,9 @@ def register(ctx: Any) -> None:
             # tool result is likely web content, not code output. Fail-open: if session_id
             # is unknown (not yet classified), skip compression rather than guess.
             from .predicates import session_type as _session_type_pred
-            stype = _session_type_pred(session_id)
-            if stype == "code":
+            sid = session_id or getattr(ctx, "_session_id", None) or ""
+            stype = _session_type_pred(sid)
+            if stype is None or stype == "code":
                 return result
             from .complexity import _DEFAULT_TELEGRAPHIC
             if _DEFAULT_TELEGRAPHIC.should_compress("tool", result):
