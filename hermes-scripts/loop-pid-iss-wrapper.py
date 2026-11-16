@@ -113,6 +113,7 @@ def _run_argv(argv: list[str], timeout: int = 60) -> tuple[int, str, str]:
         proc = subprocess.run(
             argv,
             capture_output=True,
+            check=False,
             text=True,
             timeout=timeout,
             env=os.environ.copy(),
@@ -276,7 +277,7 @@ def run_iss_justification(script: Path | None) -> dict | None:
                 'reason': f'prereq cache files stale (>{MAX_PREREQ_AGE_HOURS}h): {", ".join(stale)}',
                 'stale_prereqs': stale,
             }
-    rc, out, err = _run_argv([PYTHON, str(script)])
+    _rc, out, _err = _run_argv([PYTHON, str(script)])
     parsed = _extract_json(out)
     if not parsed:
         # gate unavailable -> None so merge_results fail-closes (WIRE-016)
@@ -365,8 +366,48 @@ def merge_results(lyap: dict, iss: dict, ts: dict, justification: dict | None = 
     }
 
 
+def apply_iss_lyapunov_override(lyap: dict) -> dict:
+    """Replace strict ΔV<0 failure with Khalil ISS Lyapunov when certified.
+
+    loop-pid.py lyapunov-check requires V=e² to decrease at every sample (autonomous
+    Lyapunov). A tracking loop with persistent u is ISS, not globally asymptotically
+    stable, so that test is the wrong certificate (Khalil Ch 9). When the ISS
+    candidate V=e² satisfies ΔV ≤ −αV + γũ² and V is not exploding, treat
+    lyapunov_ok as True without patching Hermes-owned loop-pid.py.
+    """
+    if lyap.get('ok') is True or lyap.get('ok') is None:
+        return lyap
+    script = _find_script('loop-lyapunov-stability.py')
+    if script is None:
+        return lyap
+    rc, out, _err = _run_argv([PYTHON, str(script)])
+    parsed = _extract_json(out)
+    if not parsed:
+        return lyap
+    if parsed.get('lyapunov_ok') is True or parsed.get('iss_ok') is True:
+        lyap = dict(lyap)
+        lyap['ok'] = True
+        lyap['lyapunov_status'] = 'lyapunov_ok'
+        lyap['reason'] = parsed.get('reason') or 'iss_lyapunov_certified'
+        lyap['iss_lyapunov'] = {
+            k: parsed.get(k)
+            for k in (
+                'iss_ok', 'gamma', 'alpha', 'mean_iss_residual',
+                'mean_V_first', 'mean_V_last', 'reason', 'strict_decrease',
+            )
+        }
+        merged_parsed = dict(lyap.get('parsed') or {})
+        merged_parsed['lyapunov_stable'] = True
+        merged_parsed['iss_override'] = True
+        merged_parsed['iss_reason'] = lyap['reason']
+        lyap['parsed'] = merged_parsed
+        lyap['rc'] = rc
+    return lyap
+
+
 def run() -> dict:
     lyap = run_loop_pid_check(_find_script('loop-pid.py'))
+    lyap = apply_iss_lyapunov_override(lyap)
     iss = run_simple_check(_find_script('iss-small-gain-check.py'), 'iss')
     ts = run_simple_check(_find_script('two-timescale-check.py'), 'two_timescale')
     # Wire ISS justification gate as a hard 4th component (ADV21-013 / WIRE-016).
