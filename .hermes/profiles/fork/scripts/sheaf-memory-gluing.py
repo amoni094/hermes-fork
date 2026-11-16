@@ -36,6 +36,15 @@ from typing import Dict, Iterable, List, Tuple
 NORM_WS = re.compile(r"\s+")
 
 
+def hermes_base() -> Path:
+    """HERMES_HOME even when the env var already points at profiles/<name>."""
+    env = os.environ.get("HERMES_HOME", "").strip()
+    p = Path(env) if env else Path.home() / ".hermes"
+    if p.name != ".hermes" and p.parent.name == "profiles":
+        return p.parent.parent
+    return p
+
+
 def hermes_root() -> Path:
     base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
     profile = os.environ.get("HERMES_PROFILE", "")
@@ -53,7 +62,7 @@ def _key(s: str) -> str:
     return hashlib.sha256(n.encode("utf-8")).hexdigest()[:16]
 
 
-def _rows(db: Path, sql: str) -> List[tuple]:
+def _rows(db: Path, sql: str) -> list[tuple]:
     if not db.is_file() or db.stat().st_size < 4096:
         return []
     try:
@@ -68,22 +77,43 @@ def _rows(db: Path, sql: str) -> List[tuple]:
         return []
 
 
-def load_shard_facts(root: Path) -> Dict[str, Dict[str, str]]:
+def load_shard_facts(root: Path) -> dict[str, dict[str, str]]:
     """shard_name -> {fact_key: text}."""
-    shards: Dict[str, Dict[str, str]] = {}
+    shards: dict[str, dict[str, str]] = {}
 
-    def add(name: str, pairs: Iterable[Tuple[str, str]]) -> None:
-        m: Dict[str, str] = {}
+    def add(name: str, pairs: Iterable[tuple[str, str]]) -> None:
+        m: dict[str, str] = {}
         for k, v in pairs:
             if not v:
                 continue
             m[k] = v
         shards[name] = m
 
+    def _first_existing(cands: list[Path]) -> Path:
+        """Prefer a candidate that exists; fall back to the first path."""
+        for c in cands:
+            if c.is_file():
+                return c
+        return cands[0]
+
+    base = hermes_base()
+    hindsight_path = _first_existing([
+        root / "hindsight.db",
+        base / "hindsight.db",
+        Path.home() / ".hermes" / "hindsight.db",
+    ])
+    memory_path = _first_existing([
+        root / "memory.db",
+        base / "memory.db",
+        Path.home() / ".hermes" / "memory.db",
+    ])
+
     # memory.db / hindsight.db — unknown schema; try common table names
+    # Resolve hindsight from profile root first, then HERMES base (with or
+    # without profiles/ in HERMES_HOME).
     for label, path in (
-        ("memory.db", root / "memory.db"),
-        ("hindsight.db", root / "hindsight.db"),
+        ("memory.db", memory_path),
+        ("hindsight.db", hindsight_path),
         ("memory/memory.db", root / "memory" / "memory.db"),
     ):
         facts = []
@@ -94,7 +124,7 @@ def load_shard_facts(root: Path) -> Dict[str, Dict[str, str]]:
             for t in tables:
                 cols_rows = _rows(path, f"PRAGMA table_info({t})")
                 cols = [c[1] for c in cols_rows]
-                text_col = next((c for c in cols if c in ("fact_text", "content", "text", "body", "value")), None)
+                text_col = next((c for c in cols if c in ("fact_text", "content", "text", "body", "value", "payload")), None)
                 id_col = next((c for c in cols if c in ("memory_id", "id", "key", "uuid")), None)
                 if not text_col:
                     continue
@@ -134,7 +164,7 @@ def load_shard_facts(root: Path) -> Dict[str, Dict[str, str]]:
     return shards
 
 
-def cech_h1(shards: Dict[str, Dict[str, str]]) -> dict:
+def cech_h1(shards: dict[str, dict[str, str]]) -> dict:
     """Finite Čech H^1 for the 2-cover of shards: disagreements on overlaps.
 
     H0 ~ globally agreed facts (same key, same normalized text).
@@ -201,7 +231,9 @@ def main() -> int:
     cache = (out / "profiles" / profile / "cache") if profile and "profiles" not in str(out) else (out / "cache")
     cache.mkdir(parents=True, exist_ok=True)
     dest = cache / "sheaf-gluing-report.json"
-    dest.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    _tmp = dest.with_suffix(".tmp")
+    _tmp.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    os.replace(_tmp, dest)
     report["written"] = str(dest)
     if args.json:
         print(json.dumps(report, indent=2))
