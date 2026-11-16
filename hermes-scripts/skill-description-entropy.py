@@ -69,9 +69,14 @@ def parse_description(text: str) -> str:
     for raw in fm.splitlines():
         line = raw.rstrip()
         if line.startswith('description:'):
-            rest = line.split(':', 1)[1].strip().strip('"').strip("'")
-            # YAML block scalar indicators (>, |, >-, |-, >+, |+) are not content
-            if rest and rest.rstrip('-+') not in ('>', '|'):
+            rest = line.split(':', 1)[1].strip()
+            # YAML block scalars: description: > / | / >- / |- / >+ / |+
+            block = rest.rstrip('-+')
+            if block in ('>', '|'):
+                in_desc = True
+                continue
+            rest = rest.strip('"').strip("'")
+            if rest:
                 desc.append(rest)
                 in_desc = False
             else:

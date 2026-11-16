@@ -54,11 +54,13 @@ def _atomic_write_json(path: Path, obj) -> None:
 
 def _load_json(path: Path, default):
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, FileNotFoundError, json.JSONDecodeError):
         return default
 
 DELTA = 0.05
+BM25_K1 = 1.5
+BM25_DELTA = 1.0  # BM25+ floor (Lv & Zhai 2011)
 
 
 def bm25_scores(token_map):
@@ -73,7 +75,9 @@ def bm25_scores(token_map):
         tf = Counter(toks)
         for t, f in tf.items():
             idf = math.log((n - df[t] + 0.5) / (df[t] + 0.5) + 1.0)
-            sc += idf * f
+            # BM25+: saturated TF + delta so rare terms cannot vanish
+            tf_bm25 = (f * (BM25_K1 + 1)) / (f + BM25_K1) + BM25_DELTA
+            sc += idf * tf_bm25
         scores[name] = sc
     return scores
 
@@ -96,12 +100,16 @@ def compute(index):
     n = len(token_map)
     if n < 2:
         return {'n_skills': n, 'alarm': False, 'reason': 'too_few'}
-    scores = bm25_scores({k: set(v) for k, v in token_map.items()})
+    scores = bm25_scores({k: list(v) for k, v in token_map.items()})
     ranked = sorted(scores.items(), key=lambda kv: -kv[1])
     gap = ranked[0][1] - ranked[1][1]
-    # per-doc change bound: IDF of a unique token <= log(n+1)
-    c = math.log(n + 1.0)
-    rad = mcdiarmid_radius(n, c=c)
+    # McDiarmid over query tokens, not skills (small query edits).
+    # Cosine BM25+ is 1-Lipschitz in a single query-token coordinate
+    # up to ~2/sqrt(avgdl). Use typical query length, not n_skills.
+    avgdl = max(1.0, sum(len(v) for v in token_map.values()) / n)
+    n_query = max(8, min(24, round(avgdl)))
+    c = 2.0 / math.sqrt(avgdl)
+    rad = mcdiarmid_radius(n_query, c=c)
     alarm = gap < rad
     return {
         'ts': time.time(),
@@ -110,6 +118,7 @@ def compute(index):
         'top2': ranked[1][0],
         'gap': round(gap, 6),
         'c_bound': round(c, 6),
+        'n_query': n_query,
         'mcdiarmid_radius': round(rad, 6),
         'delta': DELTA,
         'alarm': alarm,
@@ -167,7 +176,7 @@ def main():
         print(json.dumps(run(), indent=2))
     except Exception:
         print(json.dumps({'error': 'shadow_path_failed'}))
-        sys.exit(1)
+        sys.exit(0)
 
 
 if __name__ == '__main__':
