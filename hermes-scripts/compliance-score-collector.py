@@ -17,6 +17,7 @@ _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile 
 import argparse
 import fcntl
 import json
+import math
 import sqlite3
 import sys
 import tempfile
@@ -97,6 +98,64 @@ def _clip01(x: float) -> float:
     return float(x)
 
 
+MIN_LABELED_FOR_MEAN = 10
+METRICS_PATH = CACHE / 'compliance-metrics.json'
+
+
+def _mean_ci(xs: list[float], z: float = 1.96) -> tuple[float, float] | None:
+    """Normal-approx mean CI. None unless n >= MIN_LABELED_FOR_MEAN."""
+    n = len(xs)
+    if n < MIN_LABELED_FOR_MEAN:
+        return None
+    mean = sum(xs) / n
+    var = sum((x - mean) ** 2 for x in xs) / (n - 1) if n > 1 else 0.0
+    se = math.sqrt(max(var, 0.0) / n)
+    return (mean - z * se, mean + z * se)
+
+
+def write_compliance_metrics(rows: list[dict], dest: Path | None = None) -> dict:
+    """Mean accuracy over labeled rows only. Unlabeled rows are excluded."""
+    labeled_acc = [
+        float(r['accuracy'])
+        for r in rows
+        if r.get('labeled') and r.get('accuracy') is not None
+    ]
+    n_labeled = sum(1 for r in rows if r.get('labeled'))
+    metrics: dict = {
+        'ts': _now(),
+        'n': len(rows),
+        'n_labeled': n_labeled,
+        'youden_threshold': None,
+        'ci_low': None,
+        'ci_high': None,
+    }
+    labels = [float(r['label']) for r in rows if r.get('label') is not None]
+    scores_l = [
+        float(r['uncalibrated_accuracy'])
+        for r in rows
+        if r.get('label') is not None and r.get('uncalibrated_accuracy') is not None
+    ]
+    thr = youden_threshold(scores_l, labels) if labels else None
+    metrics['youden_threshold'] = thr
+    if n_labeled < MIN_LABELED_FOR_MEAN or not labeled_acc:
+        metrics['accuracy'] = None
+        metrics['note'] = 'insufficient_labels'
+    else:
+        mean = sum(labeled_acc) / len(labeled_acc)
+        metrics['accuracy'] = mean
+        metrics['note'] = 'labeled_only'
+        ci = _mean_ci(labeled_acc)
+        if ci is not None:
+            metrics['ci_low'] = ci[0]
+            metrics['ci_high'] = ci[1]
+    path = dest or METRICS_PATH
+    try:
+        _atomic_write(path, metrics)
+    except OSError:
+        pass
+    return metrics
+
+
 def _label_from_outcome(outcome: str):
     o = str(outcome or '').strip().lower()
     if o in _POS_OUTCOMES:
@@ -173,16 +232,19 @@ def score_from_review_row(row: dict) -> dict:
         accuracy = raw
         uncalibrated = raw
     else:
-        accuracy = 0.0
-        uncalibrated = 0.0
+        # Unlabeled and no score: unknown, not a negative label.
+        accuracy = None
+        uncalibrated = None
     notes = row.get('notes')
     explainability = 1.0 if notes else 0.5
+    labeled = label is not None
     return {
         'ts': row.get('ts') or _now(),
         'tool_name': row.get('tool_name') or '',
-        'accuracy': float(accuracy),
-        'uncalibrated_accuracy': float(uncalibrated),
+        'accuracy': None if accuracy is None else float(accuracy),
+        'uncalibrated_accuracy': None if uncalibrated is None else float(uncalibrated),
         'label': label,
+        'labeled': labeled,
         'explainability': float(explainability),
         'robustness': float(DEFAULT_ROBUSTNESS),
         'session_id': row.get('session_id') or '',
@@ -234,34 +296,54 @@ def collect(db_path: Path, out_path: Path, state_path: Path, limit: int = 200) -
             rec = score_from_review_row(dict(zip(cols, tup)))
             batch.append(rec)
             last_id = int(tup[0])
-        xs = [float(r.get('uncalibrated_accuracy') or 0.0) for r in batch]
+        xs = []
         ys = []
-        for r in batch:
+        pav_idx = []
+        for i, r in enumerate(batch):
+            u = r.get('uncalibrated_accuracy')
+            if u is None:
+                continue
+            xs.append(float(u))
             lab = r.get('label')
-            ys.append(float(lab) if lab is not None else float(r.get('uncalibrated_accuracy') or 0.0))
+            ys.append(float(lab) if lab is not None else float(u))
+            pav_idx.append(i)
         fitted = pav_isotonic(xs, ys)
         labels = [float(r['label']) for r in batch if r.get('label') is not None]
         scores_l = [
             float(r['uncalibrated_accuracy'])
-            for r in batch if r.get('label') is not None
+            for r in batch
+            if r.get('label') is not None and r.get('uncalibrated_accuracy') is not None
         ]
         thr = youden_threshold(scores_l, labels) if labels else None
-        for rec, fit in zip(batch, fitted):
-            rec['accuracy'] = float(fit)
-            rec['calibrated'] = True
-            if thr is not None:
+        fit_by_i = {i: f for i, f in zip(pav_idx, fitted)}
+        for i, rec in enumerate(batch):
+            if rec.get('labeled') and i in fit_by_i:
+                rec['accuracy'] = float(fit_by_i[i])
+                rec['calibrated'] = True
+            elif not rec.get('labeled') and rec.get('accuracy') is None:
+                rec['calibrated'] = False
+            elif i in fit_by_i:
+                rec['accuracy'] = float(fit_by_i[i])
+                rec['calibrated'] = True
+            if thr is not None and rec.get('uncalibrated_accuracy') is not None:
                 rec['threshold'] = float(thr)
                 rec['threshold_pred'] = 1.0 if rec['uncalibrated_accuracy'] >= thr else 0.0
             _append_jsonl(out_path, rec)
             written += 1
         cal_path = (out_path.parent if out_path is not None else CACHE) / 'compliance-calibration.json'
+        labeled_fit = [
+            float(batch[i]['accuracy'])
+            for i in range(len(batch))
+            if batch[i].get('labeled') and batch[i].get('accuracy') is not None
+        ]
         try:
             mean_raw = sum(xs) / len(xs) if xs else 0.0
-            mean_fit = sum(fitted) / len(fitted) if fitted else 0.0
+            mean_fit = (sum(labeled_fit) / len(labeled_fit)) if labeled_fit else None
             mean_label = (sum(labels) / len(labels)) if labels else None
             _atomic_write(cal_path, {
                 'ts': _now(),
                 'n': len(batch),
+                'n_labeled': sum(1 for r in batch if r.get('labeled')),
                 'mean_uncalibrated': mean_raw,
                 'mean_calibrated': mean_fit,
                 'mean_label': mean_label,
@@ -270,8 +352,17 @@ def collect(db_path: Path, out_path: Path, state_path: Path, limit: int = 200) -
             })
         except OSError:
             pass
+        metrics_path = (out_path.parent if out_path is not None else CACHE) / 'compliance-metrics.json'
+        metrics = write_compliance_metrics(batch, dest=metrics_path)
         _atomic_write(state_path, {'last_id': last_id, 'ts': _now()})
-        return {'status': 'ok', 'written': written, 'last_id': last_id, 'mean_calibrated': (sum(fitted) / len(fitted) if fitted else None)}
+        return {
+            'status': 'ok',
+            'written': written,
+            'last_id': last_id,
+            'mean_calibrated': metrics.get('accuracy'),
+            'n_labeled': metrics.get('n_labeled'),
+            'note': metrics.get('note'),
+        }
     except sqlite3.Error as exc:
         return {'status': 'error', 'reason': str(exc), 'written': written}
     finally:
@@ -301,9 +392,33 @@ def _self_test() -> int:
         labeled = score_from_review_row({'outcome': 'ok', 'score': 0.2, 'notes': 'because'})
         assert labeled['label'] == 1.0
         assert labeled['accuracy'] == 1.0
+        assert labeled['labeled'] is True
         assert labeled['uncalibrated_accuracy'] == 0.2
+        unlabeled = score_from_review_row({'outcome': '', 'score': None})
+        assert unlabeled['label'] is None
+        assert unlabeled['accuracy'] is None
+        assert unlabeled['labeled'] is False
         fit = pav_isotonic([0.1, 0.4, 0.9], [0.0, 1.0, 1.0])
         assert fit[0] <= fit[1] <= fit[2] + 1e-12
+        few = [{'labeled': True, 'accuracy': 1.0, 'label': 1.0, 'uncalibrated_accuracy': 0.9}] * 3
+        m_few = write_compliance_metrics(few, dest=td / 'compliance-metrics.json')
+        assert m_few['accuracy'] is None
+        assert m_few['note'] == 'insufficient_labels'
+        many = []
+        for i in range(12):
+            many.append({
+                'labeled': True,
+                'accuracy': 1.0 if i % 2 == 0 else 0.0,
+                'label': 1.0 if i % 2 == 0 else 0.0,
+                'uncalibrated_accuracy': 0.8 if i % 2 == 0 else 0.2,
+            })
+        many.append({'labeled': False, 'accuracy': None, 'label': None, 'uncalibrated_accuracy': None})
+        m_many = write_compliance_metrics(many, dest=td / 'compliance-metrics.json')
+        assert m_many['accuracy'] is not None
+        assert abs(m_many['accuracy'] - 0.5) < 1e-9
+        assert m_many['n_labeled'] == 12
+        assert m_many['ci_low'] is not None and m_many['ci_high'] is not None
+        assert m_many['youden_threshold'] is not None
         db = td / 'lc.db'
         conn = sqlite3.connect(str(db), timeout=30)
         conn.execute('PRAGMA journal_mode=WAL')
