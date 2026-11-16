@@ -13,7 +13,7 @@
   <a href="https://nousresearch.com"><img src="https://img.shields.io/badge/Built%20by-Nous%20Research-blueviolet?style=for-the-badge" alt="Built by Nous Research"></a>
 </p>
 
-**227 commits ahead of upstream. 25 active plugins. 266 enabled cron jobs. 6 new agent/ modules.**
+**227 commits ahead of upstream. 24 active plugins. 266 enabled scheduled jobs. 6 new agent modules.**
 
 ---
 
@@ -21,97 +21,66 @@
 
 Additions are organised into five tiers by where they run:
 
-1. **In the turn loop** — changes to agent core files that fire every turn
-2. **At compress time** — plugins that modify or observe every compaction event
+1. **During every turn** — changes to the agent's core logic that fire on each message
+2. **At compress time** — plugins that modify or observe every context compression event
 3. **Background jobs** — scheduled scripts that maintain indexes, scores, and stores
-4. **Memory architecture** — a multi-tier memory system extending upstream's defaults
-5. **Infrastructure** — sandbox, cron hardening, system maintenance
+4. **Memory** — a multi-tier memory system extending upstream's defaults
+5. **Infrastructure** — sandbox hardening, scheduling, system maintenance
 
-The turn loop itself (iteration, tool dispatch, stop conditions) is not replaced. All agent core changes are listed precisely in the "Agent core changes" section below.
-
----
-
-## Agent core changes (what actually changed in `agent/`)
-
-This is the most important section for accuracy. The fork adds six new modules to `agent/` and makes targeted changes to several existing ones. None of them rewrite the conversation loop.
-
-### New `agent/` modules
-
-**`agent/session_classifier.py`** — heuristic session-type classifier. Exports `classify()`, `get_routing_hint()`, `SESSION_TYPES` (`research`, `code`, `mixed`, `entropy-adaptive`), and maps session type to compression profile names. Currently `get_routing_hint()` always returns `fork_mixed` as the compression profile (domain-specific profiles were found to over-prune in v4 eval). `get_routing_hint()` also emits `reasoning_effort_bias` (`research→high`, `code→medium`, `mixed→default`) and `model_tier_hint` (`frontier`/`balanced`/`fast`) for plugins to consume.
-
-**`agent/routing_harmonizer.py`** — 29-line stability shim that re-exports everything from `session_classifier`. Exists so plugins can import from a stable name while the classifier evolves.
-
-**`agent/reasoning_verbosity.py`** — `ReasoningVerbosityMixin` on `AIAgent`. Adds three verbosity modes: `full` (default), `compact` (strips completed thinking tags from history on low/medium-effort turns), and `suppress` (sets `_suppress_thinking_prefill` read by `turn_empty_response.py`). `compact_thinking_history()` is not called from `conversation_loop.py` — it is available for plugins and lambda-tuner to invoke via `PluginContext.set_verbosity_mode`.
-
-**`agent/adaptive_retrieval.py`** — library of relevance heuristics (Mallen 2023 / Yoran 2023, no LLM calls). Contains `should_retrieve_skill(query, top_score)` → `skip`/`names_only`/`full` (skip if BM25 < 0.15 and < 6 words; `names_only` if BM25 > 0.85; hard-domain regex forces `full`), `web_search_necessity()`, `filter_web_passages()` (drops passages below 0.12 keyword overlap unless that would drop all), `is_degenerate_tool_result()`, and `apply_tool_result_guards()`. Re-exported by `agent/skill_utils.py`. **No call sites in `conversation_loop.py` or `tool_executor.py`** — it is a library used by `skill_utils` and optionally by plugins.
-
-**`agent/ssl_guard.py`** — re-exports `resolve_httpx_verify` / `install_truststore` from upstream's `ssl_verify` module. Ensures the agent never passes `verify=False`. Also contains a linter for skill frontmatter SSL fields.
-
-**`agent/micro_compaction.py`** — MemForest partition pruning. `partition_messages_by_event()` and `apply_partition_prune_order()` apply weighted pruning: tool_result 0.4, reasoning 0.6, tool_call 0.8, assistant prose 0.7, user messages never pruned. Called from `context_compressor.py` before summarisation when MemForest mode is active.
-
-### Changes to existing `agent/` modules
-
-**`agent/conversation_loop.py`** (two changes):
-- `invoke_hook("on_session_start", ..., agent=agent)` — added the live `agent` object as a keyword argument so plugins can access the agent instance from `on_session_start`. Upstream omitted this.
-- `_persist_system_prompt(..., persist_tools=True)` on the Bot Chat capability-refresh path. Upstream used the default `persist_tools=False`.
-
-**`agent/tool_executor.py`** (three changes):
-- Calls `_governance_pre_check(function_name, function_args)` from `tool_guardrails` before each tool call. This is fire-and-forget: failures are swallowed, the return value is discarded, and execution always continues. It does not block.
-- Calls `fire_pre_compress(...)` from `compaction_events` after a successful auto-compress, so `pre_compress` hooks receive the event.
-- Removed the call to `maybe_apply_per_call_deadline()` from the deleted `tool_executor_deadline.py` module. Tool timeouts now rely on the argument/default only.
-
-**`agent/tool_executor_deadline.py`** — deleted. This upstream module clamped `terminal`/`execute_code`/`process_manage` timeouts to `min(user_timeout, remaining_deadline)` with a 60-second floor. The fork removed this. Tool calls no longer have a remaining-deadline clamp.
-
-**`agent/tool_guardrails.py`** (two changes):
-- `_governance_pre_check(tool_name, args)` added. If `tool_name` is in `{write_file, patch, terminal, execute_code}` and an argument value contains a critical-path indicator (`.hermes/hermes-fork/agent/`, `.hermes/profiles/`, `.hermes/plugins/`, `config.yaml`), it launches `improvement_governance.py propose` as a background subprocess with a 5-second timeout. Logging only — no blocking, no return value used.
-- `check_skills_guard()` rewritten. The upstream `_FORGET_RULES` regex list (jailbreak-ish patterns: "ignore previous", "you are now", etc.) was removed. The new logic only logs `[skills_guard]` when `skill_name` is in `{skill_manage, write_file, patch}` or `target_file` contains `SKILL.md`. Upstream blocked matching content; the fork does not block.
-
-**`agent/context_compressor.py`** (additions, no removal of core logic):
-- `_message_text_for_entropy(msg)` — flatten message content to plain text for analysis.
-- `_CAUSAL_TOOLS`, `_NOISE_TOOLS`, `_CHEAP_REACQ_TOOLS` — constants defined for tool classification. Used by eval harness; not wired into live `compress()` calls in this survey.
-- `_last_ratio: float | None` on `ContextCompressor`; `last_ratio` property.
-- `_fork_policy_set_exists()` — True if `self._policy_set` is a non-empty dict.
-- `set_compression_profile(profile_name, **overrides)` — looks up `COMPRESSION_PROFILES` from `agent.compression_config`, copies into `_policy_set`, applies overrides (`target_ratio`, `protected_roles`, `protected_last_n`, `max_tokens`). Called by lambda-tuner.
-- `_extract_fact_ledger(turns)` / `_prepend_fact_ledger(summary, turns)` — harvest paths, arXiv IDs, model names, SHAs, and numbered facts from turns and prepend as `FACT LEDGER:` to the compaction summary to mitigate lost-in-the-middle effects. Tested; live call site in `compress()` not confirmed in this survey.
-- `importance_biased_prune_enabled: bool = False` flag. No new importance-scorer class. JEV lives in the `jev-compaction` plugin, not in this module.
-- `_should_compress()` now gates on `billion_context.should_skip_for_growth()`.
-
-**`agent/prompt_builder.py`**:
-- Imports `skill_tier_string` from `agent.skill_utils`. This stub always returns `"full"` (BPS budget-aware selection is not wired into the prompt builder yet).
-- Skill focus-mode demotion: textbook-category skills collapse to `category [names only]: name, …` when `is_coding=True` and `config_mode="focus"`. Frontmatter `category:` now overrides path-derived category, so textbook skills demote regardless of directory structure.
-- New: `skill_is_model_invocable()` — `metadata.hermes.disable_model_invocation: true` excludes a skill from `<available_skills>` while still allowing `skill_view()` calls. Applied in `_parse_skill_file`, plugin skill rows, and snapshot fast-path. Snapshot version incremented to 6.
-
-**`agent/subagent_lifecycle.py`**:
-- `SubagentTerminalState` gains `unsupported: bool = False`.
-- `SubagentLifecycle.wait()` timeout no longer raises — it now sets a failed terminal state with a diagnostic message instead of letting the exception propagate.
-
-**`agent/agent_init.py`**:
-- `_init_memory` binds `agent.emit_memory = MethodType(emit_memory, agent)` as a fail-open wrapper to `hindsight_retain` via `_memory_manager`. Re-bound at end of `init_agent` if missing.
-- `_inject_context_engine_tools` calls `register_session_agent(agent.session_id, agent)` so `PluginContext.compressor` in `pre_llm_call` is a per-session weakref rather than a process global.
-
-**`agent/agent_runtime_helpers.py`**:
-- `effective_cache_ttl(ttl, *, model="", provider="")` — the `base_url=` parameter was removed. Qwen/Alibaba TTL clamping (`1h → 5m`) is now detected by provider/model name rather than base URL.
-
-**`agent/moa_loop.py`**:
-- Removed `last_aggregator_route` / `last_aggregator_attempt` prompt-cache clock attributes. `agent/prompt_cache_clock.py` was deleted (−650 lines vs upstream). Cache TTL no longer reads `base_url`.
-
-**`agent/billion_context.py`** (new module vs upstream):
-- `maybe_ccr_store()` — scores tool results with `keyword_overlap_score` and offloads oversized results to disk, inserting an `acp_retrieve` placeholder. Called from `tool_executor`.
-- `crush_message_list()` — JSON-fold / log-select compression pass before the LLM summarisation step. Called from `context_compressor.py`.
-- `should_skip_for_growth()` — delays auto-compress until context growth reaches `growth_floor`. Wired into `ContextCompressor._should_compress`.
-- `classify_turn()` / `verbosity_directive()` — classify turn as `new_user_ask`, `mechanical_continuation`, or `error_continuation`. Used by billion-context plugin; not called from `conversation_loop.py`.
-
-**New: `hermes_cli/plugins_context.py`** (+347 lines, not in `agent/` but new vs upstream):
-- `PluginContext` gains: `compressor` (per-session weakref), `set_model_preference()`, `set_reasoning_mode()` / `get_reasoning_mode()`, `set_verbosity_mode()`, `set_adaptive_effort()` / `get_adaptive_effort()` / `apply_adaptive_effort_to_agent()`, `set_intent()`, `emit_episode()` → `agent.emit_memory`, `recall_episodes()`, `suggest_skill_update()`, `compact_tool_result()`.
-- `set_compression_profile()` delegates to `ContextCompressor.set_compression_profile()`.
-
-**New: `agent/compaction_events.py`**:
-- `fire_pre_compress(session_id, turn_count, context_tokens, trigger_reason, agent=None)` — fires the `pre_compress` hook with these arguments.
-- `fire_post_compaction(...)` — fires `post_compaction` hook with `agent=` forwarded.
+The core conversation loop — how the agent iterates, calls tools, and decides when to stop — is not replaced. All changes to the agent's core are listed precisely in the section below.
 
 ---
 
-## Memory architecture
+## Agent core changes
+
+This is the most important section for accuracy. The fork adds six new modules to the agent and makes targeted changes to several existing ones. None of them rewrite the conversation loop.
+
+### New agent modules
+
+**Session classifier** — identifies what kind of session is underway (research, coding, mixed, or high-volume) based on the content of messages. Used by the lambda-tuner plugin to choose how aggressively to compress context. Also emits hints about how much reasoning effort is appropriate for the current work.
+
+**Routing harmonizer** — a small stability layer that re-exports everything from the session classifier under a fixed name. Plugins import from this stable name so they don't break when the classifier evolves underneath.
+
+**Reasoning verbosity** — adds three verbosity modes to the agent: full (default), compact (strips completed internal thinking from history on low-effort turns), and suppress (turns off thinking output entirely). Available for plugins to invoke; not called automatically from the conversation loop.
+
+**Retrieval heuristics library** — a set of relevance checks for deciding when to retrieve skills, run a web search, or discard a web passage. For example: skip skill retrieval if the query is very short and the best match is weak; force skill retrieval if the query matches a known hard domain. Also flags tool results that are degenerate (empty, error-only, or repeated). Used by the skill utilities module; not called directly from the conversation loop.
+
+**SSL guard** — ensures the agent never makes HTTP requests with certificate verification disabled. Also provides a linter for skill files that reference SSL settings.
+
+**Memory partition pruner** — when the agent uses a tree-structured memory layout, this module handles weighted pruning before summarisation: tool results are pruned most aggressively, internal reasoning moderately, user messages never.
+
+### Changes to existing agent modules
+
+**Conversation loop** (two changes):
+- When a session starts, the live agent object is now passed to plugins. Previously plugins received only the session ID.
+- On the Bot Chat capability-refresh path, tool definitions are now persisted. Upstream did not persist them here.
+
+**Tool executor** (three changes):
+- Before each tool call, a lightweight governance check runs in the background. It does not block execution or change the result — it just logs a proposal if the call touches a sensitive path.
+- After a successful auto-compress, a compress event is fired so compress-time plugins receive it.
+- A deadline-clamping mechanism that limited tool timeouts based on remaining session time was removed. Tool timeouts now rely on the timeout argument alone.
+
+**Tool guardrails** (two changes):
+- Added a background governance check for writes to sensitive paths: when a file write or terminal command targets the agent's core code, config, or plugins, a background process is launched to log a proposal. It has a 5-second timeout and does not block execution.
+- Removed a blocklist of jailbreak-style phrases (e.g. "ignore previous instructions"). The fork replaces blocking with logging-only: matching patterns are noted but the call is not blocked.
+
+**Context compressor** (additions, no removal of core logic):
+- Compression can now be blocked from firing when context is growing too slowly. This avoids compressing prematurely.
+- Plugins can set a compression profile by name (research, code, or mixed). Each profile controls how aggressively context is trimmed and how many recent turns are protected.
+- Before the summarisation step, a fact ledger is prepended to the summary: paths, paper IDs, model names, and numbered facts extracted from the conversation, to reduce information loss.
+- A message-folding pass runs before the language model summarisation step to reduce token cost.
+
+**Prompt builder** (two changes):
+- Textbook-category skills collapse to name-only listings when the agent is in coding mode, reducing noise.
+- A new skill flag allows skills to be hidden from the agent's available-skills list while remaining accessible via direct lookup.
+
+**Subagent lifecycle** — when a subagent times out, the fork now records a clean failed state with a diagnostic message instead of letting the timeout propagate as an exception.
+
+**Agent init** — the agent's memory emit method is now bound at startup as a fail-open wrapper. Memory write failures no longer crash the turn.
+
+---
+
+## Memory
 
 The fork runs four distinct memory stores. They are not unified — each has its own write path and its own retrieval mechanism.
 
@@ -119,195 +88,207 @@ The fork runs four distinct memory stores. They are not unified — each has its
 
 **1. Hindsight (live, per-turn)**
 
-The primary long-term memory backend. `Hindsight` is an in-process `MemoryProvider` that runs every turn.
+The primary long-term memory backend. Runs every turn.
 
-- API mode: connects to a local Hindsight server at `http://127.0.0.1:9177`.
-- Configuration: `~/.hermes/hindsight/config.json` — `retain_every_n_turns=1`, `retain_async=true`, `auto_recall=true`, `recall_types=observation`, embeddings via `text-embedding-3-small`.
-- **Write path**: on every turn, `HindsightMemoryProvider.sync_turn()` retains the conversation async. `hindsight_retain` tool is also available for explicit retention. LRU dedup on the last 20 writes prevents double-commit.
-- **Read path**: `HindsightMemoryProvider.prefetch()` runs before each turn via the MemoryProvider interface (auto-recall). The model also has the `hindsight_recall` and `hindsight_reflect` tools.
-- **Not** the same as the Graphiti write path. Hindsight writes are synchronous with the turn; Graphiti writes are batch cron jobs.
+- Connects to a local Hindsight server.
+- Retains every turn asynchronously. A deduplication cache prevents double-commits on the last 20 writes.
+- Before each turn, relevant past observations are recalled automatically.
+- The agent can also recall and reflect on memory on demand via dedicated tools.
+- Distinct from the knowledge graph — Hindsight writes happen during turns; graph writes happen in background jobs.
 
-**2. MEMORY.md / USER.md (always-injected)**
+**2. Standing facts (always-injected)**
 
-Standing facts injected into every system prompt. 2200 character budget. Managed manually or by background scripts — not a retrieval store.
+Facts injected into every system prompt. 2200 character budget. Managed manually or by background scripts — not a retrieval store.
 
-**3. L1 markdown facts (batch extraction, not per-turn)**
+**3. Extracted facts (batch, not per-turn)**
 
-A pipeline that extracts important facts from session history into dated markdown files (`profiles/fork/memory-facts/YYYY-MM-DD.md`).
+A pipeline that extracts important facts from session history into dated markdown files.
 
-- `l1-extract.py` runs daily at 01:00 (direct, not sandboxed). Source code is a wrapper; actual logic runs from a restored `.pyc` (original source was zeroed). Extracts bullet-point facts from recent sessions.
-- `l1-promote.py` runs at 01:30, promotes high-confidence extracted facts to a query tier.
-- `l1-graphiti-write.py` runs every 250 minutes via `l1-graphiti-periodic` cron, writing promoted facts to Graphiti as episodes before truncating the staging file.
-- `l1-graphiti-reconcile.py` retries failed Graphiti writes using `graphiti-state.db`.
-- `l1-hindsight-promote.py` is currently a **stub**: it counts bullets, writes a log entry with `status: pending_gateway`, and exits 0 without calling `hindsight_retain`. The corresponding cron job (`l1-hindsight-promote`) is an **agent-prompt job** that reads `staging.md` and is supposed to call the tool directly — this is the actual promotion path, not the script.
-- `l1-gmemory-consolidation.py` — G-Memory tier promotion: session → query (≥2 references) → insight (≥3).
-- `l1-hypermem-promote.py` — promotes facts referenced by ≥3 shared entities to a hypergraph tier in Graphiti.
-- `l1-tracegrant.py` — tracks which source types are authorised to write which memory namespaces.
+- Runs daily: extracts bullet-point facts from recent sessions, then promotes high-confidence ones to a query tier.
+- Every ~4 hours: writes promoted facts to the knowledge graph.
+- Retries failed graph writes using a local state tracker.
+- A graph consolidation job promotes facts from session-tier to query-tier when they appear at least twice, and to insight-tier when they appear at least three times.
 
-**4. Graphiti (entity/relation graph, via MCP)**
+**4. Knowledge graph (entity/relation graph)**
 
-A knowledge graph running at `http://127.0.0.1:8765/mcp/`. Fed by the L1 cron pipeline, not directly by the turn loop. The model can query it on-demand via `search_memory_facts`, `search_nodes`, and `add_memory` MCP tools.
+A knowledge graph fed by the extraction pipeline, not directly by conversation turns. The agent can query it on demand via search and add tools.
 
-### CLI-only recall tools (not in the agent loop)
+### Recall tools (not in the agent loop)
 
-- `unified-recall.py` — queries Hindsight REST + Graphiti MCP, fuses results with Reciprocal Rank Fusion into L0/L1/L2 tiers. CLI tool and standalone script; **not called during turns**.
-- `dual-backend-memory-fuser.py` — fuses results from two arbitrary backends (relevance − redundancy). CLI/offline use only.
-- `memory-query-router.py` — `route_query()`: `semantic` → Hindsight, `temporal` → session search then Graphiti, `relational` → Graphiti, `exact` → FTS5. Library; **not called from the loop**.
+Several recall tools exist for offline or on-demand use — they are not called automatically during turns. These include a unified recall tool that queries both the Hindsight server and knowledge graph and merges the results, a dual-backend fuser for relevance-minus-redundancy merging, and a query router that picks the right backend by query type (semantic, temporal, relational, or exact).
 
-### Background memory maintenance scripts (~50 cron jobs)
+### Background memory maintenance
 
-The ~50 `memory-*.py` scripts in `hermes-scripts/` run as cron jobs and write results to `cache/*.json`. They are **not** the retrieval path. They maintain health metrics on the memory stores — when to evict old entries, whether the embedding space has drifted, whether duplicate facts should be merged, etc. See the cron job section for which ones run and when. None of these scripts are called during a conversation turn.
+Around 50 scheduled scripts maintain the health of the memory stores — detecting when to evict old entries, whether the embedding space has drifted, whether duplicate facts should be merged. None of these run during a conversation turn.
 
 ---
 
 ## Skill routing
 
-There are two completely separate routing layers: one that fires every turn (the nudge plugin), and a large set of background scripts that maintain an offline bandit model.
+There are two completely separate routing layers: one that fires every turn (the nudge plugin), and a large set of background scripts that maintain an offline model.
 
-### What runs during turns: `skill-routing-nudge` plugin
+### What runs during turns: skill-routing-nudge plugin
 
-The only live routing change in the turn is the `skill-routing-nudge` plugin (`pre_llm_call` hook). It:
+The only live routing change in the turn is the skill-routing-nudge plugin. It:
 
-1. Scores the user message against `profiles/fork/scripts/skill-router-index.py` using BM25/TF-IDF (k1=1.5, b=0.75).
-2. If the message is ≥8 words, the top score is ≥0.3, and either the top-2 gap is ≥0.1 or the top score is ≥0.5, injects a `[SKILL ROUTING HINT]` block into the user message naming the top-3 candidates.
-3. Safety-related skills trigger at a lower threshold (0.2).
+1. Scores the user message against a text-matching skill index.
+2. If the message is long enough and the top match is strong enough, injects a skill suggestion into the message naming the top candidates.
+3. Safety-related skills are suggested at a lower threshold.
 4. Fail-open: any failure is swallowed and the message is sent unmodified.
 
-The index is a BM25 index over skill names and descriptions, rebuilt weekly. The nudge does not select the skill — it hints the model, which still makes the final call.
+The index is rebuilt weekly. The nudge does not select the skill — it hints the model, which still makes the final call.
 
-Additionally, `skill-access-logger` (`post_tool_call` hook) appends every `skill_view` call to `cache/skill-access.log` for offline analysis.
+A companion plugin appends every skill-view call to a log for offline analysis.
 
-**`adaptive-retrieval` plugin** exists but is not in `plugins.enabled` — it is shadow/disabled.
+### What runs in background: the routing model infrastructure
 
-**`skill_is_model_invocable()`** in `agent/prompt_builder.py` — a new mechanism: skills with `metadata.hermes.disable_model_invocation: true` in their frontmatter are excluded from the `<available_skills>` block in the system prompt, while still being accessible via `skill_view()`. This runs every turn.
+About 60 scheduled scripts maintain an offline routing model whose weights are stored on disk. These weights are **not currently wired** into the live turn routing — the nudge plugin uses a plain text-matching index, not the model weights. The model infrastructure is research/forward-looking and tracks routing quality offline.
 
-### What runs in background: the bandit infrastructure
+Background jobs include weekly and Sunday index rebuilds, a daily semantic fallback index rebuild, and a daily offline model weight update.
 
-The ~60 `routing-*.py` and `skill-*.py` scripts in `hermes-scripts/` are background cron jobs. They maintain an offline bandit model (LinUCB, d=16 hashed features) whose weights live in `cache/routing-linucb*.json`. These weights are **not currently wired** into the live turn routing — the nudge plugin uses a plain BM25 index, not the bandit weights. The bandit infrastructure is research/forward-looking infrastructure that tracks routing quality offline.
-
-Background jobs that run on a schedule include:
-- `skill-router-index-rebuild` (Saturdays 05:00) and `skill-index-weekly-rebuild` (Sundays 03:00) — rebuild the BM25 index the nudge plugin reads
-- `concept-lattice-rebuild` (daily 02:00) — semantic fallback index (used if BM25 top-2 gap < 0.12)
-- `routing-linucb-0910` (daily 09:10) — updates the offline bandit state
-- `routing-weight-updater` (daily 07:00) — FTRL weight file update
-- `omni-skill-scan` (daily 01:00) — skill health scan
-
-The ~30 other routing scripts (`routing-azuma-concentration.py`, `routing-pac-bayes-bound.py`, `routing-mobius-audit.py`, etc.) write alarm logs and cache JSONs. They are observability/research infrastructure, not the live routing path.
+Around 30 other routing scripts write alarm logs and metrics — they are observability infrastructure, not the live routing path.
 
 ---
 
-## Compaction pipeline
+## Compression
 
 The fork modifies what happens at compress time and measures quality in background jobs. These are two separate things.
 
-### What runs at compress time (every compaction)
+### What runs at compress time (every compression)
 
-Compression is triggered by `ContextCompressor.maybe_compress()` / `compress()`. The fork fires `fire_pre_compress()` before compression, which invokes the `pre_compress` hook on all registered plugins. What actually runs:
+**Context compressor** — the core compress logic is upstream's. The fork adds: a fact ledger prepended to summaries, a message-folding pass before the language model summarisation step, and growth-gating (defer compression until context is actually growing fast enough).
 
-**`jev-compaction` plugin** — the most significant compaction modification. Monkeypatches the compressor's `_prune_old_tool_results()` method on the live instance:
-- Scores tool results by recency/relevance density and divides them into thirds
-- For the middle tier, makes up to 8 `logprob_classify` calls to score informativeness
-- Uses exponential moving average thresholds to decide what to drop
-- Configuration: `call_budget: 8`, `rr_lambda: 0.18`
-- Fail-open: wraps the whole thing so any failure falls back to the original prune behaviour
+**jev-compaction plugin** — the most significant compaction modification. Replaces the tool-result pruning step with a scored version: tool results are ranked by recency and relevance density, divided into tiers, and the middle tier is scored for informativeness using up to 8 secondary model calls per compaction. Fail-open.
 
-**`compaction-gate` plugin** — observability only, does not block. Runs sentence extraction + zlib MDL + Jaccard similarity and appends a quality record to `cache/compaction-gate-log.jsonl`. If `turn_count ≤ 50`, it logs a skip notice. It does not reject or modify any compaction.
+**compaction-gate plugin** — observability only, does not block. Runs quality checks and appends a record to a log. If it's early in the session, it logs a skip notice instead.
 
-**`context-pressure-guard` plugin** — computes a rate-distortion lambda target and writes it to `cache/rd-lambda-target.json` as a signal for the advisor. Does not block.
+**context-pressure-guard plugin** — computes a compression signal based on how much pressure the context is under and writes it to a cache file for use by other components.
 
-**`billion-context` plugin** — most aggressive live modification. Runs `crush_message_list()` to fold tool results to JSON / log-select before the LLM summary step. Applies growth gating (`should_skip_for_growth()`) to defer auto-compress until context growth rate meets a minimum. Handles CCR placeholder offloading for oversized tool results.
+**billion-context plugin** — the most aggressive live modification. Folds tool results to compact JSON before the language model summarisation step. Applies growth gating to defer auto-compress when context isn't growing fast enough. Offloads oversized tool results to disk and inserts a retrieval placeholder.
 
-**`pre-compact.sh` hook** — fires a loopback HTTP request to `http://127.0.0.1:49374` (ai-memory endpoint). Fail-open.
+**lambda-tuner plugin** — classifies the session type (research, coding, or mixed) from your messages and applies the matching compression profile. Research sessions compress earlier and protect more recent turns. Coding sessions keep more context per turn. Mixed is the balanced default. Also scores each message for complexity to suggest reasoning depth, and pre-compresses large tool outputs before they enter context. See the [lambda-tuner section](#lambda-tuner) below.
 
-**`lambda-tuner` plugin** (in-repo, not profile) — fires `pre_compress` and sets the compression profile via `ctx.set_compression_profile()` → `ContextCompressor.set_compression_profile()`. Profile is currently always `fork_mixed` (`target_ratio=0.50`, `protected_last_n=20`, `max_tokens=32k`) regardless of session type.
+### Offline quality measurement (not at compress time)
 
-### Offline evaluation pipeline (not at compress time)
+A separate evaluation tool compresses a saved transcript under different policies, asks recall questions about the dropped content, and uses a language model to judge the answers. This is a manual tool for evaluating compression quality — not a scheduled job.
 
-A separate eval harness lives in `evals/compaction/` (`runner.py`, `policies.py`, `report.py`, `jev_arm.py`, `octeval/`). It compresses a saved transcript under different policies, asks recall questions about the dropped content, and uses an LLM to judge the answers. This is a manual CLI tool for evaluating compaction quality — not a cron job.
-
-Background quality metrics that run on a cron schedule (not modifying the compressor):
-- `score-compaction-rouge-nightly` (daily 04:50) — ROUGE-1 precision/recall between pre/post compaction. Alarms if precision < 0.3 (fabrication) or recall < 0.2 (coverage loss).
-- `compaction-aep-typical-set` (hourly) — AEP typical-set coverage score
-- `pre-compact-annotate` (every 30 minutes, `no_agent=True`) — rate-distortion advisor; writes JSON signal
-- `compression-quality-monitor` (every 15 minutes) — monitors quality metrics
+Scheduled quality metrics that run on a cron schedule (not modifying the compressor):
+- Nightly compression quality score — precision and recall between pre/post compression. Alarms if precision drops below 0.3 (fabrication risk) or recall below 0.2 (too much lost).
+- Hourly typical-set coverage score
+- Every 30 minutes: a compression advisor writes a signal to a cache file
+- Every 15 minutes: a compression quality monitor
 
 ---
 
-## Plugin inventory (what is actually enabled)
+## Lambda-tuner
 
-23 plugins are enabled in `config.yaml`. All are fail-open except where noted.
+Lambda-tuner is the plugin that connects session classification to compression behaviour. It was available in the codebase but not enabled in the fork profile until now.
 
-| Plugin | When it runs | What it actually does |
+### What it does
+
+The agent often switches between very different kinds of work — a research session looks nothing like a coding session. Lambda-tuner watches your messages and classifies the session type. Once it has enough signal (usually after the first message), it applies a compression profile matched to that type:
+
+- **Research sessions** — compress earlier, protect more recent turns, prune older context more aggressively. Keeps the working context tight so recent findings are always available.
+- **Coding sessions** — keep more context per turn, protect more turns from pruning, compress less aggressively. Code needs more surrounding context to be useful.
+- **Mixed sessions** — the balanced default. Neither aggressive nor conservative.
+
+The classification is based on the content of your messages: research-heavy vocabulary (citing papers, asking about studies, information retrieval) pulls toward research; code-heavy vocabulary (debugging, function names, stack traces) pulls toward code.
+
+### What else it does
+
+Beyond compression, lambda-tuner also:
+- **Scores message complexity** — each message is scored for how hard it is. This score is available to plugins for adjusting reasoning depth or model tier.
+- **Pre-compresses large tool outputs** — before large tool results enter context, lambda-tuner strips boilerplate and compresses them. This runs before compression, not at it.
+- **Writes a session type hint** — the classification is written to a cache file so other plugins can read the session type without re-classifying.
+- **Warm-starts on session resume** — if a previous session was classified, the classification carries over at the start of the new session instead of starting from scratch.
+
+### Why it wasn't enabled before
+
+Lambda-tuner existed in the codebase as a shipped-but-not-deployed plugin. The fork profile's plugin directory didn't include it, so it never loaded. The context-pressure-guard plugin was writing a compression signal that lambda-tuner was designed to consume, but nothing was consuming it. This change copies lambda-tuner into the active plugin directory and adds it to the enabled list.
+
+### What changed to enable it
+
+- Copied the plugin into the active plugin directory.
+- Added it to the enabled plugins list in config.
+- Verified all hooks register correctly and relative imports work under the fork's plugin loader.
+- Confirmed that the compression profiles lambda-tuner sets match the profiles the compressor knows about (research, code, mixed).
+
+---
+
+## Plugin inventory
+
+24 plugins are enabled. All are fail-open except where noted.
+
+| Plugin | When it runs | What it does |
 |---|---|---|
-| `hindsight` | Every turn (MemoryProvider) | The primary long-term memory backend. Auto-retains every turn async via the Hindsight server. Auto-recalls before each turn. Tools: `hindsight_retain`, `hindsight_recall`, `hindsight_reflect`. |
-| `jev-compaction` | `pre_compress` | Monkeypatches `_prune_old_tool_results()` to score tool results by recency/relevance. Up to 8 LLM classify calls per compaction. |
-| `compaction-gate` | `pre_compress` | Observability: computes MDL/Jaccard compaction quality and logs it. Does not block anything. |
-| `context-pressure-guard` | `pre_compress` | Computes rate-distortion lambda; writes advisory JSON. |
-| `billion-context` | `pre_compress`, `transform_tool_result`, and others | Growth-gated compression; CCR offloading of oversized tool results; `crush_message_list()` before LLM summary. |
-| `jev-turn-evaluator` | `post_llm_call` | Scores each LLM turn via a secondary model. Writes scores; gates policy updates until ≥20 turns scored with mean ≥3.5. |
-| `governance-hard-block` | `register()` only | **Currently disabled.** `register()` logs `"DISABLED — gate not registered"`. The `pre_tool_call` stub always returns `None`. Does not block tool calls. |
-| `cobra-guard` | `post_tool_call` | Tracks decision outcomes. Blocks repeated failures on the same decision type until manually reviewed. |
-| `tool-auth-gate` | `post_tool_call` | Probabilistic spot-check: verifies auth tokens on a sampled subset of external service calls. |
-| `tool-result-audit` | `post_tool_call` | Scans external tool results for prompt injection patterns before they enter the context. |
-| `memory-ransac-gate` | `post_tool_call` | Checks new facts against existing memories before commit; rejects statistical outliers. |
-| `decision-audit` | `post_tool_call` | Accumulates tool resolvability stats per session; writes to lifecycle.db every 10 calls. |
-| `delegation-audit-hook` | `post_tool_call` | Records subagent delegation outcomes (success/failure, duration). |
-| `deductive-verifier` | `post_llm_call` | Checks that the agent's stated conclusions follow from its stated premises. |
-| `formal-verify-plugin` | `post_tool_call` | Enforces proof-state integrity on tool calls that claim to verify formal properties. |
-| `compliance-score-hook` | `post_tool_call` | Scores tool outputs for compliance red flags and excessive length; logs to `cache/compliance-scores.jsonl`. |
-| `post-tool-compliance` | `post_tool_call` | Independent compliance scorer; observation-only, never blocks. |
-| `turn-behavior-logger` | `post_llm_call` | Logs per-turn behavioural metrics: length, tool count, model, compaction events. |
-| `skill-routing-nudge` | `pre_llm_call` | Scores user message against BM25 skill index; injects `[SKILL ROUTING HINT]` into message if score threshold met. The only live routing change. |
-| `skill-access-logger` | `post_tool_call` | Appends `skill_view` calls to `cache/skill-access.log` (≤100KB). |
-| `skill-latency-logger` | `post_tool_call` | Records skill load/use latency. |
-| `adaptive-retrieval` | `pre_tool_call` | **Shadow/disabled** — not in `plugins.enabled`. |
+| `hindsight` | Every turn | The primary long-term memory backend. Retains every turn asynchronously. Recalls relevant past observations before each turn. |
+| `jev-compaction` | At compress time | Replaces the tool-result pruning step with a scored version. Up to 8 secondary model calls per compression to judge informativeness. |
+| `compaction-gate` | At compress time | Observability: computes compression quality and logs it. Does not block anything. |
+| `context-pressure-guard` | At compress time | Computes a compression pressure signal and writes it to a cache file. |
+| `billion-context` | At compress time, on tool results | Growth-gated compression. Folds tool results to compact JSON before summarisation. Offloads oversized tool results to disk. |
+| `lambda-tuner` | On each message, at compress time, on session start/end, on tool results | Classifies the session as research, coding, or mixed. Applies the matching compression profile. Scores message complexity. Pre-compresses large tool outputs. |
+| `jev-turn-evaluator` | After each model response | Scores each model response via a secondary model. Gates policy updates until enough turns are scored with a satisfactory average. |
+| `governance-hard-block` | On load only | **Currently disabled.** Logs that it is disabled; does not block tool calls. |
+| `cobra-guard` | After each tool call | Tracks decision outcomes. Blocks repeated failures on the same decision type until manually reviewed. |
+| `tool-auth-gate` | After each tool call | Spot-checks auth tokens on a sample of external service calls. |
+| `tool-result-audit` | After each tool call | Scans external tool results for injection attempts before they enter context. |
+| `memory-ransac-gate` | After each tool call | Checks new facts against existing memories before commit; rejects statistical outliers. |
+| `decision-audit` | After each tool call | Accumulates tool outcome stats per session; writes to a database periodically. |
+| `delegation-audit-hook` | After each tool call | Records subagent delegation outcomes (success/failure, duration). |
+| `deductive-verifier` | After each model response | Checks that the agent's stated conclusions follow from its stated premises. |
+| `formal-verify-plugin` | After each tool call | Enforces proof-state integrity on tool calls that claim to verify formal properties. |
+| `compliance-score-hook` | After each tool call | Scores tool outputs for compliance concerns and excessive length; logs results. |
+| `post-tool-compliance` | After each tool call | Independent compliance scorer; observation-only, never blocks. |
+| `turn-behavior-logger` | After each model response | Logs per-turn metrics: response length, tool count, model used, compression events. |
+| `skill-routing-nudge` | Before each model call | Scores the user message against the skill index; injects a skill suggestion if the match is strong enough. The only live routing change. |
+| `skill-access-logger` | After each tool call | Appends skill-view calls to a log for offline analysis. |
+| `skill-latency-logger` | After each tool call | Records how long skill loads and uses take. |
 | `orca-status` | Lifecycle events | Reports lifecycle events to an external monitoring service. |
 | `camofox` | Browser tool calls | Stealth browser backend with fingerprint evasion. |
 
-**In-repo plugins** (tracked in git, not in the profile plugins directory):
-- `hindsight` — the full `HindsightMemoryProvider` implementation (~81KB). Registers via `ctx.register_memory_provider()`.
-- `lambda-tuner` — `TaskComplexityScorer`; fires `on_session_start`, `pre_llm_call`, `pre_compress`, `on_session_finalize`, `transform_tool_result`. Writes `cache/last-session-type.json`. Sets compression profile (currently always `fork_mixed`). Complexity lambdas: research 0.55, code 0.2, mixed/entropy-adaptive 0.4.
+**In-repo plugins** (tracked in git, not in the active plugin directory):
+- `hindsight` — the full memory provider implementation. Registers via the memory provider interface.
 
 ---
 
 ## Safety and approval changes
 
-**`tools/threat_patterns.py`** — the approval pattern list was updated. Some patterns that were triggering false positives on legitimate operations were removed; patterns more specific to actual injection vectors were added. Exact set of added/removed regexes was not fully captured in this survey but the diff is ~150 lines.
+**Approval pattern list** — the set of patterns that trigger an approval prompt was updated. Some patterns that caused false positives on legitimate operations were removed; patterns more specific to actual injection vectors were added.
 
-**`tools/approval.py`** — session-keyed approval and pattern tracking added (`session_key`, `pattern_key`). `get_current_session_key` from `tools.approval_context` and detection helpers from `tools.approval_detection`. Core approval UI flow is unchanged; session scoping is the fork delta.
+**Session-scoped approval tracking** — approval and pattern tracking are now keyed to the current session. The core approval interaction flow is unchanged.
 
-**`_governance_pre_check()` in `tool_guardrails.py`** — fire-and-forget subprocess call to `improvement_governance.py propose` on high-risk writes. 5-second timeout. Does not block execution. Fail-open.
+**Governance pre-check** — a background governance check fires on writes to sensitive paths (agent core, config, plugins). It launches a background process with a 5-second timeout, does not block execution, and is fail-open.
 
-**`check_skills_guard()` in `tool_guardrails.py`** — upstream blocked tool calls matching jailbreak-ish regex patterns (`ignore previous`, `you are now`, etc.). Fork replaced this with logging-only behaviour. Matching tool calls are logged but not blocked.
+**Skills guard change** — upstream blocked tool calls matching jailbreak-style phrases. The fork replaces blocking with logging-only. Matching patterns are noted but the call proceeds.
 
 ---
 
-## Infrastructure and cron
+## Infrastructure and scheduling
 
-**Cron scale**: 270 total jobs, 266 enabled. The majority are research/alarm scripts that write cache JSON and are not in any critical path. The ones that actually matter for agent operation:
+**Scheduled jobs**: 270 total, 266 enabled. The majority are research or alarm scripts that write to cache and are not in any critical path. The ones that matter for agent operation:
 
 | Job | Schedule | Role |
 |---|---|---|
-| `l1-extract-direct` | Daily 01:00 | Extract facts from recent sessions to markdown |
-| `l1-promote-direct` | Daily 01:30 | Promote high-confidence extracted facts |
-| `l1-graphiti-periodic` | Every 250 min | Write promoted facts to Graphiti graph |
-| `l1-hindsight-promote` | Daily 09:00 | Agent-prompt job: retain staging.md facts via hindsight_retain |
-| `skill-router-index-rebuild` | Sat 05:00 | Rebuild BM25 skill index the nudge plugin reads |
-| `skill-index-weekly-rebuild` | Sun 03:00 | Unconditional skill index rebuild |
-| `concept-lattice-rebuild` | Daily 02:00 | Semantic fallback index |
-| `score-compaction-rouge-nightly` | Daily 04:50 | ROUGE-1/L compaction quality score |
-| `compaction-aep-typical-set` | Hourly | AEP typical-set coverage score |
-| `system-update` | Daily | OS/package/firmware updates with per-step timeouts |
-| `graphiti-edge-health-check` | Every 6h | Graphiti graph health |
-| `routing-linucb-0910` | Daily 09:10 | Offline bandit state update |
+| Fact extraction | Daily 01:00 | Extract facts from recent sessions to markdown |
+| Fact promotion | Daily 01:30 | Promote high-confidence extracted facts |
+| Graph write | Every ~4 hours | Write promoted facts to the knowledge graph |
+| Graph retain | Daily 09:00 | Agent job: retain staged facts via the memory tool |
+| Skill index rebuild | Saturday 05:00 | Rebuild the text-matching skill index the nudge plugin reads |
+| Skill index rebuild (unconditional) | Sunday 03:00 | Full skill index rebuild |
+| Semantic fallback index | Daily 02:00 | Rebuild the semantic fallback index |
+| Compression quality score | Daily 04:50 | Precision and recall score on recent compressions |
+| Compression coverage | Hourly | Typical-set coverage score |
+| System update | Daily | OS, packages, and firmware updates with per-step timeouts |
+| Graph health check | Every 6h | Knowledge graph health |
+| Routing model update | Daily 09:10 | Offline routing model state update |
 
-**Cron sandbox**: every cron script runs inside an openshell landlock sandbox defined by `profiles/fork/openshell-policy.yaml`. Read-only: `/usr`, hermes-scripts, profile scripts/lib. Read-write: tmp, `cache/`, `memory-facts/`, `logs/`. `HERMES_NO_SANDBOX=1` is blocked in the wrapper. The `cron-admission-control.py` script drops low-priority jobs under system load.
+**Sandbox**: every scheduled script runs inside a landlock sandbox. Read-only access to system binaries and the scripts themselves. Read-write access to temp, cache, memory-facts, and logs. Sandbox bypass is blocked in the wrapper. A load-aware admission controller drops low-priority jobs under system load.
 
-**System updates** (`daily-silverblue-update.sh`): per-step timeouts (package manager 20 min, firmware 5 min, each git repo 1 min). Flatpak metadata errors non-fatal. Login-trigger variant for headless-incompatible steps.
+**System updates**: per-step timeouts (package manager 20 min, firmware 5 min, each git repo 1 min). Non-fatal on metadata errors. A login-trigger variant handles steps that need a graphical session.
 
-**Data versioning** (`dolt-merge.py` / `lifecycle-changelog.py`): Git-style three-way merge for `jobs.json` concurrent writes (field-level conflict detection, never silent last-write-wins). Append-only change history on `lifecycle.db` with `get_history()`, `time_travel()`, `blame()`.
+**Data versioning**: three-way merge for concurrent writes to the job list (field-level conflict detection, never silent last-write-wins). Append-only change history on the lifecycle database with time-travel and blame.
 
-**ROUGE scorer** (`score-compaction-rouge.py`): stdlib ROUGE-1 (unigrams) and ROUGE-L (longest common subsequence). Case-insensitive. Sampled LCS for inputs >10,000 tokens (2500 from each end, denominators adjusted to sampled lengths). Fabrication alarm if precision < 0.3; coverage alarm if recall < 0.2.
+**Compression quality scorer**: computes two scores between pre/post compression snapshots — a precision score (did anything fabricated appear?) and a recall score (how much was lost?). Alarms if precision drops below 0.3 or recall below 0.2. Uses sampling for large inputs.
 
 ---
 
@@ -315,7 +296,7 @@ Background quality metrics that run on a cron schedule (not modifying the compre
 
 - Core conversation loop iteration, tool dispatch flow, and stop conditions
 - Installation procedure, model provider support, MCP server integration, messaging gateway, TUI/CLI interface
-- The approval UI interaction flow (session scoping was added; prompting behaviour is unchanged)
+- The approval interaction flow (session scoping was added; prompting behaviour is unchanged)
 
 For anything not covered here: **[hermes-agent.nousresearch.com/docs](https://hermes-agent.nousresearch.com/docs/)**
 
@@ -323,7 +304,7 @@ For anything not covered here: **[hermes-agent.nousresearch.com/docs](https://he
 
 ## Upstream merge policy
 
-This fork rebases or merges from `NousResearch/hermes-agent` main periodically. Conflicts on core agent loop files resolve in favour of upstream; fork additions win on scripts, plugins, and config.
+This fork rebases or merges from upstream main periodically. Conflicts on core agent loop files resolve in favour of upstream; fork additions win on scripts, plugins, and config.
 
 **Current base:** See `git log --oneline upstream/main..HEAD` for fork-only commits.
 
@@ -337,7 +318,7 @@ hermes-fork doctor   # health check
 hermes-fork -z       # fork profile with zero context (fresh session)
 ```
 
-The fork profile lives at `~/.hermes/profiles/fork/`. The binary at `~/.local/bin/hermes-fork` pins to the Py3.14 store interpreter (not `venv/bin/hermes` 3.11 — pydantic_core ABI mismatch).
+The fork profile lives at `~/.hermes/profiles/fork/`. The binary at `~/.local/bin/hermes-fork` pins to the correct Python interpreter — do not use the venv binary directly.
 
 ---
 
@@ -375,7 +356,7 @@ Use any model you want — [Nous Portal](https://portal.nousresearch.com), OpenR
 <table>
 <tr><td><b>A real terminal interface</b></td><td>Full TUI with multiline editing, slash-command autocomplete, conversation history, interrupt-and-redirect, and streaming tool output.</td></tr>
 <tr><td><b>Lives where you do</b></td><td>Telegram, Discord, Slack, WhatsApp, Signal, and CLI — all from a single gateway process. Voice memo transcription, cross-platform conversation continuity.</td></tr>
-<tr><td><b>A closed learning loop</b></td><td>Agent-curated memory with periodic nudges. Autonomous skill creation after complex tasks. Skills self-improve during use. FTS5 session search with LLM summarization for cross-session recall. <a href="https://github.com/plastic-labs/honcho">Honcho</a> dialectic user modeling. Compatible with the <a href="https://agentskills.io">agentskills.io</a> open standard.</td></tr>
+<tr><td><b>A closed learning loop</b></td><td>Agent-curated memory with periodic nudges. Autonomous skill creation after complex tasks. Skills self-improve during use. Full-text session search with LLM summarization for cross-session recall. <a href="https://github.com/plastic-labs/honcho">Honcho</a> dialectic user modeling. Compatible with the <a href="https://agentskills.io">agentskills.io</a> open standard.</td></tr>
 <tr><td><b>Scheduled automations</b></td><td>Built-in cron scheduler with delivery to any platform. Daily reports, nightly backups, weekly audits — all in natural language, running unattended.</td></tr>
 <tr><td><b>Delegates and parallelizes</b></td><td>Spawn isolated subagents for parallel workstreams. In Desktop, choose their provider, model, and limits under Settings → Model → Subagents, then Apply the complete route. Write Python scripts that call tools via RPC, collapsing multi-step pipelines into zero-context-cost turns.</td></tr>
 <tr><td><b>Runs anywhere, not just your laptop</b></td><td>Six built-in terminal backends — local, Docker, SSH, Modal, Daytona, and Vercel Sandbox — plus plugin backends such as Singularity/Apptainer. Daytona and Modal offer serverless persistence — your agent's environment hibernates when idle and wakes on demand, costing nearly nothing between sessions. Run it on a $5 VPS or a GPU cluster.</td></tr>

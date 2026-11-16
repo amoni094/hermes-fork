@@ -7,11 +7,13 @@ provides_hooks:
   - on_session_start
   - on_session_finalize
   - pre_compress
+  - transform_tool_result
 hooks:
   - pre_llm_call
   - on_session_start
   - on_session_finalize
   - pre_compress
+  - transform_tool_result
 capabilities:
   # emit_episode and recall_episodes are PluginContext API methods (not hermes capability tokens).
   # They do not need to be declared here; they are always available via ctx.

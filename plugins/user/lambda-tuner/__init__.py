@@ -16,7 +16,7 @@ import re
 import time
 import tempfile
 from collections import OrderedDict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
 
@@ -401,7 +401,7 @@ def _write_warm_start_cache(session_id: str, rec: dict[str, Any], turn_count: in
             "complexity_score": round(complexity_score, 4),
             "profile_applied": session_type,
             "turn_count": int(turn_count),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "reclassified": bool(reclassified),
         }
         intent = _pending_intent
@@ -899,6 +899,14 @@ def _classify_and_commit(
                 "overlay": overlay,
             }
             _fired.move_to_end(session_id)
+            # why: write warm-start cache at first classification, not only at finalize —
+            # so the next session can warm-start immediately even if this session crashes
+            # or is killed before on_session_finalize fires. Single-user fork has no
+            # multi-session race risk on this file.
+            try:
+                _write_warm_start_cache(session_id, _fired[session_id], len(bucket))
+            except Exception as exc:
+                logger.debug("lambda-tuner: early warm-start cache write failed (fail-open): %s", exc)
             logger.debug(
                 "lambda-tuner: committed sid=%s type=%s conf=%.2f scores=%s turn=%d complexity=%.3f",
                 session_id, session_type, confidence, scores, len(bucket), complexity,
@@ -1154,7 +1162,7 @@ def register(ctx: Any) -> None:
 
 
 # Export predicates for other plugins (lazy-read `_fired` at call time).
-from .predicates import (  # noqa: E402
+from .predicates import (
     is_code_session,
     is_greeter_turn,
     is_high_confidence,
@@ -1167,16 +1175,16 @@ from .predicates import (  # noqa: E402
 )
 
 __all__ = [
-    "register",
-    "is_research_session",
-    "is_code_session",
-    "is_high_confidence",
-    "is_greeter_turn",
-    "session_type",
-    "session_complexity",
-    "turn_complexity_score",
-    "recommended_effort",
-    "was_reclassified",
     "TaskComplexityScorer",
+    "is_code_session",
+    "is_greeter_turn",
+    "is_high_confidence",
+    "is_research_session",
+    "recommended_effort",
+    "register",
+    "session_complexity",
+    "session_type",
+    "turn_complexity_score",
+    "was_reclassified",
 ]
 
