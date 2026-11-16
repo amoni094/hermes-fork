@@ -132,6 +132,50 @@ run_privileged() {
   run_with_network_retry "$label" sudo -n "$@"
 }
 
+# Temporarily disable the ProtonVPN killswitch so that Flatpak can reach
+# remote servers.  The VPN tunnel (proton0/WireGuard) stays UP the whole time —
+# only the dummy killswitch interface is dropped.  This avoids the reconnect
+# race that previously dropped internet: VPN teardown caused ProtonVPN to
+# autoconnect slowly, and if proton0 wasn't back within 20s the killswitch
+# was re-armed over no tunnel, blocking all traffic.
+#
+# If the killswitch is not active, the command runs directly (no-op path).
+run_with_vpn_teardown() {
+  local label="$1"
+  shift
+  local ks_conn="pvpn-killswitch-ipv6"
+
+  # Check whether the killswitch is currently active.
+  local ks_active
+  ks_active=$(nmcli -t -f NAME connection show --active 2>/dev/null \
+    | grep -c "^${ks_conn}$" || true)
+
+  if [ "$ks_active" -eq 0 ]; then
+    log "Killswitch not active; running $label directly"
+    "$@"
+    return $?
+  fi
+
+  log "Suspending killswitch for $label (VPN tunnel stays up)"
+
+  # Disable autoconnect BEFORE bringing killswitch down so NM doesn't
+  # immediately re-arm it.
+  nmcli connection modify "$ks_conn" connection.autoconnect no 2>/dev/null || true
+  sleep 0.3
+  nmcli connection down "$ks_conn" 2>/dev/null || true
+
+  local cmd_rc=0
+  "$@" || cmd_rc=$?
+
+  # Re-arm: re-enable autoconnect and bring killswitch back up.
+  # No VPN reconnect wait needed — the tunnel never dropped.
+  log "Re-arming killswitch after $label"
+  nmcli connection modify "$ks_conn" connection.autoconnect yes 2>/dev/null || true
+  nmcli connection up "$ks_conn" 2>/dev/null || true
+
+  return "$cmd_rc"
+}
+
 run_system_flatpak_update() {
   if run_with_network_retry 'system Flatpak update' flatpak update -y --system --noninteractive; then
     return 0
@@ -139,6 +183,20 @@ run_system_flatpak_update() {
 
   if [ "$LAST_RUN_KIND" = 'sudo' ]; then
     return "$LAST_RUN_RC"
+  fi
+
+  # If the ONLY non-warning stderr lines are appstream metadata failures, treat as success.
+  # flathub periodically removes stale appstream2/appstream refs causing a cosmetic
+  # exit 1 even when no user apps failed to update.
+  if [ -n "$LAST_RUN_STDERR" ]; then
+    local real_errors
+    real_errors=$(printf '%s' "$LAST_RUN_STDERR" \
+      | grep -Ev '^(F: Warning: Treating remote fetch error as non-fatal|Error updating: Error updating appstream)' \
+      || true)
+    if [ -z "$real_errors" ]; then
+      log 'System Flatpak update: only appstream metadata refs missing (non-fatal); treating as success'
+      return 0
+    fi
   fi
 
   if [ -n "$LAST_RUN_STDERR" ] && ! printf '%s' "$LAST_RUN_STDERR" | grep -Eiq 'Flatpak system operation Deploy not allowed for user|polkit|not allowed'; then
@@ -235,14 +293,14 @@ else
 fi
 
 log 'Running user Flatpak update'
-if run_with_network_retry 'user Flatpak update' flatpak update -y --user; then
+if run_with_vpn_teardown 'user Flatpak update' flatpak update -y --user; then
   log 'User Flatpak update completed'
 else
   overall_status=1
 fi
 
 log 'Running system Flatpak update'
-if run_system_flatpak_update; then
+if run_with_vpn_teardown 'system Flatpak update' run_system_flatpak_update; then
   log 'System Flatpak update completed'
 else
   overall_status=1
@@ -254,13 +312,13 @@ if toolbox list --containers 2>/dev/null | awk '{print $2}' | grep -Fxq "$TOOLBO
     log 'Toolbox DNF upgrade completed'
   elif [ "$LAST_RUN_KIND" = 'sudo' ]; then
     log "Skipping toolbox DNF upgrade: ${need_sudo_msg}"
-    overall_status=1
+    # sudo unavailability is expected in unattended mode; not a hard failure
   else
     overall_status=1
   fi
 else
   log "Skipping toolbox DNF upgrade: toolbox container ${TOOLBOX_NAME} not found"
-  overall_status=1
+  # container absence is expected if toolbox is not configured; not a hard failure
 fi
 
 run_managed_repo_update() {

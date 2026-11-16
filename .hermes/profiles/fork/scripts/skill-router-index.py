@@ -146,7 +146,14 @@ def record_skill_outcome(skill_name: str, success: bool, decay: float = 0.99) ->
 
     Theory: Lattimore & Szepesvári *Bandit Algorithms* (2020) Ch 3; McAllester 2003.
     Decay approach: discounted Thompson sampling (Raj & Kalyani, 2017 arXiv:1707.09727).
+
+    Normalisation: skill_name is lowercased and hyphens/underscores unified to hyphens
+    before use as a dict key, preventing split posteriors from mixed-case or
+    hyphen/underscore variants of the same skill name.
     """
+    # Normalise: lowercase + unify hyphens/underscores so "Github-PR-Review" and
+    # "github_pr_review" map to the same Beta posterior entry.
+    skill_name = skill_name.strip().lower().replace("_", "-")
     state = load_beta_state()
     entry = state.setdefault(skill_name, {"alpha": 1.0, "beta": 1.0})
     # Apply geometric decay to both parameters (keeps relative confidence, shrinks mass)
@@ -480,7 +487,7 @@ def high_entropy_routing(scored: list, k: int = 8) -> bool:
     return h > ENTROPY_FALLBACK_FRAC * hmax
 
 
-_DPI_TOKEN_BOUND = 512  # ADV-010/GAP-5: DPI token count above which BM25 signal is diluted
+_DPI_TOKEN_BOUND = 512  # ADV-010: DPI token count above which BM25 signal is diluted
 
 
 def should_semantic_fallback(
@@ -488,7 +495,7 @@ def should_semantic_fallback(
     gap_thresh: float = 0.12,
     query_token_count: int = 0,
 ) -> bool:
-    """GAP-5/ADV-010 fix: enforce semantic fallback when query_token_count > DPI_TOKEN_BOUND.
+    """ADV-010 fix: also force semantic fallback when query_token_count > DPI_TOKEN_BOUND.
 
     Data-processing inequality: I(X;Y) >= I(X;Z) when Z=f(Y).
     BM25 is a lossy compression; at high token counts mutual info decays.
@@ -497,6 +504,7 @@ def should_semantic_fallback(
     if len(scored) < 2:
         return False
     gap = float(scored[0][0]) - float(scored[1][0])
+    # DPI guard: large query token counts degrade BM25 signal quality (ADV-010)
     dpi_trigger = query_token_count > _DPI_TOKEN_BOUND
     return gap < gap_thresh or high_entropy_routing(scored) or dpi_trigger
 
@@ -855,7 +863,7 @@ def route(query_text: str, top: int = 5) -> list[dict]:
     LATTICE_BOOST = 0.15
     if len(scored) >= 2:
         gap = scored[0][0] - scored[1][0]
-        if should_semantic_fallback(scored, AMBIGUITY_GAP, query_token_count=len(q_tokens)) and LATTICE_SCRIPT.exists():
+        if should_semantic_fallback(scored, AMBIGUITY_GAP) and LATTICE_SCRIPT.exists():
             try:
                 _lat = subprocess.run(
                     [sys.executable, str(LATTICE_SCRIPT), "--query", query_text, "--top-k", "5"],
@@ -1051,7 +1059,7 @@ def cmd_query(query_text: str):
 
     if len(scored) >= 2:
         gap = scored[0][0] - scored[1][0]
-        if should_semantic_fallback(scored, AMBIGUITY_GAP, query_token_count=len(q_tokens)) and LATTICE_SCRIPT.exists():
+        if should_semantic_fallback(scored, AMBIGUITY_GAP) and LATTICE_SCRIPT.exists():
             try:
                 _lat_result = subprocess.run(
                     [sys.executable, str(LATTICE_SCRIPT),
@@ -1357,7 +1365,7 @@ def main():
         skill_name, _, outcome = args.feedback.partition(":")
         if skill_name and outcome in ("success", "failure"):
             record_skill_outcome(skill_name.strip(), outcome == "success")
-            print(json.dumps({"ok": True, "skill": skill_name.strip(), "outcome": outcome}))
+            print(json.dumps({"ok": True, "skill": skill_name.strip().lower().replace("_", "-"), "outcome": outcome}))
         else:
             print(json.dumps({"error": "format must be 'skill-name:success' or 'skill-name:failure'"}))
             import sys; sys.exit(1)

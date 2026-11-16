@@ -1,0 +1,13 @@
+name: skill-routing-nudge
+version: 1.0.0
+description: >
+  pre_llm_call hint: score the user message against skill-router-index.json
+  TF-IDF vectors and inject a compact [SKILL ROUTING HINT] block when
+  confidence gates pass. Fail-open. Disabled until H-I8 governance approval.
+provides_hooks: [pre_llm_call]
+hooks: [pre_llm_call]
+settings:
+  enabled: false  # Set true only after governance approval (H-I8 HIGH)
+  min_score: 0.3
+  max_results: 3
+  min_words: 8

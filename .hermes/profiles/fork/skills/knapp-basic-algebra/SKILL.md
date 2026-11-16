@@ -1,6 +1,7 @@
 ---
 name: knapp-basic-algebra
 description: Use when grounding in groups rings and modules.
+category: textbook
 ---
 
 ## Overview
@@ -34,11 +35,4 @@ Knapp's Basic Algebra (2006) is a comprehensive graduate text covering group the
 - Applying results outside their domain of validity (check assumptions)
 - Confusing syntactic and semantic levels in formal treatments
 
-## Hermes Relevance
-
-- Group/ring/field theory: algebraic structure of knowledge graphs and symmetry in agent protocols
-- Galois theory: fixed-point analysis of self-modifying agent processes
-- Module theory: linear representation of agent state spaces
-- Alignment survey: direct reference for evaluating Hermes safety properties and inner alignment risks
-
-Source: Reconstructed from authoritative knowledge (PDF is image-only, text extraction failed)
+<!-- textbook-stub: see source PDF -->

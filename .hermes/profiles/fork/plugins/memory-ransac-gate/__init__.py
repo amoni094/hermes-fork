@@ -70,7 +70,9 @@ def _load_corpus() -> list[str]:
             db_path = base / "profiles" / "fork" / "memory.db"
         if not db_path.exists():
             return []
-        with sqlite3.connect(str(db_path), timeout=2) as con:
+        # Open read-only (uri mode=ro) — no WAL pragma needed and avoids mutating
+        # the default-profile DB's journal mode as a side-effect.
+        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5) as con:
             rows = con.execute(
                 "SELECT value FROM memories ORDER BY rowid DESC LIMIT 200"
             ).fetchall()

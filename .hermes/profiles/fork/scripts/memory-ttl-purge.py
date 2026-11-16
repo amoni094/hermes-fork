@@ -131,7 +131,7 @@ def load_expired(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         "SELECT memory_id, fact_type, memory_status, volatility_class, valid_to, valid_from "
         "FROM fact_lifecycle "
-        "WHERE memory_status IN ('archived', 'deleted')",
+        "WHERE memory_status IN ('purged')",
     ).fetchall()
     grace_cutoff = (now_utc() - ARCHIVED_GRACE_PERIOD).isoformat()
     for r in rows:
@@ -436,32 +436,6 @@ def main():
     if not LIFECYCLE_DB.exists():
         print("[memory-ttl-purge] lifecycle.db does not exist yet — nothing to purge.")
         return 0
-
-    # Wave 18: mixing-time vs TTL (Hairer/Durrett). Fail-open.
-    try:
-        import importlib.util as _ilu_mix
-        _mix_path = Path(__file__).resolve().parent / "memory-mixing-ttl.py"
-        # Wrapper: resolve through hermes-scripts
-        if not _mix_path.exists() or _mix_path.stat().st_size < 2000:
-            _hh = Path.home() / ".hermes" / "hermes-scripts" / "memory-mixing-ttl.py"
-            if _hh.exists():
-                _mix_path = _hh
-        if _mix_path.exists():
-            _ms = _ilu_mix.spec_from_file_location("memory_mixing_ttl", str(_mix_path))
-            if _ms and _ms.loader:
-                _mm = _ilu_mix.module_from_spec(_ms)
-                _ms.loader.exec_module(_mm)  # type: ignore[union-attr]
-                _mix = _mm.check_ttls({
-                    "ephemeral": float(TTL_POLICY["ephemeral"].total_seconds()) / 86400.0,
-                    "volatile": float(TTL_POLICY["volatile"].total_seconds()) / 86400.0,
-                    "preference": float(VOLATILE_PREFERENCE_TTL.total_seconds()) / 86400.0,
-                })
-                if _mix.get("flags"):
-                    print(f"[memory-ttl-purge] MIXING-TTL flags: {_mix['flags']}", file=sys.stderr)
-                else:
-                    print(f"[memory-ttl-purge] mixing τ={_mix.get('tau_mix_days')}d gap={_mix.get('spectral_gap')}")
-    except Exception as _mix_exc:
-        print(f"[memory-ttl-purge] mixing-ttl check skipped: {_mix_exc}", file=sys.stderr)
 
     with sqlite3.connect(str(LIFECYCLE_DB)) as conn:
         expired = load_expired(conn)

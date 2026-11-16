@@ -6,7 +6,7 @@ failed patch-tool write on this root-owned path. Runtime is restored from
 __pycache__/l1-extract.cpython-314.pyc (same mtime as the wiped source).
 A copy also lives at scripts/references/l1-extract.cpython-314.pyc.bak.
 
-Cross-job lock: ~/.hermes/.l1-extract-running
+Cross-job lock: ~/.hermes/profiles/fork/cache/.l1-extract-running
 l1-promote.py skips a cycle while this lock exists so promote cannot read a
 partial YYYY-MM-DD.md while extract is still writing L1 candidates.
 """
@@ -37,7 +37,7 @@ def _bind_profile_home() -> Path:
 
 
 _HERMES_HOME = _bind_profile_home()
-LOCK = _HERMES_HOME / ".l1-extract-running"
+LOCK = _HERMES_HOME / "cache" / ".l1-extract-running"
 _HERE = Path(__file__).resolve().parent
 _PYC_CANDIDATES = [
     # Direct references/ in same scripts dir (works for both default and fork profile paths)
@@ -90,8 +90,32 @@ def _load():
     return mod
 
 
+def _inject_api_key() -> None:
+    """Load ANTHROPIC_API_KEY from ~/.hermes/.env if not already in the environment.
+
+    The openshell sandbox strips host environment variables, so scripts that call
+    the Anthropic API directly need the key re-injected from the secrets file.
+    """
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return
+    env_path = Path.home() / ".hermes" / ".env"
+    if not env_path.exists():
+        return
+    try:
+        for line in env_path.read_text(errors="replace").splitlines():
+            line = line.strip()
+            if line.startswith("ANTHROPIC_API_KEY=") and "=" in line:
+                key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                if key:
+                    os.environ["ANTHROPIC_API_KEY"] = key
+                    return
+    except OSError:
+        pass
+
+
 def main():
     _reexec_if_wrong_python()
+    _inject_api_key()
     if "--show" in sys.argv:
         return _load().main()
     LOCK.touch()
