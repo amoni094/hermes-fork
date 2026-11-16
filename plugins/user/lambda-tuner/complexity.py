@@ -252,7 +252,7 @@ class TelegraphicCompressor:
             key_part = m.group(1)
             sep_part = m.group(2)
             val = m.group(3)
-            stub = '"[…{} chars]"'.format(len(val))
+            stub = f'"[…{len(val)} chars]"'
             return key_part + sep_part + stub
         return self._JSON_VALUE_RE.sub(_stub, text)
 
