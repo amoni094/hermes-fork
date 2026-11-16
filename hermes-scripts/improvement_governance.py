@@ -50,7 +50,22 @@ from pathlib import Path
 from datetime import datetime, timezone, UTC
 from typing import Callable, Literal
 
-DEFAULT_LEDGER = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "logs" / "improvement-proposals.jsonl"
+def _default_ledger() -> Path:
+    """Profile-aware ledger path. Prefer fork ledger when HERMES_PROFILE unset."""
+    env_home = os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))
+    base = Path(env_home)
+    profile = os.environ.get("HERMES_PROFILE", "")
+    if "profiles" in str(base):
+        return base / "logs" / "improvement-proposals.jsonl"
+    if profile:
+        return base / "profiles" / profile / "logs" / "improvement-proposals.jsonl"
+    fork = Path.home() / ".hermes" / "profiles" / "fork" / "logs" / "improvement-proposals.jsonl"
+    if fork.exists():
+        return fork
+    return base / "logs" / "improvement-proposals.jsonl"
+
+
+DEFAULT_LEDGER = _default_ledger()
 DEDUP_WINDOW_HOURS = 24
 DEDUP_LOOKBACK = 50
 # Profile-aware rate-state persistence path
@@ -58,6 +73,8 @@ _base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _profile = os.environ.get('HERMES_PROFILE', '')
 _root = (_base / 'profiles' / _profile) if _profile else _base
 _RATE_STATE_PATH = _root / 'cache' / 'governance-rate-state.json'
+
+TERMINAL_STATES = frozenset({"rejected", "reverted", "rolled_back", "superseded"})
 
 
 class ImprovementRiskLevel(Enum):
@@ -68,12 +85,14 @@ class ImprovementRiskLevel(Enum):
 
 # Valid state transitions (Lamport crash-boundary: raise on illegal transition)
 LEGAL_TRANSITIONS: dict[str, set[str]] = {
-    "pending_review": {"under_eval", "rejected"},
-    "under_eval":     {"approved", "rejected"},
-    "approved":       {"deployed", "rejected"},
-    "deployed":       {"rolled_back"},
+    "pending_review": {"under_eval", "rejected", "superseded"},
+    "under_eval":     {"approved", "rejected", "superseded"},
+    "approved":       {"deployed", "rejected", "superseded"},
+    "deployed":       {"rolled_back", "superseded"},
     "rolled_back":    set(),   # terminal
     "rejected":       set(),   # terminal
+    "reverted":       set(),   # terminal (alias of rolled_back)
+    "superseded":     set(),   # terminal (compaction tombstone)
 }
 
 # Risk classification table
@@ -104,6 +123,9 @@ def classify_change_risk(
 
 
 def is_legal_transition(from_state: str, to_state: str) -> bool:
+    # Compaction may tombstone any live (or already-terminal) record.
+    if to_state == "superseded":
+        return True
     return to_state in LEGAL_TRANSITIONS.get(from_state, set())
 
 
@@ -225,8 +247,10 @@ def _recent_description_dup(description: str, ledger: Path | None = None) -> dic
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError:
         return None
+    # Walk from end so tombstones (appended after compact) do not consume the
+    # 50-entry lookback. Skip terminal states including superseded.
     recent: list[dict] = []
-    for line in lines[-DEDUP_LOOKBACK:]:
+    for line in reversed(lines):
         line = line.strip()
         if not line:
             continue
@@ -234,11 +258,16 @@ def _recent_description_dup(description: str, ledger: Path | None = None) -> dic
             obj = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if isinstance(obj, dict):
-            recent.append(obj)
+        if not isinstance(obj, dict):
+            continue
+        if obj.get("state") in TERMINAL_STATES:
+            continue
+        recent.append(obj)
+        if len(recent) >= DEDUP_LOOKBACK:
+            break
     now = time.time()
     window_s = DEDUP_WINDOW_HOURS * 3600
-    for entry in reversed(recent):
+    for entry in recent:  # already newest-first
         if entry.get("description") != description:
             continue
         if entry.get("state") not in ("pending_review", "approved"):
@@ -419,7 +448,7 @@ def _append_to_ledger(proposal: dict, ledger: Path | None) -> None:
 
 
 def load_proposals(ledger: Path | None = None) -> list[dict]:
-    """Load all proposals from ledger. Returns list, newest-last."""
+    """Load all proposals from ledger. Returns list, newest-last. Skips malformed lines."""
     path = ledger or DEFAULT_LEDGER
     proposals = []
     if path.exists():
@@ -432,6 +461,21 @@ def load_proposals(ledger: Path | None = None) -> list[dict]:
                     except json.JSONDecodeError:
                         pass
     return proposals
+
+
+def _load_all(ledger: Path | None = None) -> list[dict]:
+    """Id-deduped proposals with superseded tombstones omitted.
+
+    Newest record per id wins (append-only ledger). Entries whose newest
+    state is superseded are skipped so callers iterating this list see
+    active proposals only. rejected/reverted/rolled_back remain so callers
+    can filter terminal states themselves.
+    """
+    seen: dict[str, dict] = {}
+    for p in load_proposals(ledger):
+        pid = p.get("id", "")
+        seen[pid] = p
+    return [p for p in seen.values() if p.get("state") != "superseded"]
 
 
 # ── CLI entry point ───────────────────────────────────────────────────────────
@@ -525,13 +569,8 @@ def _cmd_rollback(args) -> int:
 
 
 def _cmd_list(args) -> int:
-    """CLI: list all proposals from the ledger."""
-    proposals = load_proposals()
-    # Deduplicate: keep newest state per proposal id
-    seen: dict[str, dict] = {}
-    for p in proposals:
-        seen[p.get("id", "")] = p
-    out = list(seen.values())
+    """CLI: list active proposals from the ledger (deduped, newest state)."""
+    out = _load_all()
     print(json.dumps(out, indent=2))
     return 0
 
