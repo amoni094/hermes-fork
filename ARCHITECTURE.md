@@ -504,6 +504,7 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `counterfactual-tool-gate.py` | counterfactual-tool-gate.py — Pearl Rung-3 minimal tool-set gate. | --self-test |  |
 | `critique-bank.py` | critique-bank.py — CritICL critique bank for inference-time failure conditioning. | CLI | cache/critique-bank.json |
 | `cron-sandbox-runner.py` | cron-sandbox-runner.py — invoke OpenShell wrapper for Hermes cron jobs. | --self-test |  |
+| `cross-model-autoscaler.py` | cross-model-autoscaler.py — per-tool p50/p95 latency; p95>10s switch candidates. | --self-test, skill-latency.jsonl | cache/cross-model-autoscaler.json, cache/autoscaler-recommendation.json |
 | `cs-paper-interpreter.py` | cs-paper-interpreter.py | CLI | cache/hermes-cs-sweep-latest.json |
 | `cs-primers-overnight.py` | cs-primers-overnight.py | CLI |  |
 | `cs-research-sweep.py` | cs-research-sweep.py | CLI |  |
@@ -775,6 +776,7 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `skill-graph-walk.py` | skill-graph-walk.py — Graph-of-Skills dependency traversal for the Hermes skill library. | CLI | cache/provides-taxonomy.json |
 | `skill-gw-compare.py` | skill-gw-compare.py — OT-7 | CLI |  |
 | `skill-integrity-check.py` | skill-integrity-check.py — HMAC-SHA256 integrity baseline for all SKILL.md files. | CLI | cache/skill-integrity.json |
+| `skill-lfpr.py` | skill-lfpr.py — Locally Fair PageRank on skill-graph (damping 0.85 + one-step fairness). | --self-test | cache/skill-lfpr-scores.json |
 | `skill-persistent-homology.py` | skill-persistent-homology.py — Persistent homology on the Hermes skill graph. | CLI |  |
 | `skill-ranker.py` | skill-ranker.py | CLI |  |
 | `skill-router-index.py` | skill-router-index.py — SkillRouter pattern: TF-IDF semantic index over Hermes skill descriptions. | --json/stdin, routing-events.jsonl | cache/skill-router-index.json, cache/skill-beta-state.json, cache/routing-events.json |
@@ -793,6 +795,7 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `spawning-utility-estimator.py` | spawning-utility-estimator.py | CLI |  |
 | `spec-graph-extractor.py` | spec-graph-extractor.py | CLI | cache/spec-graph.json |
 | `spec-semantic-graph-builder.py` | spec-semantic-graph-builder.py | CLI |  |
+| `spectral-moment-guard.py` | spectral-moment-guard.py — algebraic connectivity lambda_2 and fragile skill-graph edges. | --self-test | cache/spectral-moment-guard.json |
 | `sprt-effective-decision.py` | sprt-effective-decision.py — Merge SPRT + vetoes into one effective decision. | --self-test | cache/sprt-effective-decision.json, cache/effective-shadow-decisions.json |
 | `sprt-falsifiability-handshake.py` | sprt-falsifiability-handshake.py — PROMOTE requires failure_observable. | --self-test | cache/shadow-sprt-decisions.json, cache/sprt-falsifiability-handshake.json |
 | `sprt-inner-outer-alignment.py` | sprt-inner-outer-alignment.py — Hubinger mesa: inner score vs outer error. | --self-test | cache/sprt-inner-outer-alignment.json |
@@ -875,6 +878,7 @@ Runpy two-tier wrappers delegate to `hermes-scripts/<name>.py` when present. Wra
 | `cron-sandbox-runner.py` | Fork profile wrapper: delegates to hermes-scripts/cron-sandbox-runner.py | runpy-wrapper |
 | `cron-ucb-safe.py` | cron-ucb-safe.py — UCB1 cron-script selection with P(fail) <= 0.1 envelope. | wrapper-only |
 | `cross-calibration-monitor.py` | Cross-calibration monitor: detect drift across the three independent calibration silos. | wrapper-only |
+| `cross-model-autoscaler.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `cs-paper-interpreter.py` | cs-paper-interpreter.py | wrapper+canonical |
 | `cs-primers-overnight.py` | cs-primers-overnight.py | wrapper+canonical |
 | `cs-research-sweep.py` | cs-research-sweep.py | wrapper+canonical |
@@ -1090,6 +1094,7 @@ Runpy two-tier wrappers delegate to `hermes-scripts/<name>.py` when present. Wra
 | `skill-compressor.py` | Spike stub: SkillZip — MDL Skill Compression | wrapper-only |
 | `skill-description-entropy.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `skill-integrity-check.py` | skill-integrity-check.py — HMAC-SHA256 integrity baseline for all SKILL.md files. | wrapper+canonical |
+| `skill-lfpr.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `skill-router-index-rebuild.py` | Cron wrapper: rebuild skill-router-index unconditionally. | wrapper-only |
 | `skill-router-index.py` | skill-router-index.py — SkillRouter pattern: TF-IDF semantic index over Hermes skill descriptions. | wrapper+canonical |
 | `skill-routing-bounds.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
@@ -1100,6 +1105,7 @@ Runpy two-tier wrappers delegate to `hermes-scripts/<name>.py` when present. Wra
 | `skill_prune_audit.py` | skill_prune_audit.py — AutoRefine-inspired skill library health check. | wrapper+canonical |
 | `skillspector_guard.py` |  | wrapper+canonical |
 | `soares-halt-liveness.py` | Fork profile wrapper: delegates to hermes-scripts/soares-halt-liveness.py | runpy-wrapper |
+| `spectral-moment-guard.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `soft-bellman-skill-router.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `spike-actuator.py` | spike-actuator.py — Build stub artifacts and layer1 demo tests from IMPLEMENT items. | wrapper-only |
 | `spike-queue-actuator.py` | spike-queue-actuator.py — Dispatch accepted SPIKE items from cs/math spike queues | wrapper-only |
@@ -1477,10 +1483,10 @@ Runpy two-tier wrappers delegate to `hermes-scripts/<name>.py` when present. Wra
 | `kl-curvature-memory-monitor-0001` | `{'kind': 'cron', 'expr': '0 6 * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/kl-curvature-memory-monitor-0001.sh |  |
 | `wave21a-alarm-bridge-ev15` | `{'kind': 'cron', 'expr': '*/15 * * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/wave21a-alarm-bridge-ev15.sh |  |
 | `memory-ttl-floor-merge-0400` | `{'kind': 'cron', 'expr': '0 4 * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/memory-ttl-floor-merge-0400.sh |  |
-| `memory-sanov-ld-ev30` | `{'kind': 'cron', 'expr': '*/30 * * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/memory-sanov-ld-ev30.sh |  |
+| `memory-sanov-ld-ev30` | `{'kind': 'cron', 'expr': '*/30 * * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/memory-sanov-ld.py |  |
 | `memory-optional-stopping-ev30` | `{'kind': 'cron', 'expr': '*/30 * * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/memory-optional-stopping-ev30.sh |  |
 | `compaction-chain-rule-mi-ev15` | `{'kind': 'cron', 'expr': '*/15 * * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/compaction-chain-rule-mi-ev15.sh |  |
-| `memory-dkw-ue-ev30` | `{'kind': 'cron', 'expr': '*/30 * * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/memory-dkw-ue-ev30.sh |  |
+| `memory-dkw-ue-ev30` | `{'kind': 'cron', 'expr': '*/30 * * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/memory-dkw-ue.py |  |
 | `memory-displacement-conv-0450` | `{'kind': 'cron', 'expr': '50 4 * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/memory-displacement-conv-0450.sh |  |
 | `memory-bethe-free-energy-0500` | `{'kind': 'cron', 'expr': '0 5 * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/memory-bethe-free-energy-0500.sh |  |
 | `memory-lp-dct-gate-ev30` | `{'kind': 'cron', 'expr': '*/30 * * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/memory-lp-dct-gate-ev30.sh |  |
@@ -1515,6 +1521,9 @@ Runpy two-tier wrappers delegate to `hermes-scripts/<name>.py` when present. Wra
 | `ue-memory-gate-cron-0001` | `{'kind': 'cron', 'expr': '0 5 * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/ue-memory-gate-cron-0001.sh |  |
 | `1a6ee3fc9a9c` | `{'kind': 'cron', 'expr': '0 3 * * 0', 'display': 'Sunday 03:00 UTC (14:00 AEDT)'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/1a6ee3fc9a9c.sh |  |
 | `memory-auto-improvement-0001` | `{'kind': 'cron', 'expr': '0 3 * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/memory-auto-improvement-0001.sh |  |
+| `spectral-moment-guard-0001` | `{'kind': 'cron', 'expr': '0 3 * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/spectral-moment-guard.py |  |
+| `skill-lfpr-0001` | `{'kind': 'cron', 'expr': '0 3 * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/skill-lfpr.py |  |
+| `cross-model-autoscaler-0001` | `{'kind': 'cron', 'expr': '30 1 * * *'}` | /var/home/rainbow/.hermes/profiles/fork/scripts/cross-model-autoscaler.py |  |
 
 ### MEMORY
 
@@ -1611,6 +1620,7 @@ Enumerated 350 files (cap 350).
 | `cache/cron-mdp-policy.json` | JSON state/report |
 | `cache/cron-ucb-safe.json` | JSON state/report |
 | `cache/cross-calibration-alarm.json` | JSON state/report |
+| `cache/cross-model-autoscaler.json` | JSON state/report |
 | `cache/current-token-count.json` | JSON state/report |
 | `cache/cusum-gain-freeze.json` | JSON state/report |
 | `cache/cusum-h-calibration.json` | JSON state/report |
@@ -1798,11 +1808,13 @@ Enumerated 350 files (cap 350).
 | `cache/skill-description-entropy.json` | JSON state/report |
 | `cache/skill-integrity.json` | JSON state/report |
 | `cache/skill-integrity.key` | blob |
+| `cache/skill-lfpr-scores.json` | JSON state/report |
 | `cache/skill-merkle.json` | JSON state/report |
 | `cache/skill-router-index.json` | JSON state/report |
 | `cache/skill-routing-causal-audit.json` | JSON state/report |
 | `cache/skill-wiki-export.md` | markdown note |
 | `cache/soares-halt-liveness.json` | JSON state/report |
+| `cache/spectral-moment-guard.json` | JSON state/report |
 | `cache/spike-actuator-log.json` | JSON state/report |
 | `cache/sprt-effective-decision.json` | JSON state/report |
 | `cache/sprt-falsifiability-handshake.json` | JSON state/report |
