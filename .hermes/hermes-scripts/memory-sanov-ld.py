@@ -100,6 +100,31 @@ def sanov_stat(samples: list, n_bins: int = N_BINS, delta: float = DELTA) -> dic
     }
 
 
+_CALIB_SKIP_REASONS = frozenset({
+    'empty_query_or_response',
+    'no_ue_scores_fail_closed',
+    'unhandled',
+})
+
+
+def _ue_calibration_sample(row: dict):
+    if not isinstance(row, dict):
+        return None
+    if row.get('calibration_exclude'):
+        return None
+    reason = str(row.get('reason') or '')
+    if reason in _CALIB_SKIP_REASONS or 'empty_query' in reason:
+        return None
+    if int(row.get('content_len') or 0) == 0 and _clip01(row.get('composite_ue') or row.get('ue_score')) >= 0.99:
+        return None
+    v = row.get('composite_ue')
+    if v is None:
+        v = row.get('ue_score', row.get('ue'))
+    if v is None:
+        return None
+    return _clip01(v)
+
+
 def load_ue() -> list:
     out = []
     cache = _cache_dir()
@@ -116,13 +141,9 @@ def load_ue() -> list:
                     row = json.loads(s)
                 except Exception:
                     continue
-                if not isinstance(row, dict):
-                    continue
-                v = row.get('composite_ue')
-                if v is None:
-                    v = row.get('ue_score', row.get('ue'))
-                if v is not None:
-                    out.append(_clip01(v))
+                sample = _ue_calibration_sample(row)
+                if sample is not None:
+                    out.append(sample)
         except Exception:
             continue
         if out:
@@ -151,6 +172,7 @@ def self_test() -> int:
     assert r2['kl_nats'] > r['kl_nats']
     empty = sanov_stat([])
     assert empty['n'] == 0 and empty['alarm'] is False
+    assert _ue_calibration_sample({'composite_ue': 1.0, 'reason': 'empty_query_or_response'}) is None
     print('PASS memory-sanov-ld self-test')
     return 0
 

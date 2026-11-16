@@ -30,16 +30,16 @@ import json
 import math
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME       = Path.home()
 _HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 _HP = os.environ.get("HERMES_PROFILE", "fork")
-_RT = _HH / "profiles" / _HP if _HP else _HH
+_RT = _HH / "profiles" / _HP if _HP and "profiles" not in str(_HH) else _HH
 SKILLS_DIR = _RT / "skills"
 ALT_SKILLS = _HH / "skills"
-CACHE_DIR  = _HH / "cache" / "monitors"
+CACHE_DIR  = _RT / "cache" / "monitors"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUT_FILE   = CACHE_DIR / "magnitude-calibration.json"
 
@@ -50,7 +50,65 @@ CALIBRATION_ERROR_THRESHOLD = 0.25
 
 
 def _sigmoid(x: float) -> float:
+    x = max(-30.0, min(30.0, x))
     return 1.0 / (1.0 + math.exp(-x))
+
+
+def _fit_platt(pairs: list[tuple[float, float]]) -> tuple[float, float]:
+    """Newton MLE: P(y) = sigmoid(a*s + b) with soft labels y in [0,1]."""
+    if len(pairs) < 3:
+        return PLATT_A, PLATT_B
+    a, b = 6.0, -0.5
+    for _ in range(30):
+        g_a = g_b = h_aa = h_bb = h_ab = 0.0
+        for s, y in pairs:
+            p = _sigmoid(a * s + b)
+            err = p - y
+            w = max(p * (1.0 - p), 1e-6)
+            g_a += err * s
+            g_b += err
+            h_aa += w * s * s
+            h_bb += w
+            h_ab += w * s
+        det = h_aa * h_bb - h_ab * h_ab
+        if abs(det) < 1e-12:
+            break
+        da = (h_bb * g_a - h_ab * g_b) / det
+        db = (h_aa * g_b - h_ab * g_a) / det
+        a -= da
+        b -= db
+        if abs(da) + abs(db) < 1e-8:
+            break
+    a = max(a, 0.05)
+    return a, b
+
+
+def calibrate(query: str, skills: list[dict]) -> list[dict]:
+    q_tok = _tokenize(query)
+    raw_rows = []
+
+    for s in skills:
+        raw_sim  = _jaccard_sim(q_tok, s["tokens"])
+        # Coverage of query tokens (recall) as a soft relevance label.
+        gt_prob  = min(len(q_tok & s["tokens"]) / max(len(q_tok), 1), 1.0)
+        raw_rows.append((s["name"], raw_sim, gt_prob))
+
+    a, b = _fit_platt([(rs, gt) for _, rs, gt in raw_rows])
+    results = []
+    for name, raw_sim, gt_prob in raw_rows:
+        cal_prob = _sigmoid(a * raw_sim + b)
+        error    = abs(gt_prob - cal_prob)
+        results.append({
+            "name":     name,
+            "raw_sim":  round(raw_sim, 4),
+            "cal_prob": round(cal_prob, 4),
+            "gt_proxy": round(gt_prob, 4),
+            "error":    round(error, 4),
+            "platt_a":  round(a, 4),
+            "platt_b":  round(b, 4),
+        })
+
+    return sorted(results, key=lambda r: r["cal_prob"], reverse=True)
 
 
 def _jaccard_sim(a: set, b: set) -> float:
@@ -78,31 +136,8 @@ def _load_skills(n: int = 30) -> list[dict]:
     return skills[:n]
 
 
-def calibrate(query: str, skills: list[dict]) -> list[dict]:
-    q_tok = _tokenize(query)
-    results = []
-
-    for s in skills:
-        raw_sim  = _jaccard_sim(q_tok, s["tokens"])
-        # Platt-calibrated probability
-        cal_prob = _sigmoid(PLATT_A * raw_sim + PLATT_B)
-        # Ground-truth proxy: keyword overlap fraction
-        gt_prob  = min(len(q_tok & s["tokens"]) / max(len(q_tok), 1), 1.0)
-        error    = abs(gt_prob - cal_prob)
-
-        results.append({
-            "name":     s["name"],
-            "raw_sim":  round(raw_sim, 4),
-            "cal_prob": round(cal_prob, 4),
-            "gt_proxy": round(gt_prob, 4),
-            "error":    round(error, 4),
-        })
-
-    return sorted(results, key=lambda r: r["cal_prob"], reverse=True)
-
-
 def run(query: str, top: int, dry_run: bool) -> int:
-    now    = datetime.now(timezone.utc).isoformat()
+    now    = datetime.now(UTC).isoformat()
     skills = _load_skills(50)
 
     if not skills:
@@ -128,7 +163,7 @@ def run(query: str, top: int, dry_run: bool) -> int:
         print(f"\nALARM: yes — avg calibration error {avg_error:.3f} > {CALIBRATION_ERROR_THRESHOLD}")
         rc = 1
     else:
-        print(f"\nALARM: no — retrieval scores adequately calibrated")
+        print("\nALARM: no — retrieval scores adequately calibrated")
         rc = 0
 
     if not dry_run:

@@ -71,7 +71,7 @@ def fano_pe_lower(h_x_given_y_bits: float, alphabet: int) -> dict:
     # Tight-ish: invert H(X|Y) <= h2(Pe) + Pe log2(|X|-1) by grid search
     logAm1 = math.log2(max(A - 1, 2))
     pe_tight = 0.0
-    for i in range(0, 501):
+    for i in range(501):
         pe = i / 500.0
         rhs = binary_entropy(pe) + pe * logAm1
         if rhs + 1e-12 >= hxy:
@@ -103,9 +103,18 @@ def load_channel() -> dict:
 def compute(h_xy: float | None = None, alphabet: int | None = None) -> dict:
     try:
         ch = load_channel()
+        if alphabet is None:
+            alphabet = 256
+        logA = math.log2(max(int(alphabet), 2))
         if h_xy is None:
             if "h_x_given_y" in ch:
-                h_xy = float(ch["h_x_given_y"])
+                h_xy_total = float(ch["h_x_given_y"])
+                # ADV21-001 (direct-read path): h_x_given_y is total bits over the whole
+                # context; normalize to bits/byte so Fano with |A|=256 is well-formed.
+                # Without normalization, 7016 total bits → Pe_weak = (7016-1)/8 ≈ 876 → 1.0
+                # which is a spurious alarm for any context >256 bytes.
+                n_bytes = max(1, int(ch.get("n_pre_bytes") or (h_xy_total / 8.0) or 1))
+                h_xy = h_xy_total / n_bytes
             else:
                 h_pre_total = float(ch.get("h_pre") or 0.0)
                 mi = float(ch.get("mutual_info_proxy") or 0.0)
@@ -113,8 +122,10 @@ def compute(h_xy: float | None = None, alphabet: int | None = None) -> dict:
                 # ADV21-001: normalize to bits/byte so Fano with |A|=256 is well-formed
                 n_bytes = max(1, int(ch.get("n_pre_bytes") or (h_pre_total / 8.0) or 1))
                 h_xy = h_xy_total / n_bytes
-        if alphabet is None:
-            alphabet = 256
+        # Guard: leftover total-bit values (H(X|Y) cannot exceed log|A| nats/symbol).
+        if float(h_xy) > logA + 1.0:
+            n_bytes = max(1, int(ch.get("n_pre_bytes") or (float(h_xy) / logA) or 1))
+            h_xy = float(h_xy) / n_bytes
         rec = fano_pe_lower(float(h_xy), int(alphabet))
         rec["ts"] = time.time()
         rec["source"] = "context-channel-capacity" if ch else "cli"

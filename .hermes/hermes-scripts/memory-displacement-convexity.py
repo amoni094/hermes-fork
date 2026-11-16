@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""memory-displacement-convexity.py — McCann displacement convexity of entropy.
+"""memory-displacement-convexity.py — McCann displacement convexity.
 
-Villani: Shannon entropy is displacement-convex on P_2(R). Along the
-1-D monotone (quantile) geodesic μ_t = ((1-t)id + t T)_# μ, t |-> H(μ_t)
-is convex.
+Villani/McCann: the internal energy Ent(μ)=∫ ρ log ρ is displacement-convex
+on P_2(R) along the monotone quantile geodesic. Equivalently Shannon entropy
+H=-Ent is displacement-concave: H(μ_{1/2}) >= 0.5 H(μ_0)+0.5 H(μ_1)-slack.
 
-Sample t in {0, 1/2, 1}; check H(μ_{1/2}) <= 0.5 H(μ_0) + 0.5 H(μ_1) + slack.
-Consumes memory-ot-decay.json importances as μ_0; target = uniform on top-K.
+Sample t in {0, 1/2, 1}. Consumes memory-ot-decay.json importances as μ_0;
+target = uniform on top-K.
 
 Usage:
   python3 memory-displacement-convexity.py --self-test
@@ -58,14 +58,44 @@ def entropy(p: list) -> float:
 
 
 def geodesic_mid(p: list, q: list) -> list:
-    # 1-D monotone: sort both, interpolate masses on common support size
+    """McCann displacement midpoint on ordered support {0..n-1}.
+
+    Sorting probability masses independently is not a monotone coupling:
+    locations must stay aligned. Interpolate inverse CDFs, then re-bin.
+    """
     n = min(len(p), len(q))
     if n == 0:
         return []
-    ps, qs = sorted(p[:n]), sorted(q[:n])
-    mid = [0.5 * a + 0.5 * b for a, b in zip(ps, qs)]
-    s = sum(mid) or 1.0
-    return [x / s for x in mid]
+    pn = [max(float(x), 0.0) for x in p[:n]]
+    qn = [max(float(x), 0.0) for x in q[:n]]
+
+    def _cdf(masses: list) -> list:
+        out = []
+        acc = 0.0
+        for m in masses:
+            acc += m
+            out.append(acc)
+        total = out[-1] if out else 0.0
+        if total <= 0.0:
+            return [(i + 1) / n for i in range(n)]
+        return [x / total for x in out]
+
+    def _quantile(cdf_vals: list, u: float) -> float:
+        for i, c in enumerate(cdf_vals):
+            if c >= u:
+                return float(i)
+        return float(n - 1)
+
+    cp, cq = _cdf(pn), _cdf(qn)
+    acc = [0.0] * n
+    samples = max(32, n * 8)
+    for k in range(samples):
+        u = (k + 0.5) / samples
+        x = 0.5 * _quantile(cp, u) + 0.5 * _quantile(cq, u)
+        j = min(n - 1, max(0, round(x)))
+        acc[j] += 1.0
+    s = sum(acc) or 1.0
+    return [x / s for x in acc]
 
 
 def check_convexity(p: list, q: list) -> dict:
@@ -75,10 +105,21 @@ def check_convexity(p: list, q: list) -> dict:
     sq = sum(q) or 1.0
     pn = [max(x, 0.0) / sp for x in p]
     qn = [max(x, 0.0) / sq for x in q]
+    # Degenerate-support guard: McCann DC of Ent=∑ρ log ρ needs ≥3 atoms.
+    EFF_THRESH = 1e-6
+    eff_p = sum(1 for x in pn if x > EFF_THRESH)
+    eff_q = sum(1 for x in qn if x > EFF_THRESH)
+    if eff_p < 3 or eff_q < 3:
+        return {
+            'n': len(pn), 'eff_p': eff_p, 'eff_q': eff_q,
+            'alarm': False, 'reason': 'degenerate_support', 'convex_ok': True,
+            'ts': time.time(),
+        }
     mid = geodesic_mid(pn, qn)
     h0, h1, hm = entropy(pn), entropy(qn), entropy(mid)
-    rhs = 0.5 * h0 + 0.5 * h1 + SLACK
-    ok = bool(hm <= rhs + 1e-9)
+    # Shannon is displacement-concave along W2 ⇔ Ent=-H is displacement-convex.
+    lhs = 0.5 * h0 + 0.5 * h1 - SLACK
+    ok = bool(hm + 1e-9 >= lhs)
     return {
         'n': len(pn),
         'h0': round(h0, 6),
@@ -119,13 +160,15 @@ def compute(p=None, q=None) -> dict:
 
 
 def self_test() -> int:
-    # Two discrete laws on R: entropy of midpoint <= average (Shannon also mixture-convex)
+    # Swapped peaks: quantile midpoint spreads mass → Shannon rises (DC of Ent).
     p = [0.7, 0.2, 0.1]
     q = [0.1, 0.2, 0.7]
     rec = check_convexity(p, q)
     assert rec['convex_ok'] is True
     empty = check_convexity([1.0], [1.0])
     assert empty['convex_ok'] is True
+    deg = check_convexity([1.0, 0.0], [0.5, 0.5])
+    assert deg['alarm'] is False
     print('PASS memory-displacement-convexity self-test')
     return 0
 

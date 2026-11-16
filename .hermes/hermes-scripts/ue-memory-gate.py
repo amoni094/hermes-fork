@@ -168,6 +168,7 @@ def decide(query: str, response: str, content: str = "") -> dict:
             "ue_score": 1.0,
             "reason": "empty_query_or_response",
             "content_len": len(content or ""),
+            "calibration_exclude": True,
         }
         _append_jsonl(_gate_log_path(), rec)
         return rec
@@ -188,6 +189,7 @@ def decide(query: str, response: str, content: str = "") -> dict:
             "ue_score": 1.0,
             "reason": "no_ue_scores_fail_closed",
             "content_len": len(content or ""),
+            "calibration_exclude": True,
         }
         _append_jsonl(_gate_log_path(), rec)
         return rec
@@ -198,13 +200,13 @@ def decide(query: str, response: str, content: str = "") -> dict:
 
     if composite > DENY_UE:
         decision = "GATE_DENY"
-        reasons.append("composite_ue>%.2f" % DENY_UE)
+        reasons.append(f"composite_ue>{DENY_UE:.2f}")
     elif composite > WARN_UE or hedge > WARN_HEDGE:
         decision = "GATE_WARN"
         if composite > WARN_UE:
-            reasons.append("composite_ue>%.2f" % WARN_UE)
+            reasons.append(f"composite_ue>{WARN_UE:.2f}")
         if hedge > WARN_HEDGE:
-            reasons.append("hedge_phrase>%.2f" % WARN_HEDGE)
+            reasons.append(f"hedge_phrase>{WARN_HEDGE:.2f}")
     else:
         decision = "GATE_PASS"
         reasons.append("ok")
@@ -257,7 +259,7 @@ def self_test() -> int:
     os.environ["UE_CACHE_DIR"] = str(isolated)
 
     d0 = decide("", "fact")
-    check(d0["decision"] == "GATE_DENY", "empty query bypass: %s" % d0)
+    check(d0["decision"] == "GATE_DENY", f"empty query bypass: {d0}")
     d1 = decide("query", "")
     check(d1["decision"] == "GATE_DENY", "empty response bypass")
     d1b = decide("   ", "   ")
@@ -269,7 +271,7 @@ def self_test() -> int:
         "This might possibly be uncertain. I'm not sure. It could, probably, likely, be unclear.",
         content="memory fact",
     )
-    check(d2["decision"] in ("GATE_WARN", "GATE_DENY"), "hedge not gated: %s" % d2)
+    check(d2["decision"] in ("GATE_WARN", "GATE_DENY"), f"hedge not gated: {d2}")
 
     # Low-uncertainty factual
     d3 = decide("what is 2+2", "2+2 equals 4.")
@@ -288,7 +290,7 @@ def self_test() -> int:
         d4 = decide("malformed-cache-query", "a perfectly ordinary memory sentence about cats.")
         check("decision" in d4, "malformed jsonl raised or empty")
     except Exception as exc:
-        failures.append("malformed jsonl raised: %s" % exc)
+        failures.append(f"malformed jsonl raised: {exc}")
 
     if failures:
         print(json.dumps({"self_test": "FAIL", "failures": failures}))
