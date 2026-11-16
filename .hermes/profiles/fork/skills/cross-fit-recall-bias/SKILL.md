@@ -1,9 +1,6 @@
 ---
 name: cross-fit-recall-bias
-description: >
-  Use when scoring skill recall without selection bias. Applies cross-fitting to separate
-  the data used for skill selection from the data used for outcome scoring. Required to close
-  the calibration log GATE GAP: ensures calibration-log.jsonl is wired to selection events.
+description: Use when scoring skill recall without selection bias.
 triggers:
   - scoring skill recall quality
   - calibrating skill selection

@@ -2,16 +2,17 @@
 """routing-kl-ucb.py — Bernoulli KL-UCB indices from beta-bandit state.
 
 Index: max q in [mu,1] s.t. n * kl(mu,q) <= log(t) + 3 log log(t).
-Unused arms (n=0) get +inf. Alarm if argmax KL-UCB disagrees with argmax beta-mean
-and the index gap exceeds 0.15.
+When median n < 5, Bernoulli KL-UCB saturates (all unused arms index 1.0);
+ranking switches to Thompson sampling from the Beta posterior.
 
-Source: Cappé/Garivier KL-UCB; Lattimore & Szepesvari Theorem 10.6.
+Source: Cappé/Garivier KL-UCB; Lattimore & Szepesvari Thm 10.6 / Ch 36.
 """
 from __future__ import annotations
 import argparse
 import json
 import math
 import os
+import random
 import sys
 import tempfile
 import time
@@ -59,6 +60,8 @@ def _load_json(path: Path, default):
         return default
 
 GAP = 0.15
+MIN_N_FOR_KL_ALARM = 5.0  # Bernoulli KL-UCB saturates at 1.0 when n is tiny
+TS_SEED = 0x74686F6D  # deterministic Thompson draws for cron replay
 
 
 def bernoulli_kl(p, q):
@@ -85,10 +88,20 @@ def kl_ucb_index(mu, n, t, lo=0.0, hi=1.0):
     return loq
 
 
+def _thompson_sample(alpha, beta, rng):
+    a = max(float(alpha), EPS)
+    b = max(float(beta), EPS)
+    try:
+        return rng.betavariate(a, b)
+    except ValueError:
+        return a / (a + b)
+
+
 def compute(beta):
     names = sorted(beta.keys()) if isinstance(beta, dict) else []
     rows = []
     t = 0.0
+    rng = random.Random(TS_SEED)
     for nm in names:
         e = beta.get(nm) if isinstance(beta.get(nm), dict) else {}
         try:
@@ -99,7 +112,11 @@ def compute(beta):
         n = max(0.0, a + b - 2.0)
         mu = a / max(a + b, EPS)
         t += n
-        rows.append({'skill': nm, 'n': n, 'mu': mu, 'alpha': a, 'beta': b})
+        ts = _thompson_sample(a, b, rng)
+        rows.append({
+            'skill': nm, 'n': n, 'mu': mu, 'alpha': a, 'beta': b,
+            'thompson': ts,
+        })
     t = max(t, 1.0)
     for r in rows:
         r['kl_ucb'] = kl_ucb_index(r['mu'], r['n'], t)
@@ -107,20 +124,37 @@ def compute(beta):
         return {'n_skills': 0, 'alarm': False, 'reason': 'empty'}
     by_ucb = sorted(rows, key=lambda x: -x['kl_ucb'])
     by_mu = sorted(rows, key=lambda x: -x['mu'])
-    top_u, top_m = by_ucb[0]['skill'], by_mu[0]['skill']
+    by_ts = sorted(rows, key=lambda x: -x['thompson'])
+    top_u, top_m, top_ts = by_ucb[0]['skill'], by_mu[0]['skill'], by_ts[0]['skill']
     gap = abs(by_ucb[0]['kl_ucb'] - by_mu[0]['mu'])
-    alarm = top_u != top_m and gap > GAP
+    ns = sorted(r['n'] for r in rows)
+    n_median = ns[len(ns) // 2]
+    # KL-UCB assumes Bernoulli. With n<<5 every unused arm has index 1.0, so
+    # argmax KL-UCB disagrees with mean by construction. Switch ranking to
+    # Thompson sampling from the Beta posterior (Lattimore Ch 36) and only
+    # alarm on KL vs mean when there is enough Bernoulli evidence.
+    undersampled = n_median < MIN_N_FOR_KL_ALARM
+    alarm = (not undersampled) and top_u != top_m and gap > GAP
+    if undersampled:
+        reason = 'thompson_preferred_undersampled'
+    elif alarm:
+        reason = 'klucb_vs_mean_disagreement'
+    else:
+        reason = 'ok'
     return {
         'ts': time.time(),
         'n_skills': len(rows),
         't': t,
         'kl_ucb_top1': top_u,
         'mean_top1': top_m,
+        'thompson_top1': top_ts,
+        'bandit': 'thompson' if undersampled else 'kl_ucb',
+        'n_median': round(n_median, 6),
         'index_gap': round(gap, 6),
         'alarm': alarm,
-        'reason': 'klucb_vs_mean_disagreement' if alarm else 'ok',
+        'reason': reason,
         'top': [{k: (round(v, 6) if isinstance(v, float) else v)
-                 for k, v in r.items()} for r in by_ucb[:8]],
+                 for k, v in r.items()} for r in (by_ts if undersampled else by_ucb)[:8]],
     }
 
 

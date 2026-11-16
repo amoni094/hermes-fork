@@ -103,7 +103,12 @@ def compute_bound(beta_state: dict, delta: float = DELTA) -> dict:
     m = max(1.0, sum(obs))
     s = sum(means) or float(n)
     q = [x / s for x in means]
-    p = [1.0 / n] * n
+    # Data-dependent prior (McAllester 2013): add-one smoothed empirical means.
+    # Tightens KL(Q||P) vs uniform when the posterior is peaked; when nearly
+    # uniform (sample-starved Beta), KL stays ~0 and emp_error dominates.
+    p_raw = [means[i] + (1.0 / n) for i in range(n)]
+    ps = sum(p_raw) or float(n)
+    p = [x / ps for x in p_raw]
     kl = _kl_categorical(q, p)
     # ADV21-006: Q-weighted empirical error (McAllester Lhat(Q) = sum q_i * loss_i)
     emp_error = max(0.0, sum(q[i] * (1.0 - means[i]) for i in range(n)))
@@ -112,9 +117,17 @@ def compute_bound(beta_state: dict, delta: float = DELTA) -> dict:
     inner = max(0.0, inner)
     penalty = math.sqrt(inner / (2.0 * m))
     gen = min(1.0, max(0.0, emp_error + penalty))
+    mean_n = m / float(n)
+    sample_starved = mean_n < 2.0
     # ADV21-006: only alarm if bound is non-vacuous (m > KL + log term)
     vacuous = m < (kl + math.log(max(EPS, 2.0 / max(delta, EPS))))
-    alarm = gen > ALARM_THRESH and not vacuous
+    alarm = gen > ALARM_THRESH and not vacuous and not sample_starved
+    if sample_starved:
+        reason = 'sample_starved'
+    elif alarm:
+        reason = 'gen_error_bound>0.3'
+    else:
+        reason = 'ok'
     return {
         'n_skills': n,
         'm': int(m) if m == int(m) else m,
@@ -125,8 +138,10 @@ def compute_bound(beta_state: dict, delta: float = DELTA) -> dict:
         'gen_error_bound': round(gen, 6),
         'alarm': alarm,
         'vacuous': vacuous,
+        'sample_starved': sample_starved,
+        'prior': 'data_dependent_addone',
         'alarm_threshold': ALARM_THRESH,
-        'reason': 'gen_error_bound>0.3' if alarm else 'ok',
+        'reason': reason,
         'posterior_mass_top': sorted(
             [{'skill': names[i], 'q': round(q[i], 6), 'mean': round(means[i], 6)} for i in range(n)],
             key=lambda r: -r['q'],

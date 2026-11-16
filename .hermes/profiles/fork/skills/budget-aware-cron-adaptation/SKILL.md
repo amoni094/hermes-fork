@@ -1,15 +1,15 @@
 ---
 name: budget-aware-cron-adaptation
-description: >
-  Use when a cron job backlog exceeds budget or cron jobs consistently miss windows.
-  Applies stochastic gradient scheduling: estimate job utility vs runtime cost empirically,
-  then dynamically reschedule or shed low-utility jobs to stay within a token/time budget.
+description: Use when cron backlog exceeds budget or jobs miss windows.
 triggers:
   - cron jobs failing due to time budget exceeded
   - adaptive cron scheduling needed
   - cron backlog audit reveals low-utility recurring jobs
   - scheduler budget enforcement
   - cron-budget-guard.py reporting violations
+  - stochastic gradient job shedding
+  - cron token/time budget
+  - related: hermes-cron-sandbox-fixes, channel-fracture-cron
 category: research
 ---
 

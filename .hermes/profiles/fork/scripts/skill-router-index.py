@@ -61,6 +61,11 @@ OVERLAP_THRESHOLD = 0.65
 # when task degree/complexity is high (ambiguous routing), wider sampling beats greedy top-1.
 AMBIGUITY_THRESHOLD = 0.05  # difference below which routing is considered ambiguous
 MIN_SCORE_THRESHOLD = 0.3  # minimum BM25 score to accept a result
+# BM25+ (Lv & Zhai 2011): \u03b4 floors rare-term TF so long docs cannot zero a term.
+# McDiarmid: adding \u03b4 lowers the Lipschitz constant of rank vs query-token flips.
+BM25_K1 = 1.5
+BM25_B = 0.75
+BM25_DELTA = 1.0
 BETA_STATE_PATH = _hermes_root_sri / "cache" / "skill-beta-state.json"
 
 # R4 — Cross-domain skill fingerprints (Sweep 24 / arXiv:2603.22455 §4)
@@ -579,14 +584,12 @@ def flag_near_duplicate_triggers(skills: list[dict], min_dist: int = 5) -> list[
 def build_tfidf(skills: list[dict]) -> tuple[list[dict], dict]:
     """Build BM25-style vectors. Returns (skills_with_vectors, idf_dict).
 
-    Replaces raw TF-IDF with BM25 term saturation (k1=1.5, b=0.75).
-    BM25 dampens high-frequency token inflation and accounts for document length.
-    Source: information_retrieval CS primer (Robertson & Zaragoza 2009).
-    At 217+ skills, BM25 meaningfully reduces routing confusion from shared stopword-
-    heavy descriptions (e.g. 'use when' triggers appearing in every skill).
+    Replaces raw TF-IDF with BM25+ (k1=1.5, b=0.75, \u03b4=1.0).
+    BM25+ dampens high-frequency token inflation, accounts for document length,
+    and adds \u03b4 so rare terms never have zero TF weight (Lv & Zhai 2011).
+    Source: Robertson & Zaragoza 2009; Lv & Zhai SIGIR 2011.
+    At 217+ skills, BM25+ reduces ranking jumps under small query edits (McDiarmid).
     """
-    BM25_K1 = 1.5
-    BM25_B = 0.75
     N = len(skills)
 
     # Build document frequency and average document length
@@ -613,10 +616,10 @@ def build_tfidf(skills: list[dict]) -> tuple[list[dict], dict]:
             tf_raw[t] += 1
         vec = {}
         for t, freq in tf_raw.items():
-            # BM25 TF normalization
+            # BM25+ TF: saturated TF plus \u03b4 lower bound (Lv & Zhai 2011)
             tf_bm25 = (freq * (BM25_K1 + 1)) / (
-                freq + BM25_K1 * (1 - BM25_B + BM25_B * dl / avgdl)
-            )
+                freq + BM25_K1 * (1 - BM25_B + BM25_B * dl / max(avgdl, 1e-9))
+            ) + BM25_DELTA
             vec[t] = tf_bm25 * idf.get(t, 0.0)
         # L2-normalize so cosine similarity works unchanged downstream
         norm = math.sqrt(sum(v * v for v in vec.values())) or 1.0
@@ -824,13 +827,13 @@ def route(query_text: str, top: int = 5) -> list[dict]:
         return []
     skills, idf, _index = load_index_with_tfidf()
     q_tokens = tokenize(query_text)
-    BM25_K1_Q = 1.5
+    BM25_K1_Q = BM25_K1
     q_tf = defaultdict(float)
     for t in q_tokens:
         q_tf[t] += 1
     q_vec_raw = {}
     for t, freq in q_tf.items():
-        tf_bm25 = (freq * (BM25_K1_Q + 1)) / (freq + BM25_K1_Q)
+        tf_bm25 = (freq * (BM25_K1_Q + 1)) / (freq + BM25_K1_Q) + BM25_DELTA
         q_vec_raw[t] = tf_bm25 * idf.get(t, 0.0)
     q_norm = math.sqrt(sum(v * v for v in q_vec_raw.values())) or 1.0
     q_vec = {t: v / q_norm for t, v in q_vec_raw.items()}
@@ -1025,13 +1028,14 @@ def cmd_query(query_text: str):
     # For short queries, length normalisation (b) is set to 0 (avgdl=dl=1 → no length penalty).
     # k1 same as document scoring (1.5) for symmetric term saturation.
     # Source: adversarial review Sep 2026 — raw TF/BM25-IDF asymmetry vs doc BM25-TF/BM25-IDF.
-    BM25_K1_Q = 1.5
+    BM25_K1_Q = BM25_K1
     q_tf = defaultdict(float)
     for t in q_tokens:
         q_tf[t] += 1
     q_vec_raw = {}
     for t, freq in q_tf.items():
-        tf_bm25 = (freq * (BM25_K1_Q + 1)) / (freq + BM25_K1_Q)  # b=0: no length norm on queries
+        # b=0: no length norm on queries; +BM25_DELTA = BM25+
+        tf_bm25 = (freq * (BM25_K1_Q + 1)) / (freq + BM25_K1_Q) + BM25_DELTA
         q_vec_raw[t] = tf_bm25 * idf.get(t, 0.0)
     q_norm = math.sqrt(sum(v * v for v in q_vec_raw.values())) or 1.0
     q_vec = {t: v / q_norm for t, v in q_vec_raw.items()}

@@ -1,9 +1,6 @@
 ---
 name: rate-distortion-context-budget
-description: >
-  Use when allocating context prune budget via rate-distortion principles. Treats context
-  compression as a rate-distortion problem: find the minimum token budget that preserves
-  maximum task-relevant information. Applies to lambda-tuner and pre_compress hook.
+description: Use when allocating prune budget via rate-distortion.
 triggers:
   - context window approaching limit
   - tuning lambda value for compression

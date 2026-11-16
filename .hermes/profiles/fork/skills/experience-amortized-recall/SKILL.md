@@ -1,15 +1,13 @@
 ---
 name: experience-amortized-recall
-description: >
-  Use when improving recall quality in the unified-recall pipeline. Applies experience-amortized
-  reranking: accumulate a lightweight feedback log per query cluster, then use that log to
-  re-weight retrieval candidates at query time — without retraining the embedder.
+description: Use when unified-recall quality drops; amortize rerank logs.
 triggers:
   - recall quality degrading over repeated similar queries
   - retrieval returning stale or low-relevance results
   - tuning unified-recall.py or hindsight recall pipeline
   - implementing retrieval feedback loops
   - amortizing retrieval experience across sessions
+  - experience-amortized reranking without retraining embedder
 category: research
 ---
 

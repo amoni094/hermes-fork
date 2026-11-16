@@ -1,9 +1,6 @@
 ---
 name: cross-lingual-context-compression
-description: >
-  Use when compressing context that contains multilingual content. Applies token-arbitrage
-  compression: identify spans in non-English languages where a translation is shorter in
-  the target token space, and substitute. Works within the existing lambda-tuner pipeline.
+description: Use when compressing multilingual context; token-arbitrage.
 triggers:
   - context window contains non-English text
   - compression ratio below target on multilingual sessions

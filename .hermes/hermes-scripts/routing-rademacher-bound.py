@@ -64,11 +64,11 @@ B_NORM = 1.0
 
 
 def feature_norm(token_map):
-    # X = max l2 of binary token vectors ~ sqrt(max df-less length)
-    mx = 0.0
-    for toks in token_map.values():
-        mx = max(mx, math.sqrt(float(len(toks))))
-    return max(mx, 1.0)
+    # Router L2-normalizes BM25+ vectors, so the linear class has ||x||_2 <= 1.
+    # Using raw sqrt(|tokens|) inflated Rademacher by ~12x vs the deployed class.
+    if not token_map:
+        return 1.0
+    return 1.0
 
 
 def rademacher(B, X, m):
@@ -105,6 +105,14 @@ def compute(beta, index):
     X = feature_norm(token_map) if token_map else 1.0
     R = rademacher(B_NORM, X, m)
     gb = gen_bound(emp, R, m)
+    sample_starved = m < 2.0 * max(len(names), 1)
+    alarm = gb > ALARM and not sample_starved
+    if sample_starved:
+        reason = 'sample_starved'
+    elif alarm:
+        reason = 'rademacher_gen>0.4'
+    else:
+        reason = 'ok'
     return {
         'ts': time.time(),
         'm': m,
@@ -113,9 +121,10 @@ def compute(beta, index):
         'feature_norm_X': round(X, 6),
         'rademacher_R': round(R, 6),
         'gen_error_bound': round(gb, 6),
-        'alarm': gb > ALARM,
+        'sample_starved': sample_starved,
+        'alarm': alarm,
         'alarm_threshold': ALARM,
-        'reason': 'rademacher_gen>0.4' if gb > ALARM else 'ok',
+        'reason': reason,
     }
 
 

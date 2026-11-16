@@ -1,6 +1,13 @@
 ---
 name: pearl-causality
-description: Use when detecting or gating causal claims in responses.
+description: Use when gating causal claims, do-calculus, or backdoors.
+triggers:
+  - causal claim gating in responses
+  - do-calculus backdoor identification
+  - causal ladder rungs
+  - causal-memory-annotator.py
+  - intervention vs correlation
+  - related: scholkopf-causal-representation
 ---
 
 ## Operational Summary

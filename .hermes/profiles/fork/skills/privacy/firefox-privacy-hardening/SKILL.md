@@ -1,6 +1,12 @@
 ---
 name: firefox-privacy-hardening
-description: Use when hardening Firefox fingerprinting/privacy on Linux.
+description: Use when hardening Firefox RFP/fingerprinting privacy.
+triggers:
+  - Firefox fingerprinting on Linux
+  - resistFingerprinting RFP disabled
+  - CanvasBlocker AudioContext
+  - ETP FPP user.js Flatpak
+  - related: firefox-config, firefox-privacy
 ---
 
 # Firefox Privacy Hardening (Flatpak, Linux)
