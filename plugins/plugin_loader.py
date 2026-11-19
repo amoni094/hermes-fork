@@ -276,6 +276,7 @@ class NoopPluginContext:
     register_provider = _noop
     register_context_engine = _noop
     register_browser_provider = _noop
+    register_computer_use_provider = _noop
     register_image_gen_provider = _noop
     register_video_gen_provider = _noop
     register_web_search_provider = _noop

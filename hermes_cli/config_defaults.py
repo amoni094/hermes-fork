@@ -779,6 +779,8 @@ DEFAULT_CONFIG = {
         "profile_describer": _aux(60),   # 1-2 sentence profile blurb; short, cheap
         "goal_judge": _aux(60),          # /goal satisfaction + contract drafting; JSON calls
         "group_router": _aux(20),        # Group Chat routing "auto": who answers; fast/cheap model OK
+        # Cheap classifier for smart_model_routing (light/standard/heavy). Fast/small model.
+        "routing_classifier": _aux(15),
         # Curator skill-usage review can take minutes on reasoning models (umbrellas over hundreds
         # of skills); route cheaper via `hermes model` → auxiliary → Curator.
         "curator": _aux(600),
@@ -798,6 +800,19 @@ DEFAULT_CONFIG = {
         # (moa.presets.<name>.reference_models[].reasoning_effort / aggregator.reasoning_effort).
         "moa_reference": _aux(900, reasoning_effort=False),
         "moa_aggregator": _aux(900, reasoning_effort=False),
+    },
+
+    # First-turn complexity classifier → tier model. Off by default. Tiers are the
+    # source of truth: each value is a model id, or {model, provider} for a
+    # different provider than the session's current one.
+    "smart_model_routing": {
+        "enabled": False,
+        "default_tier": "standard",
+        "tiers": {
+            "light": "",
+            "standard": "",
+            "heavy": "",
+        },
     },
 
     "display": {

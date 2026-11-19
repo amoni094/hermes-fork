@@ -558,6 +558,31 @@ def _route_overrides(route: Any) -> dict[str, Any]:
     }
 
 
+def _route_task_creds(base_creds: dict[str, Any], goal: str, parent_agent) -> dict[str, Any]:
+    """Apply smart_model_routing when delegation.model is not pinned. Fail-open."""
+    if base_creds.get("model"):
+        return dict(base_creds)  # always return a copy so callers can mutate safely
+    try:
+        from agent.model_router import route as _route_model
+        decision = _route_model(
+            goal,
+            current_model=getattr(parent_agent, "model", "") or "",
+            current_provider=getattr(parent_agent, "provider", "") or "",
+        )
+    except Exception:
+        logger.debug("smart_model_routing: child route() failed; inheriting parent model", exc_info=True)
+        return dict(base_creds)
+    if decision is None:
+        return dict(base_creds)
+    routed = dict(base_creds)
+    routed["model"] = decision.model
+    routed["provider"] = decision.provider
+    routed["api_key"] = decision.api_key
+    routed["base_url"] = decision.base_url
+    routed["api_mode"] = decision.api_mode
+    return routed
+
+
 def _build_children(
     task_list: list[dict[str, Any]], task_schemas: list[Optional[dict[str, Any]]], routes: list[Any], *,
     top_role: str, max_iterations: int, parent_agent,
@@ -578,13 +603,16 @@ def _build_children(
         _child_context = t.get("context")
         if _task_schema is not None:
             _child_context = append_output_contract(_child_context, _task_schema)
+        task_creds = _route_task_creds(route.creds, str(t.get("goal") or ""), parent_agent)
         try:
             child = _build_child_preserving_parent_tools(
                 task_index=i, goal=t["goal"], context=_child_context, max_iterations=max_iterations,
                 task_count=len(task_list), parent_agent=parent_agent, role=_normalize_role(t.get("role") or top_role),
-                **_route_overrides(route),
+                **_credential_overrides(task_creds, route.routing_cfg),
+                override_reasoning_effort=route.reasoning_effort,
+                profile_home=route.profile_home,
                 # A spawn always inherits the parent's toolsets; a continued child keeps its own.
-                **{"toolsets": None, "model": route.creds["model"], **(rebuild[i] if rebuild else {})},
+                **{"toolsets": None, "model": task_creds["model"], **(rebuild[i] if rebuild else {})},
             )
         except ValueError as exc:
             # An owner refusal can land mid-batch: the siblings built so far hold reservations.
@@ -592,7 +620,7 @@ def _build_children(
                 _detach_child(parent_agent, built)
                 _close_child(built, "Failed to close child after a refused sibling")
             return [], str(exc)
-        pin_child_service_tier(child, route.creds)
+        pin_child_service_tier(child, task_creds)
         if isinstance(getattr(child, "_delegate_resume", None), dict):
             child._delegate_resume["route"] = route
         if _task_schema is not None:

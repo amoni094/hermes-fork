@@ -45,3 +45,22 @@ def _fast_retry_backoff(request, monkeypatch):
     # server-error retries don't burn real wall-clock seconds.
     from agent import retry_utils as _retry_utils
     monkeypatch.setattr(_retry_utils, "jittered_backoff", lambda *a, **k: 0.0)
+
+
+@pytest.fixture(autouse=True)
+def _stub_owning_home_root(monkeypatch):
+    """Unit tests never run inside a borrowing launch context.
+
+    ``pm.environments.owning_home_root`` probes ``<home>/installs/<key>/facts.json``
+    on disk to discover whether the checkout is owned by a different data root.
+    That probe triggers ``home_io_guard`` in any test that imports agent modules
+    which call ``owning_home_root`` at module-load or first-call time.
+
+    Returning ``None`` is always correct for unit tests: it means the active root
+    owns the checkout, so no borrowing redirect applies.
+    """
+    try:
+        import pm.environments as _pm_env
+        monkeypatch.setattr(_pm_env, "owning_home_root", lambda _root: None)
+    except (ImportError, AttributeError):
+        pass

@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from agent.provider_base import ProviderBase
+from agent.computer_use_provider import ComputerUseProvider as ComputerUseProviderABC
 
 
 @dataclass
@@ -146,21 +146,21 @@ class ComputerUseBackend(ABC):
         return ActionResult(ok=True, action="wait", message=f"waited {seconds:.2f}s")
 
 
-class ComputerUseProvider(ProviderBase):
+class ComputerUseProvider(ComputerUseProviderABC):
     """Factory for one computer_use driver, registered via ``ctx.register_computer_use_provider`` from a provider
     plugin whose directory name is the ``computer_use.backend`` value (built-in: ``plugins/computer_use/cua``). Only
     the selected provider is imported and instantiated. The model-facing tool schema is identical for every backend:
     an action the driver cannot perform returns ``ActionResult(ok=False, code="unsupported_action", message=...)``
     rather than changing the schema."""
 
-    @abstractmethod
-    def create_backend(self, *, permission_mode: str) -> ComputerUseBackend:
-        """A fresh, unstarted backend for one Hermes session (the tool calls ``start()``/``stop()``).
-        ``permission_mode`` is ``standard`` | ``bounded`` | ``unrestricted`` (approval bypass active)."""
-
     def is_available(self) -> bool:
         """Usable on this host right now (the tool's ``check_fn``). Cheap: no network, no spawning."""
         return True
+
+    @abstractmethod
+    def create_backend(self, session_id: str = "", permission_mode: str = "standard") -> ComputerUseBackend:
+        """A fresh, unstarted backend for one Hermes session (the tool calls ``start()``/``stop()``).
+        ``permission_mode`` is ``standard`` | ``bounded`` | ``unrestricted`` (approval bypass active)."""
 
     def doctor(self) -> Optional[int]:
         """``hermes computer-use doctor`` for this backend: print findings, return the exit code.

@@ -11,7 +11,7 @@ class CuaDriverProvider(ComputerUseProvider):
     name = "cua"
     display_name = "cua-driver (background)"
 
-    def create_backend(self, *, permission_mode: str) -> ComputerUseBackend:
+    def create_backend(self, session_id: str = "", permission_mode: str = "standard") -> ComputerUseBackend:
         from tools.computer_use.cua_backend import CuaDriverBackend
         return CuaDriverBackend(permission_mode=permission_mode)
 

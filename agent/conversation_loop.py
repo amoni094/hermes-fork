@@ -1696,6 +1696,9 @@ def _run_conversation_turn(
     agent._held_transforms = held_stream_transforms()
     agent._hold_stream = bool(agent._held_transforms)
 
+    # First-turn smart routing must run before the system prompt is built.
+    _maybe_apply_session_routing(agent, user_message, conversation_history)
+
     # Per-turn setup: build_turn_context mutates ``agent`` and returns the locals the loop reads.
     try:
         _ctx = build_turn_context(
@@ -1805,6 +1808,63 @@ def _run_conversation_turn(
         # future input can move to a clean session (#98722).
         result.update(error=_COMPRESSION_TIMEOUT_FINAL_RESPONSE, partial=True, compression_exhausted=True)
     return result
+
+
+def _user_message_text(user_message: Any) -> str:
+    """Flatten a turn's user payload into classifier text. Fail-open to empty."""
+    if isinstance(user_message, str):
+        return user_message
+    if isinstance(user_message, list):
+        parts: list[str] = []
+        for part in user_message:
+            if isinstance(part, str):
+                parts.append(part)
+            elif isinstance(part, dict):
+                text = part.get("text") or part.get("content")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "\n".join(parts)
+    if isinstance(user_message, dict):
+        content = user_message.get("content") or user_message.get("text") or ""
+        return content if isinstance(content, str) else _user_message_text(content)
+    return str(user_message or "")
+
+
+def _maybe_apply_session_routing(agent, user_message: Any, conversation_history) -> None:
+    """First-turn smart model routing. Fail-open: a miss leaves the current model."""
+    if conversation_history:
+        return
+    try:
+        from agent.model_router import route as _route_model
+        decision = _route_model(
+            _user_message_text(user_message),
+            current_model=getattr(agent, "model", "") or "",
+            current_provider=getattr(agent, "provider", "") or "",
+        )
+    except Exception:
+        logger.debug("smart_model_routing: route() failed; staying put", exc_info=True)
+        return
+    if decision is None:
+        return
+    try:
+        agent.switch_model(
+            new_model=decision.model,
+            new_provider=decision.provider,
+            api_key=decision.api_key,
+            base_url=decision.base_url,
+            api_mode=decision.api_mode,
+        )
+    except Exception:
+        logger.debug(
+            "smart_model_routing: switch to %s failed; staying on %s",
+            decision.model, getattr(agent, "model", ""), exc_info=True,
+        )
+        return
+    if not getattr(agent, "quiet_mode", False):
+        try:
+            agent._safe_print(f"⚡ Routed to {decision.tier}: {decision.model}")
+        except Exception:
+            pass
 
 
 def run_conversation(

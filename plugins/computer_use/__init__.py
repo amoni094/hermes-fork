@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, Optional
 
 from plugins import plugin_loader as _loader
 
 if TYPE_CHECKING:
-    from tools.computer_use.backend import ComputerUseProvider
+    from agent.computer_use_provider import ComputerUseProvider
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +72,17 @@ def _load_provider_from_dir(provider_dir: Path) -> Optional[ComputerUseProvider]
         f"{__package__}.{name}" if is_bundled else f"{_USER_NAMESPACE}.{name}", provider_dir,
         parents=(__package__.rpartition(".")[0], __package__), logger=logger,
         synthetic_namespace=None if is_bundled else _USER_NAMESPACE)
-    return mod and _loader.instance_from_module(
+    provider = mod and _loader.instance_from_module(
         mod, collector=_ProviderCollector(), collected_attr="provider", base_cls=ComputerUseProvider,
         name=name, logger=logger)
+    if provider is not None:
+        try:
+            from agent.computer_use_registry import _registry as _cu_registry
+            from hermes_constants import hermes_home_key
+            _cu_registry.register(provider, scope=hermes_home_key())
+        except Exception:
+            logger.debug("Could not register computer-use provider %s into the process registry", name, exc_info=True)
+    return provider
 
 
 class _ProviderCollector(_loader.NoopPluginContext):
@@ -96,9 +104,21 @@ def configured_backend_name() -> str:
 
 
 def get_active_provider() -> ComputerUseProvider:
-    """The one provider ``computer_use.backend`` selects; ``LookupError`` naming the available ones otherwise."""
+    """The one provider ``computer_use.backend`` selects; ``LookupError`` naming the available ones otherwise.
+
+    PluginContext-registered backends (``register_computer_use_provider``) win when their
+    ``provider.name`` matches the configured backend; otherwise the exclusive on-disk loader runs.
+    """
     name = configured_backend_name()
-    provider = load_computer_use_provider(name)
+    from agent.computer_use_registry import _registry as _cu_registry
+    try:
+        from hermes_constants import hermes_home_key
+        provider = _cu_registry.get_provider(name, scope=hermes_home_key())
+    except Exception:
+        logger.debug("computer_use: registry lookup failed for %s; falling back to disk load", name, exc_info=True)
+        provider = None
+    if provider is None:
+        provider = load_computer_use_provider(name)
     if provider is None:
         available = ", ".join(found for found, _ in discover_computer_use_providers())
         state = "could not be loaded (see the log)" if find_provider_dir(name) else "is not installed"

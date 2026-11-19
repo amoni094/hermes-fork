@@ -68,6 +68,7 @@ HOST_OBJECT_BASES: dict[str, str] = {
     "register_video_gen_provider": "agent.video_gen_provider:VideoGenProvider",
     "register_web_search_provider": "agent.web_search_provider:WebSearchProvider",
     "register_browser_provider": "agent.browser_provider:BrowserProvider",
+    "register_computer_use_provider": "agent.computer_use_provider:ComputerUseProvider",
     "register_terminal_environment_provider": "agent.terminal_env_provider:TerminalEnvironmentProvider",
     "register_secret_source": "agent.secret_sources.base:SecretSource",
     "register_tts_provider": "agent.tts_provider:TTSProvider",
