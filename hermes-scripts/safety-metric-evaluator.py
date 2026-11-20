@@ -68,7 +68,7 @@ ALWAYS_SAFE = {"clarify", "text_to_speech", "vision_analyze", "memory"}
 
 def _extract_tool_calls_from_session(path: Path) -> list[str]:
     tools = []
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         try:
             ev = json.loads(line)
             content = ev.get("content", ev.get("api_content", ""))

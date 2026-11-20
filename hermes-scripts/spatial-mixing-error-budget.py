@@ -32,6 +32,7 @@ from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
+import itertools
 
 HOME         = Path.home()
 _HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
@@ -51,7 +52,7 @@ EPSILON        = 0.05  # target mixing accuracy
 def _extract_tool_sequence(session_path: Path) -> list[str]:
     """Extract ordered tool call names from session."""
     tools = []
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev      = json.loads(line)
             content = ev.get("api_content", ev.get("content", ""))
@@ -71,7 +72,7 @@ def _transition_matrix(seq: list[str]) -> tuple[np.ndarray, list[str]]:
     n      = len(tools)
     counts = np.zeros((n, n)) + 1e-6  # Laplace smoothing
 
-    for a, b in zip(seq[:-1], seq[1:]):
+    for a, b in itertools.pairwise(seq):
         counts[idx[a], idx[b]] += 1
 
     P = counts / counts.sum(axis=1, keepdims=True)

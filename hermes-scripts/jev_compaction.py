@@ -708,7 +708,7 @@ def compact_messages(
     candidates = [c for c in calls if not c.pinned]
 
     # Fit state
-    state, state_tokens, stage = fit_state(messages, calls, options)
+    state, state_tokens, _stage = fit_state(messages, calls, options)
 
     # Score candidates in batches
     all_scores: dict[str, tuple[float, float]] = {}
@@ -778,7 +778,7 @@ def _load_session_messages(session_id: str) -> list[dict]:
         candidates = list(sessions_dir.glob(f"*{session_id}*"))
     if not candidates:
         raise FileNotFoundError(f"No session found for id: {session_id}")
-    session_file = sorted(candidates)[-1]
+    session_file = max(candidates)
     messages = []
     for line in session_file.read_text().splitlines():
         line = line.strip()
@@ -863,7 +863,7 @@ def main() -> None:
     if args.session:
         messages = _load_session_messages(args.session)
     elif args.input:
-        for line in Path(args.input).read_text().splitlines():
+        for line in Path(args.input).read_text(encoding='utf-8').splitlines():
             if line.strip():
                 messages.append(json.loads(line))
     else:
@@ -898,7 +898,7 @@ def main() -> None:
 
     if args.estimate_only:
         try:
-            state, tokens, stage = fit_state(messages, calls, options)
+            _state, tokens, stage = fit_state(messages, calls, options)
             print(f"State tokens: {tokens:,} (stage: {stage})", file=sys.stderr)
         except ValueError as e:
             print(f"State fitting failed: {e}", file=sys.stderr)
@@ -946,7 +946,7 @@ def main() -> None:
     # Write output
     output_lines = [json.dumps(m) for m in result.messages]
     if args.output:
-        Path(args.output).write_text("\n".join(output_lines) + "\n")
+        Path(args.output).write_text("\n".join(output_lines) + "\n", encoding='utf-8')
         print(f"Written: {args.output}", file=sys.stderr)
     else:
         print("\n".join(output_lines))

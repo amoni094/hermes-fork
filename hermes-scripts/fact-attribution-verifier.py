@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 
@@ -38,14 +38,25 @@ def verify_attribution(text: str) -> dict:
         else:
             missing.append(c)
     n = len(claims)
-    rate = (len(attributed) / float(n)) if n else 1.0
+    if n == 0:
+        return {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "n_claims": 0,
+            "n_attributed": 0,
+            "attribution_rate": None,
+            "missing": [],
+            "ok": None,
+            "status": "insufficient_data",
+        }
+    rate = len(attributed) / float(n)
     return {
         "generated_at": datetime.now(UTC).isoformat(),
         "n_claims": n,
         "n_attributed": len(attributed),
         "attribution_rate": round(rate, 6),
         "missing": missing[:20],
-        "ok": rate >= 0.7 or n == 0,
+        "ok": rate >= 0.7,
+        "status": "ok",
     }
 
 
@@ -56,6 +67,7 @@ def self_test() -> dict:
     assert r["n_attributed"] >= 1, r
     empty = verify_attribution("")
     assert empty["n_claims"] == 0
+    assert empty["status"] == "insufficient_data"
     return {"self_test": "PASS", "sample": r}
 
 
@@ -73,10 +85,11 @@ def main() -> None:
         if not text and not sys.stdin.isatty():
             text = sys.stdin.read()
         out = verify_attribution(text)
-        try:
-            _atomic_write_json(OUT, out)
-        except Exception:
-            pass
+        if out.get("status") != "insufficient_data":
+            try:
+                _atomic_write_json(OUT, out)
+            except Exception:
+                pass
         print(json.dumps(out, indent=2))
     except Exception:
         pass

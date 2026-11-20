@@ -5,16 +5,17 @@ from __future__ import annotations
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 import argparse
+import fcntl
 import json
 import sys
 import tempfile
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 CACHE = _hermes_root / 'cache'
 OUT_PATH = CACHE / 'fair-pagerank.json'
@@ -22,14 +23,17 @@ GRAPH_PATH = CACHE / 'skill-graph.json'
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _atomic_write(path: Path, obj) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + '.tmp')
-    tmp.write_text(json.dumps(obj, indent=2) + '\n', encoding='utf-8')
-    os.replace(str(tmp), str(path))
+    lock = path.with_suffix('.lock')
+    with open(lock, 'w', encoding='utf-8') as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        tmp = path.with_name(path.name + '.tmp')
+        tmp.write_text(json.dumps(obj, indent=2) + '\n', encoding='utf-8')
+        os.replace(tmp, path)
 
 
 def _load_graph(graph_path: Path):
@@ -115,8 +119,6 @@ def fair_adjust(pr, groups):
         by[groups.get(u, 'default')].append((u, p))
     out = dict(pr)
     for g, items in by.items():
-        if not items:
-            continue
         mean = sum(p for _, p in items) / len(items)
         for u, p in items:
             out[u] = 0.5 * p + 0.5 * mean
@@ -169,7 +171,7 @@ def _self_test() -> int:
     empty = run(graph_path=Path('/nonexistent/skill-graph.json'))
     assert empty['status'] == 'insufficient_data'
     assert empty.get('reason') == 'skill-graph.json missing'
-    td = Path(tempfile.mkdtemp(prefix='fpr-%s-' % uuid.uuid4().hex[:8]))
+    td = Path(tempfile.mkdtemp(prefix=f'fpr-{uuid.uuid4().hex[:8]}-'))
     try:
         tmpg = td / 'skill-graph.json'
         payload = {
@@ -187,7 +189,7 @@ def _self_test() -> int:
         empty_g.write_text(json.dumps({'n_nodes': 0, 'nodes': [], 'edges': []}), encoding='utf-8')
         e2 = run(graph_path=empty_g)
         assert e2['status'] == 'insufficient_data'
-        print('[fair-pagerank-skill-scorer] --self-test PASS n=%s' % r['n_nodes'])
+        print('[fair-pagerank-skill-scorer] --self-test PASS n={}'.format(r['n_nodes']))
         return 0
     finally:
         import shutil
@@ -202,7 +204,7 @@ def main():
         try:
             sys.exit(_self_test())
         except Exception as exc:
-            print('[fair-pagerank-skill-scorer] --self-test FAIL: %s' % exc)
+            print(f'[fair-pagerank-skill-scorer] --self-test FAIL: {exc}')
             sys.exit(1)
     try:
         r = run()
@@ -210,8 +212,9 @@ def main():
             _atomic_write(OUT_PATH, r)
         slim = {k: r[k] for k in r if k != 'scores'}
         print(json.dumps(slim))
-    except Exception:
-        pass
+    except Exception as e:
+        print(json.dumps({'error': str(e), 'ts': datetime.now(UTC).isoformat()}))
+        sys.exit(1)
 
 
 if __name__ == '__main__':

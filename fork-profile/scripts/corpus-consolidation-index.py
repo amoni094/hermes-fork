@@ -171,7 +171,7 @@ def _load_json(path: Path) -> Any:
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
         print(f"[corpus-index] WARN: failed to read {path}: {exc}", file=sys.stderr)
         return None

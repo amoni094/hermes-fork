@@ -30,7 +30,7 @@ from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (
     (_hermes_base / 'profiles' / _hermes_profile)
     if _hermes_profile and 'profiles' not in str(_hermes_base)
@@ -287,7 +287,7 @@ def self_test() -> int:
     rl2 = cusum_run_length([0.0] * 5 + [3.0] * 20, mu0=0.0, k=0.25, h=4.0)
     if rl2 > 20:
         failures.append(f'step should alarm, rl={rl2}')
-    mu, sig = mean_std([1.0, 3.0, 5.0])
+    mu, _sig = mean_std([1.0, 3.0, 5.0])
     if abs(mu - 3.0) > 1e-12:
         failures.append('mean')
     pre = synthetic_prechange(n=50, seed=1)
@@ -326,7 +326,7 @@ def main(argv=None) -> int:
             'h_star', 'ARL0_h_star', 'hit_target', 'recommendation', 'output',
         )
     }))
-    return 1 if out.get('alarm') else 0
+    return 1 if out.get('write_error') else 0  # ADV2-017: alarm is not a process failure
 
 
 if __name__ == '__main__':

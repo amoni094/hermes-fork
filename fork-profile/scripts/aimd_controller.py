@@ -30,24 +30,16 @@ import math
 import random
 import threading
 import time
-from collections import deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from enum import IntEnum
+from enum import Enum
 from typing import Generator
 
 
-class NodePriority(IntEnum):
-    """Priority for backpressure. Ordered so HIGH > MEDIUM > LOW.
-
-    Puterman, Markov Decision Processes (1994): under constrained resources,
-    prefer higher-reward (higher-priority) states. IntEnum makes ``>`` / ``<``
-    well-defined; a string Enum is not ordered.
-    """
-
-    LOW = 0
-    MEDIUM = 1
-    HIGH = 2
+class NodePriority(Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
 # Default concurrency budgets per node type
@@ -99,9 +91,6 @@ class _Window:
         ok = self._events.count("ok")
         return ok / len(self._events)
 
-    def __len__(self) -> int:
-        return len(self._events)
-
 
 class AIMDController:
     """
@@ -125,108 +114,41 @@ class AIMDController:
         self._max_limit = self._initial * 3
         self._limit = self._initial
         self._rng = rng or random.Random()  # never module-global
-        # Use Condition + _in_flight so _limit changes take effect immediately.
-        # A plain Semaphore cannot shrink without draining slots; Condition can.
-        self._cond = threading.Condition(threading.Lock())
-        self._lock = self._cond  # _adjust() acquires _lock; works with Condition
-        self._in_flight: int = 0
+        self._lock = threading.Lock()
+        self._sem = threading.Semaphore(self._initial)
         self._window = _Window()
         self._op_count = 0
-        # Strogatz §2.2: successive limits for discrete fixed-point detection.
-        self._limit_history: deque[int] = deque(maxlen=5)
-        # Astrom & Murray §10.1: error-count history for the derivative term.
-        self._error_count_history: deque[int] = deque(maxlen=5)
-        # TODO(Astrom & Murray §10.1): latency P-controller
-        # update_with_latency(duration_ms, slo_ms) — Hermes callers do not yet
-        # emit duration_ms per call; do not add until acquire/release can carry
-        # it without an API break.
 
     @property
     def limit(self) -> int:
         return self._limit
 
     def _adjust(self) -> None:
-        """AIMD adjustment based on sliding window. Call under _lock.
-
-        Theory:
-          - Chiu & Jain 1989: additive increase / multiplicative decrease.
-          - Astrom & Murray, Feedback Systems §10.1: derivative term on beta;
-            min-sample guard so the controller does not act on noise.
-          - Strogatz, Nonlinear Dynamics and Chaos §2.2: record post-adjust
-            limits for discrete fixed-point / oscillation detection.
-        """
-        # Min-sample guard: do not adjust on fewer than 5 observations.
-        if len(self._window) < 5:
-            return
-
+        """AIMD adjustment based on sliding window. Call under _lock."""
         throttles = self._window.count("throttle")
         errors = self._window.count("error")
-        self._error_count_history.append(errors)
         old = self._limit
 
         if throttles >= 2:
-            # Multiplicative decrease with adaptive beta (Astrom & Murray §10.1)
-            beta = self.adaptive_beta()
-            new = max(1, int(self._limit * beta))
+            # Multiplicative decrease
+            new = max(1, self._limit // 2)
         elif errors >= 3:
             # Moderate decrease
             new = max(1, int(self._limit * 0.7))
-        elif errors == 0 and throttles == 0:
-            # Additive increase only on a clean window (Chiu & Jain fairness).
-            # Health-ratio threshold alone allowed increase with errors > 0.
+        elif self._window.full() and self._window.health_ratio() >= 0.75:
+            # Additive increase
             new = min(self._max_limit, self._limit + 1)
         else:
-            new = old
+            return  # no change
 
         if new != old:
-            pass  # limit change handled below via _cond.notify_all()
-        delta = new - old
-        # Remove leftover semaphore release calls from the old increase path
-        if delta > 0:
-            pass  # _cond.notify_all() below wakes waiters; no separate semaphore
-        # MD only writes _limit; slot release is via _cond.notify_all() so waiting
-        # acquire()s re-check _in_flight < _limit themselves.
-        self._limit = new
-        self._cond.notify_all()
-
-        # Strogatz §2.2: always record the post-adjust limit (even if unchanged).
-        self._limit_history.append(self._limit)
-
-    def is_near_fixed_point(self) -> bool:
-        """True if the last 3 limits are within 5% relative tolerance of each other.
-
-        Strogatz, Nonlinear Dynamics and Chaos §2.2: a fixed point x* of
-        x_{n+1} = f(x_n) satisfies f(x*) = x*. Near-equality of successive
-        AIMD limits is the discrete analogue of approaching x*; persistent
-        oscillation around x* is detected as *not* near a fixed point.
-        The controller is already per-node, so the node is ``self``.
-        """
-        if len(self._limit_history) < 3:
-            return False
-        last3 = list(self._limit_history)[-3:]
-        for i, a in enumerate(last3):
-            for b in last3[i + 1 :]:
-                if abs(a - b) / max(abs(a), 1) > 0.05:
-                    return False
-        return True
-
-    def adaptive_beta(self) -> float:
-        """Derivative-shaped multiplicative decrease factor in [0.25, 0.75].
-
-        Astrom & Murray, Feedback Systems §10.1: the D term uses d_err to
-        strengthen the cut when error is rising (lower beta) and weaken it
-        when error is falling (higher beta). d_err is the first difference
-        of window error counts. The controller is already per-node.
-        """
-        hist = self._error_count_history
-        if len(hist) < 2:
-            return 0.5
-        d_err = hist[-1] - hist[-2]
-        if d_err > 0:
-            return max(0.25, 0.5 - 0.05 * d_err)
-        if d_err < 0:
-            return min(0.75, 0.5 - 0.05 * d_err)
-        return 0.5
+            # Adjust semaphore
+            delta = new - old
+            if delta > 0:
+                for _ in range(delta):
+                    self._sem.release()
+            # For decreases we let slots drain naturally; forced decrease would deadlock
+            self._limit = new
 
     def record_outcome(self, outcome: str) -> None:
         """outcome: 'ok' | 'throttle' | 'error'"""
@@ -269,19 +191,7 @@ class AIMDController:
                     f"health too low ({self.health_ratio():.2f}) for LOW priority"
                 )
 
-        # Acquire a slot: wait until in_flight < _limit (respects MD immediately)
-        acquired = False
-        deadline = time.monotonic() + timeout
-        with self._cond:
-            while True:
-                if self._in_flight < self._limit:
-                    self._in_flight += 1
-                    acquired = True
-                    break
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    break
-                self._cond.wait(timeout=remaining)
+        acquired = self._sem.acquire(timeout=timeout)
         if not acquired:
             raise TimeoutError(
                 f"AIMD: timeout acquiring slot for {self.provider}/{self.node}"
@@ -297,9 +207,7 @@ class AIMDController:
                 outcome = "error"
             raise
         finally:
-            with self._cond:
-                self._in_flight -= 1
-                self._cond.notify_all()
+            self._sem.release()
             self.record_outcome(outcome)
 
     def jitter_backoff(self, attempt: int, base: float = 1.0, cap: float = 32.0) -> float:
@@ -414,106 +322,31 @@ def reset_registry() -> None:
         _registry.clear()
 
 
-def _self_test() -> None:
-    """In-process checks for AIMD adaptive-beta / fixed-point / IntEnum."""
-    reset_registry()
-
-    # Puterman 1994: IntEnum ordering
-    assert NodePriority.HIGH > NodePriority.MEDIUM > NodePriority.LOW
-    assert NodePriority.LOW == 0 and NodePriority.MEDIUM == 1 and NodePriority.HIGH == 2
-
+if __name__ == "__main__":
+    # Quick smoke test
     rng = random.Random(42)
     ctrl = get_controller("anthropic", "extractor", rng=rng)
-    initial = ctrl.limit
-    assert initial == 8
-
-    # Min-sample guard: 4 events must not change the limit (Astrom & Murray §10.1)
-    for _ in range(4):
-        ctrl.record_outcome("throttle")
-    assert ctrl.limit == initial, "adjust must not fire before 5 samples"
-    assert len(ctrl._limit_history) == 0
-
-    # 5th throttle: first MD with history < 2 ⇒ beta = 0.5
-    ctrl.record_outcome("throttle")
-    assert ctrl.limit == max(1, int(initial * 0.5))
-    assert list(ctrl._limit_history)[-1] == ctrl.limit
-
-    # adaptive_beta: rising error counts lower beta (Astrom & Murray §10.1)
-    ctrl._error_count_history.clear()
-    ctrl._error_count_history.append(1)
-    ctrl._error_count_history.append(5)  # d_err = 4 > 0
-    assert ctrl.adaptive_beta() == max(0.25, 0.5 - 0.05 * 4)
-    ctrl._error_count_history.clear()
-    ctrl._error_count_history.append(5)
-    ctrl._error_count_history.append(1)  # d_err = -4 < 0
-    assert ctrl.adaptive_beta() == min(0.75, 0.5 - 0.05 * (-4))
-    ctrl._error_count_history.clear()
-    ctrl._error_count_history.append(3)
-    ctrl._error_count_history.append(3)
-    assert ctrl.adaptive_beta() == 0.5
-
-    # Tight increase: errors > 0 must not additive-increase even if mostly ok.
-    # Sprinkle errors so intermediate windows never look clean (old health_ratio
-    # rule would still increase once the window is full at 18/20 ok).
-    reset_registry()
-    ctrl = get_controller("anthropic", "extractor", rng=random.Random(1), initial=4)
-    start = ctrl.limit
-    for i in range(20):
-        ctrl.record_outcome("error" if i in (4, 9) else "ok")
-    # 18 ok + 2 error, health_ratio = 0.9, errors != 0 ⇒ no increase
-    assert ctrl.limit == start, "must not additive-increase while errors > 0"
-
-    # Clean window does increase (adjust fires at ops 5 and 10)
-    reset_registry()
-    ctrl = get_controller("anthropic", "extractor", rng=random.Random(2), initial=4)
-    start = ctrl.limit
+    print(f"Initial limit: {ctrl.limit}")
     for _ in range(10):
+        ctrl.record_outcome("throttle")
+    print(f"After throttles: {ctrl.limit}")
+    for _ in range(40):
         ctrl.record_outcome("ok")
-    assert ctrl.limit == start + 2
-
-    # Strogatz §2.2: last 3 limits within 5% ⇒ near fixed point
-    ctrl._limit_history.clear()
-    for v in (8, 8, 8):
-        ctrl._limit_history.append(v)
-    assert ctrl.is_near_fixed_point() is True
-    ctrl._limit_history.clear()
-    for v in (8, 4, 8):
-        ctrl._limit_history.append(v)
-    assert ctrl.is_near_fixed_point() is False
-    ctrl._limit_history.clear()
-    assert ctrl.is_near_fixed_point() is False
+    print(f"After recovery: {ctrl.limit}")
 
     now = 1_000_000.0
+    # Hard core: selected arm with n>=10 has P(fail) <= 0.1
     safe = {"ok": {"n": 20, "failures": 1, "last_ts": now}}
-    unsafe = {"bad": {"n": 20, "failures": 8, "last_ts": now}}
+    unsafe = {"bad": {"n": 20, "failures": 8, "last_ts": now}}  # 9/22 > 0.1
     stale = {"old": {"n": 20, "failures": 0, "last_ts": now - 48 * 3600}}
     assert select_ucb_arm(safe, t=20, now=now) == "ok"
     assert select_ucb_arm(unsafe, t=20, now=now) is None
-    assert select_ucb_arm(stale, t=20, now=now) is None
+    assert select_ucb_arm(stale, t=20, now=now) is None  # stale successes
     nostamp = {"ghost": {"n": 20, "failures": 0, "last_ts": None}}
-    assert select_ucb_arm(nostamp, t=20, now=now) is None
+    assert select_ucb_arm(nostamp, t=20, now=now) is None  # missing ts is stale
     picked = select_ucb_arm({**safe, **unsafe, **stale}, t=20, now=now)
     assert picked == "ok"
-    assert laplace_p_fail(1, 20) <= FAIL_BOUND
-    reset_registry()
-    print("AIMD controller --self-test PASSED")
-
-
-if __name__ == "__main__":
-    import sys
-
-    if "--self-test" in sys.argv:
-        _self_test()
-    else:
-        rng = random.Random(42)
-        ctrl = get_controller("anthropic", "extractor", rng=rng)
-        print(f"Initial limit: {ctrl.limit}")
-        for _ in range(10):
-            ctrl.record_outcome("throttle")
-        print(f"After throttles: {ctrl.limit}")
-        for _ in range(40):
-            ctrl.record_outcome("ok")
-        print(f"After recovery: {ctrl.limit}")
-        _self_test()
-        print("AIMD controller smoke test PASSED")
-        print("UCB safety envelope self-test PASSED")
+    n, f = 20, 1
+    assert laplace_p_fail(f, n) <= FAIL_BOUND
+    print("AIMD controller smoke test PASSED")
+    print("UCB safety envelope self-test PASSED")

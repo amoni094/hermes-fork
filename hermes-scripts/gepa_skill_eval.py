@@ -367,11 +367,11 @@ def main():
             config=OptimizeAnythingConfig(max_token_cost=args.budget),
         )
 
-    final_score, final_info = evaluate_skill(result.best_candidate, cases)
+    final_score, _final_info = evaluate_skill(result.best_candidate, cases)
     print(f"\nOptimized score: {final_score:.3f} (was {score:.3f}, delta +{final_score - score:.3f})")
 
     out_path = args.output or str(skill_path.parent / "SKILL_optimized.md")
-    Path(out_path).write_text(result.best_candidate)
+    Path(out_path).write_text(result.best_candidate, encoding="utf-8")
     print(f"Optimized skill written to: {out_path}")
     print("Review and copy to SKILL.md if satisfied.")
 

@@ -19,10 +19,9 @@ import sqlite3
 from pathlib import Path
 
 _HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
-if _HERMES_HOME.name == "fork" and _HERMES_HOME.parent.name == "profiles":
-    _FORK_ROOT = _HERMES_HOME
-else:
-    _FORK_ROOT = _HERMES_HOME / "profiles" / "fork"
+# Resolve fork profile root without doubling when HERMES_HOME is already the fork dir.
+_hh = str(_HERMES_HOME)
+_FORK_ROOT = _HERMES_HOME if ("profiles" in _hh and _hh.endswith("fork")) else _HERMES_HOME / "profiles/fork"
 LIFECYCLE_DB = _HERMES_HOME / "memory-facts/lifecycle.db"
 CRON_JOBS = _FORK_ROOT / "cron/jobs.json"
 EXEC_LOG = _FORK_ROOT / "logs/exec-integrity.jsonl"
@@ -31,7 +30,7 @@ AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
 
 
 def _now_iso() -> str:
-    return datetime.datetime.utcnow().isoformat() + "Z"
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def _load_cron_jobs() -> list[dict]:
@@ -122,8 +121,15 @@ def main() -> int:
 
     # 1. Check tracegrant_grants for grants without expiry
     grants = _load_tracegrant_grants(session_id)
+    # Only flag expiry when the schema actually has an expiry column; if the
+    # DB was created without expiry columns (pre-policy schema), treat as inapplicable.
+    _expiry_cols = {"expires_at", "expiry", "ttl", "expires"}
+    _grant_cols: set[str] = set()
+    if grants:
+        _grant_cols = set(grants[0].keys())
+    _schema_has_expiry = bool(_expiry_cols & _grant_cols)
     for grant in grants:
-        if _check_grant_expiry(grant):
+        if _schema_has_expiry and _check_grant_expiry(grant):
             flagged.append({
                 "resource_type": "tracegrant",
                 "resource_id": str(grant.get("grant_id", grant.get("id", "?"))),
@@ -132,10 +138,17 @@ def main() -> int:
                 "issue": "no expiry record",
             })
 
-    # 2. Check cron jobs — flag any with no TTL or end_date
+    # 2. Check cron jobs — only flag one-shot or session-scoped jobs without expiry.
+    # Perpetual scheduled jobs (recurring cron/interval without max_runs) are by design
+    # and should not be flagged as unaudited session resources.
     cron_jobs = _load_cron_jobs()
     for job in cron_jobs:
         job_id = job.get("id", "?")
+        schedule_kind = job.get("schedule", {}).get("kind", "cron")
+        run_once = job.get("run_once") or schedule_kind == "once"
+        # Only audit non-recurring or explicitly session-bounded jobs
+        if not run_once:
+            continue  # perpetual scheduled jobs are intentional — skip
         has_expiry = any(
             job.get(k) for k in ("end_date", "expires_at", "ttl", "max_runs", "run_once")
         )
@@ -145,7 +158,7 @@ def main() -> int:
                 "resource_id": str(job_id),
                 "session_id": session_id or "unknown",
                 "acquired_at": str(job.get("created_at", "?")),
-                "issue": "cron job has no end_date, ttl, or max_runs — perpetual resource",
+                "issue": "one-shot cron job has no expiry record",
             })
 
     # 3. Tool calls from exec log — flag any without call_id

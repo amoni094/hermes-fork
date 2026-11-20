@@ -27,7 +27,7 @@ import json
 import os
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 # ── Profile-aware root ────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ def _msg_snippet(data: dict, source: str) -> str:
 
 def aggregate() -> dict:
     """Scan cache/ for *-alarm.json files ≤2h old, return summary dict."""
-    now_ts = datetime.now(timezone.utc)
+    now_ts = datetime.now(UTC)
     now_epoch = now_ts.timestamp()
     checked_at = now_ts.isoformat()
 

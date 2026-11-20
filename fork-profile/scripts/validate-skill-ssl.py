@@ -69,7 +69,7 @@ _LAW_STOPWORDS = {
     "a", "an", "the", "and", "or", "not", "no", "if", "then", "iff", "equals",
     "eq", "implies", "forall", "exists", "true", "false", "must", "may", "only",
     "all", "any", "in", "of", "to", "for", "with", "without", "is", "are", "be",
-    "does", "do", "must", "shall", "should", "can", "cannot", "via", "from",
+    "does", "do", "shall", "should", "can", "cannot", "via", "from",
     "into", "on", "at", "by", "as", "vs", "than", "that", "this", "those",
     "these", "it", "its", "we", "our", "law", "invariant", "preserves",
     "preserve", "never", "always", "under", "over", "when", "where",

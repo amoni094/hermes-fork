@@ -11,7 +11,7 @@ from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 if _hermes_base.name != '.hermes' and _hermes_base.parent.name == 'profiles':
     _hermes_base = _hermes_base.parent.parent
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
@@ -184,8 +184,8 @@ def synthetic_suite(n=100, seed=1):
     for i in range(n // 2):
         clean.append({
             'ts': _now(),
-            'session_id': f's{i}',
-            'tool_name': f'tool_{i % 5}',
+            'session_id': 's%d' % i,
+            'tool_name': 'tool_%d' % (i % 5),
             'latency_ms': 20 + rng.randrange(80),
             'outcome': 'ok',
             'score': 0.9 + 0.1 * rng.random(),
@@ -197,8 +197,8 @@ def synthetic_suite(n=100, seed=1):
     for i in range(n // 2):
         base = {
             'ts': _now(),
-            'session_id': f'f{i}',
-            'tool_name': f'tool_{i % 5}',
+            'session_id': 'f%d' % i,
+            'tool_name': 'tool_%d' % (i % 5),
             'latency_ms': 30,
             'outcome': 'ok',
             'score': 0.95,

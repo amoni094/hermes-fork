@@ -79,7 +79,7 @@ def _log_result(verdict: str, check_type: str, details: dict) -> None:
     }
     _CACHE.mkdir(parents=True, exist_ok=True)
     try:
-        with open(GATE_LOG, "a") as f:
+        with open(GATE_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
     except OSError:
         pass
@@ -124,7 +124,7 @@ def verify_compile(path_str: str) -> int:
         _log_result("FAIL", "compile", {"path": path_str, "detail": "file not found"})
         return 1
     try:
-        ast.parse(path.read_text(errors="ignore"))
+        ast.parse(path.read_text(encoding="utf-8", errors="ignore"))
         _log_result("PASS", "compile", {"path": path_str, "detail": "syntax OK"})
         print(f"[mirage-gate] PASS: compile {path.name}")
         return 0
@@ -168,7 +168,7 @@ def check_claims(ledger_path: str) -> int:
 
     unverified = 0
     total = 0
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         try:

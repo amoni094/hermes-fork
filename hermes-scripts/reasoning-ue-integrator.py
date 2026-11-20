@@ -22,7 +22,7 @@ from pathlib import Path
 
 # --- Profile awareness ---
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (
     (_hermes_base / 'profiles' / _hermes_profile)
     if _hermes_profile and 'profiles' not in str(_hermes_base)
@@ -45,7 +45,7 @@ def _qhash(text: str) -> str:
 def _load_jsonl(path: Path) -> list:
     rows = []
     try:
-        for line in path.read_text().splitlines():
+        for line in path.read_text(encoding='utf-8').splitlines():
             line = line.strip()
             if not line:
                 continue
@@ -59,7 +59,7 @@ def _load_jsonl(path: Path) -> list:
 
 def _atomic_append(path: Path, obj: dict) -> None:
     try:
-        with open(path, 'a') as f:
+        with open(path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(obj) + '\n')
             f.flush()
     except OSError:
@@ -88,7 +88,7 @@ _CAUSAL_R3 = re.compile(
 def _load_ue(qhash: str) -> dict:
     """Return most recent UE score row for this query_hash, or defaults."""
     rows = _load_jsonl(_UE_SCORES)
-    now = time.time()
+    time.time()
     matches = [r for r in rows if r.get('query_hash') == qhash]
     if matches:
         return matches[-1].get('scores', {}), matches[-1].get('composite_ue', 0.5), matches[-1]
@@ -120,9 +120,9 @@ def _reward_hack_count(qhash: str) -> int:
                and now - r.get('ts', 0) < 3600)
 
 def audit(query: str, response: str, has_tool_verification: bool = False,
-          logprob_confidence: float = None) -> dict:
+          logprob_confidence: float | None = None) -> dict:
     qhash = _qhash(query)
-    scores, composite_ue, ue_row = _load_ue(qhash)
+    scores, composite_ue, _ue_row = _load_ue(qhash)
     consistency_score = _load_consistency(qhash)
     ue_proxy = _load_perplexity(qhash)
     verbalization_confidence = scores.get('verbalization_confidence', 0.5)
@@ -368,7 +368,7 @@ def main():
     a.add_argument('--response', required=True)
     a.add_argument('--has-tool-verification', action='store_true')
     a.add_argument('--logprob-confidence', type=float)
-    s = sub.add_parser('stats')
+    sub.add_parser('stats')
     args = parser.parse_args()
 
     if args.self_test:

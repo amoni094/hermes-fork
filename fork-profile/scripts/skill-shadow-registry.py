@@ -19,11 +19,13 @@ import datetime
 from pathlib import Path
 
 _HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hh = str(_HERMES_HOME)
+_FORK_ROOT = _HERMES_HOME if ("profiles" in _hh and _hh.endswith("fork")) else _HERMES_HOME / "profiles/fork"
 SKILLS_ROOTS = [
-    _HERMES_HOME / "profiles/fork/skills",
+    _FORK_ROOT / "skills",
     _HERMES_HOME / "skills",
 ]
-REGISTRY_PATH = _HERMES_HOME / "profiles/fork/logs/skill-shadow-registry.jsonl"
+REGISTRY_PATH = _FORK_ROOT / "logs/skill-shadow-registry.jsonl"
 REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 SHADOW_MIN_SESSIONS = 3

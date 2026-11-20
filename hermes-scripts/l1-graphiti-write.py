@@ -333,7 +333,7 @@ def parse_staging(path: pathlib.Path, default_source: str = DEFAULT_SOURCE_TYPE)
     facts = []
     if not path.exists() or path.stat().st_size == 0:
         return facts
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line.startswith("-"):
             continue
@@ -528,7 +528,7 @@ def main():
     grant_id = tracegrant_log_grant("l1-graphiti-write", source_type, taint_path=taint)
     if grant_id:
         print(f"[tracegrant] grant={grant_id} source_type={source_type}", file=sys.stderr)
-    now = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
+    datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
     written = 0
     failed = 0
 

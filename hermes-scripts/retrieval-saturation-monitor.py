@@ -81,7 +81,7 @@ def extract_retrieval_events(session_file: Path) -> list[dict]:
     """Extract retrieval tool calls with query and result content."""
     events = []
     try:
-        lines = [l.strip() for l in session_file.read_text().splitlines() if l.strip()]
+        lines = [l.strip() for l in session_file.read_text(encoding="utf-8").splitlines() if l.strip()]
     except Exception:
         return events
 

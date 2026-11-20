@@ -24,7 +24,7 @@ def _hermes_home() -> Path:
 
 
 def _profile_name() -> str:
-    profile = os.environ.get('HERMES_PROFILE', '').strip()
+    profile = os.environ.get('HERMES_PROFILE', 'fork').strip()
     if profile:
         return profile
     raw = os.environ.get('HERMES_HOME', '').strip()
@@ -325,7 +325,7 @@ def cmd_self_test() -> int:
     for turn in range(1, 301):
         for sk in range(5):
             p = 0.40 if (sk == 2 and turn >= 150) else 0.85
-            rows.append((f'skill_{sk}', _bernoulli(rng, p)))
+            rows.append(('skill_%d' % sk, _bernoulli(rng, p)))
 
     rows_180 = []
     for turn in range(1, 181):

@@ -348,7 +348,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         print(f"  {layer:12s}: {status} (confidence={img.confidence:.2f}) {img.content_preview[:50]}")
     # Log
     THREAD_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with open(THREAD_LOG, "a") as f:
+    with open(THREAD_LOG, "a", encoding="utf-8") as f:
         f.write(json.dumps(thread.to_dict()) + "\n")
     return 0 if thread.is_thread else 1
 

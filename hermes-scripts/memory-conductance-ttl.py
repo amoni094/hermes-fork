@@ -31,7 +31,7 @@ from pathlib import Path
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 TOKEN_RE = re.compile(r"[a-z0-9]{3,}")
@@ -202,7 +202,7 @@ def compute(entries: list[dict] | None = None) -> dict:
         phi = min_conductance(W, deg)
         t_lo, t_hi, pi_min = mixing_bounds(phi, n, deg)
         existing = existing_ttl_seconds()
-        ttl_floor = max(existing, int(math.ceil(t_lo * BASE_UNIT_SECONDS)))
+        ttl_floor = max(existing, math.ceil(t_lo * BASE_UNIT_SECONDS))
         rec = {
             "conductance": round(phi, 6),
             "mixing_time_lower_bound": round(t_lo, 6),

@@ -120,7 +120,7 @@ def main():
     # Append to run log
     if not args.no_log:
         LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(LOG_PATH, "a") as f:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(header) + "\n")
 
     sys.exit(0)

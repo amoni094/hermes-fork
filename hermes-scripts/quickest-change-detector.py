@@ -71,7 +71,7 @@ def _extract_series(session_path: Path) -> dict[str, list[float]]:
     resp_lengths = []
     tool_counts  = []
 
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev      = json.loads(line)
             role    = ev.get("role", "")

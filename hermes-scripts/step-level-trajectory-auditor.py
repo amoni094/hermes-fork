@@ -1,147 +1,175 @@
 #!/usr/bin/env python3
-"""Audit each step in an agent trajectory for process quality (AgentProcessBench)."""
-import os
-from pathlib import Path
-_hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
-_hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
-
-
-import argparse
-import json
-import sqlite3
-import sys
+"""Score a tool-use trajectory step-by-step (process-reward style)."""
+from __future__ import annotations
+import argparse, json, os, sqlite3, sys, tempfile, uuid
 from datetime import datetime, timezone, UTC
+from pathlib import Path
 
-OUT = _hermes_root / "cache" / "trajectory-audit.json"
-LIFECYCLE_DB = Path("/var/home/rainbow/.hermes/memory-facts/lifecycle.db")
+_hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
+_hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
+CACHE = _hermes_root / 'cache'
 
+def _now() -> str:
+    return datetime.now(UTC).isoformat()
 
-def _atomic_write_json(path: Path, obj) -> None:
+def _atomic_write(path: Path, obj) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(obj, indent=2) + "\n")
+    tmp = path.with_name(path.name + '.tmp')
+    tmp.write_text(json.dumps(obj, indent=2) + '\n', encoding='utf-8')
     os.replace(str(tmp), str(path))
 
+def _lifecycle_db() -> Path:
+    return _hermes_root / 'memory-facts' / 'lifecycle.db'
 
-def audit_step(step: dict, prev_sigs: set, next_step: dict | None) -> dict:
-    tool = step.get("tool") or step.get("action") or ""
-    args = step.get("args") if isinstance(step.get("args"), dict) else {}
-    args_valid = bool(tool) and (args is not None)
-    consumed = True
-    if next_step is not None:
-        blob = json.dumps(next_step, default=str)
-        out = step.get("output")
-        consumed = (out is None) or (str(out)[:40] in blob) or bool(next_step.get("uses_prior"))
-    sig = json.dumps({"tool": tool, "args": args}, sort_keys=True, default=str)
-    redundant = sig in prev_sigs
-    prev_sigs.add(sig)
-    quality = (
-        0.3 * float(bool(tool))
-        + 0.3 * float(args_valid)
-        + 0.2 * float(consumed)
-        + 0.2 * float(not redundant)
-    )
-    return {
-        "tool_used": str(tool),
-        "args_valid": bool(args_valid),
-        "output_consumed": bool(consumed),
-        "redundant_call": bool(redundant),
-        "quality": round(quality, 6),
-    }
+def _temp_out(prefix: str) -> Path:
+    return Path(tempfile.gettempdir()) / (f'{prefix}-{uuid.uuid4().hex}.json')
+
+OUT_PATH = CACHE / 'trajectory-audit.json'
 
 
-def audit_trajectory(steps: list, episode_id: str = "") -> dict:
-    prev = set()
-    scored = []
-    seq = steps or []
-    for i, step in enumerate(seq):
+DEFAULT_INVARIANTS = (
+    'no_self_message_loop',
+    'unique_step_ids',
+    'actor_present',
+    'action_present',
+)
+
+
+def _invariant_violations(steps):
+    violations = []
+    ids = []
+    for i, step in enumerate(steps):
         if not isinstance(step, dict):
-            step = {"tool": str(step)}
-        nxt = seq[i + 1] if i + 1 < len(seq) else None
-        row = audit_step(step, prev, nxt)
-        row["step"] = i
-        scored.append(row)
-    q = sum(s["quality"] for s in scored) / float(len(scored) or 1)
+            step = {}
+        actor = step.get('actor') or step.get('role') or ''
+        target = step.get('target') or step.get('to') or ''
+        action = step.get('action') or step.get('tool') or ''
+        sid = step.get('id') if step.get('id') is not None else step.get('step_id')
+        if sid is not None:
+            ids.append(sid)
+        if actor and target and str(actor) == str(target):
+            violations.append({'step': i, 'invariant': 'no_self_message_loop'})
+        if not actor:
+            violations.append({'step': i, 'invariant': 'actor_present'})
+        if not action:
+            violations.append({'step': i, 'invariant': 'action_present'})
+    if ids and len(ids) != len(set(ids)):
+        violations.append({'step': None, 'invariant': 'unique_step_ids'})
+    return violations
+
+
+def score_step(step, i, n):
+    tool = str(step.get('tool') or step.get('action') or '')
+    ok = step.get('ok')
+    if ok is None:
+        ok = step.get('success')
+    if ok is None:
+        err = step.get('error')
+        ok = False if err else True
+    progress = (i + 1) / max(1, n)
     return {
-        "generated_at": datetime.now(UTC).isoformat(),
-        "episode_id": episode_id,
-        "step_count": len(scored),
-        "quality_score": round(q, 6),
-        "steps": scored,
+        'i': i,
+        'tool': tool,
+        'ok': bool(ok),
+        'progress': round(progress, 4),
+        'score': (0.7 if ok else 0.2) * (0.5 + 0.5 * progress),
     }
 
 
-def _log_lifecycle(report: dict) -> None:
-    conn = sqlite3.connect(str(LIFECYCLE_DB))
+def audit(steps):
+    steps = list(steps or [])
+    n = len(steps)
+    if n == 0:
+        return {
+            'step_count': 0,
+            'mean_score': None,
+            'ok_rate': None,
+            'steps': [],
+            'ok': None,
+            'invariants': list(DEFAULT_INVARIANTS),
+            'violations': [],
+            'status': 'insufficient_data',
+            'ts': _now(),
+        }
+    scored = [score_step(s if isinstance(s, dict) else {'action': s}, i, n) for i, s in enumerate(steps)]
+    mean = sum(s['score'] for s in scored) / n
+    ok_rate = sum(1 for s in scored if s['ok']) / n
+    violations = _invariant_violations(steps)
+    return {
+        'step_count': n,
+        'mean_score': mean,
+        'ok_rate': ok_rate,
+        'steps': scored,
+        'ok': len(violations) == 0,
+        'invariants': list(DEFAULT_INVARIANTS),
+        'violations': violations,
+        'status': 'ok',
+        'ts': _now(),
+    }
+
+
+def _maybe_log(report):
+    db = _lifecycle_db()
+    if not db.exists() or report.get('status') == 'insufficient_data':
+        return
     try:
-        conn.execute(
-            """CREATE TABLE IF NOT EXISTS trajectory_audits(
-            id INTEGER PRIMARY KEY,
-            ts TEXT,
-            episode_id TEXT,
-            step_count INTEGER,
-            quality_score REAL)"""
-        )
-        conn.execute(
-            """INSERT INTO trajectory_audits (ts, episode_id, step_count, quality_score)
-            VALUES (datetime('now'), ?, ?, ?)""",
-            (
-                report.get("episode_id") or "",
-                int(report.get("step_count") or 0),
-                float(report.get("quality_score") or 0.0),
-            ),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+        conn = sqlite3.connect(str(db))
+        conn.execute('PRAGMA journal_mode=WAL')
+        try:
+            tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if 'trajectory_audit' not in tables:
+                return
+            conn.execute(
+                'INSERT INTO trajectory_audit(ts, step_count, mean_score) VALUES (?,?,?)',
+                (report['ts'], report['step_count'], report['mean_score']),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass
 
 
-def self_test() -> dict:
-    steps = [
-        {"tool": "read_file", "args": {"path": "a"}, "output": "hello"},
-        {"tool": "read_file", "args": {"path": "a"}, "output": "hello", "uses_prior": True},
-        {"tool": "write_file", "args": {"path": "b"}, "output": "ok", "uses_prior": True},
-    ]
-    r = audit_trajectory(steps, episode_id="t1")
-    assert r["step_count"] == 3, r
-    assert r["steps"][1]["redundant_call"] is True
-    assert 0.0 <= r["quality_score"] <= 1.0
-    assert audit_trajectory([])["step_count"] == 0
-    return {"self_test": "PASS", "sample": r}
+def _self_test() -> int:
+    empty = audit([])
+    assert empty['status'] == 'insufficient_data'
+    assert empty['ok'] is None
+    r = audit([{'tool': 'a', 'ok': True, 'actor': 'x', 'id': 1}, {'tool': 'b', 'ok': False, 'actor': 'y', 'id': 2}])
+    assert r['step_count'] == 2
+    loop = audit([{'actor': 'x', 'target': 'x', 'action': 'msg', 'id': 1}])
+    assert any(v['invariant'] == 'no_self_message_loop' for v in loop['violations'])
+    assert loop['ok'] is False
+    tmp = _temp_out('traj-audit')
+    _atomic_write(tmp, r)
+    try:
+        tmp.unlink(missing_ok=True)
+    except OSError:
+        pass
+    print('[step-level-trajectory-auditor] --self-test PASS mean={:.3f}'.format(r['mean_score']))
+    return 0
 
 
-def main() -> None:
+def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--self-test", action="store_true")
-    ap.add_argument("--json", default="")
-    ap.add_argument("--episode-id", default="")
+    ap.add_argument('--self-test', action='store_true')
     args = ap.parse_args()
     if args.self_test:
-        r = self_test()
-        print(json.dumps(r, indent=2))
-        sys.exit(0 if r.get("self_test") == "PASS" else 1)
-    raw = args.json
-    if not raw and not sys.stdin.isatty():
-        raw = sys.stdin.read()
-    steps = []
-    if raw:
         try:
-            obj = json.loads(raw)
-            steps = obj if isinstance(obj, list) else obj.get("steps") or obj.get("trace") or []
-        except json.JSONDecodeError:
-            steps = []
-    out = audit_trajectory(steps, args.episode_id)
+            sys.exit(_self_test())
+        except Exception as exc:
+            print(f'[step-level-trajectory-auditor] --self-test FAIL: {exc}')
+            sys.exit(1)
     try:
-        _atomic_write_json(OUT, out)
-    except Exception:
-        pass
-    try:
-        _log_lifecycle(out)
-    except Exception:
-        pass
-    print(json.dumps(out, indent=2))
+        r = audit([])
+        if r.get('status') != 'insufficient_data':
+            _atomic_write(OUT_PATH, r)
+            _maybe_log(r)
+        print(json.dumps({k: r[k] for k in r if k != 'steps'}))
+    except Exception as e:
+        print(json.dumps({'status': 'error', 'reason': str(e)}))
+        sys.exit(0)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

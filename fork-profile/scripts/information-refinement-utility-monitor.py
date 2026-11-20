@@ -29,7 +29,7 @@ import os
 import argparse
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -103,7 +103,7 @@ def _utility_at_level(stats: list[dict], level: int) -> float:
 
 
 def run_monitor(dry_run: bool = False) -> int:
-    now   = datetime.now(timezone.utc).isoformat()
+    now   = datetime.now(UTC).isoformat()
     alarms: list[str] = []
     stats = _load_session_stats()
 

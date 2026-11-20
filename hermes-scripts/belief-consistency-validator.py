@@ -79,7 +79,7 @@ def _tool_to_intent_vec(tool: str) -> np.ndarray:
 
 def _extract_tool_sequence(session_path: Path) -> list[str]:
     tools = []
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev = json.loads(line)
             if ev.get("role") != "assistant":

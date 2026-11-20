@@ -460,55 +460,27 @@ def analyse_hermes_home(info: ScriptInfo) -> None:
 # Interprocedural lattice propagation
 # ---------------------------------------------------------------------------
 
-def propagate_summaries(infos: dict[str, ScriptInfo]) -> None:
-    """Functional summaries via worklist: phi_p(X) = exits(p) union unhandled-callee exits.
-
-    Lattice height is finite (2 labels) so the worklist terminates without a magic cap.
-    """
-    import sys as _sys
-    _scripts = Path(__file__).resolve().parent
-    if str(_scripts) not in _sys.path:
-        _sys.path.insert(0, str(_scripts))
-    from nielson_solver import worklist
-
-    nodes = list(infos.keys())
-    succ = {sid: sorted(info.callees) for sid, info in infos.items()}
-
-    def xfer(n, val):
-        info = infos.get(n)
-        if info is None:
-            return val
-        if info.label == "error_propagator":
-            return "error_propagator"
-        for callee in info.callees:
-            if callee in info.handled_callees:
-                continue
-            other = infos.get(callee)
-            if other is not None and other.label == "error_propagator":
-                return "error_propagator"
-            if val == "error_propagator":
-                return "error_propagator"
-        return val
-
-    def join(a, b):
-        if a == "error_propagator" or b == "error_propagator":
-            return "error_propagator"
-        return a or b
-
-    A = worklist(
-        nodes, succ, xfer,
-        "error_propagator",
-        [sid for sid, info in infos.items() if info.label == "error_propagator"],
-        join=join,
-        bot="ok",
-    )
-    for sid, lab in A.items():
-        if lab == "error_propagator" and sid in infos:
-            infos[sid].label = "error_propagator"
-
-
 def propagate_labels(infos: dict[str, ScriptInfo]) -> None:
-    propagate_summaries(infos)
+    """If A calls B via subprocess and B is error_propagator, A inherits
+    unless the call site has explicit error handling."""
+    changed = True
+    guard = 0
+    while changed and guard < 64:
+        changed = False
+        guard += 1
+        for info in infos.values():
+            if info.label == "error_propagator":
+                continue
+            for callee in info.callees:
+                if callee in info.handled_callees:
+                    continue
+                other = infos.get(callee)
+                if other is None:
+                    continue
+                if other.label == "error_propagator":
+                    info.label = "error_propagator"
+                    changed = True
+                    break
 
 
 def risk_paths(infos: dict[str, ScriptInfo]) -> list[list[str]]:
@@ -618,7 +590,7 @@ def main() -> int:
         analyse_hermes_home(info)
 
     infos = {info.sid: info for info in infos_list}
-    propagate_summaries(infos)
+    propagate_labels(infos)
     report = build_report(infos)
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     # Atomic write: write to .tmp then rename (M5 non-atomic fix; Lynch §10 atomicity)

@@ -70,7 +70,7 @@ DEDUP_WINDOW_HOURS = 24
 DEDUP_LOOKBACK = 50
 # Profile-aware rate-state persistence path
 _base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
-_profile = os.environ.get('HERMES_PROFILE', '')
+_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _root = (_base / 'profiles' / _profile) if _profile else _base
 _RATE_STATE_PATH = _root / 'cache' / 'governance-rate-state.json'
 

@@ -58,7 +58,7 @@ def _extract_concepts(text: str) -> set[str]:
 
 def _extract_messages(session_path: Path) -> list[dict]:
     messages = []
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev      = json.loads(line)
             content = ev.get("api_content", ev.get("content", ""))

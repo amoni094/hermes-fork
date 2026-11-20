@@ -59,7 +59,7 @@ RECENCY_DECAY     = 0.80   # per-step decay on recency weight
 def _load_session_blocks(session_path: Path) -> list[dict]:
     """Parse JSONL session into context blocks with metadata."""
     blocks = []
-    lines  = session_path.read_text().splitlines()
+    lines  = session_path.read_text(encoding="utf-8").splitlines()
     for idx, line in enumerate(lines):
         try:
             ev = json.loads(line)

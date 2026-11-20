@@ -86,7 +86,7 @@ def _compress(trace: np.ndarray, k: int) -> tuple[np.ndarray, float]:
 
 def analyse_session(path: Path, k: int = 8) -> dict | None:
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except Exception:
         return None
     tools = _extract_tools(text)

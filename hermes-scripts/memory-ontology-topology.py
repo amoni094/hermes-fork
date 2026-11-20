@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 import argparse
@@ -444,7 +444,7 @@ def self_test() -> int:
     if ok:
         print('PASS')
         return 0
-    print('FAIL metrics=%s' % m)
+    print(f'FAIL metrics={m}')
     return 1
 
 

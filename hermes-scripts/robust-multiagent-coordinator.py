@@ -5,17 +5,18 @@ from __future__ import annotations
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 import argparse
+import fcntl
 import json
 import random
 import sqlite3
 import sys
 import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 CACHE = _hermes_root / 'cache'
 OUT_PATH = CACHE / 'multiagent-coord-result.json'
@@ -24,14 +25,17 @@ LIFECYCLE_DB = _hermes_base / 'memory-facts' / 'lifecycle.db'
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _atomic_write(path: Path, obj) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + '.tmp')
-    tmp.write_text(json.dumps(obj, indent=2) + '\n', encoding='utf-8')
-    os.replace(str(tmp), str(path))
+    lock = path.with_suffix('.lock')
+    with open(lock, 'w', encoding='utf-8') as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        tmp = path.with_name(path.name + '.tmp')
+        tmp.write_text(json.dumps(obj, indent=2) + '\n', encoding='utf-8')
+        os.replace(tmp, path)
 
 
 def trimmed_mean(xs, trim=0.10):
@@ -91,6 +95,7 @@ def read_outcomes(db_path=None, n=20, out_path=None) -> dict:
         return {'status': 'insufficient_data', 'n': 0}
     try:
         conn = sqlite3.connect(str(db))
+        conn.execute('PRAGMA journal_mode=WAL')
         try:
             tabs = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if 'delegation_audit' not in tabs:
@@ -131,14 +136,15 @@ def _self_test() -> int:
     r = coordinate(workers)
     assert r['n_workers'] == 10
     assert abs(r['aggregate'] - 0.7) < abs(r['raw_mean'] - 0.7) + 0.05
-    tmp = Path(tempfile.gettempdir()) / ('coord-%s.json' % uuid.uuid4().hex)
+    tmp = Path(tempfile.gettempdir()) / (f'coord-{uuid.uuid4().hex}.json')
     _atomic_write(tmp, r)
     tmp.unlink(missing_ok=True)
 
-    td = Path(tempfile.mkdtemp(prefix='rmc-%s-' % uuid.uuid4().hex[:8]))
+    td = Path(tempfile.mkdtemp(prefix=f'rmc-{uuid.uuid4().hex[:8]}-'))
     try:
         db = td / 'lifecycle.db'
         conn = sqlite3.connect(str(db))
+        conn.execute('PRAGMA journal_mode=WAL')
         conn.execute(
             'CREATE TABLE delegation_audit ('
             'id INTEGER PRIMARY KEY, ts TEXT, episode_id TEXT, '
@@ -170,7 +176,7 @@ def _self_test() -> int:
         assert 'consensus_threshold' in ok
         loaded = json.loads(outp.read_text(encoding='utf-8'))
         assert loaded['n_episodes'] == ok['n_episodes']
-        print('[robust-multiagent-coordinator] --self-test PASS agg=%.3f raw=%.3f n_ep=%s' % (
+        print('[robust-multiagent-coordinator] --self-test PASS agg={:.3f} raw={:.3f} n_ep={}'.format(
             r['aggregate'], r['raw_mean'], ok['n_episodes']))
         return 0
     finally:
@@ -188,7 +194,7 @@ def main():
         try:
             sys.exit(_self_test())
         except Exception as exc:
-            print('[robust-multiagent-coordinator] --self-test FAIL: %s' % exc)
+            print(f'[robust-multiagent-coordinator] --self-test FAIL: {exc}')
             sys.exit(1)
     if args.read_outcomes:
         r = read_outcomes()

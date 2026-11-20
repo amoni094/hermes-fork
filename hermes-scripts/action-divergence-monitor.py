@@ -44,9 +44,9 @@ MIN_SESSIONS  = 4
 
 def _tool_dist(path: Path) -> Counter:
     try:
-        lines = path.read_text().strip().splitlines()
+        lines = path.read_text(encoding="utf-8").strip().splitlines()
         msgs = [json.loads(l) for l in lines if l.strip()] if lines and lines[0].startswith("{") \
-               else (json.loads(path.read_text()) if path.stat().st_size else [])
+               else (json.loads(path.read_text(encoding="utf-8")) if path.stat().st_size else [])
         msgs = msgs if isinstance(msgs, list) else msgs.get("messages", [])
     except Exception:
         return Counter()

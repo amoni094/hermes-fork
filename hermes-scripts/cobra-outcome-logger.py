@@ -107,7 +107,7 @@ def cmd_report(args) -> int:
 
     from collections import Counter
     tool_counts = Counter(r["tool_name"] for r in records)
-    used_counts = Counter(
+    Counter(
         (r["tool_name"], r.get("result_used"))
         for r in records
     )

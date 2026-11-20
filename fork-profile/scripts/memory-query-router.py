@@ -309,7 +309,7 @@ def route_query(query: str, allow_llm: bool = True) -> RouteResult:
     )
     if _is_extraction_attempt:
         import sys as _sys_mextra
-        print(f"[memory-router] MEXTRA: extraction pattern blocked in query",
+        print("[memory-router] MEXTRA: extraction pattern blocked in query",
               file=_sys_mextra.stderr)
         # Return a special route result that blocks verbatim memory injection
         return RouteResult(
@@ -355,10 +355,7 @@ def route_query(query: str, allow_llm: bool = True) -> RouteResult:
     try:
         _w = _route_weights.get(qtype, 1.0)
         if _w < 0.4:
-            if confidence == 'high':
-                confidence = 'low'
-                reason = reason + f' [ftrl_weight={_w:.3f}→low]'
-            elif confidence == 'medium':
+            if confidence == 'high' or confidence == 'medium':
                 confidence = 'low'
                 reason = reason + f' [ftrl_weight={_w:.3f}→low]'
         elif _w < 0.7:

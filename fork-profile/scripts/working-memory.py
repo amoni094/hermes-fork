@@ -58,9 +58,10 @@ import subprocess
 import sys
 import uuid
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
+import itertools
 
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 WM_DIR = HERMES_HOME / "cache" / "working-memory"
@@ -103,7 +104,7 @@ def _wm_verify_mac(doc: dict[str, Any]) -> bool:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _path(session_id: str) -> Path:
@@ -261,7 +262,7 @@ def cmd_add_constraint(args: argparse.Namespace) -> int:
         "source_context": getattr(args, "source_context", None) or None,  # e.g. "session:abc123" or "skill:hermes-agent"
         "predecessor_model": getattr(args, "predecessor_model", None) or None,  # model that generated this constraint
         # arXiv:2608.25553: stale constraint expiry metadata (required)
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "expires_at_or_policy": getattr(args, "expires_at", None) or "until_changed",
         "source_turn": getattr(args, "source_turn", None),
         # Zenn JP Aug 2026: card scope
@@ -2118,7 +2119,7 @@ def _bigram_counts(
             continue
         seq = [str(s) for s in skills if s is not None and str(s) != ""]
         vocab.update(seq)
-        for a, b in zip(seq, seq[1:]):
+        for a, b in itertools.pairwise(seq):
             table[a][b] += 1
             pairs.append((a, b))
     return {cur: dict(row) for cur, row in table.items()}, pairs, vocab
@@ -2236,6 +2237,43 @@ def cmd_bigrams(args: argparse.Namespace) -> int:
         out["ranked"] = reranked
 
     print(json.dumps(out, indent=2, ensure_ascii=False))
+    return 0
+
+
+def cmd_lens_test(args: argparse.Namespace) -> int:
+    """Lens laws over WM payload keys (excludes updated_at/_mac)."""
+    import copy as _copy
+
+    def _get(s, key):
+        return _copy.deepcopy(s.get(key))
+
+    def _put(s, key, a):
+        out = _copy.deepcopy(s)
+        out[key] = _copy.deepcopy(a)
+        return out
+
+    s = {
+        "session_id": "lens-test",
+        "goal": "ship",
+        "progress": ["a"],
+        "beliefs": {"k": {"text": "x"}},
+        "constraints": [],
+    }
+    for key, a, b in (
+        ("goal", "other", "third"),
+        ("progress", ["b"], ["c"]),
+        ("beliefs", {"z": {"text": "y"}}, {"k": {"text": "x"}}),
+    ):
+        if _put(s, key, _get(s, key)) != s:
+            print(json.dumps({"ok": False, "law": "GetPut", "key": key}))
+            return 1
+        if _get(_put(s, key, a), key) != a:
+            print(json.dumps({"ok": False, "law": "PutGet", "key": key}))
+            return 1
+        if _put(_put(s, key, a), key, b) != _put(s, key, b):
+            print(json.dumps({"ok": False, "law": "PutPut", "key": key}))
+            return 1
+    print("PASS working-memory lens GetPut PutGet PutPut")
     return 0
 
 
@@ -2464,6 +2502,9 @@ def main() -> int:
         help="Confidence threshold for count (default 0.5)",
     )
     p_norm.set_defaults(func=cmd_norm)
+
+    p_lens = sub.add_parser("lens-test", help="Harper/Reynolds GetPut PutGet PutPut on WM payload")
+    p_lens.set_defaults(func=cmd_lens_test)
 
     args = ap.parse_args()
     return int(args.func(args) or 0)

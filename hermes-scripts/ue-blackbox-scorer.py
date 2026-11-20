@@ -581,11 +581,11 @@ def self_test() -> int:
     # 3. hedge-heavy
     hedgy = "This might possibly be true. It could be uncertain. I'm not sure. It may, approximately, likely, probably be unclear."
     r3 = compute_scores("q", hedgy, update_length=False)
-    check(r3["scores"]["hedge_phrase"] > 0.4, "hedge not detected: %s" % r3["scores"]["hedge_phrase"])
+    check(r3["scores"]["hedge_phrase"] > 0.4, "hedge not detected: {}".format(r3["scores"]["hedge_phrase"]))
 
     # 4. verbalization numeric
     r4 = compute_scores("q", "I'm 80% confident this is right.", update_length=False)
-    check(abs(r4["scores"]["verbalization"] - 0.8) < 1e-6, "verbalization 80%% failed: %s" % r4["scores"]["verbalization"])
+    check(abs(r4["scores"]["verbalization"] - 0.8) < 1e-6, "verbalization 80% failed: {}".format(r4["scores"]["verbalization"]))
     r4b = compute_scores("q", "The capital of France is Paris.", update_length=False)
     check(r4b["scores"]["verbalization"] is None, "uninformative verbalization must be null")
 
@@ -616,7 +616,7 @@ def self_test() -> int:
         update_length=False,
     )
     implied_conf = 1.0 - r7["composite_ue"]
-    check(implied_conf <= 0.2 + 1e-9, "DPI violated: implied_conf=%s composite=%s" % (implied_conf, r7["composite_ue"]))
+    check(implied_conf <= 0.2 + 1e-9, "DPI violated: implied_conf={} composite={}".format(implied_conf, r7["composite_ue"]))
 
     # 8. logprob out of range clipped
     r8 = compute_scores("q", "ok", logprob_confidence=5.0, update_length=False)

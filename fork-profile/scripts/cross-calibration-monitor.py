@@ -21,7 +21,7 @@ import math
 import os
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -222,7 +222,7 @@ def _write_alarm(alarm_path: Path, alarm: bool, severity: str, msg: str) -> None
         "alarm":    alarm,
         "severity": severity,
         "msg":      msg,
-        "ts":       datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ts":       datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     alarm_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_fd, tmp_path = tempfile.mkstemp(

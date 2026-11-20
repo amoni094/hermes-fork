@@ -267,7 +267,7 @@ def main() -> None:
         print(json.dumps(ranked_bare, indent=2))
         return
 
-    args, remaining = parser.parse_known_args()
+    args, _remaining = parser.parse_known_args()
 
     if args.subcommand == "js-divergence":
         _cmd_js_divergence(args)

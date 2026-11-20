@@ -28,7 +28,7 @@ from pathlib import Path
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 def _cache_dir() -> Path:
@@ -93,7 +93,7 @@ def bits_back(texts: list, bins_bits: int = BINS_BITS) -> dict:
         # -log P(x|z) ≈ zlib bits of text (likelihood proxy)
         nll = zlib_bits(t)
         # bits-back credit
-        credit = log_p - log_q  # log Q - log P in bits if Q sharper... wait
+        log_p - log_q  # log Q - log P in bits if Q sharper... wait
         # L = nll + log_p - (-log2 Q) = nll + log_p - log_q
         # bits_back recovered = -log P + log Q = log_p - log_q
         L = nll + log_p - log_q

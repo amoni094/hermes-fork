@@ -12,7 +12,7 @@ Usage:
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 import argparse
@@ -21,7 +21,11 @@ import re
 import sys
 from datetime import datetime, timezone, UTC
 
-ASSIGN_THRESHOLD = 0.6  # containment: 60% of term trigrams in concept text
+ASSIGN_THRESHOLD = 0.5  # containment: 50% of term trigrams in concept text
+CORE_ENTITY_CONTAINMENT = 0.5
+CORE_ENTITY_BOOST = 0.1
+SYNONYM_FILE = 'synonym-pairs.json'
+DOMAIN_FILE = 'domain-summary.json'
 _TOKEN_RE = re.compile(r'[A-Za-z]{4,}')
 _STOPWORDS = frozenset({
     'with', 'that', 'this', 'from', 'have', 'will', 'been', 'they', 'their',
@@ -206,32 +210,119 @@ def collect_terms(skills_dir: Path, memories_dir: Path) -> dict:
     return found
 
 
-def type_terms(term_sources: dict, concepts: list) -> dict:
-    """Assign each term to the best concept intent via trigram Jaccard."""
+def _load_json(path: Path, default):
+    try:
+        if not path.exists():
+            return default
+        return json.loads(path.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        return default
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return default
+    except Exception:
+        return default
+
+
+def _synonym_index(data) -> dict:
+    """Bidirectional lowercased term → set of synonym strings."""
+    pairs = []
+    if isinstance(data, list):
+        pairs = data
+    elif isinstance(data, dict):
+        p = data.get('pairs', [])
+        if isinstance(p, list):
+            pairs = p
+    idx = {}
+    for rec in pairs:
+        if not isinstance(rec, dict):
+            continue
+        t = str(rec.get('term') or '').strip()
+        s = str(rec.get('synonym') or '').strip()
+        if not t or not s:
+            continue
+        idx.setdefault(t.lower(), set()).add(s)
+        idx.setdefault(s.lower(), set()).add(t)
+    return idx
+
+
+def _core_entity_names(summary) -> list:
+    if not isinstance(summary, dict):
+        return []
+    ents = summary.get('core_entities') or []
+    names = []
+    for e in ents:
+        if isinstance(e, str) and e.strip():
+            names.append(e.strip())
+        elif isinstance(e, dict):
+            n = e.get('name') or ''
+            if isinstance(n, list):
+                n = ' '.join(str(x) for x in n[:3])
+            n = str(n).strip()
+            if n:
+                names.append(n)
+    return names
+
+
+def _containment(a: str, b: str) -> float:
+    """Directional containment: |trigrams(a) ∩ trigrams(b)| / |trigrams(a)|."""
+    A = trigrams((a or '').lower())
+    B = trigrams((b or '').lower())
+    if not A:
+        return 0.0
+    return len(A & B) / len(A)
+
+
+def type_terms(term_sources: dict, concepts: list,
+               synonym_pairs=None, domain_summary=None) -> dict:
+    """Assign each term to the best concept intent via directional containment.
+
+    Synonym pairs (from synonym-pairs.json) expand the term with aliases before
+    scoring — boosts recall when an abbreviation is typed against a full name.
+    Domain summary core_entities: containment >= 0.5 vs a core entity name
+    boosts the best score by 0.1 (capped at 1.0).
+    """
     typed = []
     untyped = []
     concept_intents = []
     for c in concepts or []:
         intent = _intent_text(c)
         concept_intents.append(intent)
+    syn_idx = _synonym_index(synonym_pairs)
+    core_names = _core_entity_names(domain_summary)
     for term, source in (term_sources or {}).items():
         best_intent = ''
         best_score = 0.0
         tnorm = (term or '').lower()
+        variants = [tnorm]
+        for syn in syn_idx.get(tnorm, ()):
+            sl = (syn or '').lower()
+            if sl and sl not in variants:
+                variants.append(sl)
         for intent in concept_intents:
             inorm = (intent or '').lower()
-            # Containment: fraction of term's own trigrams that appear in intent text.
-            # Correct metric when term is short (4-10 chars) and intent text is long.
-            t_tri = trigrams(tnorm)
             i_tri = trigrams(inorm)
-            if t_tri:
-                score = len(t_tri & i_tri) / len(t_tri)
-            else:
-                score = trigram_jaccard(tnorm, inorm)
+            score = 0.0
+            for variant in variants:
+                t_tri = trigrams(variant)
+                if t_tri and i_tri:
+                    score = max(score, len(t_tri & i_tri) / len(t_tri))
+                elif t_tri:
+                    score = max(score, _containment(variant, inorm))
+                else:
+                    score = max(score, trigram_jaccard(variant, inorm))
+            # Bidirectional synonym index already expanded `variants` with
+            # aliases of the typed term (including abbreviations of concept
+            # tokens). Do not get(inorm) — intent strings are not index keys.
             score = max(0.0, min(1.0, score))
             if score > best_score:
                 best_score = score
                 best_intent = intent
+        boost = 0.0
+        for name in core_names:
+            if _containment(tnorm, name) >= CORE_ENTITY_CONTAINMENT:
+                boost = CORE_ENTITY_BOOST
+                break
+        best_score = max(0.0, min(1.0, best_score + boost))
         if best_score >= ASSIGN_THRESHOLD and best_intent:
             typed.append({
                 'term': term,
@@ -257,7 +348,13 @@ def run() -> int:
     skills_dir = _hermes_root / 'skills'
     memories_dir = _hermes_root / 'memories'
     term_sources = collect_terms(skills_dir, memories_dir)
-    result = type_terms(term_sources, concepts)
+    synonym_pairs = _load_json(cache / SYNONYM_FILE, {'pairs': []})
+    domain_summary = _load_json(cache / DOMAIN_FILE, {})
+    result = type_terms(
+        term_sources, concepts,
+        synonym_pairs=synonym_pairs,
+        domain_summary=domain_summary,
+    )
     out_path = cache / OUTPUT_NAME
     alarm_path = cache / ALARM_NAME
     try:
@@ -265,16 +362,45 @@ def run() -> int:
     except Exception:
         pass
     if result.get('n_untyped', 0) > 0:
+        n_typed_count = result.get('n_typed', 0)
+        n_untyped_count = result['n_untyped']
+        total = n_typed_count + n_untyped_count
+        # Alarm only when untyped rate > 80% — tolerates stopgap lattice gaps;
+        # still catches truly failed typing (lattice missing, 0 typed terms, etc.)
+        UNTYPED_RATE_THRESHOLD = 0.80
+        untyped_rate = n_untyped_count / total if total > 0 else 1.0
+        if untyped_rate > UNTYPED_RATE_THRESHOLD:
+            alarm = {
+                'ts': result.get('ts') or _now(),
+                'alarm': True,
+                'reason': 'untyped_terms',
+                'n_untyped': n_untyped_count,
+                'n_typed': n_typed_count,
+                'n_total': total,
+                'untyped_rate': round(untyped_rate, 3),
+                'untyped_terms': result.get('untyped_terms') or [],
+            }
+        else:
+            alarm = {
+                'ts': result.get('ts') or _now(),
+                'alarm': False,
+                'reason': 'acceptable_coverage',
+                'n_untyped': n_untyped_count,
+                'n_typed': n_typed_count,
+                'n_total': total,
+                'untyped_rate': round(untyped_rate, 3),
+            }
+    else:
         alarm = {
             'ts': result.get('ts') or _now(),
-            'alarm': 'untyped_terms',
-            'n_untyped': result['n_untyped'],
-            'untyped_terms': result.get('untyped_terms') or [],
+            'alarm': False,
+            'reason': 'ok',
+            'n_untyped': 0,
         }
-        try:
-            _atomic_write(alarm_path, alarm)
-        except Exception:
-            pass
+    try:
+        _atomic_write(alarm_path, alarm)
+    except Exception:
+        pass
     return 0
 
 

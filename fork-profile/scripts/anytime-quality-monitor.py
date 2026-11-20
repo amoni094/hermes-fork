@@ -12,7 +12,7 @@ import math
 import os
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
@@ -32,7 +32,7 @@ DEFAULT_FIT_N = 20
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _parse_dt(raw) -> datetime | None:
@@ -42,12 +42,12 @@ def _parse_dt(raw) -> datetime | None:
     if not text:
         return None
     try:
-        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(text)
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def _load_checkpoint(path: Path) -> dict | None:
@@ -108,9 +108,9 @@ def monitor(checkpoint_dir: Path | None = None, expected_rate: float = DEFAULT_E
         started = _parse_dt(obj.get("started_at") or obj.get("created_at"))
         updated = _parse_dt(obj.get("updated_at"))
         if started is None:
-            started = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+            started = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
         if updated is None:
-            updated = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+            updated = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
         elapsed_s = max(0.0, (updated - started).total_seconds())
         elapsed_hours = elapsed_s / 3600.0
         items = _item_count(obj)
@@ -138,7 +138,7 @@ def monitor(checkpoint_dir: Path | None = None, expected_rate: float = DEFAULT_E
                 "WARNING "
                 + job_name
                 + " items_per_hour="
-                + ("%.3f" % rate)
+                + (f"{rate:.3f}")
                 + " < 50% of expected_rate="
                 + str(expected_rate)
             )
@@ -304,10 +304,7 @@ def _self_test() -> int:
         "updated_at": "2026-10-29T02:00:00+00:00",
         "status": "partial",
     }
-    _cp = d / "slow-job.json"
-    _tmp = _cp.with_suffix(".tmp")
-    _tmp.write_text(json.dumps(slow), encoding="utf-8")
-    os.replace(_tmp, _cp)
+    (d / "slow-job.json").write_text(json.dumps(slow), encoding="utf-8")
     report = monitor(checkpoint_dir=d, expected_rate=100.0)
     assert report["jobs"][0]["below_half_expected"] is True
     assert report["jobs"][0]["items_per_hour"] == 5.0

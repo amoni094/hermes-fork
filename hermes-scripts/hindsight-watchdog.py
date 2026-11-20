@@ -53,7 +53,7 @@ def log(msg):
     print(line)
     _rotate_log()
     try:
-        with open(LOG, "a") as f:
+        with open(LOG, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except OSError:
         pass

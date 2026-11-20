@@ -73,7 +73,7 @@ def _context_limit(model_config_json: str | None) -> int:
 
 def _session_fill(session: tuple) -> float:
     """Return context fill ratio [0..1] for a session row."""
-    sid, inp, cache, model_config = session
+    _sid, inp, cache, model_config = session
     tokens = (inp or 0) + (cache or 0)
     limit  = _context_limit(model_config)
     return tokens / limit if limit > 0 else 0.0
@@ -194,20 +194,6 @@ def main() -> None:
             f"[pre-compact-annotate @ {now}] Context at {fill:.0%}. "
             f"Suggested: /compact {focus}"
         )
-
-        # Keep AEP/MI/advisor from reporting zeros (Wave 22 data-bridge). Fail-open (H-I7).
-        try:
-            import subprocess
-            def _hermes_root():
-                base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
-                if base.name != ".hermes" and base.parent.name == "profiles":
-                    return base.parent.parent
-                return base
-            _bridge = _hermes_root() / "hermes-scripts" / "eval-compaction-data-bridge.py"
-            if _bridge.exists():
-                subprocess.run([sys.executable, str(_bridge)], capture_output=True, timeout=10)
-        except Exception:
-            pass
 
         # Append rd-compaction-advisor advisory
         try:

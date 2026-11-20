@@ -851,7 +851,6 @@ def cmd_score(argv: list[str]) -> None:
 
         rng = _np.random.default_rng(42)
         q_dense = _to_dense(q_vec, vocab)
-        cosine_cache: dict[str, float] = {}
 
         slw_results = []
         for name, s_vec in all_skills_vecs:
@@ -907,7 +906,7 @@ def cmd_score(argv: list[str]) -> None:
             total_s = sum(raw_scores)
             if total_s > 0 and len(raw_scores) > 0:
                 p = [s / total_s for s in raw_scores]
-                N = len(p)
+                len(p)
                 l2 = math.sqrt(sum(pk * pk for pk in p))
                 linf = max(p)
                 hhi = sum(pk * pk for pk in p)

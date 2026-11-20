@@ -60,7 +60,7 @@ def _sensitive_tokens(text: str) -> set[str]:
 
 def analyse_session(session_path: Path) -> dict:
     turns: list[dict] = []
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev      = json.loads(line)
             role    = ev.get("role", "")

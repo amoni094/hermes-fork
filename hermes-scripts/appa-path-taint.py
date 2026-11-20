@@ -319,7 +319,7 @@ def build_taint_dag(
     seen: set[tuple[int, int, str]] = set()
     token_edge_counts: dict[str, int] = Counter()
 
-    n = len(calls)
+    len(calls)
     # Index tokens -> producing call indices for faster dst scans.
     producers: dict[str, list[int]] = defaultdict(list)
     for i, toks in enumerate(token_sets):

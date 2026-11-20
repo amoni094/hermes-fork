@@ -96,7 +96,7 @@ def test_observe_loop_escalates_soft_medium_hard(tmp_path):
 def test_observe_loop_resets_streak_on_new_action():
     state = bag.LoopState()
     fp = "u|1|abc"
-    state, o1 = bag.observe_loop(state, {"type": "click", "index": 1}, fp)
+    state, _o1 = bag.observe_loop(state, {"type": "click", "index": 1}, fp)
     state, o2 = bag.observe_loop(state, {"type": "click", "index": 1}, fp)
     assert o2.same_action_streak == 2
     state, o3 = bag.observe_loop(state, {"type": "click", "index": 2}, fp)

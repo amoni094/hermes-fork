@@ -59,11 +59,11 @@ def _load_sessions(n: int = WINDOW) -> list[Path]:
 def _parse_session(path: Path) -> dict:
     """Extract tool calls and rough token proxy from a session file."""
     try:
-        lines = path.read_text().strip().splitlines()
+        lines = path.read_text(encoding="utf-8").strip().splitlines()
         if lines and lines[0].startswith("{") and len(lines) > 1:
             messages = [json.loads(l) for l in lines if l.strip()]
         else:
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             messages = data if isinstance(data, list) else data.get("messages", [])
     except Exception:
         return {}

@@ -198,7 +198,7 @@ def _tfidf_index(docs: list[tuple[str, str]]) -> dict:
 def _atomic_write(path: Path, obj) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = path.with_suffix(".lock")
-    with open(lock_path, "w") as lock_f:
+    with open(lock_path, "w", encoding="utf-8") as lock_f:
         fcntl.flock(lock_f, fcntl.LOCK_EX)
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(obj, indent=2), encoding="utf-8")

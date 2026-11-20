@@ -177,7 +177,7 @@ def bps_select(query: str, budget_tokens: int = 4000, topk: int = 5) -> list[dic
     }
     _CACHE.mkdir(parents=True, exist_ok=True)
     try:
-        with open(SELECTION_LOG, "a") as f:
+        with open(SELECTION_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry) + "\n")
     except OSError:
         pass

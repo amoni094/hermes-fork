@@ -161,7 +161,7 @@ def score_results(query: str, results: list[dict], now_ts: float | None = None) 
             if isinstance(created, (int, float)):
                 age_days = (now_ts - float(created)) / 86400.0
             elif created:
-                ts = datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp()
+                ts = datetime.fromisoformat(created).timestamp()
                 age_days = (now_ts - ts) / 86400.0
             else:
                 age_days = 30.0  # assume 30-day-old if unknown
@@ -757,7 +757,7 @@ class MemoryMonad:
             "detail": detail, "ts": datetime.now(UTC).isoformat()
         }
         self._log_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self._log_path, "a") as f:
+        with open(self._log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
 
     def retain(self, pair: GrothPair) -> MemoryResult[GrothPair]:
@@ -860,7 +860,7 @@ if __name__ == "__main__":
     if args.cmd == "groupoid-check":
         facts = []
         if args.facts:
-            facts = json.loads(Path(args.facts).read_text())
+            facts = json.loads(Path(args.facts).read_text(encoding="utf-8"))
         checker = GroupoidCheck(facts)
         violations = checker.check_all_triples()
         if violations:
@@ -873,10 +873,10 @@ if __name__ == "__main__":
     elif args.cmd == "sheaf-check":
         sheaf = SheafCoboundary()
         if args.nodes:
-            for eid, tags in json.loads(Path(args.nodes).read_text()).items():
+            for eid, tags in json.loads(Path(args.nodes).read_text(encoding="utf-8")).items():
                 sheaf.add_entity(eid, tags)
         if args.edges:
-            for src, tgt, rel in json.loads(Path(args.edges).read_text()):
+            for src, tgt, rel in json.loads(Path(args.edges).read_text(encoding="utf-8")):
                 sheaf.add_relation(src, tgt, rel)
         issues = sheaf.detect_inconsistencies(threshold=args.threshold)
         score = sheaf.global_inconsistency_score()

@@ -137,7 +137,6 @@ def self_test() -> int:
         for j in range(2):
             assert abs(sig["level2"][i][j] - expected[i][j]) < 1e-12, (i, j, sig["level2"], expected)
     # Time-reparametrisation invariance of signature (weak): same increments
-    path2 = [[0.0, 0.0], [0.3, 0.6], [1.0, 2.0]]  # not linear in time but colinear in space
     # For a genuinely linear geometric path split in two, Chen identity still holds globally
     sig2 = order2_signature([[0.0, 0.0], [1.0, 2.0], [1.0, 2.0]])
     assert abs(sig2["level1"][0] - 1.0) < 1e-12

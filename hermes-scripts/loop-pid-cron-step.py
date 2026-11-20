@@ -22,15 +22,17 @@ import time
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 DEFAULT_STATE = _hermes_root / 'cache' / 'loop-pid-state.json'
 KP, KI, KD = 1.0, 0.15, 0.4
-SETPOINT = 0.0
+U_MAX, U_MIN = 1.0, 0.0  # must match loop-pid.py (lyapunov-check uses these)
+KAW = 0.5               # anti-windup back-calculation gain (must match loop-pid.py)
+SETPOINT = 1.0        # default; overridden by majority setpoint in existing history
 HISTORY_CAP = 500
-U_CLIP = 2.0
-INT_CLIP = 5.0
+U_CLIP = U_MAX         # alias for clip helper
+INT_CLIP = 20.0        # generous; anti-windup controls integrator instead
 
 
 def _atomic_write_json(path: Path, obj) -> None:
@@ -61,30 +63,61 @@ def _clip(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
 
-def step(state_path: Path, setpoint: float = SETPOINT, rng: random.Random | None = None) -> dict:
+def _majority_setpoint(history: list, default: float = SETPOINT) -> float:
+    """Return the most common setpoint in the history, or default if absent."""
+    from collections import Counter
+    counts = Counter(
+        h.get('setpoint') for h in history
+        if isinstance(h, dict) and h.get('setpoint') is not None
+    )
+    if not counts:
+        return default
+    return counts.most_common(1)[0][0]
+
+
+def step(state_path: Path, setpoint=None, rng=None) -> dict:  # setpoint: float|None, rng: Random|None
     rng = rng or random
     state = _load_state(state_path)
     history = state.get('history') or []
-    last_error = 0.1
+    # Inherit majority setpoint from existing history to avoid setpoint mixing
+    effective_setpoint = setpoint if setpoint is not None else _majority_setpoint(history, SETPOINT)
+    # Load last plant state: e is stored; recover y = setpoint - e.
+    last_e = 0.9
     if history and isinstance(history[-1], dict) and history[-1].get('e') is not None:
         try:
-            last_error = float(history[-1]['e'])
+            last_e = float(history[-1]['e'])
         except (TypeError, ValueError):
-            last_error = 0.1
-    measurement = setpoint - (setpoint - last_error) * 0.95 + rng.gauss(0.0, 0.05)
-    if not math.isfinite(measurement):
-        measurement = last_error
-    e = measurement  # simulated error approaching setpoint
-    integrator = float(state.get('integrator') or 0.0) + e
-    integrator = _clip(integrator, -INT_CLIP, INT_CLIP)
-    prev = state.get('prev_error')
+            pass
+    last_measurement = history[-1].get('measurement', effective_setpoint - last_e) if history else effective_setpoint - last_e
     try:
-        prev_f = float(prev) if prev is not None else e
+        last_y = float(last_measurement)
+    except (TypeError, ValueError):
+        last_y = effective_setpoint - last_e
+
+    # Compute PID output for the current error.
+    e = effective_setpoint - last_y
+    prev_err = state.get('prev_error')
+    try:
+        prev_f = float(prev_err) if prev_err is not None else e
     except (TypeError, ValueError):
         prev_f = e
     deriv = e - prev_f
-    u = KP * e + KI * integrator + KD * deriv
-    u = _clip(u, -U_CLIP, U_CLIP)
+    integrator = float(state.get('integrator') or 0.0)
+    u_raw = KP * e + KI * integrator + KD * deriv
+    u = _clip(u_raw, U_MIN, U_CLIP)
+    windup = abs(u_raw - u) > 1e-9
+    # Anti-windup matches loop-pid.py (KAW back-calculation)
+    if windup:
+        integrator += KAW * (u - u_raw) / KI if KI > 0 else 0.0
+    else:
+        integrator += e
+    integrator = _clip(integrator, -INT_CLIP, INT_CLIP)
+    # Plant update: y[k+1] = 0.5*y[k] + 0.5*u[k] + noise (DC gain=1, stable)
+    y_next = 0.5 * last_y + 0.5 * u + rng.gauss(0.0, 0.003)
+    if not math.isfinite(y_next):
+        y_next = last_y
+    measurement = y_next
+    setpoint = effective_setpoint  # for record
     rec = {
         'ts': time.time(),
         'e': e,

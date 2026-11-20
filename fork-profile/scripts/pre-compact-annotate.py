@@ -29,7 +29,7 @@ import json
 import re
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import os
@@ -46,7 +46,7 @@ MAX_VERBATIM  = 10
 _DECISION_RE = re.compile(
     r"(?:use\s+|prefer\s+|don'?t\s+|always\s+|never\s+|remember\s+|keep\s+|set\s+)"
     r"[^\n]{8,80}",
-    re.I,
+    re.IGNORECASE,
 )
 _VERBATIM_RE = re.compile(
     r"(?:"
@@ -57,7 +57,7 @@ _VERBATIM_RE = re.compile(
     r"|(?:error[:\s][^\n]{8,60})"      # error messages
     r"|(?:FAILED[:\s][^\n]{8,60})"     # failures
     r")",
-    re.I,
+    re.IGNORECASE,
 )
 
 
@@ -73,7 +73,7 @@ def _context_limit(model_config_json: str | None) -> int:
 
 def _session_fill(session: tuple) -> float:
     """Return context fill ratio [0..1] for a session row."""
-    sid, inp, cache, model_config = session
+    _sid, inp, cache, model_config = session
     tokens = (inp or 0) + (cache or 0)
     limit  = _context_limit(model_config)
     return tokens / limit if limit > 0 else 0.0
@@ -247,25 +247,11 @@ def main() -> None:
             sys.exit(0)
 
         # Output the compact instruction — delivered as a message by cron no_agent=True
-        now = datetime.now(timezone.utc).strftime("%H:%M UTC")
+        now = datetime.now(UTC).strftime("%H:%M UTC")
         annotation = (
             f"[pre-compact-annotate @ {now}] Context at {fill:.0%}. "
             f"Suggested: /compact {focus}"
         )
-
-        # Keep AEP/MI/advisor from reporting zeros (Wave 22 data-bridge). Fail-open (H-I7).
-        try:
-            import subprocess
-            def _hermes_root():
-                base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
-                if base.name != ".hermes" and base.parent.name == "profiles":
-                    return base.parent.parent
-                return base
-            _bridge = _hermes_root() / "hermes-scripts" / "eval-compaction-data-bridge.py"
-            if _bridge.exists():
-                subprocess.run([sys.executable, str(_bridge)], capture_output=True, timeout=10)
-        except Exception:
-            pass
 
         # Append rd-compaction-advisor advisory
         try:
@@ -306,8 +292,8 @@ def main() -> None:
 
         # Append alarm-aggregator summary
         try:
-            import subprocess as _sp  # noqa: F811 (re-import for standalone block)
-            import sys as _sys         # noqa: F811
+            import subprocess as _sp
+            import sys as _sys
             _alarm_result = _sp.run(
                 [_sys.executable, str(Path(__file__).parent / "alarm-aggregator.py")],
                 capture_output=True, text=True, timeout=10,
@@ -329,8 +315,8 @@ def main() -> None:
 
         # Append Focus Agent reminder (wires focus_compress.py as a live annotation)
         try:
-            import subprocess as _sp  # noqa: F811
-            import sys as _sys         # noqa: F811
+            import subprocess as _sp
+            import sys as _sys
             _fc_result = _sp.run(
                 [_sys.executable, str(Path(__file__).parent / "focus_compress.py"),
                  "--mode", "reminder"],

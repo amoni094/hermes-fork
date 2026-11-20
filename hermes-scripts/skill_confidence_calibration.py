@@ -14,7 +14,7 @@ from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 CACHE = _hermes_root / 'cache'
 OUT_PATH = CACHE / 'skill_confidence_intervals.json'
@@ -264,12 +264,12 @@ def _self_test() -> int:
         calls = []
         for i in range(300):
             p = 0.7 if (i % 4) else 0.55
-            calls.append((f's{i % 4}', 1 if rng.random() < p else 0))
+            calls.append(('s%d' % (i % 4), 1 if rng.random() < p else 0))
         cov, tot = empirical_coverage(calls, window=100, alpha=0.1, hold=100)
         if tot and cov is not None and 0.70 <= cov <= 1.0:
             ok += 1
-    assert ok >= 35, f'coverage trials ok={ok}/50'
-    calls = [(f's{i % 3}', 1 if rng.random() < 0.65 else 0) for i in range(400)]
+    assert ok >= 35, 'coverage trials ok=%d/50' % ok
+    calls = [('s%d' % (i % 3), 1 if rng.random() < 0.65 else 0) for i in range(400)]
     iv100 = intervals_for(calls[:100], window=100)
     iv200 = intervals_for(calls[:200], window=200)
     w100 = sum(v['width'] for v in iv100.values()) / max(1, len(iv100))
@@ -278,7 +278,7 @@ def _self_test() -> int:
     outcomes = {}
     for k in range(5):
         p = 0.4 + 0.1 * k
-        outcomes[f's{k}'] = [1 if rng.random() < p else 0 for _ in range(100)]
+        outcomes['s%d' % k] = [1 if rng.random() < p else 0 for _ in range(100)]
     hits = 0
     for seed in (1, 2):
         iv = bagged_intervals(outcomes, B=100, alpha=0.1, rng=random.Random(seed))
@@ -286,7 +286,7 @@ def _self_test() -> int:
             emp_mean = sum(emp) / len(emp)
             if iv[sk]['lo'] - 1e-9 <= emp_mean <= iv[sk]['hi'] + 1e-9:
                 hits += 1
-    assert hits >= 9, f'coverage hits={hits}/10'
+    assert hits >= 9, 'coverage hits=%d/10' % hits
     tmp = _temp_out('skill-conf')
     post = _temp_out('posterior')
     db_tmp = Path(tempfile.gettempdir()) / (f'skill-cal-{uuid.uuid4().hex}.db')

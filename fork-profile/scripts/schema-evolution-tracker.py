@@ -34,7 +34,7 @@ import json
 import os
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _base = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
@@ -171,7 +171,7 @@ def _append_audit(version: int, description: str, checksum: str) -> None:
         "version": version,
         "description": description,
         "checksum": checksum,
-        "applied_at": datetime.now(timezone.utc).isoformat(),
+        "applied_at": datetime.now(UTC).isoformat(),
     }
     AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
     with AUDIT_LOG.open("a") as f:

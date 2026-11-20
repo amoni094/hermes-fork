@@ -35,7 +35,7 @@ import math
 import os
 import re
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from pathlib import Path
 
 # OT utilities (shared; OT-4)
@@ -87,7 +87,7 @@ def find_active_skills() -> list[Path]:
 def extract_description(skill_md: Path) -> str:
     """Extract description: field from SKILL.md frontmatter."""
     try:
-        text = skill_md.read_text(errors="replace")
+        text = skill_md.read_text(encoding="utf-8", errors="replace")
         m = re.search(r"^description:\s*[\"']?(.*?)[\"']?\s*$", text, re.MULTILINE)
         if m:
             return m.group(1).strip().rstrip("'\"")
@@ -147,7 +147,7 @@ def main():
                         "with overlap score and heuristic barycenter description suggestion")
     args = p.parse_args()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     stale_cutoff = now - timedelta(days=args.days)
 
     usage = load_usage()

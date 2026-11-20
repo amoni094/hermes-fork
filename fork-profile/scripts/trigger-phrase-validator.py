@@ -148,8 +148,7 @@ def parse_triggers_linewise(fm_text: str) -> list[str] | None:
                     i += 1
                     buf += " " + lines[i].strip()
                 inner = buf[buf.find("[") + 1 :]
-                if inner.endswith("]"):
-                    inner = inner[:-1]
+                inner = inner.removesuffix("]")
                 return _split_flow_sequence(inner)
             if rest:
                 return [_unquote(rest)]
@@ -218,13 +217,9 @@ def validate_phrases(phrases: list[str]) -> list[dict[str, str]]:
             violations.append({"phrase": phrase, "reason": REASON_WHITESPACE})
             # Still run the remaining checks so a blank also shows as empty-NFKD.
         normalized = nfkd_stripped(phrase)
-        if not normalized and not is_pure_whitespace(phrase):
+        if not normalized and not is_pure_whitespace(phrase) or not normalized and is_pure_whitespace(phrase):
             violations.append({"phrase": phrase, "reason": REASON_EMPTY_NFKD})
-        elif not normalized and is_pure_whitespace(phrase):
-            violations.append({"phrase": phrase, "reason": REASON_EMPTY_NFKD})
-        if len(phrase) > MAX_TRIGGER_PHRASE_CHARS:
-            violations.append({"phrase": phrase, "reason": REASON_TOO_LONG})
-        elif len(phrase.strip()) > MAX_TRIGGER_PHRASE_CHARS:
+        if len(phrase) > MAX_TRIGGER_PHRASE_CHARS or len(phrase.strip()) > MAX_TRIGGER_PHRASE_CHARS:
             violations.append({"phrase": phrase, "reason": REASON_TOO_LONG})
         # Duplicate identity: NFKD + strip, matching the live matcher fold.
         # Whitespace-only / empty-NFKD phrases share one identity; still flag repeats.

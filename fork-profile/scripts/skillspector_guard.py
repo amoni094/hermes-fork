@@ -8,7 +8,7 @@ import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +24,55 @@ PENDING_PATH = SECURITY_ROOT / "pending_quarantine.json"
 QUARANTINE_ROOT = Path(os.environ.get("HERMES_SKILLS_QUARANTINE_ROOT", os.path.expanduser("~/.hermes/skills-quarantine")))
 SKILLSPECTOR_BIN = os.environ.get("SKILLSPECTOR_BIN", os.path.expanduser("~/.local/bin/skillspector"))
 DEFAULT_THRESHOLD = int(os.environ.get("HERMES_SKILLS_QUARANTINE_SCORE", "60"))
+TRIGGER_EDIT_MIN = 5  # Lin coding analog: near-duplicate triggers are a routing failure
+_TRIGGER_TYPES = frozenset({"assertive", "directive", "commissive", "expressive", "declarative"})
+
+
+def _trigger_tokens(text: str) -> list[str]:
+    import re
+    return re.findall(r"[a-z][a-z0-9]{2,}", (text or "").lower())[:24]
+
+
+def _token_edit_distance(a: list[str], b: list[str]) -> int:
+    la, lb = len(a), len(b)
+    if la == 0:
+        return lb
+    if lb == 0:
+        return la
+    prev = list(range(lb + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i] + [0] * lb
+        for j, cb in enumerate(b, 1):
+            cur[j] = min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + (ca != cb))
+        prev = cur
+    return prev[lb]
+
+
+def flag_near_duplicate_triggers(skill_dirs: list[Path], min_dist: int = TRIGGER_EDIT_MIN) -> list[tuple]:
+    """Hard core: no two skill descriptions have token edit distance < 5."""
+    phrases = []
+    for path in skill_dirs:
+        skill_md = path / "SKILL.md"
+        if not skill_md.exists():
+            continue
+        try:
+            text = skill_md.read_text(encoding="utf-8", errors="replace")[:1500]
+        except OSError:
+            continue
+        desc = text
+        for line in text.splitlines():
+            if line.lower().startswith("description:") or "use when" in line.lower():
+                desc = line
+                break
+        phrases.append((path.name, _trigger_tokens(desc)))
+    flags = []
+    for i in range(len(phrases)):
+        for j in range(i + 1, len(phrases)):
+            d = _token_edit_distance(phrases[i][1], phrases[j][1])
+            if d < min_dist:
+                flags.append((d, phrases[i][0], phrases[j][0]))
+    flags.sort()
+    return flags
 
 
 @dataclass
@@ -46,8 +95,44 @@ class SkillResult:
     quarantine_proposed: bool = False
 
 
+def parse_skill_frontmatter(text: str) -> dict[str, str]:
+    """Stdlib YAML-ish frontmatter: first --- ... --- block, key: value lines."""
+    meta: dict[str, str] = {}
+    if not text.startswith("---"):
+        return meta
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return meta
+    for line in parts[1].splitlines():
+        raw = line.strip()
+        if not raw or raw.startswith("#") or ":" not in raw:
+            continue
+        key, val = raw.split(":", 1)
+        meta[key.strip()] = val.strip().strip("\"'[]")
+    return meta
+
+
+def warn_missing_trigger_types(skill_dirs: list[Path]) -> list[str]:
+    """Shoham speech-act typing: skill triggers are illocutionary types."""
+    missing: list[str] = []
+    for d in skill_dirs:
+        p = d / "SKILL.md"
+        try:
+            text = p.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        meta = parse_skill_frontmatter(text)
+        tt = str(meta.get("trigger_type", "")).lower()
+        if not any(t in tt for t in _TRIGGER_TYPES):
+            try:
+                missing.append(d.relative_to(SKILLS_ROOT).as_posix())
+            except Exception:
+                missing.append(str(d))
+    return missing
+
+
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def ensure_dirs() -> None:
@@ -85,7 +170,7 @@ def result_from_cache(path: Path, bundled_names: set[str], cached: dict[str, Any
     raw: dict[str, Any] = {}
     if report.exists():
         try:
-            loaded = json.loads(report.read_text())
+            loaded = json.loads(report.read_text(encoding="utf-8"))
             if isinstance(loaded, dict):
                 raw = loaded
         except Exception:
@@ -224,9 +309,9 @@ def scan_skill(path: Path, bundled_names: set[str]) -> SkillResult:
     else:
         data = {"stderr_prefix": proc.stderr[:2000]}
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    _tmp = out_path.with_suffix('.tmp')
-    _tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
-    _tmp.replace(out_path)
+    _tmp_out = out_path.with_suffix(".tmp")
+    _tmp_out.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    _tmp_out.replace(out_path)
     risk_raw = data.get("risk_assessment", {})
     risk = risk_raw if isinstance(risk_raw, dict) else {}
     findings_raw = data.get("findings", [])
@@ -396,6 +481,7 @@ def main() -> int:
     parser.add_argument("--confirm-quarantine", nargs="+", metavar="REL_PATH", help="After an adversarial scan has confirmed a pending proposal is a true positive, actually move the given skill(s) (by rel path, e.g. software-development/foo) from skills/ into quarantine. Fails if the skill has no matching pending proposal or its hash has changed since proposal.")
     parser.add_argument("--reject-quarantine", nargs="+", metavar="REL_PATH", help="Mark pending proposal(s) as false positives: add to the allowlist (so they are not re-proposed) and clear the pending entry. Use --reject-reason to record why.")
     parser.add_argument("--reject-reason", default="Adversarial review: false positive", help="Reason recorded in the allowlist for --reject-quarantine entries.")
+    parser.add_argument("--check-trigger-type", action="store_true", help="Warn (or exit 1 with --enforce) when SKILL.md frontmatter lacks trigger_type.")
     args = parser.parse_args()
 
     ensure_dirs()
@@ -404,6 +490,14 @@ def main() -> int:
     pending = load_pending()
     bundled_names = load_bundled_names()
     skill_dirs = find_skill_dirs()
+    if args.check_trigger_type or args.enforce:
+        missing_tt = warn_missing_trigger_types(skill_dirs)
+        if missing_tt:
+            print(f"TRIGGER_TYPE_MISSING count={len(missing_tt)} (hard core: every skill has a typed trigger)")
+            for rel in missing_tt[:20]:
+                print(f"TRIGGER_TYPE_MISSING {rel}")
+            if args.enforce and args.check_trigger_type:
+                return 1
     previous_approved = state.get("approved_hashes", {})
     cached_results = state.get("last_results", {})
     results: list[SkillResult] = []
@@ -412,7 +506,7 @@ def main() -> int:
         current_hash = file_hash(path)
         cached = cached_results.get(rel)
         report_path = Path(str(cached.get("report", ""))) if isinstance(cached, dict) else None
-        allowlisted_hashes = allowlist.get("skills", {}).get(rel, {}).get("hashes", [])
+        allowlist.get("skills", {}).get(rel, {}).get("hashes", [])
         can_reuse_cache = (
             not args.refresh_baseline
             and isinstance(cached, dict)
@@ -560,6 +654,7 @@ def main() -> int:
         if _profile_c and "profiles" not in str(_base_c)
         else _base_c
     ) / "cache"
+    _drift_count = 0
     try:
         _integrity_path = _cache_root / "skill-integrity.json"
         if _integrity_path.exists():
@@ -579,6 +674,7 @@ def main() -> int:
                     _skill = _item.get("skill", _item.get("name", "unknown"))
                     _reason = _item.get("reason", _item.get("status", "unknown"))
                     print(f"INTEGRITY-FAIL: {_skill} ({_reason})")
+                    _drift_count += 1
     except Exception:
         pass
 
@@ -599,10 +695,21 @@ def main() -> int:
                 if _item.get("drift") or _item.get("changed"):
                     _skill = _item.get("skill", _item.get("name", "unknown"))
                     print(f"MERKLE-DRIFT: {_skill}")
+                    _drift_count += 1
     except Exception:
         pass
 
-    return 1 if locals().get('changed_high_risk') else 0
+    try:
+        _dups = flag_near_duplicate_triggers(skill_dirs, min_dist=TRIGGER_EDIT_MIN)
+        if _dups:
+            print(f"TRIGGER-NEAR-DUP: {len(_dups)} skill pairs with token edit distance < {TRIGGER_EDIT_MIN}")
+            for d, a, b in _dups[:15]:
+                print(f"TRIGGER-NEAR-DUP: dist={d} {a} <-> {b}")
+            # Advisory only — do not fail the cron job on description collisions.
+    except Exception:
+        pass
+
+    return 1 if _drift_count > 0 else 0
 
 
 if __name__ == "__main__":

@@ -13,12 +13,16 @@ import sqlite3
 import sys
 import pathlib
 
-_hh = pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes")))
-if _hh.name == "fork" and _hh.parent.name == "profiles":
-    _FORK_ROOT = _hh
+HERMES_HOME = pathlib.Path(os.environ.get("HERMES_HOME", str(pathlib.Path.home() / ".hermes")))
+# Resolve the real fork DB regardless of whether HERMES_HOME is the top-level ~/.hermes
+# or is already the fork profile root (e.g. ~/.hermes/profiles/fork).
+# When cron sets HERMES_HOME to the fork profile dir, appending profiles/fork again doubles the path.
+_hermes_str = str(HERMES_HOME)
+if "profiles" in _hermes_str and _hermes_str.endswith("fork"):
+    # HERMES_HOME is already the fork profile root
+    FORK_DB = HERMES_HOME / "state.db"
 else:
-    _FORK_ROOT = _hh / "profiles" / "fork"
-FORK_DB = _FORK_ROOT / "state.db"
+    FORK_DB = HERMES_HOME / "profiles" / "fork" / "state.db"
 
 
 def main() -> int:

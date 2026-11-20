@@ -163,7 +163,7 @@ def classify_section(idx: int, section: str, corpus: str = "") -> dict:
     # ── Date staleness check ──────────────────────────────────────────────
     dates = extract_dates(section)
     if dates:
-        oldest = min(dates)  # noqa: F841
+        min(dates)
         newest = max(dates)
         age_days = (today - newest).days
         if age_days > recommended_ttl:
@@ -206,7 +206,8 @@ def classify_section(idx: int, section: str, corpus: str = "") -> dict:
     if status == "UNKNOWN" and ref_freq >= REF_FREQUENT_MIN:
         status = "ACTIVE"
         reasons.append(
-            f"no dates but reference_frequency={ref_freq} (>={REF_FREQUENT_MIN}) => ACTIVE"
+            "no dates but reference_frequency=%d (>=%d) => ACTIVE"
+            % (ref_freq, REF_FREQUENT_MIN)
         )
 
     first = (section.splitlines()[0].strip() if section else "")[:120]

@@ -200,7 +200,7 @@ def score_skill(path: Path) -> dict[str, Any]:
     total = sum(scores.values())
     priority = total < PRIORITY_THRESHOLD
     n_dims = len(scores)
-    n_pass_dims = sum(1 for s in scores.values() if s > 0)  # any points = partial pass
+    sum(1 for s in scores.values() if s > 0)  # any points = partial pass
     frac = total / 100.0  # normalise to [0,1]
     k_equiv = round(frac * n_dims)  # equivalent passes
     cp_lb = clopper_pearson_lower(k_equiv, n_dims)

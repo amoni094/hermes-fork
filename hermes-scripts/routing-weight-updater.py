@@ -68,7 +68,7 @@ def load_skill_latency(path: Path) -> dict:
     if not path.exists():
         return gks
     try:
-        for line in path.read_text(errors="replace").splitlines():
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
             try:
                 row = json.loads(line)
             except Exception:
@@ -228,7 +228,7 @@ def competitive_ratio_last_24h(log_path: Path, now: float, weights: dict | None 
     alg_n = 0
     alg_loss = 0.0
     if log_path.exists():
-        for line in log_path.read_text().splitlines():
+        for line in log_path.read_text(encoding="utf-8").splitlines():
             try:
                 row = json.loads(line)
             except Exception:
@@ -290,7 +290,7 @@ def _load_known_routes(weights_path: Path, log_path: Path) -> list:
     # 1. Seed from existing weights file
     if weights_path.exists():
         try:
-            stored = json.loads(weights_path.read_text())
+            stored = json.loads(weights_path.read_text(encoding="utf-8"))
             if isinstance(stored, dict):
                 for k in stored:
                     if k not in known:
@@ -302,7 +302,7 @@ def _load_known_routes(weights_path: Path, log_path: Path) -> list:
     # 2. Discover any new routes from the calibration log
     if log_path.exists():
         try:
-            for line in log_path.read_text().splitlines():
+            for line in log_path.read_text(encoding="utf-8").splitlines():
                 try:
                     row = json.loads(line)
                     route = row.get('route', '')
@@ -522,7 +522,7 @@ def main():
     }
     try:
         REGRET_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(REGRET_LOG_PATH, 'a') as _rlog:
+        with open(REGRET_LOG_PATH, 'a', encoding="utf-8") as _rlog:
             _rlog.write(json.dumps(regret_entry) + '\n')
         if regret_entry['alarm']:
             print(f"[ALARM] FTRL regret={regret_this_run:.1f} > 5% threshold — FTRL underperforming uniform baseline")
@@ -539,7 +539,7 @@ def main():
         summary_comp = competitive_ratio_last_24h(LOG_PATH, now, updated_weights)
         COMP_PATH = _hermes_root / "cache" / "routing-competitive-ratio.jsonl"
         COMP_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(COMP_PATH, "a") as _clog:
+        with open(COMP_PATH, "a", encoding="utf-8") as _clog:
             _clog.write(json.dumps(summary_comp) + "\n")
         print(f"[competitive-ratio] ratio={summary_comp.get('competitive_ratio')} "
               f"finite={summary_comp.get('finite')} achieved_opt=False")

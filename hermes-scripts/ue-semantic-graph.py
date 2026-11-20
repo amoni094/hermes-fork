@@ -296,7 +296,7 @@ def self_test() -> int:
             "completely unrelated zebra economy report",
         ]
     )
-    check(diverse["num_sem_sets"] >= 2, "diverse num_sem_sets=%s" % diverse["num_sem_sets"])
+    check(diverse["num_sem_sets"] >= 2, "diverse num_sem_sets={}".format(diverse["num_sem_sets"]))
     check(diverse["high_diversity"] is True, "diverse high_diversity")
     # identical texts form a tighter (higher-degree) graph than unrelated texts
     check(same["deg_mat_mean"] >= diverse["deg_mat_mean"], "degree mean inverted")

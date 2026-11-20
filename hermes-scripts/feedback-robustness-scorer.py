@@ -1,185 +1,132 @@
 #!/usr/bin/env python3
-"""Huber-loss robust regression on skill feedback (delta=1.35)."""
-import os
-from pathlib import Path
-_hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
-_hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
-
-import argparse
-import json
-import math
-import sqlite3
-import sys
-from collections import defaultdict
+"""Score robustness of a feedback/eval trajectory under bounded perturbations."""
+from __future__ import annotations
+import argparse, json, math, os, random, sqlite3, sys, tempfile, uuid
 from datetime import datetime, timezone, UTC
+from pathlib import Path
 
-DELTA = 1.35
-ROUTING_EVENTS = _hermes_root / "cache" / "routing-events.jsonl"
-OUT_PATH = _hermes_root / "cache" / "skill-robustness-scores.json"
-LIFECYCLE_DB = Path("/var/home/rainbow/.hermes/memory-facts/lifecycle.db")
+_hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
+_hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
+CACHE = _hermes_root / 'cache'
 
+def _now() -> str:
+    return datetime.now(UTC).isoformat()
 
-def huber(r: float, delta: float = DELTA) -> float:
-    ar = abs(r)
-    if ar <= delta:
-        return (r * r) / 2.0
-    return delta * (ar - delta / 2.0)
-
-
-def robust_mean(scores: list, delta: float = DELTA) -> float:
-    if not scores:
-        return 0.0
-    mu = sum(scores) / float(len(scores))
-    weights = []
-    for s in scores:
-        L = huber(s - mu, delta)
-        weights.append(1.0 / max(L, 0.001))
-    wsum = sum(weights) or 1.0
-    return sum(w * s for w, s in zip(weights, scores)) / wsum
-
-
-def _atomic_write_json(path: Path, obj) -> None:
+def _atomic_write(path: Path, obj) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(obj, indent=2) + "\n")
+    tmp = path.with_name(path.name + '.tmp')
+    tmp.write_text(json.dumps(obj, indent=2) + '\n', encoding='utf-8')
     os.replace(str(tmp), str(path))
 
+def _lifecycle_db() -> Path:
+    return _hermes_root / 'memory-facts' / 'lifecycle.db'
 
-def _load_routing_events(path: Path) -> dict:
-    by_skill = defaultdict(list)
-    if not path.exists():
-        return by_skill
+def _temp_out(prefix: str) -> Path:
+    return Path(tempfile.gettempdir()) / (f'{prefix}-{uuid.uuid4().hex}.json')
+
+OUT_PATH = CACHE / 'feedback-robustness.json'
+EPS = 0.05
+TRIALS = 40
+
+
+def load_scores():
+    p = CACHE / 'eval-scores.jsonl'
+    xs = []
+    if not p.exists():
+        return xs
     try:
-        for line in path.read_text().splitlines():
+        for line in p.read_text(encoding='utf-8').splitlines():
             line = line.strip()
             if not line:
                 continue
             try:
                 rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(rec, dict):
-                continue
-            skill = rec.get("top_skill") or rec.get("skill") or rec.get("skill_name")
-            score = rec.get("top_score", rec.get("score", rec.get("reward")))
-            if skill is None or score is None:
-                continue
-            try:
-                by_skill[str(skill)].append(float(score))
-            except (TypeError, ValueError):
-                continue
-    except OSError:
-        return defaultdict(list)
-    return by_skill
-
-
-def _load_lifecycle_episodes() -> dict:
-    by_skill = defaultdict(list)
-    try:
-        if not LIFECYCLE_DB.exists():
-            return by_skill
-        conn = sqlite3.connect(str(LIFECYCLE_DB))
-        try:
-            names = [
-                r[0]
-                for r in conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table'"
-                ).fetchall()
-            ]
-            if "episodes" not in names:
-                return by_skill
-            cols = [r[1] for r in conn.execute("PRAGMA table_info(episodes)").fetchall()]
-            skill_col = "skill_name" if "skill_name" in cols else None
-            score_col = "score" if "score" in cols else None
-            if not skill_col or not score_col:
-                return by_skill
-            for skill, score in conn.execute(
-                "SELECT %s, %s FROM episodes" % (skill_col, score_col)
-            ):
-                if skill is None or score is None:
-                    continue
+                xs.append(float(rec.get('score', rec.get('value', rec))))
+            except (json.JSONDecodeError, TypeError, ValueError):
                 try:
-                    by_skill[str(skill)].append(float(score))
-                except (TypeError, ValueError):
+                    xs.append(float(line))
+                except ValueError:
                     continue
-        finally:
-            conn.close()
-    except Exception:
-        return defaultdict(list)
-    return by_skill
+    except OSError:
+        return []
+    return xs
 
 
-def synthetic_scores() -> dict:
-    return {
-        "skill_a": [0.8, 0.82, 0.79, 0.81, 0.83],
-        "skill_b": [0.5, 0.52, 0.48, 0.51, 0.9],
-    }
-
-
-def score_groups(by_skill: dict, delta: float = DELTA) -> dict:
-    rows = []
-    for skill, scores in sorted(by_skill.items()):
-        if not scores:
+def robustness(scores, eps=EPS, trials=TRIALS, seed=0):
+    ys = []
+    for s in scores or []:
+        try:
+            ys.append(float(s))
+        except (TypeError, ValueError):
             continue
-        rows.append(
-            {
-                "skill": skill,
-                "robustness_score": round(robust_mean(scores, delta), 6),
-                "n": len(scores),
-            }
-        )
+    n = len(ys)
+    if n == 0:
+        return {
+            'robustness_score': None,
+            'base_mean': None,
+            'worst_mean': None,
+            'eps': eps,
+            'trials': trials,
+            'n': 0,
+            'status': 'insufficient_data',
+            'ts': _now(),
+        }
+    rng = random.Random(seed)
+    base = sum(ys) / n
+    worst = base
+    for _ in range(trials):
+        pert = [max(0.0, min(1.0, y + rng.uniform(-eps, eps))) for y in ys]
+        m = sum(pert) / n
+        worst = min(worst, m)
+    score = 1.0 - abs(base - worst) / max(eps, 1e-9)
+    score = max(0.0, min(1.0, score))
     return {
-        "generated_at": datetime.now(UTC).isoformat(),
-        "delta": delta,
-        "scores": rows,
+        'robustness_score': score,
+        'base_mean': base,
+        'worst_mean': worst,
+        'eps': eps,
+        'trials': trials,
+        'n': n,
+        'status': 'ok',
+        'ts': _now(),
     }
 
 
-def run() -> dict:
-    by_skill = _load_routing_events(ROUTING_EVENTS)
-    source = "routing-events"
-    if not by_skill:
-        by_skill = _load_lifecycle_episodes()
-        source = "lifecycle.episodes"
-    if not by_skill:
-        by_skill = synthetic_scores()
-        source = "synthetic"
-    out = score_groups(by_skill)
-    out["source"] = source
+def _self_test() -> int:
+    empty = robustness([])
+    assert empty['status'] == 'insufficient_data'
+    assert empty['robustness_score'] is None
+    r = robustness([0.5] * 30, eps=0.05, trials=20, seed=1)
+    assert 0.0 <= r['robustness_score'] <= 1.0
+    tmp = _temp_out('feedback-rob')
+    _atomic_write(tmp, r)
     try:
-        _atomic_write_json(OUT_PATH, out)
-    except Exception:
+        tmp.unlink(missing_ok=True)
+    except OSError:
         pass
-    return out
+    print('[feedback-robustness-scorer] --self-test PASS score={:.3f}'.format(r['robustness_score']))
+    return 0
 
 
-def self_test() -> dict:
-    scores = [0.8, 0.81, 0.79, 0.82, 0.80, 5.0]
-    naive = sum(scores) / len(scores)
-    rob = robust_mean(scores)
-    assert rob < naive, (rob, naive)
-    assert abs(rob - 0.8) < 0.15, rob
-    empty = robust_mean([])
-    assert empty == 0.0
-    return {
-        "self_test": "PASS",
-        "naive": round(naive, 6),
-        "robust": round(rob, 6),
-        "outlier_downweighted": rob < naive,
-    }
-
-
-def main() -> None:
+def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--self-test", action="store_true")
+    ap.add_argument('--self-test', action='store_true')
     args = ap.parse_args()
     if args.self_test:
-        r = self_test()
-        print(json.dumps(r, indent=2))
-        sys.exit(0 if r.get("self_test") == "PASS" else 1)
-    print(json.dumps(run(), indent=2))
+        try:
+            sys.exit(_self_test())
+        except Exception as exc:
+            print(f'[feedback-robustness-scorer] --self-test FAIL: {exc}')
+            sys.exit(1)
+    try:
+        r = robustness(load_scores())
+        if r.get('status') != 'insufficient_data':
+            _atomic_write(OUT_PATH, r)
+        print(json.dumps(r))
+    except Exception:
+        pass
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

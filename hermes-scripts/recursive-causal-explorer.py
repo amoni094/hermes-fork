@@ -53,7 +53,7 @@ MIN_COUNT = 2     # minimum co-occurrence count
 def _extract_tool_sequence(session_path: Path) -> list[str]:
     """Extract ordered tool call names from a session JSONL."""
     tools = []
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev      = json.loads(line)
             content = ev.get("api_content", ev.get("content", ""))

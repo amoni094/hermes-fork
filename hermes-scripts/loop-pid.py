@@ -88,14 +88,14 @@ def _percentile(values, p):
     xs = sorted(float(v) for v in values)
     n = len(xs)
     rank = (p / 100.0) * (n - 1)
-    lo = int(math.floor(rank))
-    hi = int(math.ceil(rank))
+    lo = math.floor(rank)
+    hi = math.ceil(rank)
     if lo == hi:
         val = xs[lo]
     else:
         val = xs[lo] + (xs[hi] - xs[lo]) * (rank - lo)
     if abs(val - round(val)) < 1e-9:
-        return int(round(val))
+        return round(val)
     return val
 
 

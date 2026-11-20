@@ -106,8 +106,7 @@ def filter_scored_skills(
             rel = float(score)
         except (TypeError, ValueError):
             rel = 0.0
-        if rel < 0.0:
-            rel = 0.0
+        rel = max(rel, 0.0)
         key = _pair_key(idx, skill)
         text = " ".join(
             str(skill.get(k, "") or "")

@@ -50,7 +50,7 @@ TERMINAL_WORDS   = {"done", "complete", "finished", "deployed", "saved", "writte
 def _extract_skill_meta(path: Path) -> dict:
     """Extract name, precondition keywords, postcondition keywords."""
     try:
-        text  = path.read_text()
+        text  = path.read_text(encoding="utf-8")
         lines = text.splitlines()
     except Exception:
         return {}

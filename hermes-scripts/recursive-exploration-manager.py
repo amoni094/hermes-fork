@@ -79,7 +79,7 @@ def _staleness(idea: dict, now: datetime) -> float:
     if not ts:
         return 0.5   # unknown age → moderate staleness
     try:
-        generated = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        generated = datetime.fromisoformat(ts)
         age_days   = (now - generated).total_seconds() / 86400
         return math.exp(-age_days / 30.0)
     except Exception:

@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 import argparse
@@ -12,7 +12,7 @@ import json
 import sqlite3
 import sys
 
-LIFECYCLE_DB = Path("/var/home/rainbow/.hermes/memory-facts/lifecycle.db")
+LIFECYCLE_DB = _hermes_root / 'memory-facts' / 'lifecycle.db'
 
 
 def _read_text(args) -> str:
@@ -84,6 +84,7 @@ def _log_violations(result: dict) -> None:
     if result.get("valid"):
         return
     conn = sqlite3.connect(str(LIFECYCLE_DB))
+    conn.execute('PRAGMA journal_mode=WAL')
     try:
         conn.execute(
             """CREATE TABLE IF NOT EXISTS output_violations(
@@ -132,8 +133,9 @@ def main() -> None:
         except Exception:
             pass
         print(json.dumps(result))
-    except Exception:
-        pass
+    except Exception as e:
+        print(json.dumps({"status": "error", "reason": str(e)}))
+        sys.exit(0)
 
 
 if __name__ == "__main__":

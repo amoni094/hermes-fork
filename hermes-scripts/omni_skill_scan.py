@@ -244,7 +244,7 @@ def write_report(results: list[dict], report_path: Path):
     today = datetime.now().strftime("%Y-%m-%d")
     total = len(results)
     below = [r for r in results if r['score'] < THRESHOLD]
-    above = [r for r in results if r['score'] >= THRESHOLD]
+    [r for r in results if r['score'] >= THRESHOLD]
     avg = round(sum(r['score'] for r in results) / max(total, 1), 3)
 
     lines = [
@@ -513,7 +513,7 @@ def optimize_queued(budget_per_skill: float, max_skills: int):
         skill_path = Path(item['path'])
         if not skill_path.exists():
             continue
-        skill_md = skill_path.read_text()
+        skill_md = skill_path.read_text(encoding="utf-8")
         baseline, _ = mod.evaluate_skill(skill_md)
         print(f"\nOptimizing: {item['name']} (baseline={baseline:.3f}, weak={item['weak_checks']})")
 

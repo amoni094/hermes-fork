@@ -100,7 +100,6 @@ def fetch_items(feed_url: str) -> list[dict]:
         root = ET.fromstring(raw)
 
         # RSS 2.0
-        ns = {}
         for item in root.findall(".//item"):
             title = (item.findtext("title") or "").strip()
             link = (item.findtext("link") or "").strip()

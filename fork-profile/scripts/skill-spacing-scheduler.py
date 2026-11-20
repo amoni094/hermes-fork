@@ -322,10 +322,10 @@ def cmd_self_test() -> None:
         sys.exit(1)
     else:
         print("SELF-TEST PASS")
-        print(f"  ACT-R activation formula correct")
+        print("  ACT-R activation formula correct")
         print(f"  Spacing: n=0 gap={g0:.1f}d, n=1 gap={g1:.1f}d, n=2 gap={g2:.1f}d")
         print(f"  Cap at {_MAX_GAP_DAYS}d verified")
-        print(f"  mark_reviewed state transitions correct")
+        print("  mark_reviewed state transitions correct")
 
 
 def main() -> None:

@@ -116,7 +116,7 @@ def _plan(task: str, budget: int) -> list[dict]:
         for tool in tools:
             if any(p["tool"] == tool for p in plan):
                 continue  # don't repeat tools unless explicit
-            tool_kws = set(TOOL_MANIFEST.get(tool, []))
+            set(TOOL_MANIFEST.get(tool, []))
 
             # Compute marginal coverage gain across all intents
             gain = 0.0
@@ -140,7 +140,7 @@ def _plan(task: str, budget: int) -> list[dict]:
             break
 
         # Update coverage
-        tool_kws = set(TOOL_MANIFEST.get(best_tool, []))
+        set(TOOL_MANIFEST.get(best_tool, []))
         for intent_phrase, _ in intents:
             intent_words = set(intent_phrase.split())
             raw = _coverage_score(best_tool, intent_words)

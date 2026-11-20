@@ -52,7 +52,7 @@ def _keywords(skill_path: Path) -> set[str]:
     """Extract keyword tokens from skill name + first 500 chars of content."""
     text = skill_path.stem.replace("-", " ").replace("_", " ")
     try:
-        text += " " + skill_path.read_text()[:500]
+        text += " " + skill_path.read_text(encoding="utf-8")[:500]
     except Exception:
         pass
     return set(re.findall(r"[a-z]{3,}", text.lower()))

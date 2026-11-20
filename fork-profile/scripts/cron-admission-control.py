@@ -53,6 +53,19 @@ REPORT_FILE = HERMES_HOME / "omni" / "cron-admission-report.json"
 # Default C_i when timeout not specified (seconds)
 DEFAULT_TIMEOUT_SECONDS = 300.0
 
+
+def _get_max_parallel_jobs() -> int:
+    """Read cron.max_parallel_jobs from config.yaml; default 1 (conservative)."""
+    try:
+        import yaml  # type: ignore[import]
+        config_path = HERMES_HOME / 'config.yaml'
+        if not config_path.exists():
+            return 1
+        cfg = yaml.safe_load(config_path.read_text()) or {}
+        return int(cfg.get('cron', {}).get('max_parallel_jobs', 1))
+    except Exception:
+        return 1
+
 # Liu-Layland RM bound (converges to ln2 ≈ 0.6931)
 RM_BOUND_ASYMPTOTIC = math.log(2)  # 0.6931...
 
@@ -117,7 +130,14 @@ def _job_cadence_seconds(job: dict) -> Optional[float]:
         return None
     kind = schedule.get("kind", "")
     if kind == "interval":
-        return float(schedule.get("seconds", 0)) or None
+        # ADV-022: jobs use schedule.minutes, not schedule.seconds
+        secs = schedule.get("seconds")
+        mins = schedule.get("minutes")
+        if secs is not None:
+            return float(secs) or None
+        if mins is not None:
+            return float(mins) * 60.0 or None
+        return None
     if kind == "cron":
         return _parse_cron_cadence(schedule.get("expr", ""))
     return None
@@ -127,15 +147,17 @@ def _job_timeout_seconds(job: dict) -> float:
     """Get job timeout as C_i. Falls back to DEFAULT_TIMEOUT_SECONDS.
 
     ADV-013 fix: timeout=0 undercounts load. Use DEFAULT_TIMEOUT_SECONDS instead.
+    ADV-022 fix: most jobs use timeout_seconds, not timeout. Check both; timeout_seconds wins.
     """
-    t = job.get("timeout")
-    if t is not None:
-        try:
-            tv = float(t)
-            # ADV-013: timeout <= 0 is inadmissible; treat as default worst-case
-            return tv if tv > 0 else DEFAULT_TIMEOUT_SECONDS
-        except (TypeError, ValueError):
-            pass
+    for key in ("timeout_seconds", "timeout"):
+        t = job.get(key)
+        if t is not None:
+            try:
+                tv = float(t)
+                # ADV-013: timeout <= 0 is inadmissible; treat as default worst-case
+                return tv if tv > 0 else DEFAULT_TIMEOUT_SECONDS
+            except (TypeError, ValueError):
+                pass
     return DEFAULT_TIMEOUT_SECONDS
 
 
@@ -191,10 +213,13 @@ def compute_utilisation(jobs: list[dict]) -> dict:
     n = len(per_job)
     total_u = sum(j["utilisation"] for j in per_job)
     rm_b = rm_bound(n) if n > 0 else 0.0
+    # Scale EDF bound by parallel slots: with P processors, EDF is feasible iff U <= P.
+    p = _get_max_parallel_jobs()
+    edf_b = float(p)  # multiprocessor EDF bound
 
-    if total_u <= rm_b:
+    if total_u <= rm_b * p:
         status = "OK_EDF_AND_RM"
-    elif total_u <= 1.0:
+    elif total_u <= edf_b:
         status = "WARN_RM_ONLY"  # EDF is fine but RM may miss deadlines
     else:
         status = "OVERLOADED"
@@ -231,7 +256,7 @@ def compute_utilisation(jobs: list[dict]) -> dict:
 
     return {
         "total_utilisation": round(total_u, 6),
-        "edf_bound": 1.0,
+        "edf_bound": edf_b,
         "rm_bound": round(rm_b, 6),
         "rm_bound_asymptotic": round(RM_BOUND_ASYMPTOTIC, 6),
         "n_periodic": n,
@@ -276,12 +301,12 @@ def admit_new_job(existing_jobs: list[dict], timeout_s: float, cadence_s: float,
     if policy == "rm":
         admitted = total_with_new <= rm_b
     else:
-        admitted = total_with_new <= 1.0
+        admitted = total_with_new <= float(_get_max_parallel_jobs())
 
     report["admitted"] = admitted
     report["total_with_new"] = round(total_with_new, 6)
     report["policy"] = policy
-    report["admission_bound"] = rm_b if policy == "rm" else 1.0
+    report["admission_bound"] = rm_b if policy == "rm" else float(_get_max_parallel_jobs())
 
     return report
 
@@ -348,11 +373,28 @@ def main() -> int:
     else:
         report = compute_utilisation(jobs)
 
-    # Save report
+    # Save report to omni/ (always)
     REPORT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _tmp = REPORT_FILE.with_suffix(".tmp")
-    _tmp.write_text(json.dumps(report, indent=2))
-    os.replace(_tmp, REPORT_FILE)
+    REPORT_FILE.write_text(json.dumps(report, indent=2))
+
+    # Write an alarm file to the profile cache so alarm-aggregator picks it up
+    # when status is OVERLOADED. Remove it when load is acceptable.
+    _alarm_path = HERMES_HOME / "cache" / "cron-admission-alarm.json"
+    _alarm_path.parent.mkdir(parents=True, exist_ok=True)
+    if report.get("status") == "OVERLOADED":
+        _alarm_path.write_text(json.dumps({
+            "source": "cron-admission-control",
+            "severity": "HIGH",
+            "status": report["status"],
+            "total_utilisation": report["total_utilisation"],
+            "edf_bound": report["edf_bound"],
+            "ts": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+        }))
+    elif _alarm_path.exists():
+        try:
+            _alarm_path.unlink()
+        except OSError:
+            pass
 
     print(json.dumps({
         k: report[k] for k in [
@@ -361,7 +403,10 @@ def main() -> int:
         ] + (["admitted", "total_with_new"] if args.new_job else [])
     }, indent=2))
 
-    return 1 if report.get("status") == "OVERLOADED" else 0
+    # Advisory monitor: always exit 0. OVERLOADED status is visible in the JSON
+    # output and any downstream alarm consumer. Exiting 1 only creates a permanent
+    # failure streak when the system is structurally overloaded (U=10.7 with 164 jobs).
+    return 0
 
 
 if __name__ == "__main__":

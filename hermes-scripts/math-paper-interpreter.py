@@ -751,7 +751,7 @@ def main():
     if not input_path.exists():
         print(f"[math-interpreter] input file not found: {input_path} — run hermes-math-sweep.py first", file=sys.stderr)
         sys.exit(1)  # exit 1 so cron treats missing sweep output as an error, not silent success
-    sweep = json.loads(input_path.read_text())
+    sweep = json.loads(input_path.read_text(encoding="utf-8"))
     flat = sweep.get("new_papers_flat", [])
 
     # Filter to math categories only

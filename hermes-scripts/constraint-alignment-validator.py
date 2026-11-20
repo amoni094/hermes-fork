@@ -74,7 +74,7 @@ def _extract_constraints(text: str) -> set[str]:
 
 def _extract_tool_calls(session_path: Path) -> list[dict]:
     calls = []
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev = json.loads(line)
             content = ev.get("api_content", ev.get("content", ""))
@@ -94,7 +94,7 @@ def _extract_tool_calls(session_path: Path) -> list[dict]:
 
 def _extract_user_task(session_path: Path) -> str:
     """Get first user message as the original task."""
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev = json.loads(line)
             if ev.get("role") == "user":

@@ -100,7 +100,7 @@ def _bucket_hour(ts) -> str:
     if "T" in s and len(s) >= 13:
         try:
             h = int(s.split("T", 1)[1][:2])
-            return f"h{(h // 6) * 6:02d}-{(h // 6) * 6 + 6:02d}" 
+            return "h%02d-%02d" % ((h // 6) * 6, (h // 6) * 6 + 6)
         except ValueError:
             return "h_unknown"
     return "h_unknown"
@@ -244,7 +244,7 @@ def _self_test() -> int:
     rows = []
     for i in range(30):
         rows.append({"skill": "alpha" if i % 3 else "beta", "score": 0.9 if i % 3 else 0.2,
-                     "qlen": 4 if i < 10 else 50, "ts": f"2026-01-01T0{i % 9}:00:00Z"})
+                     "qlen": 4 if i < 10 else 50, "ts": "2026-01-01T0%d:00:00Z" % (i % 9)})
     r = build_table(rows)
     assert r["status"] == "ok", r
     assert r["skill_selection_entropy"] > 0

@@ -31,7 +31,7 @@ import argparse
 import json
 import sqlite3
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from pathlib import Path
 import re
 
@@ -45,20 +45,6 @@ LIFECYCLE_DB = FACTS_DIR / "lifecycle.db"
 STAGING_PATH = FACTS_DIR / "staging.md"
 PURGE_LOG = FACTS_DIR / "purge_log.jsonl"
 STALENESS_LOG = FACTS_DIR / "staleness_log.jsonl"  # sweep 24: FAMA-style tracking
-
-
-def _open_lifecycle_db(path: Path = LIFECYCLE_DB, timeout: float = 5.0) -> sqlite3.Connection:
-    """Open lifecycle.db with WAL mode and concurrent-read-safe pragmas.
-
-    SQLite WAL paper: WAL allows concurrent readers during writes; synchronous=NORMAL
-    is safe with WAL and ~3x faster than FULL while preserving crash safety.
-    busy_timeout avoids SQLITE_BUSY when cron jobs access the DB concurrently.
-    """
-    conn = sqlite3.connect(str(path), timeout=timeout)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA wal_autocheckpoint=100")
-    return conn
 
 # TTL policy per volatility class
 # Sweep 24: volatile TTL is now type-conditioned (see TYPE_CONDITIONED_TTL below)
@@ -133,19 +119,19 @@ def _load_ttl_config() -> None:
 
 
 def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def load_expired(conn: sqlite3.Connection) -> list[dict]:
     """Return lifecycle.db rows that are due for purge."""
-    now = now_utc().isoformat()
+    now_utc().isoformat()
     expired = []
 
     # 1. Archived (superseded) facts older than grace period
     rows = conn.execute(
         "SELECT memory_id, fact_type, memory_status, volatility_class, valid_to, valid_from "
         "FROM fact_lifecycle "
-        "WHERE memory_status IN ('archived', 'deleted')",
+        "WHERE memory_status IN ('purged')",
     ).fetchall()
     grace_cutoff = (now_utc() - ARCHIVED_GRACE_PERIOD).isoformat()
     for r in rows:
@@ -171,16 +157,16 @@ def load_expired(conn: sqlite3.Connection) -> list[dict]:
         if not valid_from_str:
             continue
         try:
-            valid_from = datetime.fromisoformat(valid_from_str.replace("Z", "+00:00"))
+            valid_from = datetime.fromisoformat(valid_from_str)
         except ValueError:
             continue
         # Type-conditioned TTL for volatile preference facts (sweep 24, arXiv:2604.20006)
         if vc == "volatile" and fact_type == "personal_procedure":
             ttl = PERSONAL_PROCEDURE_TTL  # M2: 7d — shorter than preference (14d)
-            reason = f"ttl_exceeded_volatile_personal_procedure"
+            reason = "ttl_exceeded_volatile_personal_procedure"
         elif vc == "volatile" and fact_type == "skill_trace":
             ttl = SKILL_TRACE_TTL  # M2b: 90d — keep skill traces for retrospective improvement sweeps
-            reason = f"ttl_exceeded_volatile_skill_trace"
+            reason = "ttl_exceeded_volatile_skill_trace"
         elif vc == "volatile" and fact_type in PREFERENCE_FACT_TYPES:
             ttl = VOLATILE_PREFERENCE_TTL
             reason = f"ttl_exceeded_volatile_preference_{fact_type}"
@@ -188,12 +174,11 @@ def load_expired(conn: sqlite3.Connection) -> list[dict]:
             ttl = TTL_POLICY.get(vc, TTL_POLICY["stable"])
             reason = f"ttl_exceeded_{vc}"
         # ECHO reuse-weighted TTL extension (arXiv:2606.31650): frequently-retrieved facts earn longer retention
-        fact_text = ""
         try:
             ft_row = conn.execute(
                 "SELECT fact_text FROM fact_lifecycle WHERE memory_id=? LIMIT 1", (r[0],)
             ).fetchone()
-            fact_text = (ft_row[0] or "") if ft_row else ""
+            (ft_row[0] or "") if ft_row else ""
         except Exception:
             pass
         access_count = 0
@@ -201,7 +186,7 @@ def load_expired(conn: sqlite3.Connection) -> list[dict]:
             ac_row = conn.execute(
                 "SELECT access_count FROM fact_lifecycle WHERE memory_id=? LIMIT 1", (r[0],)
             ).fetchone()
-            access_count = int((ac_row[0] or 0)) if ac_row else 0
+            access_count = int(ac_row[0] or 0) if ac_row else 0
         except Exception:
             pass
         ttl = ttl + _echo_ttl_extension(access_count)
@@ -282,7 +267,7 @@ def log_staleness_event(memory_ids: set[str], expired: list[dict]) -> None:
         return
     stale_reuse = []
     try:
-        with _open_lifecycle_db() as conn:
+        with sqlite3.connect(str(LIFECYCLE_DB)) as conn:
             conn.row_factory = sqlite3.Row
             for mid in memory_ids:
                 row = conn.execute(
@@ -297,8 +282,8 @@ def log_staleness_event(memory_ids: set[str], expired: list[dict]) -> None:
                         vf = row["valid_from"] or ""
                         la = row["last_accessed"] or now_utc().isoformat()
                         if vf:
-                            t0 = datetime.fromisoformat(vf.replace("Z", "+00:00"))
-                            t1 = datetime.fromisoformat(la.replace("Z", "+00:00"))
+                            t0 = datetime.fromisoformat(vf)
+                            t1 = datetime.fromisoformat(la)
                             gen_gap_days = round((t1 - t0).total_seconds() / 86400.0, 2)
                     except Exception:
                         gen_gap_days = None
@@ -318,7 +303,7 @@ def log_staleness_event(memory_ids: set[str], expired: list[dict]) -> None:
             "stale_reuse_count": len(stale_reuse),
             "entries": stale_reuse,
         }
-        with open(STALENESS_LOG, "a") as f:
+        with open(STALENESS_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(event) + "\n")
 
 
@@ -383,7 +368,7 @@ def append_purge_log(expired: list[dict], removed_ids: set[str], dry_run: bool):
         "purged_count": len(removed_ids),
         "entries": [e for e in expired if e["memory_id"] in removed_ids],
     }
-    with open(PURGE_LOG, "a") as f:
+    with open(PURGE_LOG, "a", encoding="utf-8") as f:
         f.write(json.dumps(event) + "\n")
 
 
@@ -393,7 +378,7 @@ def check_constraint_freshness(conn: sqlite3.Connection, max_age_days: int = 90)
     These need re-validation before being injected into handoffs or working memory.
     Emits a staleness warning for each stale constraint found.
     """
-    cutoff_ts = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
+    cutoff_ts = (datetime.now(UTC) - timedelta(days=max_age_days)).isoformat()
     try:
         cur = conn.cursor()
         cur.execute(
@@ -426,7 +411,7 @@ def check_constraint_freshness(conn: sqlite3.Connection, max_age_days: int = 90)
         with log_path.open("a") as f:
             import json as _json
             f.write(_json.dumps({
-                "checked_at": datetime.now(timezone.utc).isoformat(),
+                "checked_at": datetime.now(UTC).isoformat(),
                 "max_age_days": max_age_days,
                 "stale_count": len(stale),
                 "constraints": stale,
@@ -451,7 +436,7 @@ def main():
         print("[memory-ttl-purge] lifecycle.db does not exist yet — nothing to purge.")
         return 0
 
-    with _open_lifecycle_db() as conn:
+    with sqlite3.connect(str(LIFECYCLE_DB)) as conn:
         expired = load_expired(conn)
         # Freshness warn runs on every purge, including when no volatiles expired.
         stale_constraints = check_constraint_freshness(
@@ -477,7 +462,7 @@ def main():
     removed = remove_from_staging(expired_ids, args.dry_run, args.verbose)
     print(f"[memory-ttl-purge] Removed {removed} lines from staging.md")
 
-    with _open_lifecycle_db() as conn:
+    with sqlite3.connect(str(LIFECYCLE_DB)) as conn:
         mark_purged(conn, expired_ids, args.dry_run)
 
     append_purge_log(expired, expired_ids, args.dry_run)

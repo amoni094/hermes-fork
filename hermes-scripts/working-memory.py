@@ -61,6 +61,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
+import itertools
 
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
 WM_DIR = HERMES_HOME / "cache" / "working-memory"
@@ -2118,7 +2119,7 @@ def _bigram_counts(
             continue
         seq = [str(s) for s in skills if s is not None and str(s) != ""]
         vocab.update(seq)
-        for a, b in zip(seq, seq[1:]):
+        for a, b in itertools.pairwise(seq):
             table[a][b] += 1
             pairs.append((a, b))
     return {cur: dict(row) for cur, row in table.items()}, pairs, vocab

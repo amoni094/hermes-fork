@@ -7,7 +7,7 @@ Designed for cron execution (no_agent=true).
 """
 import subprocess, sys, json, os
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 import os
 _HERMES_ROOT = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
@@ -78,7 +78,7 @@ monitors = [
     # Analysis/utility (run-on-demand, not daily monitors)
 ]
 
-now = datetime.now(timezone.utc).isoformat()
+now = datetime.now(UTC).isoformat()
 results = []
 for m in monitors:
     path = SCRIPTS / m

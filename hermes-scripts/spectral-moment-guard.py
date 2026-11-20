@@ -30,7 +30,7 @@ def _hermes_home() -> Path:
 
 
 def _profile_name() -> str:
-    profile = os.environ.get('HERMES_PROFILE', '').strip()
+    profile = os.environ.get('HERMES_PROFILE', 'fork').strip()
     if profile:
         return profile
     raw = os.environ.get('HERMES_HOME', '').strip()

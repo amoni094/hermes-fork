@@ -166,7 +166,7 @@ def _write_consistency_calib_row(predicted_confidence: float, query_hash: str,
             "scope": scope,
             "condorcet_score": round(condorcet, 4),
         }
-        with open(_CONSISTENCY_CALIB_LOG, "a") as _f:
+        with open(_CONSISTENCY_CALIB_LOG, "a", encoding="utf-8") as _f:
             _f.write(json.dumps(row) + "\n")
     except OSError:
         pass
@@ -418,7 +418,7 @@ def _write_calibration_row(session_id: str | None, task_class: str | None,
                 row["confidence_drift"] = 0.0
         except Exception:
             row["confidence_drift"] = 0.0  # never let tracker failure crash the harness
-        with open(_CALIB_LOG, "a") as f:
+        with open(_CALIB_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(row) + "\n")
     except OSError:
         pass  # never let logging failure crash the harness

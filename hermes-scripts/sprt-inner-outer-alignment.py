@@ -14,32 +14,15 @@ import argparse
 import json
 import os
 import sys
-import time
 from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 CACHE = _hermes_root / 'cache'
 OUT = CACHE / 'sprt-inner-outer-alignment.json'
 SOFT = 0.05  # below 0.10 veto, still concerning
-
-
-
-SHADOW_MAX_AGE_SEC = 90 * 60
-
-
-def _shadow_stale() -> dict | None:
-    """Refuse to certify yesterday's shadow-sprt-decisions.json (mtime > 90 min)."""
-    p = CACHE / 'shadow-sprt-decisions.json'
-    try:
-        age = time.time() - p.stat().st_mtime
-    except OSError:
-        age = float('inf')
-    if age > SHADOW_MAX_AGE_SEC:
-        return {'status': 'shadow_stale', 'alarm': False, 'skipped': True}
-    return None
 
 
 def _atomic_write(path: Path, data: dict) -> None:
@@ -71,15 +54,6 @@ def check(decisions: list[dict]) -> dict:
 
 
 def run() -> dict:
-    stale = _shadow_stale()
-    if stale is not None:
-        stale['ts'] = datetime.now(UTC).isoformat()
-        try:
-            _atomic_write(OUT, stale)
-            stale['output'] = str(OUT)
-        except OSError as exc:
-            stale['write_error'] = str(exc)
-        return stale
     decisions = []
     try:
         obj = json.loads((CACHE / 'shadow-sprt-decisions.json').read_text())
@@ -121,11 +95,8 @@ def main(argv=None) -> int:
     if args.self_test:
         return self_test()
     out = run()
-    if out.get('status') == 'shadow_stale':
-        print(json.dumps({k: out.get(k) for k in ('status', 'alarm', 'skipped')}))
-        return 0
     print(json.dumps({k: out.get(k) for k in ('n_promote', 'n_misaligned', 'alarm', 'output')}))
-    return 1 if out.get('write_error') else 0  # ADV2-017: alarm is not a process failure
+    return 1 if out.get('alarm') else 0
 
 
 if __name__ == '__main__':

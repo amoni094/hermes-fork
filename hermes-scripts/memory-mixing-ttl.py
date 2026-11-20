@@ -25,6 +25,7 @@ import sqlite3
 import sys
 from datetime import timedelta
 from pathlib import Path
+import itertools
 
 
 def hermes_home() -> Path:
@@ -60,7 +61,7 @@ def empirical_transition(seq: list[str]) -> list[list[float]]:
     idx = {s: i for i, s in enumerate(states)}
     n = len(states)
     C = [[0.0] * n for _ in range(n)]
-    for a, b in zip(seq, seq[1:]):
+    for a, b in itertools.pairwise(seq):
         C[idx[a]][idx[b]] += 1.0
     P = []
     for i in range(n):
@@ -83,7 +84,7 @@ def spectral_gap(P: list[list[float]]) -> float:
         import numpy as np
         A = np.array(P, dtype=np.float64)
         # stationary: left eigenvector
-        w, v = np.linalg.eig(A.T)
+        w, _v = np.linalg.eig(A.T)
         w = np.real(w)
         order = np.argsort(-np.abs(w))
         lam2 = float(np.abs(w[order[1]])) if n > 1 else 0.0

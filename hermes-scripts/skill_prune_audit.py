@@ -87,7 +87,7 @@ def find_active_skills() -> list[Path]:
 def extract_description(skill_md: Path) -> str:
     """Extract description: field from SKILL.md frontmatter."""
     try:
-        text = skill_md.read_text(errors="replace")
+        text = skill_md.read_text(encoding="utf-8", errors="replace")
         m = re.search(r"^description:\s*[\"']?(.*?)[\"']?\s*$", text, re.MULTILINE)
         if m:
             return m.group(1).strip().rstrip("'\"")

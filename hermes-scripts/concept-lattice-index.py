@@ -178,7 +178,7 @@ def rq_kmeans_assign(texts: list[str], n_clusters: int) -> list[int]:
 
     # --- Deterministic seed: pick n_clusters indices whose sha256 hashes
     #     spread most evenly across the [0, 2^256) range ---
-    target_gap = (2 ** 256) // n_clusters
+    (2 ** 256) // n_clusters
     sorted_by_hash = sorted(
         range(len(texts)),
         key=lambda i: int(hashlib.sha256(texts[i].encode()).hexdigest(), 16),
@@ -355,7 +355,7 @@ def main():
 
     # Log
     LATTICE_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with open(LATTICE_LOG, "a") as f:
+    with open(LATTICE_LOG, "a", encoding="utf-8") as f:
         f.write(json.dumps({
             "ts": lattice_data["built_at"],
             "facts_indexed": len(facts),

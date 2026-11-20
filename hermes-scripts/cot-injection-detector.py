@@ -73,7 +73,7 @@ TOOL_INTENT = {
 
 def _extract_events(session_path: Path) -> list[dict]:
     events = []
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev      = json.loads(line)
             content = ev.get("api_content", ev.get("content", ""))

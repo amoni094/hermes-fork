@@ -20,7 +20,7 @@ import os
 import sys
 import urllib.request
 import urllib.error
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
 
@@ -210,9 +210,9 @@ def main():
 
     # Log
     HYPERMEM_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with open(HYPERMEM_LOG, "a") as f:
+    with open(HYPERMEM_LOG, "a", encoding="utf-8") as f:
         f.write(json.dumps({
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "episodes_scanned": len(episodes),
             "hyperedges_found": len(hyperedges),
             "dry_run": args.dry_run,

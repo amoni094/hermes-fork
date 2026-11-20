@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 import argparse
@@ -265,7 +265,7 @@ def layer1_demo(rng=None) -> dict:
         channel = [0.0] * n_skills
         channel[0] = 1.0
         rec = {
-            'episode_id': f'det-{i:02d}',
+            'episode_id': 'det-%02d' % i,
             'kind': 'deterministic',
             'observation_channel': channel,
             'value_contrast': 0.90,
@@ -279,7 +279,7 @@ def layer1_demo(rng=None) -> dict:
     for i in range(15):
         channel = multinomial_channel(peaked, 2000, rng)
         rec = {
-            'episode_id': f'sim-{i:02d}',
+            'episode_id': 'sim-%02d' % i,
             'kind': 'simulation',
             'observation_channel': channel,
             'value_contrast': 0.55,
@@ -293,7 +293,7 @@ def layer1_demo(rng=None) -> dict:
     for i in range(15):
         channel = multinomial_channel(uniform, 2000, rng)
         rec = {
-            'episode_id': f'amb-{i:02d}',
+            'episode_id': 'amb-%02d' % i,
             'kind': 'ambiguous',
             'observation_channel': channel,
             'value_contrast': 0.0,

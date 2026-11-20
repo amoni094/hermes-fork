@@ -201,7 +201,6 @@ def validate_cache_files(cache_dir: Path) -> list[dict]:
 def run(check_path: Path | None, check_output: str | None, dry_run: bool) -> int:
     now    = datetime.now(UTC).isoformat()
     alarms: list[str] = []
-    all_violations: list[dict] = []
 
     print(f"\n=== Constraint Validator with Rollback — {now[:10]} ===")
 

@@ -113,7 +113,7 @@ def _recency_score(row: dict) -> float:
     if not vf:
         return 0.5
     try:
-        dt = datetime.fromisoformat(vf.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(vf)
         age_days = (now_utc() - dt).days
         return max(0.0, 1.0 - age_days / 30.0)
     except Exception:

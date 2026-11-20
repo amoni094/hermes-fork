@@ -17,6 +17,7 @@ import math
 import statistics
 from pathlib import Path
 from datetime import datetime, timezone, UTC
+import itertools
 
 
 def parse_args():
@@ -121,7 +122,7 @@ def cmd_renewal_stats() -> None:
         if len(times) < 2:
             continue
         sorted_ts = sorted(times)
-        for a, b in zip(sorted_ts, sorted_ts[1:]):
+        for a, b in itertools.pairwise(sorted_ts):
             inter_renewal_hours.append((b - a) / 3600.0)
 
     ttl_vals = [rec["ttl_hours"] for rec in records if isinstance(rec.get("ttl_hours"), (int, float))]

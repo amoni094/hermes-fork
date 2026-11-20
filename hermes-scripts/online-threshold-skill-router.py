@@ -39,7 +39,7 @@ SKILLS = [
 THETA = 0.75   # threshold = THETA * best_seen; competitive ratio ~ THETA
 
 def _score(skill: tuple, task: str) -> float:
-    name, keywords, base = skill
+    _name, keywords, base = skill
     hits  = sum(1 for k in keywords if k.lower() in task.lower())
     bonus = hits / max(len(keywords), 1)
     return base * (0.6 + 0.4 * bonus)

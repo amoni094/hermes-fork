@@ -19,7 +19,7 @@ from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 CACHE = _hermes_root / 'cache'
 OUT = CACHE / 'ltl-promotion-invariant.json'
@@ -87,31 +87,13 @@ def model_check(decisions: list[dict]) -> dict:
 
 
 def run() -> dict:
-    # Effective merge is the promotion-safe source. Raw shadow-sprt-decisions.json
-    # is veto-producer input (tamper/truncation/handshake/inner-outer write vetoes
-    # from it). LTL must model-check post-merge decisions, not unvetted SPRT.
-    # CONTINUE/HOLD-only traces still run: G(PROMOTE -> FO) holds vacuously and
-    # still checks temporal ordering of the effective trace.
-    eff_path = CACHE / 'effective-shadow-decisions.json'
-    if not eff_path.exists():
-        out = {
-            'status': 'skipped',
-            'reason': 'effective_not_ready',
-            'alarm': False,
-            'ts': datetime.now(UTC).isoformat(),
-        }
-        try:
-            _atomic_write(OUT, out)
-            out['output'] = str(OUT)
-        except OSError as exc:
-            out['write_error'] = str(exc)
-        return out
     decisions = []
     try:
-        obj = json.loads(eff_path.read_text())
+        obj = json.loads((CACHE / 'shadow-sprt-decisions.json').read_text())
         decisions = list(obj.get('decisions') or [])
     except (OSError, json.JSONDecodeError):
         pass
+    # handshake holds are already non-PROMOTE in spirit; still check raw SPRT
     out = model_check(decisions)
     out['ts'] = datetime.now(UTC).isoformat()
     try:
@@ -148,11 +130,8 @@ def main(argv=None) -> int:
     if args.self_test:
         return self_test()
     out = run()
-    if out.get('status') == 'skipped':
-        print(json.dumps({k: out.get(k) for k in ('status', 'reason', 'alarm')}))
-        return 0
     print(json.dumps({k: out.get(k) for k in ('satisfied', 'n_violations', 'alarm', 'output')}))
-    return 1 if out.get('write_error') else 0  # ADV2-017: alarm is not a process failure
+    return 1 if out.get('alarm') else 0
 
 
 if __name__ == '__main__':

@@ -80,7 +80,7 @@ def _job_content_hash(job: dict) -> str:
 def _load_jobs(path: Path) -> Optional[dict[str, str]]:
     """Return {job_id: content_hash} or None if file unreadable."""
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         jobs = data if isinstance(data, list) else data.get("jobs", [])
         return {
             j.get("id", f"__anon_{i}"): _job_content_hash(j)
@@ -172,14 +172,12 @@ def check_for_changes(*, write_sentinel: bool = True) -> dict:
         )
         if write_sentinel:
             RELOAD_SENTINEL.parent.mkdir(parents=True, exist_ok=True)
-            _tmp = RELOAD_SENTINEL.with_suffix(".tmp")
-            _tmp.write_text(json.dumps({
+            RELOAD_SENTINEL.write_text(json.dumps({
                 "detected_at": time.time(),
                 "added": added,
                 "removed": removed,
                 "modified": modified,
             }, indent=2))
-            os.replace(_tmp, RELOAD_SENTINEL)
             logger.info("Wrote reload sentinel: %s", RELOAD_SENTINEL)
 
     # Always update state after a stat change (even if no job-level diff)
@@ -239,7 +237,10 @@ def main() -> int:
 
     report = check_for_changes(write_sentinel=not args.no_sentinel)
     print(json.dumps(report, indent=2))
-    return 1 if report["changed"] else 0
+    # Always exit 0 — change-detected is a normal outcome, not a failure.
+    # The sentinel file is the signal to downstream consumers; exit code 1
+    # was triggering false-positive cron failure alerts.
+    return 0
 
 
 if __name__ == "__main__":

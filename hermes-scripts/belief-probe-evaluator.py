@@ -116,7 +116,7 @@ def _probe_claims(client: anthropic.Anthropic, claims: list[str]) -> dict:
 def analyse_session(path: Path, dry_run: bool = False) -> dict:
     now = datetime.now(UTC).isoformat()
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except Exception as e:
         return {"error": str(e)}
 

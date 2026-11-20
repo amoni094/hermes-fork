@@ -5,6 +5,15 @@ Pure API test: no LLM. For each test query, POST /recall (legacy) then the
 v1 memories/recall endpoint, score keyword overlap against expected_keywords,
 and report per-query precision plus global coverage.
 
+Scoring notes:
+  baseline_score is always 0.0 — it represents the no-injection, empty-bank
+  score: with no memory injection there are no recalled facts and nothing to
+  score against. This is intentional; delta = recall_score - 0.0 = recall_score.
+
+Verdicts: HIT (>=1 relevant fact recalled), MISS (api ok, 0 relevant facts),
+  ERROR (api reachable but non-OK response, e.g. HTTP 404), API_DOWN (connection
+  refused or timeout). one_line() distinguishes api=ERROR from api=DOWN.
+
 Usage:
   /usr/bin/python3 ~/.hermes/profiles/fork/scripts/read-gate-eval.py
   HERMES_HOME=~/.hermes HERMES_PROFILE=fork python3 read-gate-eval.py --self-test
@@ -20,7 +29,7 @@ import tempfile
 import urllib.error
 import urllib.request
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Callable
 
@@ -88,7 +97,7 @@ STOPWORDS = frozenset(
     }
 )
 
-TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9._:+-]*", re.I)
+TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9._:+-]*", re.IGNORECASE)
 
 HARDCODED_QUERIES: list[dict[str, Any]] = [
     {
@@ -181,12 +190,18 @@ def extract_facts(payload: Any) -> list[str]:
     if isinstance(payload, list):
         items = payload
     elif isinstance(payload, dict):
-        items = (
-            payload.get("results")
-            or payload.get("memories")
-            or payload.get("facts")
-            or []
-        )
+        # Use the first key whose value is a non-None list (including empty).
+        # Do NOT use `or` chaining: an empty list is falsy and would fall through
+        # to the next key, causing {'results': [], 'memories': ['fact']} to return
+        # the memories list instead of the (correct, empty) results list.
+        items = None
+        for key in ("results", "memories", "facts"):
+            val = payload.get(key)
+            if isinstance(val, list):
+                items = val
+                break
+        if items is None:
+            items = []
     else:
         return []
     out: list[str] = []
@@ -264,10 +279,10 @@ def recall_hindsight(
     except urllib.error.HTTPError as exc:
         # 404/405/422: documented legacy stub; fall through to v1.
         if exc.code not in (404, 405, 422, 400):
-            empty["error"] = "/recall HTTP %s" % exc.code
+            empty["error"] = f"/recall HTTP {exc.code}"
     except urllib.error.URLError as exc:
         reason = getattr(exc, "reason", exc)
-        empty["error"] = "api_down: %s" % reason
+        empty["error"] = f"api_down: {reason}"
         empty["api_down"] = True
         return empty
     except TimeoutError:
@@ -275,14 +290,14 @@ def recall_hindsight(
         empty["api_down"] = True
         return empty
     except Exception as exc:
-        empty["error"] = "/recall %s: %s" % (type(exc).__name__, exc)
+        empty["error"] = f"/recall {type(exc).__name__}: {exc}"
 
     try:
         payload = _post_json(v1_url, {"query": query}, timeout)
         facts = extract_facts(payload)[:top_k]
         return {
             "ok": True,
-            "endpoint": "/v1/default/banks/%s/memories/recall" % bank_id,
+            "endpoint": f"/v1/default/banks/{bank_id}/memories/recall",
             "facts": facts,
             "error": None,
             "api_down": False,
@@ -292,7 +307,7 @@ def recall_hindsight(
             "ok": False,
             "endpoint": None,
             "facts": [],
-            "error": "v1 HTTP %s" % exc.code,
+            "error": f"v1 HTTP {exc.code}",
             "api_down": False,
         }
     except urllib.error.URLError as exc:
@@ -301,7 +316,7 @@ def recall_hindsight(
             "ok": False,
             "endpoint": None,
             "facts": [],
-            "error": "api_down: %s" % reason,
+            "error": f"api_down: {reason}",
             "api_down": True,
         }
     except TimeoutError:
@@ -317,7 +332,7 @@ def recall_hindsight(
             "ok": False,
             "endpoint": None,
             "facts": [],
-            "error": "%s: %s" % (type(exc).__name__, exc),
+            "error": f"{type(exc).__name__}: {exc}",
             "api_down": False,
         }
 
@@ -405,13 +420,9 @@ def score_query(
     if recalled.get("api_down"):
         verdict = "API_DOWN"
     elif not recalled.get("ok") and n_rec == 0:
-        verdict = "API_DOWN" if recalled.get("api_down") else "ERROR"
-        if recalled.get("error") and "api_down" in str(recalled.get("error")):
-            verdict = "API_DOWN"
-        elif not recalled.get("ok") and recalled.get("error"):
-            verdict = "ERROR"
-        else:
-            verdict = "MISS"
+        # api is reachable but returned a non-OK response (e.g. HTTP 404, 405).
+        # Always ERROR here regardless of whether error string is populated.
+        verdict = "ERROR"
     elif hit:
         verdict = "HIT"
     else:
@@ -462,12 +473,10 @@ def run_eval(
     precision = _clip01((n_rel / n_facts) if n_facts else 0.0)
     coverage = _clip01((n_hit / n_q) if n_q else 0.0)
     api_ok = (not api_down) and any(r["verdict"] != "API_DOWN" for r in rows) if rows else (not api_down)
-    if api_down:
-        api_ok = False
-    elif rows and all(r["verdict"] == "ERROR" for r in rows):
+    if api_down or rows and all(r["verdict"] == "ERROR" for r in rows):
         api_ok = False
     return {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "api_ok": bool(api_ok),
         "api_down": bool(api_down),
         "api_error": api_error,
@@ -502,17 +511,16 @@ def format_table(result: dict[str, Any]) -> str:
         body.append(
             (
                 task,
-                "%.2f" % float(row.get("baseline_score") or 0.0),
-                "%.2f" % float(row.get("recall_score") or 0.0),
-                "%+.2f" % float(row.get("delta") or 0.0),
+                "{:.2f}".format(float(row.get("baseline_score") or 0.0)),
+                "{:.2f}".format(float(row.get("recall_score") or 0.0)),
+                "{:+.2f}".format(float(row.get("delta") or 0.0)),
                 str(row.get("verdict") or ""),
             )
         )
     widths = [len(h) for h in headers]
     for tup in body:
         for i, cell in enumerate(tup):
-            if len(cell) > widths[i]:
-                widths[i] = len(cell)
+            widths[i] = max(widths[i], len(cell))
     def fmt(cols: tuple[str, ...]) -> str:
         return " | ".join(c.ljust(widths[i]) for i, c in enumerate(cols))
     lines = [fmt(headers), "-+-".join("-" * w for w in widths)]
@@ -521,10 +529,22 @@ def format_table(result: dict[str, Any]) -> str:
 
 
 def one_line(result: dict[str, Any]) -> str:
-    if result.get("api_down") or not result.get("api_ok"):
+    if result.get("api_down"):
         err = result.get("api_error") or "unavailable"
         return (
             "read-gate: api=DOWN (%s) precision=%.2f coverage=%.2f (%d/%d queries hit)"
+            % (
+                err,
+                float(result.get("recall_precision") or 0.0),
+                float(result.get("recall_coverage") or 0.0),
+                int(result.get("n_queries_with_hit") or 0),
+                int(result.get("n_queries") or 0),
+            )
+        )
+    if not result.get("api_ok"):
+        err = result.get("api_error") or "non-ok response"
+        return (
+            "read-gate: api=ERROR (%s) precision=%.2f coverage=%.2f (%d/%d queries hit)"
             % (
                 err,
                 float(result.get("recall_precision") or 0.0),
@@ -554,14 +574,14 @@ def self_test() -> dict[str, Any]:
         "What port does hindsight run on?",
     )
     if not rel or hits < 1:
-        failures.append("positive-overlap: %s %s" % (rel, hits))
+        failures.append(f"positive-overlap: {rel} {hits}")
     rel2, hits2 = fact_is_relevant(
         "unrelated gardening notes about tomatoes",
         ["9177", "hindsight"],
         "What port does hindsight run on?",
     )
     if rel2 or hits2 != 0:
-        failures.append("negative-overlap: %s %s" % (rel2, hits2))
+        failures.append(f"negative-overlap: {rel2} {hits2}")
     rel3, _ = fact_is_relevant("the pi ip is 192.168.0.138", [], "What is the Pi IP address?")
     if not rel3:
         failures.append("fallback-query-overlap failed")
@@ -601,13 +621,13 @@ def self_test() -> dict[str, Any]:
     ]
     result = run_eval(tasks, "hermes-fork", 5, recall_fn=mock_recall)
     if result["rows"][0]["verdict"] != "HIT":
-        failures.append("hit-verdict: %s" % result["rows"][0])
+        failures.append("hit-verdict: {}".format(result["rows"][0]))
     if abs(result["rows"][0]["recall_score"] - 0.5) > 1e-9:
-        failures.append("precision-row0: %s" % result["rows"][0]["recall_score"])
+        failures.append("precision-row0: {}".format(result["rows"][0]["recall_score"]))
     if result["rows"][1]["verdict"] != "MISS":
-        failures.append("miss-verdict: %s" % result["rows"][1])
+        failures.append("miss-verdict: {}".format(result["rows"][1]))
     if abs(result["recall_coverage"] - 0.5) > 1e-9:
-        failures.append("coverage: %s" % result["recall_coverage"])
+        failures.append("coverage: {}".format(result["recall_coverage"]))
     if not (0.0 <= result["recall_precision"] <= 1.0):
         failures.append("precision-bounds")
 
@@ -623,11 +643,30 @@ def self_test() -> dict[str, Any]:
 
     down = run_eval(tasks, "hermes-fork", 5, recall_fn=down_fn)
     if down["api_ok"] or not down["api_down"]:
-        failures.append("api-down-flags: %s" % down)
+        failures.append(f"api-down-flags: {down}")
     if down["n_facts_total"] != 0 or down["recall_coverage"] != 0.0:
-        failures.append("api-down-empty: %s" % down)
+        failures.append(f"api-down-empty: {down}")
     if any(r["verdict"] != "API_DOWN" for r in down["rows"]):
         failures.append("api-down-verdict")
+
+    # ERROR path: api reachable, ok=False, non-connection error (e.g. HTTP 404).
+    def error_fn(query: str, bank_id: str, top_k: int) -> dict[str, Any]:
+        _ = query, bank_id, top_k
+        return {
+            "ok": False,
+            "endpoint": None,
+            "facts": [],
+            "error": "v1 HTTP 404",
+            "api_down": False,
+        }
+
+    err_result = run_eval(tasks, "hermes-fork", 5, recall_fn=error_fn)
+    if err_result.get("api_ok") or err_result.get("api_down"):
+        failures.append("error-flags: api_ok={} api_down={}".format(err_result.get("api_ok"), err_result.get("api_down")))
+    if any(r["verdict"] != "ERROR" for r in err_result["rows"]):
+        failures.append("error-verdict: %s" % [r["verdict"] for r in err_result["rows"]])
+    if "api=ERROR" not in one_line(err_result):
+        failures.append(f"error-one_line: {one_line(err_result)}")
 
     rel_empty, hits_empty = fact_is_relevant("", ["9177"], "port")
     if rel_empty or hits_empty != 0:
@@ -645,7 +684,7 @@ def self_test() -> dict[str, Any]:
         try:
             loaded, src = load_queries(bad)
         except Exception as exc:
-            failures.append("malformed-json-raised: %s" % exc)
+            failures.append(f"malformed-json-raised: {exc}")
             loaded, src = [], ""
         if not loaded:
             failures.append("malformed-json-empty-fallback")
@@ -654,7 +693,7 @@ def self_test() -> dict[str, Any]:
         try:
             parsed = json.loads(outp.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            failures.append("json-out: %s" % exc)
+            failures.append(f"json-out: {exc}")
             parsed = {}
         if "recall_precision" not in parsed or "rows" not in parsed:
             failures.append("json-schema")
@@ -662,7 +701,7 @@ def self_test() -> dict[str, Any]:
 
     scores = [result["recall_precision"], result["recall_coverage"], result["rows"][0]["delta"]]
     if any(s < 0.0 or s > 1.0 for s in scores):
-        failures.append("score-clip: %s" % scores)
+        failures.append(f"score-clip: {scores}")
 
     return {
         "self_test": "PASS" if not failures else "FAIL",

@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 
@@ -12,6 +12,7 @@ import json
 import re
 import sys
 from datetime import datetime, timezone, UTC
+import itertools
 
 OUT = _hermes_root / "cache" / "reasoning-trace-eval-log.json"
 
@@ -51,7 +52,7 @@ def coherence(steps: list) -> float:
     if len(steps) < 2:
         return 1.0 if steps else 0.0
     sims = []
-    for a, b in zip(steps, steps[1:]):
+    for a, b in itertools.pairwise(steps):
         ta, tb = _tokens(a), _tokens(b)
         if not ta and not tb:
             sims.append(1.0)
@@ -74,15 +75,28 @@ def evaluate(text: str, query: str = "") -> dict:
     steps = extract_steps(text)
     coh = coherence(steps)
     rel = relevance(steps, query)
+    n = len(steps)
+    if n == 0:
+        return {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "n_steps": 0,
+            "coherence": None,
+            "relevance": None,
+            "helpful_score": None,
+            "helps_human_eval": None,
+            "steps": [],
+            "status": "insufficient_data",
+        }
     helpful = 0.5 * coh + 0.5 * rel
     return {
         "generated_at": datetime.now(UTC).isoformat(),
-        "n_steps": len(steps),
+        "n_steps": n,
         "coherence": round(coh, 6),
         "relevance": round(rel, 6),
         "helpful_score": round(helpful, 6),
         "helps_human_eval": helpful >= 0.35,
         "steps": steps[:20],
+        "status": "ok",
     }
 
 
@@ -93,6 +107,7 @@ def self_test() -> dict:
     assert r["coherence"] >= 0.0
     empty = evaluate("")
     assert empty["n_steps"] == 0
+    assert empty["status"] == "insufficient_data"
     return {"self_test": "PASS", "sample": r}
 
 
@@ -106,15 +121,19 @@ def main() -> None:
         r = self_test()
         print(json.dumps(r, indent=2))
         sys.exit(0 if r.get("self_test") == "PASS" else 1)
-    text = args.text
-    if not text and not sys.stdin.isatty():
-        text = sys.stdin.read()
-    out = evaluate(text, args.query)
     try:
-        _atomic_write_json(OUT, out)
+        text = args.text
+        if not text and not sys.stdin.isatty():
+            text = sys.stdin.read()
+        out = evaluate(text, args.query)
+        if out.get("status") != "insufficient_data":
+            try:
+                _atomic_write_json(OUT, out)
+            except Exception:
+                pass
+        print(json.dumps(out, indent=2))
     except Exception:
         pass
-    print(json.dumps(out, indent=2))
 
 
 if __name__ == "__main__":

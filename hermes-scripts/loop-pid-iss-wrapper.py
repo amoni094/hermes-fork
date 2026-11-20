@@ -32,7 +32,7 @@ from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 OUT_PATH = _hermes_root / 'cache' / 'loop-stability-composite.json'
@@ -251,7 +251,7 @@ def run_iss_justification(script: Path | None) -> dict | None:
     if script_dir is not None:
         # Prereq cache files: passivity, circle, nyquist (NOT composite — gate no longer reads it)
         _hermes_home = Path(os.environ.get('HERMES_HOME', Path.home() / '.hermes'))
-        _profile = os.environ.get('HERMES_PROFILE', '')
+        _profile = os.environ.get('HERMES_PROFILE', 'fork')
         if _profile:
             cache_dir = _hermes_home / 'profiles' / _profile / 'cache'
         else:

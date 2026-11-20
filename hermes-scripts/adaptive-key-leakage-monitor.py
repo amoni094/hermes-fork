@@ -29,6 +29,7 @@ import sys
 from collections import Counter
 from datetime import datetime, timezone, UTC
 from pathlib import Path
+import itertools
 
 HOME          = Path.home()
 _HH = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
@@ -47,11 +48,11 @@ WINDOW            = 8     # sessions to analyse
 
 def _load_tool_sequence(path: Path) -> list[str]:
     try:
-        lines = path.read_text().strip().splitlines()
+        lines = path.read_text(encoding="utf-8").strip().splitlines()
         if lines and lines[0].startswith("{") and len(lines) > 1:
             messages = [json.loads(l) for l in lines if l.strip()]
         else:
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             messages = data if isinstance(data, list) else data.get("messages", [])
     except Exception:
         return []
@@ -69,7 +70,7 @@ def _mutual_information(seq: list[str]) -> float:
     """Empirical MI between consecutive tool calls I(T_t ; T_{t+1})."""
     if len(seq) < 2:
         return 0.0
-    bigrams  = list(zip(seq[:-1], seq[1:]))
+    bigrams  = list(itertools.pairwise(seq))
     n        = len(bigrams)
     joint    = Counter(bigrams)
     p_a      = Counter(a for a, _ in bigrams)

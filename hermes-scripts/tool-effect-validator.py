@@ -117,7 +117,7 @@ EFFECT_CHECKS: dict[str, object] = {
 def _extract_tool_calls(session_path: Path) -> list[dict]:
     """Parse JSONL session for tool call records with args and results."""
     calls = []
-    lines = session_path.read_text().splitlines()
+    lines = session_path.read_text(encoding="utf-8").splitlines()
     for line in lines:
         try:
             ev = json.loads(line)

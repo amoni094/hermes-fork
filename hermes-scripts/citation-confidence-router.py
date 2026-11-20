@@ -1,79 +1,106 @@
 #!/usr/bin/env python3
-"""Route answers by citation confidence: cite if >0.7 else silent."""
+"""Route claims by citation confidence. Missing confidence is unmeasured, not a default."""
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
-
 
 import argparse
 import json
-import re
 import sys
+import uuid
 from datetime import datetime, timezone, UTC
 
-OUT = _hermes_root / "cache" / "citation-routing.json"
-CITE_RE = re.compile(r"(\[[0-9]+\]|https?://\S+|arxiv:\d{4}\.\d+|\([A-Za-z].*\d{4}\))", re.IGNORECASE)
+CACHE = _hermes_root / 'cache'
+OUT_PATH = CACHE / 'citation-confidence-router.json'
+SILENT, CITE, ABSTAIN = 'silent', 'cite', 'abstain'
 
 
-def _atomic_write_json(path: Path, obj) -> None:
+def _atomic_write(path: Path, obj) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(obj, indent=2) + "\n")
-    os.replace(str(tmp), str(path))
+    tmp = path.with_name(path.name + '.tmp')
+    tmp.write_text(json.dumps(obj, indent=2) + '\n', encoding='utf-8')
+    os.replace(tmp, path)
 
 
-def route(claim: str, source: str = "", confidence: float | None = None) -> dict:
-    has_cite = bool(CITE_RE.search(claim or "") or CITE_RE.search(source or "") or (source or "").strip())
+def route(claim: str, source: str = '', confidence=None) -> dict:
     if confidence is None:
-        conf = 0.85 if has_cite else 0.2
-        src = source or ""
-        looks_url = "http://" in src or "https://" in src or "[" in (claim or "")
-        if has_cite and (not looks_url) and len((src or claim or "").split()) < 3:
-            conf = 0.55
+        return {
+            'generated_at': datetime.now(UTC).isoformat(),
+            'claim': (claim or '')[:240],
+            'has_source': bool(source),
+            'confidence': None,
+            'decision': None,
+            'status': 'insufficient_data',
+            'n': 0,
+        }
+    try:
+        conf = float(confidence)
+    except (TypeError, ValueError):
+        return {
+            'generated_at': datetime.now(UTC).isoformat(),
+            'claim': (claim or '')[:240],
+            'has_source': bool(source),
+            'confidence': None,
+            'decision': None,
+            'status': 'insufficient_data',
+            'n': 0,
+        }
+    if conf < 0.4:
+        decision = ABSTAIN
+    elif conf < 0.7 or not source:
+        decision = CITE
     else:
-        conf = min(1.0, max(0.0, float(confidence)))
-    decision = "cite_and_answer" if conf > 0.7 else "silent"
+        decision = SILENT
     return {
-        "generated_at": datetime.now(UTC).isoformat(),
-        "confidence": round(conf, 6),
-        "has_source": has_cite,
-        "decision": decision,
+        'generated_at': datetime.now(UTC).isoformat(),
+        'claim': (claim or '')[:240],
+        'has_source': bool(source),
+        'confidence': round(conf, 6),
+        'decision': decision,
+        'status': 'ok',
+        'n': 1,
     }
 
 
 def self_test() -> dict:
-    a = route("The court held X [1].", source="https://example.com/case")
-    b = route("I guess this is true.")
-    assert a["decision"] == "cite_and_answer", a
-    assert b["decision"] == "silent", b
-    c = route("x", confidence=0.71)
-    assert c["decision"] == "cite_and_answer"
-    return {"self_test": "PASS", "cite": a, "silent": b}
+    a = route('x is y', source='paper', confidence=0.9)
+    assert a['decision'] == SILENT and a['status'] == 'ok'
+    b = route('x is y', source='', confidence=0.5)
+    assert b['decision'] == CITE
+    c = route('x is y', confidence=0.2)
+    assert c['decision'] == ABSTAIN
+    d = route('x is y')
+    assert d['status'] == 'insufficient_data' and d['decision'] is None and d['n'] == 0
+    tmp = OUT_PATH.with_name(OUT_PATH.stem + '_test_' + uuid.uuid4().hex + OUT_PATH.suffix)
+    _atomic_write(tmp, a)
+    try:
+        assert tmp.exists()
+    finally:
+        tmp.unlink(missing_ok=True)
+    return {'self_test': 'PASS', 'sample': a}
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--self-test", action="store_true")
-    ap.add_argument("--claim", default="")
-    ap.add_argument("--source", default="")
-    ap.add_argument("--confidence", type=float, default=None)
+    ap.add_argument('--self-test', action='store_true')
+    ap.add_argument('--claim', default='')
+    ap.add_argument('--source', default='')
+    ap.add_argument('--confidence', default=None)
     args = ap.parse_args()
     if args.self_test:
         r = self_test()
         print(json.dumps(r, indent=2))
-        sys.exit(0 if r.get("self_test") == "PASS" else 1)
-    claim = args.claim
-    if not claim and not sys.stdin.isatty():
-        claim = sys.stdin.read()
-    out = route(claim, args.source, args.confidence)
-    try:
-        _atomic_write_json(OUT, out)
-    except Exception:
-        pass
-    print(json.dumps(out, indent=2))
+        sys.exit(0)
+    r = route(args.claim, args.source, args.confidence)
+    if r.get('status') != 'insufficient_data':
+        try:
+            _atomic_write(OUT_PATH, r)
+        except Exception:
+            pass
+    print(json.dumps(r, indent=2))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

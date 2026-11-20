@@ -170,8 +170,8 @@ def extract_steps(skill_md: str) -> list[str]:
 
 def merge_candidates(file1: str, file2: str):
     """Intersection merge: keep only steps present in both candidates."""
-    md1 = Path(file1).read_text()
-    md2 = Path(file2).read_text()
+    md1 = Path(file1).read_text(encoding="utf-8")
+    md2 = Path(file2).read_text(encoding="utf-8")
     steps1 = extract_steps(md1)
     steps2 = extract_steps(md2)
 

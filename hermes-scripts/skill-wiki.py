@@ -243,7 +243,7 @@ def cmd_prune(args: argparse.Namespace) -> int:
         updated = doc.get("last_updated")
         if updated:
             try:
-                dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+                dt = datetime.fromisoformat(updated)
                 if dt < cutoff and doc.get("access_count", 0) == 0:
                     p.unlink()
                     pruned += 1

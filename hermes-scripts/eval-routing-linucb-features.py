@@ -30,7 +30,7 @@ from collections import defaultdict
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 EPS = 1e-15
@@ -76,7 +76,7 @@ def _atomic_write_json(path: Path, obj) -> None:
 
 def _load_json(path: Path, default):
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, FileNotFoundError, json.JSONDecodeError):
         return default
 
@@ -218,7 +218,7 @@ def load_qrels(path: Path) -> list:
     rows = []
     if not path.exists():
         return rows
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding='utf-8').splitlines():
         line = line.strip()
         if not line:
             continue

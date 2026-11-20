@@ -20,8 +20,10 @@ import urllib.error
 from pathlib import Path
 
 _HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hh = str(_HERMES_HOME)
+_FORK_ROOT = _HERMES_HOME if ("profiles" in _hh and _hh.endswith("fork")) else _HERMES_HOME / "profiles/fork"
+LOG_PATH = _FORK_ROOT / "logs/graphiti-edge-health.jsonl"
 GRAPHITI_BASE = "http://127.0.0.1:8765/mcp"
-LOG_PATH = _HERMES_HOME / "profiles/fork/logs/graphiti-edge-health.jsonl"
 LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # Katz parameters (stdlib-only power iteration)
@@ -30,7 +32,7 @@ KATZ_ITERATIONS = 30
 LOW_SIGNAL_ZSCORE = -2.0  # flag edges below mean - 2*stdev
 
 # Hub-score state (compare run-over-run via log)
-HUB_STATE_PATH = _HERMES_HOME / "profiles/fork/logs/graphiti-hub-scores.json"
+HUB_STATE_PATH = _FORK_ROOT / "logs/graphiti-hub-scores.json"
 
 
 def _now_iso() -> str:

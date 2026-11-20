@@ -85,7 +85,7 @@ def result_from_cache(path: Path, bundled_names: set[str], cached: dict[str, Any
     raw: dict[str, Any] = {}
     if report.exists():
         try:
-            loaded = json.loads(report.read_text())
+            loaded = json.loads(report.read_text(encoding="utf-8"))
             if isinstance(loaded, dict):
                 raw = loaded
         except Exception:
@@ -412,7 +412,7 @@ def main() -> int:
         current_hash = file_hash(path)
         cached = cached_results.get(rel)
         report_path = Path(str(cached.get("report", ""))) if isinstance(cached, dict) else None
-        allowlisted_hashes = allowlist.get("skills", {}).get(rel, {}).get("hashes", [])
+        allowlist.get("skills", {}).get(rel, {}).get("hashes", [])
         can_reuse_cache = (
             not args.refresh_baseline
             and isinstance(cached, dict)

@@ -311,7 +311,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
 
 def cmd_check_file(args: argparse.Namespace) -> int:
     try:
-        data = json.loads(Path(args.json_file).read_text())
+        data = json.loads(Path(args.json_file).read_text(encoding="utf-8"))
     except Exception as e:
         print(f"ERROR reading file: {e}", file=sys.stderr)
         return 1

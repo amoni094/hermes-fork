@@ -105,7 +105,7 @@ def main() -> int:
         print(f"[prefetch] ERROR: sweep file not found: {input_path}", file=sys.stderr)
         return 1
 
-    sweep = json.loads(input_path.read_text())
+    sweep = json.loads(input_path.read_text(encoding="utf-8"))
     flat: list[dict] = sweep.get("new_papers_flat", [])
     total = len(flat)
     print(f"[prefetch] {total} papers in sweep", file=sys.stderr)

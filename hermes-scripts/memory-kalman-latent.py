@@ -141,7 +141,7 @@ def self_test() -> int:
     prev_P = P
     for z in (0.5, 0.4, 0.45, 0.42):
         # update without extra Q to isolate monotonicity of posterior
-        x, P, K = update(x, P, z, R)
+        x, P, _K = update(x, P, z, R)
         assert P < prev_P, (P, prev_P)
         assert P > 0
         prev_P = P

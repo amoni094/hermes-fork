@@ -35,7 +35,7 @@ import json
 import math
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HOME      = Path.home()
@@ -133,7 +133,7 @@ def real_options_decision(
 
 
 def run(task: str, uncertainty: float | None, horizon: int, dry_run: bool) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     demo_tasks = [
         task,
@@ -179,7 +179,22 @@ def main() -> None:
     p.add_argument("--uncertainty", type=float, default=None)
     p.add_argument("--horizon",     type=int,   default=DEFAULT_HORIZON)
     p.add_argument("--dry-run",     action="store_true")
+    p.add_argument("--json-output", action="store_true",
+                   help="Print first decision as JSON line to stdout (for machine callers)")
     args = p.parse_args()
+    if args.json_output:
+        # Machine-readable output: run single task, emit JSON, suppress human text
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _rc = run(args.task, args.uncertainty, args.horizon, dry_run=True)
+        # Always write the advisory file too (non-dry mode)
+        run(args.task, args.uncertainty, args.horizon, dry_run=False)
+        r = real_options_decision(args.task, args.uncertainty, args.horizon)
+        print(json.dumps({"decision": r["decision"], "task": r["task"],
+                          "v_commit": r["v_commit"], "v_wait": r["v_wait"],
+                          "rationale": r["rationale"]}))
+        sys.exit(0 if r["decision"] == "COMMIT" else 1)
     sys.exit(run(args.task, args.uncertainty, args.horizon, args.dry_run))
 
 

@@ -61,7 +61,7 @@ def _boundary_score(text: str) -> float:
 def _load_blocks(session_path: Path) -> list[dict]:
     """Load session messages as text blocks."""
     try:
-        data = json.loads(session_path.read_text())
+        data = json.loads(session_path.read_text(encoding="utf-8"))
     except Exception:
         return []
     messages = data if isinstance(data, list) else data.get("messages", [])

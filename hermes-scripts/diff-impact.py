@@ -201,7 +201,7 @@ def main():
     args = parser.parse_args()
     
     try:
-        diff_text, file_diffs = get_git_diff(args.repo, args.range)
+        _diff_text, file_diffs = get_git_diff(args.repo, args.range)
         report = analyze_impact(file_diffs)
         
         if args.json:

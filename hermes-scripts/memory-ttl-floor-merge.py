@@ -27,7 +27,7 @@ from pathlib import Path
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 EPHEMERAL_SECONDS = 86400
@@ -72,9 +72,9 @@ def merge_floors(mix: dict, cond: dict, ephemeral_s: int = EPHEMERAL_SECONDS) ->
     floor_s = max(mix_s, cond_s, 0.0)
     alarm = bool(ephemeral_s < floor_s and floor_s > 0)
     return {
-        'ttl_floor_seconds': int(math.ceil(floor_s)),
-        'from_mixing_seconds': int(round(mix_s)),
-        'from_conductance_seconds': int(round(cond_s)),
+        'ttl_floor_seconds': math.ceil(floor_s),
+        'from_mixing_seconds': round(mix_s),
+        'from_conductance_seconds': round(cond_s),
         'ephemeral_seconds': int(ephemeral_s),
         'alarm': alarm,
         'reason': 'ephemeral_below_floor' if alarm else 'ok',

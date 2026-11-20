@@ -97,7 +97,7 @@ def triangulate(claim: str, dry_run: bool = False) -> dict:
 
     if dry_run:
         # Syntactic self-consistency check without LLM (baseline)
-        dist = _keyword_dist(claim)
+        _keyword_dist(claim)
         # Split claim into halves, measure self-similarity
         words = claim.split()
         mid = max(1, len(words) // 2)
@@ -174,7 +174,7 @@ def main() -> None:
     if args.stdin:
         claim = sys.stdin.read().strip()
     elif args.file:
-        claim = Path(args.file).read_text().strip()
+        claim = Path(args.file).read_text(encoding="utf-8").strip()
     elif args.claim:
         claim = args.claim
     else:

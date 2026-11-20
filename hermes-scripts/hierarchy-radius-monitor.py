@@ -61,7 +61,7 @@ def analyse_session(session_path: Path) -> dict:
     tier_tokens: dict[str, int] = {t: 0 for t in TIERS}
     total = 0
 
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev      = json.loads(line)
             role    = ev.get("role", "")
@@ -91,8 +91,8 @@ def analyse_session(session_path: Path) -> dict:
     violations = []
     tier_list  = sorted(TIERS.items(), key=lambda x: x[1])
     for i in range(len(tier_list) - 1):
-        name_hi, pri_hi = tier_list[i]
-        name_lo, pri_lo = tier_list[i + 1]
+        name_hi, _pri_hi = tier_list[i]
+        name_lo, _pri_lo = tier_list[i + 1]
         t_hi = tier_tokens[name_hi]
         t_lo = tier_tokens[name_lo]
         # Lower-priority tier should not dominate higher-priority by >3×

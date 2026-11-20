@@ -20,7 +20,7 @@ from pathlib import Path
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 EPS = 1e-15
@@ -53,7 +53,7 @@ def _atomic_write_json(path: Path, obj) -> None:
 
 def _load_json(path: Path, default):
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, FileNotFoundError, json.JSONDecodeError):
         return default
 
@@ -127,7 +127,7 @@ def self_test():
     try:
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)
-            r = run(cache=d)
+            run(cache=d)
             assert (d / 'routing-token-setcover.json').exists()
     except Exception as e:
         failures.append(f'io: {e}')

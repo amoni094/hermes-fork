@@ -32,7 +32,7 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
@@ -551,7 +551,7 @@ def main():
         time.sleep(0.1)
 
     # Save outputs
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     _tmp = output_latest.with_suffix('.tmp')
     _tmp.write_text(json.dumps({
         "interpreted_at": now,

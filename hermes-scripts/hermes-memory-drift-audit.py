@@ -76,7 +76,7 @@ def normalize(line: str) -> str:
 
 def fact_lines(path: pathlib.Path) -> list[str]:
     lines: list[str] = []
-    for raw in path.read_text().splitlines():
+    for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line or line == '§':
             continue
@@ -119,7 +119,7 @@ def current_daily_note() -> pathlib.Path:
 
 
 def section_lines(path: pathlib.Path, heading: str) -> list[str]:
-    lines = path.read_text().splitlines()
+    lines = path.read_text(encoding="utf-8").splitlines()
     in_section = False
     found_heading = False
     collected: list[str] = []
@@ -214,7 +214,7 @@ def evaluate_mandatory_rule_leakage() -> list[str]:
 
     # Load MEMORY.md content for cross-check
     try:
-        memory_text = HERMES_MEMORY.read_text().lower()
+        memory_text = HERMES_MEMORY.read_text(encoding="utf-8").lower()
     except Exception:
         return findings
 
@@ -414,7 +414,7 @@ if __name__ == '__main__':
         if not HERMES_MEMORY.exists():
             print(f"[OT-11] MEMORY.md not found at {HERMES_MEMORY}")
             sys.exit(1)
-        current_text = HERMES_MEMORY.read_text(errors="replace")
+        current_text = HERMES_MEMORY.read_text(encoding="utf-8", errors="replace")
         tf_current = _ot_utils.build_tf(current_text)
 
         # Previous checkpoint — look for a dated backup or snapshot

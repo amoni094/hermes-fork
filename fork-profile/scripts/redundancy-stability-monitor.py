@@ -27,7 +27,7 @@ import os
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -95,7 +95,7 @@ def _group_by_prefix(sessions: dict[str, list[str]]) -> dict[str, dict[str, list
 
 
 def run_monitor(dry_run: bool = False) -> int:
-    now    = datetime.now(timezone.utc).isoformat()
+    now    = datetime.now(UTC).isoformat()
     alarms: list[str] = []
     results: list[dict] = []
 

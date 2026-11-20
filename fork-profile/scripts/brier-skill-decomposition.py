@@ -186,10 +186,8 @@ def decompose_constant_f(f, success_count, n):
         s = int(success_count)
     except (TypeError, ValueError):
         raise ValueError('invalid success_count')
-    if s < 0:
-        s = 0
-    if s > n:
-        s = n
+    s = max(s, 0)
+    s = min(s, n)
     o_bar = s / n
     brier = (s * (fc - 1.0) ** 2 + (n - s) * (fc ** 2)) / n
     return {
@@ -232,7 +230,7 @@ def _table_names(conn):
 def _columns(conn, table):
     if not table.replace('_', '').isalnum():
         return set()
-    return {r[1] for r in conn.execute('PRAGMA table_info(%s)' % table).fetchall()}
+    return {r[1] for r in conn.execute(f'PRAGMA table_info({table})').fetchall()}
 
 
 def _pick(cols, candidates):
@@ -252,12 +250,10 @@ def _load_quality_log(conn, tables, skill_filter):
     o_col = _pick(cols, _O_COLS)
     if not skill_col or not f_col or not o_col:
         return None
-    sql = 'SELECT %s AS skill_name, %s AS f, %s AS o FROM %s' % (
-        skill_col, f_col, o_col, log_table,
-    )
+    sql = f'SELECT {skill_col} AS skill_name, {f_col} AS f, {o_col} AS o FROM {log_table}'
     params = []
     if skill_filter:
-        sql += ' WHERE %s = ?' % skill_col
+        sql += f' WHERE {skill_col} = ?'
         params.append(skill_filter)
     grouped = defaultdict(lambda: {'f': [], 'o': []})
     for row in conn.execute(sql, params):
@@ -285,7 +281,7 @@ def _load_metrics(conn, tables, skill_filter):
         fields.append('success_count')
     if has_qs:
         fields.append('quality_score')
-    sql = 'SELECT %s FROM skill_yield_metrics' % ', '.join(fields)
+    sql = 'SELECT {} FROM skill_yield_metrics'.format(', '.join(fields))
     params = []
     if skill_filter:
         sql += ' WHERE skill_name = ?'
@@ -364,7 +360,7 @@ def evaluate_skills(db_path, skill_filter=None, min_n=MIN_N):
         try:
             d = decompose_record(name, rec)
         except Exception as exc:
-            print('warning: skip %s (%s)' % (name, exc), file=sys.stderr)
+            print(f'warning: skip {name} ({exc})', file=sys.stderr)
             continue
         if skill_filter is None and d['n'] < min_n:
             continue
@@ -373,7 +369,7 @@ def evaluate_skills(db_path, skill_filter=None, min_n=MIN_N):
 
 
 def _fmt(value):
-    return '%.4f' % value
+    return f'{value:.4f}'
 
 
 def print_table(rows):
@@ -426,30 +422,28 @@ def _self_test():
     d1_exact = murphy_decompose([1, 1, 0, 0], [1, 1, 0, 0])
     if abs(d1_exact['reliability']) > 1e-12 or d1['resolution'] <= 0:
         failures.append(
-            '1 perfect calibration: REL_exact=%s REL=%.6f RES=%.6f'
-            % (d1_exact['reliability'], d1['reliability'], d1['resolution'])
+            '1 perfect calibration: REL_exact={} REL={:.6f} RES={:.6f}'.format(d1_exact['reliability'], d1['reliability'], d1['resolution'])
         )
     elif d1['reliability'] > 0.05:
         failures.append(
-            '1 perfect calibration: REL=%.6f (expected ~0)' % d1['reliability']
+            '1 perfect calibration: REL={:.6f} (expected ~0)'.format(d1['reliability'])
         )
 
     ece_perfect = expected_calibration_error([0.8, 0.8, 0.2, 0.2], [1, 1, 0, 0])
     # 10 equal-width bins: ECE(0.8 vs 1)=0.2. Bound holds when bins align.
     if abs(expected_calibration_error([1, 1, 0, 0], [1, 1, 0, 0])) >= 0.05:
-        failures.append('ECE perfect: %s' % ece_perfect)
+        failures.append(f'ECE perfect: {ece_perfect}')
 
     d2 = murphy_decompose([0.5, 0.5, 0.5, 0.5], [1, 0, 1, 0])
     if abs(d2['resolution']) > 1e-12 or abs(d2['uncertainty'] - 0.25) > 1e-12:
         failures.append(
-            '2 climatological: RES=%s UNC=%s' % (d2['resolution'], d2['uncertainty'])
+            '2 climatological: RES={} UNC={}'.format(d2['resolution'], d2['uncertainty'])
         )
 
     d3 = murphy_decompose([0, 0, 1, 1], [1, 1, 0, 0])
     if d3['reliability'] <= 0 or d3['resolution'] <= 0:
         failures.append(
-            '3 maximally miscalibrated: REL=%s RES=%s'
-            % (d3['reliability'], d3['resolution'])
+            '3 maximally miscalibrated: REL={} RES={}'.format(d3['reliability'], d3['resolution'])
         )
 
     if failures:
@@ -459,16 +453,13 @@ def _self_test():
         return 1
     print('SELF-TEST PASS')
     print(
-        '  1. perfect calibration: REL=%.6f RES=%.6f (exact REL=%.6f) ECE=%.6f'
-        % (d1['reliability'], d1['resolution'], d1_exact['reliability'], ece_perfect)
+        '  1. perfect calibration: REL={:.6f} RES={:.6f} (exact REL={:.6f}) ECE={:.6f}'.format(d1['reliability'], d1['resolution'], d1_exact['reliability'], ece_perfect)
     )
     print(
-        '  2. climatological: RES=%.6f UNC=%.6f'
-        % (d2['resolution'], d2['uncertainty'])
+        '  2. climatological: RES={:.6f} UNC={:.6f}'.format(d2['resolution'], d2['uncertainty'])
     )
     print(
-        '  3. maximally miscalibrated: REL=%.6f RES=%.6f'
-        % (d3['reliability'], d3['resolution'])
+        '  3. maximally miscalibrated: REL={:.6f} RES={:.6f}'.format(d3['reliability'], d3['resolution'])
     )
     return 0
 
@@ -498,7 +489,7 @@ def main(argv=None):
     try:
         rows = evaluate_skills(db_path, skill_filter=args.skill)
     except Exception as exc:
-        print('warning: decomposition failed (%s)' % exc, file=sys.stderr)
+        print(f'warning: decomposition failed ({exc})', file=sys.stderr)
         return 0
 
     if args.json:

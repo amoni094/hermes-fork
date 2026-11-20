@@ -21,7 +21,7 @@ from pathlib import Path
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 K1 = 1.2
@@ -56,7 +56,7 @@ def _atomic_write_json(path: Path, obj) -> None:
 
 def _load_json(path: Path, default):
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, FileNotFoundError, json.JSONDecodeError):
         return default
 
@@ -111,7 +111,7 @@ def bm25_scores(query_tokens: list, token_map: dict) -> dict:
     lens = []
     tfs = {}
     for name in names:
-        toks = list(token_map[name])
+        list(token_map[name])
         tfs[name] = Counter(token_map[name])  # set originally; treat presence tf=1
         # restore multiplicity-less tf
         df.update(set(token_map[name]))
@@ -150,7 +150,7 @@ def rank(scores: dict) -> list:
 
 def inversions(raw_top: list, corr_top: list) -> list:
     flags = []
-    n = min(5, len(raw_top), len(corr_top))
+    min(5, len(raw_top), len(corr_top))
     raw5, corr5 = raw_top[:5], corr_top[:5]
     for i, name in enumerate(corr5):
         if name not in raw5:

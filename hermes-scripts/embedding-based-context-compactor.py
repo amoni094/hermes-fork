@@ -58,7 +58,7 @@ def compact_session(session_path: Path, task: str, budget: int) -> dict:
     task_tokens = _tokens(task)
     blocks: list[dict] = []
 
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev      = json.loads(line)
             role    = ev.get("role", "")

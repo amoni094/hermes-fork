@@ -205,7 +205,7 @@ def _load_active_grant() -> CapabilityGrant | None:
         expires_dt: datetime | None = None
         if expires_str:
             try:
-                expires_dt = datetime.fromisoformat(expires_str.replace("Z", "+00:00"))
+                expires_dt = datetime.fromisoformat(expires_str)
             except Exception:
                 pass
         return CapabilityGrant(
@@ -319,7 +319,7 @@ def cmd_classify(args: argparse.Namespace) -> int:
         "approved": False,
         **result,
     }
-    with open(_log_path(session), "a") as f:
+    with open(_log_path(session), "a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
     print(json.dumps(result, indent=2))
     if result["classification"] in ("ACTION_INDUCING", "SUSPICIOUS"):
@@ -418,7 +418,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         "approved": decision == "ALLOW",
         **result,
     }
-    with open(_log_path(session), "a") as f:
+    with open(_log_path(session), "a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
     print(json.dumps(result, indent=2))
     return 0 if decision == "ALLOW" else 1

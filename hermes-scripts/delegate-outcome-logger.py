@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 import argparse
@@ -55,7 +55,7 @@ def log_outcome(episode_id, subtask_count, success_rate, flags='[]', token_cost=
         conn.close()
     jsonl_path.parent.mkdir(parents=True, exist_ok=True)
     lock = jsonl_path.with_suffix('.lock')
-    with open(lock, 'w') as lf:
+    with open(lock, 'w', encoding='utf-8') as lf:
         fcntl.flock(lf, fcntl.LOCK_EX)
         with open(jsonl_path, 'a', encoding='utf-8') as fh:
             fh.write(json.dumps(rec) + '\n')

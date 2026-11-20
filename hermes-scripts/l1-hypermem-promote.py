@@ -210,7 +210,7 @@ def main():
 
     # Log
     HYPERMEM_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with open(HYPERMEM_LOG, "a") as f:
+    with open(HYPERMEM_LOG, "a", encoding="utf-8") as f:
         f.write(json.dumps({
             "ts": datetime.now(UTC).isoformat(),
             "episodes_scanned": len(episodes),

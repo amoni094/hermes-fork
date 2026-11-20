@@ -10,7 +10,6 @@ def _hermes_home() -> Path:
     return p
 TARGET = _hermes_home() / 'hermes-scripts' / 'consensus-convergence-monitor.py'
 if not TARGET.exists():
-    print('ERROR: target script missing: ' + str(TARGET), file=sys.stderr)
-    sys.exit(2)
+    print('ERROR: target missing: ' + str(TARGET), file=sys.stderr); sys.exit(2)
 sys.argv[0] = str(TARGET)
 runpy.run_path(str(TARGET), run_name='__main__')

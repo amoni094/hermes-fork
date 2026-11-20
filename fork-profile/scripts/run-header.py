@@ -34,7 +34,7 @@ import hashlib
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HERMES_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
@@ -74,7 +74,7 @@ def main():
     parser.add_argument("--no-log", action="store_true", help="Print only, don't append to log")
     args = parser.parse_args()
 
-    ts = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(UTC).isoformat()
 
     # Resolve script path
     script_path = Path(args.script)
@@ -120,7 +120,7 @@ def main():
     # Append to run log
     if not args.no_log:
         LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(LOG_PATH, "a") as f:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(header) + "\n")
 
     sys.exit(0)

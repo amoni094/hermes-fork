@@ -54,7 +54,7 @@ def session_tool_distribution(session_file: Path) -> dict[str, float]:
     """Return normalised tool-call frequency distribution for a session."""
     counts: Counter = Counter()
     try:
-        for line in session_file.read_text().splitlines():
+        for line in session_file.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line:
                 continue

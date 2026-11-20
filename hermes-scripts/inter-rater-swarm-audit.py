@@ -229,7 +229,7 @@ def run_self_test():
     check(
         "a: perfect agreement",
         _approx(a_alpha, 1.0) and _approx(a_ac2, 1.0),
-        "alpha=%s ac2=%s" % (a_alpha, a_ac2),
+        f"alpha={a_alpha} ac2={a_ac2}",
     )
 
     no_var = [[1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]]
@@ -238,7 +238,7 @@ def run_self_test():
     check(
         "b: chance agreement (no variation)",
         abs(b_alpha) < 1e-9 and (b_ac2 == 0.0 or b_ac2 is None),
-        "alpha=%s ac2=%s" % (b_alpha, b_ac2),
+        f"alpha={b_alpha} ac2={b_ac2}",
     )
 
     mixed = [[1, 0, 1, 0], [1, 1, 1, 0], [0, 0, 1, 0]]
@@ -246,7 +246,7 @@ def run_self_test():
     check(
         "c: 3 raters x 4 items alpha > 0",
         c_alpha > 0.0,
-        "alpha=%s" % c_alpha,
+        f"alpha={c_alpha}",
     )
 
     r1 = [1, 0, 1, 1]
@@ -255,7 +255,7 @@ def run_self_test():
     check(
         "d: cohen kappa = 0.5",
         _approx(kappa, 0.5),
-        "kappa=%s" % kappa,
+        f"kappa={kappa}",
     )
 
     if failures:

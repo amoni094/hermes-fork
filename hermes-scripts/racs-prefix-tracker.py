@@ -37,7 +37,7 @@ def load_state(session_id: str) -> dict:
 def save_state(session_id: str, state: dict):
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     _lock_path = STATE_PATH.with_suffix(".lock")
-    with open(_lock_path, "w") as _lf:
+    with open(_lock_path, "w", encoding='utf-8') as _lf:
         fcntl.flock(_lf, fcntl.LOCK_EX)
         try:
             all_state = json.loads(STATE_PATH.read_text()) if STATE_PATH.exists() else {}
@@ -70,20 +70,20 @@ def track_turn(session_id: str, turn_num: int, blocks: dict) -> list:
             }
             drifts.append(event)
             _log_lock = LOG_PATH.with_suffix(".lock")
-            with open(_log_lock, "w") as _lf:
+            with open(_log_lock, "w", encoding='utf-8') as _lf:
                 fcntl.flock(_lf, fcntl.LOCK_EX)
-                with open(LOG_PATH, 'a') as f:
+                with open(LOG_PATH, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(event) + '\n')
     
     save_state(session_id, current_hashes)
     return drifts
 
-def get_drift_report(session_id: str = None) -> dict:
+def get_drift_report(session_id: str | None = None) -> dict:
     """Get drift summary from log."""
     if not LOG_PATH.exists():
         return {'total_events': 0, 'by_block': {}}
     events = []
-    with open(LOG_PATH) as f:
+    with open(LOG_PATH, encoding='utf-8') as f:
         for line in f:
             try:
                 e = json.loads(line)

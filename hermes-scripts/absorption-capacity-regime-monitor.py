@@ -165,7 +165,7 @@ def run_monitor(dry_run: bool = False) -> int:
 
         # Exponential decay fit
         try:
-            a, b, c = _fit_exponential_decay(relevances)
+            a, b, _c = _fit_exponential_decay(relevances)
             result["decay_rate_b"] = round(b, 4)
             if b < EFOLDING_MIN and b > -0.5:
                 # b close to 0 means flat but not random noise — genuine saturation

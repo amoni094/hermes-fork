@@ -50,7 +50,7 @@ def apply_schema(db_path: Path) -> list:
 
 
 def self_test() -> dict:
-    p = Path(tempfile.gettempdir()) / ('test-tool-review-%s.db' % uuid.uuid4().hex)
+    p = Path(tempfile.gettempdir()) / (f'test-tool-review-{uuid.uuid4().hex}.db')
     try:
         if p.exists():
             p.unlink()
@@ -58,6 +58,7 @@ def self_test() -> dict:
         assert 'tool_review_log' in names, names
         assert 'anytime_eval_log' in names, names
         conn = sqlite3.connect(str(p), timeout=30)
+        conn.execute('PRAGMA journal_mode=WAL')
         try:
             conn.execute(
                 'INSERT INTO tool_review_log(ts, session_id, tool_name, '

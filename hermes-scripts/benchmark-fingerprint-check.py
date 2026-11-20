@@ -158,7 +158,7 @@ def check_routing_query_contamination(
 
 
 def run(queue_path: Path) -> dict[str, Any]:
-    queue = json.loads(queue_path.read_text())
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
     if isinstance(queue, dict):
         items = queue.get("items") or list(queue.values())
     elif isinstance(queue, list):

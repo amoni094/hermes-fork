@@ -137,7 +137,7 @@ def _check_postcondition_reachability(nodes: dict) -> list[dict]:
 
 def analyse_skill(path: Path) -> dict:
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except Exception as e:
         return {"path": str(path), "error": str(e), "issues": []}
 

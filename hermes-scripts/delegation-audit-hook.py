@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (
     (_hermes_base / 'profiles' / _hermes_profile)
     if _hermes_profile and 'profiles' not in str(_hermes_base)
@@ -27,7 +27,7 @@ import sqlite3
 import sys
 import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 CACHE = _hermes_root / 'cache'
 OUT_JSONL = CACHE / 'delegation-outcomes.jsonl'
@@ -41,7 +41,7 @@ DDL = (
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _subtask_count(args) -> int:
@@ -137,7 +137,7 @@ def register(ctx) -> None:
 
 def _self_test() -> int:
     import shutil
-    td = Path(tempfile.mkdtemp(prefix='dah-%s-' % uuid.uuid4().hex[:8]))
+    td = Path(tempfile.mkdtemp(prefix=f'dah-{uuid.uuid4().hex[:8]}-'))
     try:
         db = td / 'lifecycle.db'
         jsonl = td / 'delegation-outcomes.jsonl'
@@ -149,6 +149,7 @@ def _self_test() -> int:
         )
         assert rec['success_rate'] is None, rec
         conn = sqlite3.connect(str(db))
+        conn.execute('PRAGMA journal_mode=WAL')
         try:
             rows = conn.execute(
                 'SELECT episode_id, subtask_count, success_rate, audit_flags '
@@ -188,7 +189,7 @@ def main() -> None:
         try:
             sys.exit(_self_test())
         except Exception as exc:
-            print('[delegation-audit-hook] --self-test FAIL: %s' % exc)
+            print(f'[delegation-audit-hook] --self-test FAIL: {exc}')
             sys.exit(1)
     print(json.dumps({'ok': True, 'mode': 'idle', 'hint': 'use as post_tool_call hook'}))
 

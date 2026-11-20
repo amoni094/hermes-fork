@@ -23,7 +23,7 @@ from pathlib import Path
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 def _cache_dir() -> Path:
@@ -63,7 +63,7 @@ def kraft(texts: list) -> dict:
     bits = [zlib_bits(t) for t in texts]
     # scale so min length >= 1 and typical Kraft ~ O(1)
     m = min(bits)
-    lengths = [max(1, int(math.ceil(b / m))) for b in bits]
+    lengths = [max(1, math.ceil(b / m)) for b in bits]
     ks = 0.0
     for ell in lengths:
         ks += 2.0 ** (-ell)

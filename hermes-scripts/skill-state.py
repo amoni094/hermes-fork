@@ -303,7 +303,7 @@ def cmd_gc(args: argparse.Namespace) -> int:
             if doc.get("status") in ("complete", "failed"):
                 updated = doc.get("updated_at") or doc.get("completed_at")
                 if updated:
-                    dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+                    dt = datetime.fromisoformat(updated)
                     if dt < cutoff:
                         p.unlink()
                         removed += 1

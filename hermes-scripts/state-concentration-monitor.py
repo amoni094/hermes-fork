@@ -59,12 +59,12 @@ def _tool_entropy(tool_calls: list[str]) -> float:
 
 def _load_recent_tools(session_path: Path) -> list[str]:
     try:
-        lines = session_path.read_text().strip().splitlines()
+        lines = session_path.read_text(encoding="utf-8").strip().splitlines()
         # Support both JSONL (one message per line) and single-object JSON
         if lines and lines[0].startswith("{") and lines[0].strip().endswith("}") and len(lines) > 1:
             messages = [json.loads(l) for l in lines if l.strip()]
         else:
-            data = json.loads(session_path.read_text())
+            data = json.loads(session_path.read_text(encoding="utf-8"))
             messages = data if isinstance(data, list) else data.get("messages", [])
     except Exception:
         return []

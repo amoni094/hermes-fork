@@ -204,7 +204,7 @@ def main() -> int:
     if not args.dry_run:
         _ADVISORY.parent.mkdir(parents=True, exist_ok=True)
         tmp = Path(str(_ADVISORY) + ".tmp")
-        tmp.write_text(adv)
+        tmp.write_text(adv, encoding="utf-8")
         tmp.replace(_ADVISORY)
 
     return 0 if summary.get("status") == "ok" else 1

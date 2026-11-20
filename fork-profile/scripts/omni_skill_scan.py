@@ -254,7 +254,7 @@ def write_report(results: list[dict], report_path: Path):
     today = datetime.now().strftime("%Y-%m-%d")
     total = len(results)
     below = [r for r in results if r['score'] < THRESHOLD]
-    above = [r for r in results if r['score'] >= THRESHOLD]  # noqa: F841
+    [r for r in results if r['score'] >= THRESHOLD]
     avg = round(sum(r['score'] for r in results) / max(total, 1), 3)
 
     lines = [
@@ -523,7 +523,7 @@ def optimize_queued(budget_per_skill: float, max_skills: int):
         skill_path = Path(item['path'])
         if not skill_path.exists():
             continue
-        skill_md = skill_path.read_text()
+        skill_md = skill_path.read_text(encoding="utf-8")
         baseline, _ = mod.evaluate_skill(skill_md)
         print(f"\nOptimizing: {item['name']} (baseline={baseline:.3f}, weak={item['weak_checks']})")
 
@@ -637,10 +637,10 @@ def main():
     _router = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts/skill-router-index.py"
     if _router.exists():
         print("\n--- SkillRouter: rebuilding index ---")
-        _result = _sp.run(["python3", str(_router), "--build"], capture_output=True, check=False)
+        _result = _sp.run(["python3", str(_router), "--build"], capture_output=True)
         if _result.returncode != 0:
             print(f"[omni_skill_scan] skill-router-index --build failed (rc={_result.returncode})", file=sys.stderr)
-        _chk = _sp.run(["python3", str(_router), "--check"], capture_output=True, text=True, check=False)
+        _chk = _sp.run(["python3", str(_router), "--check"], capture_output=True, text=True)
         if _chk.stdout.strip():
             print(_chk.stdout.strip())
 
@@ -657,7 +657,7 @@ def main():
     # Skill yield audit (SYNAPSE tracker — shows metrics for skills with recorded invocations)
     _yield_tracker = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "scripts/skill-yield-tracker.py"
     if _yield_tracker.exists():
-        _yt = _sp.run(["python3", str(_yield_tracker), "--audit"], capture_output=True, text=True, check=False)
+        _yt = _sp.run(["python3", str(_yield_tracker), "--audit"], capture_output=True, text=True)
         if _yt.stdout.strip():
             print("\n--- Skill Yield Tracker (SYNAPSE) ---")
             print(_yt.stdout.strip())

@@ -20,7 +20,7 @@ from pathlib import Path
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 EPS = 1e-15
@@ -53,7 +53,7 @@ def _atomic_write_json(path: Path, obj) -> None:
 
 def _load_json(path: Path, default):
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, FileNotFoundError, json.JSONDecodeError):
         return default
 
@@ -134,9 +134,9 @@ def run(cache=None):
 def self_test():
     failures = []
     try:
-        p, r, h = precision_recall(['a', 'b', 'c'], ['a', 'b'], k=2)
+        p, r, _h = precision_recall(['a', 'b', 'c'], ['a', 'b'], k=2)
         assert abs(p - 1.0) < 1e-12 and abs(r - 1.0) < 1e-12
-        p2, r2, _ = precision_recall(['x', 'y'], ['a'], k=2)
+        p2, _r2, _ = precision_recall(['x', 'y'], ['a'], k=2)
         assert p2 == 0.0
     except Exception as e:
         failures.append(f'pr: {e}')

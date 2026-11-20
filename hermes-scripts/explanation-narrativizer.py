@@ -48,7 +48,7 @@ AUDIENCES = ("technical", "executive", "plain")
 
 def _load_session(path: Path) -> list[dict]:
     events = []
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         try:
             events.append(json.loads(line))
         except Exception:

@@ -86,7 +86,7 @@ def _recency_score(ts_str: str | None) -> float:
     if not ts_str:
         return 0.3  # unknown recency: neutral
     try:
-        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+        ts = datetime.fromisoformat(ts_str)
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=UTC)
         age_hours = (datetime.now(UTC) - ts).total_seconds() / 3600
@@ -158,7 +158,7 @@ def filter_by_decision_impact(
 def _load_facts(facts_file: str) -> list[dict[str, Any]]:
     """Load facts from a JSONL file (one JSON object per line)."""
     facts: list[dict[str, Any]] = []
-    with open(facts_file) as fh:
+    with open(facts_file, encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if line:

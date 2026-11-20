@@ -86,7 +86,7 @@ def _kl_div(p: Counter, q: Counter, vocab: set[str]) -> float:
 
 def analyse_session(path: Path) -> dict | None:
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except Exception:
         return None
     tools = _extract_tools(text)

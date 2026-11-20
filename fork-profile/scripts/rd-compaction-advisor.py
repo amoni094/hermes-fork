@@ -172,149 +172,6 @@ def compute_aggressiveness(
     }
 
 
-def _current_from_cache() -> int | None:
-    """Fallback when --current-tokens is omitted: cache/current-token-count.json."""
-    roots = []
-    for r in (_profile_root(), HERMES_HOME, Path.home() / ".hermes"):
-        if r not in roots:
-            roots.append(r)
-    override = os.environ.get("UE_CACHE_DIR", "").strip()
-    paths = []
-    if override:
-        paths.append(Path(override) / "current-token-count.json")
-    for root in roots:
-        paths.append(root / "cache" / "current-token-count.json")
-    for path in paths:
-        try:
-            if not path.exists():
-                continue
-            data = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(data, dict):
-                continue
-            for key in ("current_tokens", "tokens", "token_count"):
-                if key in data and data[key] is not None:
-                    return int(data[key])
-        except (OSError, ValueError, TypeError, json.JSONDecodeError):
-            continue
-    return None
-
-
-def _eval_rd_paths() -> list[Path]:
-    paths: list[Path] = []
-    seen: set[str] = set()
-    for root in (_profile_root(), HERMES_HOME, Path.home() / ".hermes"):
-        for p in (
-            root / "cache" / "eval-compaction-results.json",
-            root / "cache" / "scratch" / "eval-compaction-results.json",
-        ):
-            key = str(p)
-            if key not in seen:
-                seen.add(key)
-                paths.append(p)
-    return paths
-
-
-def load_eval_rd_points() -> tuple[list[dict], str | None]:
-    for path in _eval_rd_paths():
-        try:
-            if not path.exists():
-                continue
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if not isinstance(data, dict):
-            continue
-        curve = data.get("rd_curve")
-        if not isinstance(curve, list):
-            continue
-        pts: list[dict] = []
-        for item in curve:
-            if not isinstance(item, dict) or item.get("oracle_summary") is True:
-                continue
-            name = item.get("policy") or item.get("name")
-            d = item.get("D", item.get("distortion"))
-            rate = item.get("rate")
-            try:
-                d = float(d)
-                rate = float(rate)
-            except (TypeError, ValueError):
-                continue
-            if not name:
-                continue
-            pts.append({"policy": str(name), "D": d, "rate": rate})
-        if pts:
-            return pts, str(path)
-    return [], None
-
-
-def pareto_frontier(pts: list[dict]) -> list[dict]:
-    nd: list[dict] = []
-    for a in pts:
-        dominated = False
-        for b in pts:
-            if b is a:
-                continue
-            if (
-                b["D"] <= a["D"]
-                and b["rate"] >= a["rate"]
-                and (b["D"] < a["D"] or b["rate"] > a["rate"])
-            ):
-                dominated = True
-                break
-        if not dominated:
-            nd.append(a)
-    return nd
-
-
-def recommend_from_eval() -> dict | None:
-    """Pareto-filter, then min-D / max-rate (jev_tail40 > jev at D=0)."""
-    pts, source = load_eval_rd_points()
-    if not pts:
-        return None
-    nd = pareto_frontier(pts)
-    if not nd:
-        return None
-    nd.sort(key=lambda p: (p["D"], -p["rate"]))
-    pick = nd[0]
-    rate = float(pick["rate"])
-    agg = round(1.0 - rate, 2)
-    return {
-        "recommended": pick["policy"],
-        "aggressiveness": agg,
-        "eval_rate": round(rate, 3),
-        "eval_D": round(float(pick["D"]), 3),
-        "pareto": [{"policy": p["policy"], "D": p["D"], "rate": p["rate"]} for p in nd],
-        "eval_source": source,
-        "rationale_eval": (
-            f"Pareto-filter then min-D/max-rate among {len(nd)} non-dominated "
-            f"of {len(pts)} non-oracle arms → {pick['policy']} "
-            f"(rate={rate:.3f}, D={pick['D']:.3f}, aggressiveness={agg})."
-        ),
-    }
-
-
-def apply_eval_recommendation(result: dict, eval_rec: dict) -> dict:
-    result["recommended"] = eval_rec["recommended"]
-    result["aggressiveness"] = eval_rec["aggressiveness"]
-    result["eval_rate"] = eval_rec["eval_rate"]
-    result["eval_D"] = eval_rec["eval_D"]
-    result["pareto"] = eval_rec["pareto"]
-    result["eval_source"] = eval_rec["eval_source"]
-    extra = eval_rec["rationale_eval"]
-    prev = result.get("rationale") or ""
-    result["rationale"] = (extra + " " + prev).strip()
-    agg = eval_rec["aggressiveness"]
-    if agg < 0.25:
-        result["level"] = "minimal"
-    elif agg < 0.50:
-        result["level"] = "light"
-    elif agg < 0.75:
-        result["level"] = "moderate"
-    else:
-        result["level"] = "aggressive"
-    return result
-
-
 def _current_from_log() -> int | None:
     """Best-effort: only explicit current/prompt/context token fields, not bare 'N tokens'."""
     log_path = HERMES_HOME / "logs" / "agent.log"
@@ -617,22 +474,6 @@ def plan_compaction(
     # Prefer dropping typical tokens that wavelet also dropped
     wav_drop = set(t.lower() for t in wav["dropped"])
     planned_drop = [t for t in typ["prune_first"] if t.lower() in wav_drop]
-    # Intersect with MARK-drop (Motwani paging): unmarked lines are eviction candidates.
-    try:
-        import importlib.util as _ilu
-        import sys as _sys
-        _mp = Path(__file__).resolve().parent / "mark-context-pager.py"
-        _spec = _ilu.spec_from_file_location("mark_context_pager", str(_mp))
-        if _spec and _spec.loader:
-            _mod = _ilu.module_from_spec(_spec)
-            _sys.modules["mark_context_pager"] = _mod
-            _spec.loader.exec_module(_mod)
-            items = [{"id": t} for t in tokens]
-            pager = _mod.MarkPager(k=max(1, int(len(tokens) * keep_ratio) or 1), n=max(1, len(tokens)))
-            mark_drop = {str(x).lower() for x in _mod.mark_drop_set(items, pager, None)}
-            planned_drop = [t for t in planned_drop if t.lower() in mark_drop]
-    except Exception as e:
-        print(f"MARK import failed: {e}", file=sys.stderr)
     flag = flag_plan_if_drops_focus(planned_drop, focus_tokens)
     if flag["plan_rejected"]:
         planned_drop = [t for t in planned_drop if t.lower() not in {x.lower() for x in focus_tokens}]
@@ -788,13 +629,10 @@ def main() -> None:
             sys.exit(1)
         current = found
     else:
-        found = _current_from_cache()
-        if found is None:
-            print(json.dumps({
-                "error": "Pass --current-tokens, or --from-log, or write cache/current-token-count.json.",
-            }))
-            sys.exit(1)
-        current = found
+        print(json.dumps({
+            "error": "Pass --current-tokens (or --from-log for a best-effort log parse).",
+        }))
+        sys.exit(1)
 
     result = compute_aggressiveness(current, threshold, k=args.k)
     if args.content_entropy is not None:
@@ -808,9 +646,6 @@ def main() -> None:
             f" Entropy-adjusted (H/H_max={args.content_entropy:.2f}, alpha=0.3): "
             f"{raw_agg:.3f} → {result['aggressiveness']:.3f}."
         )
-    eval_rec = recommend_from_eval()
-    if eval_rec:
-        result = apply_eval_recommendation(result, eval_rec)
 
     focus_tokens = tokenize_focus(args.focus)
     result["focus_tokens"] = focus_tokens

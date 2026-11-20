@@ -18,7 +18,7 @@ def _mem_path() -> Path:
     base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
     profile = os.environ.get('HERMES_PROFILE', 'fork')
     # If base already includes the profile path, don't double-nest
-    if profile and 'profiles' not in Path(base).parts:
+    if profile and 'profiles' not in str(base):
         candidate = base / 'profiles' / profile / 'memories' / 'MEMORY.md'
         if candidate.exists():
             return candidate
@@ -102,7 +102,7 @@ def main() -> None:
                 'removed_lines': total_removed,
                 'chars_after': len(result),
             })
-            with open(str(log_path), 'a') as f:
+            with open(str(log_path), 'a', encoding='utf-8') as f:
                 f.write(entry + '\n')
         except Exception:
             pass

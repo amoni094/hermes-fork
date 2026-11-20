@@ -49,7 +49,7 @@ def schedule(task: str, call_log: list[str]) -> None:
         preempt = " PREEMPT" if g < PREEMPT_THRESHOLD else ""
         print(f"  {route:<25} {n:>6} {g:>10.4f}{preempt}{current}")
 
-    current_route = call_log[-1] if call_log else list(ROUTES)[0]
+    current_route = call_log[-1] if call_log else next(iter(ROUTES))
     current_gain  = gains.get(current_route, 0)
     best_route    = max(gains.keys(), key=lambda k: gains[k])
     best_gain     = gains[best_route]

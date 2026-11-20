@@ -126,7 +126,7 @@ def validate_response(text: str) -> dict:
 
 def _extract_assistant_responses(session_path: Path) -> list[str]:
     responses = []
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev = json.loads(line)
             if ev.get("role") == "assistant":

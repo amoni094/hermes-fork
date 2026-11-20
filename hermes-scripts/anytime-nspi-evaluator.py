@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 import argparse
@@ -22,7 +22,7 @@ import sqlite3
 import sys
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 CACHE = _hermes_root / 'cache'
 OUT_PATH = CACHE / 'nspi-state.json'
@@ -39,7 +39,7 @@ LIFECYCLE_DB = _true_home(_hermes_base) / 'memory-facts' / 'lifecycle.db'
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _coerce_float(v, default=0.0) -> float:
@@ -139,7 +139,7 @@ def load_live_series(db: Path) -> dict:
         cols = {r[1] for r in conn.execute('PRAGMA table_info(anytime_eval_runs)')}
         order = 'id' if 'id' in cols else 'ts'
         rows = conn.execute(
-            'SELECT arm_id, mean_score, spi_score, ts FROM anytime_eval_runs ORDER BY %s' % order
+            f'SELECT arm_id, mean_score, spi_score, ts FROM anytime_eval_runs ORDER BY {order}'
         ).fetchall()
     finally:
         conn.close()
@@ -204,7 +204,7 @@ def _self_test() -> int:
     finally:
         tmp.unlink(missing_ok=True)
         tmp.with_suffix(tmp.suffix + '.lock').unlink(missing_ok=True)
-    print('[anytime-nspi-evaluator] --self-test PASS A=%.4f B=%.4f C=%.4f' % (
+    print('[anytime-nspi-evaluator] --self-test PASS A={:.4f} B={:.4f} C={:.4f}'.format(
         arms['A']['nspi'], arms['B']['nspi'], arms['C']['nspi']))
     return 0
 
@@ -218,7 +218,7 @@ def main() -> int:
         try:
             return _self_test()
         except Exception as exc:
-            print('[anytime-nspi-evaluator] --self-test FAIL: %s' % exc)
+            print(f'[anytime-nspi-evaluator] --self-test FAIL: {exc}')
             return 1
     try:
         state = run_live(OUT_PATH)

@@ -68,7 +68,7 @@ def _xor_hmac_encrypt(plaintext: bytes, key: bytes) -> bytes:
     print(_FALLBACK_WARNING, file=sys.stderr)
     nonce = secrets.token_bytes(32)
     # XOR with SHA256(key || nonce || counter) keystream (single block — not for large data)
-    ks = hashlib.sha256(key + nonce).digest()
+    hashlib.sha256(key + nonce).digest()
     # Pad keystream with repeated hashing for longer plaintexts
     keystream = b""
     counter = 0

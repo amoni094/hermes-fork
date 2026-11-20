@@ -19,8 +19,9 @@ from pathlib import Path
 
 import os
 from pathlib import Path
+import itertools
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 EPS = 1e-15
@@ -53,7 +54,7 @@ def _atomic_write_json(path: Path, obj) -> None:
 
 def _load_json(path: Path, default):
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, FileNotFoundError, json.JSONDecodeError):
         return default
 
@@ -95,7 +96,7 @@ def compute(rows):
         if s:
             seq.append(str(s))
     trans = defaultdict(Counter)
-    for a, b in zip(seq, seq[1:]):
+    for a, b in itertools.pairwise(seq):
         trans[a][b] += 1
     n_trans = sum(sum(c.values()) for c in trans.values())
     self_max, self_skill = 0.0, None

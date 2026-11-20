@@ -737,7 +737,7 @@ def cmd_domain_gaps(skills_dir=None) -> None:
     """HAT-6: Domain co-occurrence graph and isolated domain detection."""
     import networkx as nx
 
-    root = Path(skills_dir) if skills_dir else SKILLS_DIR
+    Path(skills_dir) if skills_dir else SKILLS_DIR
     skills = _load_graph_with_related(skills_dir)
 
     # Build skill -> category map

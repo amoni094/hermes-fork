@@ -227,7 +227,7 @@ def find_replacement_skill(skill_name: str) -> Optional[str]:
         return None
     
     # Read category from skill file
-    with open(skill_path, 'r') as f:
+    with open(skill_path, 'r', encoding="utf-8") as f:
         for line in f:
             if line.startswith("category:"):
                 category = line.split(":")[1].strip()
@@ -241,7 +241,7 @@ def find_replacement_skill(skill_name: str) -> Optional[str]:
         if skill_dir.is_dir():
             candidate_path = skill_dir / "SKILL.md"
             if candidate_path.exists():
-                with open(candidate_path, 'r') as f:
+                with open(candidate_path, 'r', encoding="utf-8") as f:
                     for line in f:
                         if line.startswith("category:") and line.split(":")[1].strip() == category:
                             candidates.append(skill_dir.name)
@@ -270,7 +270,7 @@ def add_tombstone(skill_name: str, yield_val: float, invocation_count: int, repl
     if not skill_path.exists():
         return
 
-    with open(skill_path, 'r') as f:
+    with open(skill_path, 'r', encoding="utf-8") as f:
         content = f.read()
 
     tombstone = f"\n## Deprecation\n- Date: {time.strftime('%Y-%m-%d')}\n- Reason: Yield < {YIELD_THRESHOLD_PRUNE} ({invocation_count} invocations, yield={yield_val:.3f})\n"
@@ -564,7 +564,7 @@ def main():
                 if not p.exists():
                     print(f"[OT-14] {label} file not found: {p}")
                     sys.exit(1)
-                return p.read_text(errors="replace")
+                return p.read_text(encoding="utf-8", errors="replace")
             return val
 
         ideal_text = _load_text(_wargs.ideal, "ideal")

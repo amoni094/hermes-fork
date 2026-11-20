@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 """routing-skill-percolation.py — giant-component percolation of the Jaccard skill graph.
 
-Scan Jaccard thresholds; record giant fraction and Molloy–Reed kappa=<k^2>/<k>.
-Operating edge if J>=0.15 (BM25 token Jaccard; 0.35 fragments the graph).
+Scan Jaccard thresholds; record giant fraction. Operating edge if J>=0.35.
 Alarm FRAGMENTED if giant_frac < 0.5; CLIQUE if giant_frac==1 and mean_deg > 3 log n.
-Giant component exists (configuration-model) iff kappa > 2.
 
-Source: van der Hofstad, Random Graphs and Complex Networks (percolation / giant);
-Molloy–Reed criterion.
+Source: van der Hofstad, Random Graphs and Complex Networks (percolation / giant).
 """
 from __future__ import annotations
 import argparse
@@ -23,7 +20,7 @@ from pathlib import Path
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 EPS = 1e-15
@@ -56,16 +53,11 @@ def _atomic_write_json(path: Path, obj) -> None:
 
 def _load_json(path: Path, default):
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, FileNotFoundError, json.JSONDecodeError):
         return default
 
-# 0.35 is too aggressive for BM25 token Jaccard (mean_deg ~ 0.17, kappa << 2).
-# 0.15 sits near the Molloy–Reed crossing for this corpus (see T_star in output).
-OPERATING = 0.15
-CURVE_THRESHOLDS = (
-    0.05, 0.08, 0.10, 0.12, 0.15, 0.18, 0.20, 0.22, 0.25, 0.30, 0.35, 0.50, 0.70, 0.90,
-)
+OPERATING = 0.35
 
 
 def _jaccard(a, b):
@@ -107,52 +99,6 @@ def graph_at(token_map, thresh):
     return adj
 
 
-def molloy_reed(adj):
-    """Configuration-model giant-component criterion: kappa = <k^2>/<k>.
-
-    A giant component exists (w.h.p. in the configuration model) iff kappa > 2.
-    Isolated vertices contribute k=0; if mean_k==0 then kappa=0 (no giant).
-    """
-    n = len(adj)
-    if n == 0:
-        return 0.0, 0.0, 0.0
-    degs = [len(v) for v in adj.values()]
-    mean_k = sum(degs) / n
-    mean_k2 = sum(d * d for d in degs) / n
-    kappa = (mean_k2 / mean_k) if mean_k > EPS else 0.0
-    return mean_k, mean_k2, kappa
-
-
-def t_star_from_curve(curve):
-    """T* := interpolated T where kappa crosses 2 from above as T increases.
-
-    Returns the last downward crossing, else max T with kappa>=2, else None.
-    """
-    if not curve:
-        return None
-    crossing = None
-    last_above = None
-    prev = None
-    for pt in curve:
-        k = float(pt.get('kappa') or 0.0)
-        t = float(pt.get('threshold') or 0.0)
-        if k >= 2.0:
-            last_above = t
-        if prev is not None:
-            pk = float(prev['kappa'])
-            pt_t = float(prev['threshold'])
-            if pk >= 2.0 and k < 2.0:
-                dk = pk - k
-                frac = ((pk - 2.0) / dk) if dk > EPS else 0.0
-                crossing = pt_t + (t - pt_t) * frac
-        prev = pt
-    if crossing is not None:
-        return round(crossing, 6)
-    if last_above is not None:
-        return last_above
-    return None
-
-
 def compute(index):
     token_map = {}
     skills = index.get('skills') if isinstance(index, dict) else []
@@ -164,48 +110,27 @@ def compute(index):
     if n == 0:
         return {'n_skills': 0, 'alarm': False, 'reason': 'empty'}
     curve = []
-    for t in CURVE_THRESHOLDS:
+    for t in (0.1, 0.2, 0.35, 0.5, 0.7, 0.9):
         adj = graph_at(token_map, t)
         gf, gs = giant_frac(adj)
-        mean_k, mean_k2, kappa = molloy_reed(adj)
-        curve.append({
-            'threshold': t,
-            'giant_frac': round(gf, 6),
-            'giant_size': gs,
-            'mean_deg': round(mean_k, 4),
-            'mean_k2': round(mean_k2, 4),
-            'kappa': round(kappa, 6),
-            'molloy_reed_giant': kappa > 2.0,
-        })
+        md = (sum(len(v) for v in adj.values()) / n) if n else 0.0
+        curve.append({'threshold': t, 'giant_frac': round(gf, 6), 'giant_size': gs, 'mean_deg': round(md, 4)})
     adj = graph_at(token_map, OPERATING)
     gf, gs = giant_frac(adj)
-    mean_k, mean_k2, kappa = molloy_reed(adj)
-    t_star = t_star_from_curve(curve)
+    md = (sum(len(v) for v in adj.values()) / n) if n else 0.0
     reason = 'ok'
     alarm = False
     if gf < 0.5:
         reason, alarm = 'FRAGMENTED', True
-    elif abs(gf - 1.0) < 1e-12 and mean_k > 3.0 * math.log(max(n, 2)):
+    elif abs(gf - 1.0) < 1e-12 and md > 3.0 * math.log(max(n, 2)):
         reason, alarm = 'CLIQUE', True
-    rationale = (
-        'Molloy-Reed: a giant component exists in the configuration model iff '
-        'kappa=<k^2>/<k> > 2. BM25 token Jaccard at 0.35 yields mean_deg ~0.17 '
-        'so kappa << 2 (correctly FRAGMENTED). Operating threshold 0.15 is chosen '
-        'to sit near the kappa=2 crossing for this description-token graph; '
-        'T_star is the interpolated threshold where kappa crosses 2.'
-    )
     return {
         'ts': time.time(),
         'n_skills': n,
         'operating_threshold': OPERATING,
         'giant_frac': round(gf, 6),
         'giant_size': gs,
-        'mean_degree': round(mean_k, 4),
-        'mean_k2': round(mean_k2, 4),
-        'kappa': round(kappa, 6),
-        'molloy_reed_giant': kappa > 2.0,
-        'T_star': t_star,
-        'molloy_reed_rationale': rationale,
+        'mean_degree': round(md, 4),
         'alarm': alarm,
         'reason': reason,
         'curve': curve,
@@ -237,24 +162,12 @@ def self_test():
         tmap2 = {f's{i}': {'shared', 'tok'} for i in range(6)}
         gf2, _ = giant_frac(graph_at(tmap2, 0.5))
         assert abs(gf2 - 1.0) < 1e-12
-        # complete graph K_4: k=3, k^2=9, kappa=9/3=3 > 2
-        k4 = {f'n{i}': set(f'n{j}' for j in range(4) if j != i) for i in range(4)}
-        _mk, _mk2, kap = molloy_reed(k4)
-        assert abs(kap - 3.0) < 1e-9, kap
-        assert abs(OPERATING - 0.15) < 1e-12
-        # T* interpolation: kappa 3 -> 1 between 0.1 and 0.2
-        ts = t_star_from_curve([
-            {'threshold': 0.1, 'kappa': 3.0},
-            {'threshold': 0.2, 'kappa': 1.0},
-        ])
-        assert ts is not None
-        assert abs(ts - 0.15) < 1e-6, ts
     except Exception as e:
         failures.append(f'giant: {e}')
     try:
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)
-            r = run(cache=d)
+            run(cache=d)
             assert (d / 'routing-skill-percolation.json').exists()
     except Exception as e:
         failures.append(f'io: {e}')

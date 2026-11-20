@@ -23,7 +23,7 @@ from pathlib import Path
 
 # --- Profile awareness ---
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (
     (_hermes_base / 'profiles' / _hermes_profile)
     if _hermes_profile and 'profiles' not in str(_hermes_base)
@@ -59,7 +59,7 @@ def _qhash(text: str) -> str:
 def _load_jsonl(path: Path) -> list:
     rows = []
     try:
-        for line in path.read_text().splitlines():
+        for line in path.read_text(encoding='utf-8').splitlines():
             line = line.strip()
             if not line:
                 continue

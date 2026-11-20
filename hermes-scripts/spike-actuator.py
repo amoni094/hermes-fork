@@ -136,7 +136,7 @@ def _write_py_stub(path: Path, item: dict) -> None:
         "    main()",
         "",
     ]
-    path.write_text("\n".join(lines))
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def _write_sql_stub(path: Path, item: dict) -> None:
@@ -161,7 +161,7 @@ def _write_sql_stub(path: Path, item: dict) -> None:
         ");",
         "",
     ]
-    path.write_text("\n".join(lines))
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def _write_md_stub(path: Path, item: dict) -> None:
@@ -190,7 +190,7 @@ def _write_md_stub(path: Path, item: dict) -> None:
         "Replace this stub with the full skill document.",
         "",
     ]
-    path.write_text("\n".join(lines))
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def _write_json_stub(path: Path, item: dict) -> None:
@@ -204,7 +204,7 @@ def _write_json_stub(path: Path, item: dict) -> None:
         "title":      title,
         "schema_note": f"TODO: define schema. Invariant: {hard_core}. Scaffold: {scaffold}",
     }
-    path.write_text(json.dumps(stub, indent=2) + "\n")
+    path.write_text(json.dumps(stub, indent=2) + "\n", encoding="utf-8")
 
 
 def _write_stub(path: Path, item: dict, atype: str) -> None:
@@ -246,7 +246,7 @@ def _write_test(test_path: Path, item: dict, slug: str) -> None:
         "    pass  # placeholder: replace with falsifiable assertion",
         "",
     ]
-    test_path.write_text("\n".join(lines))
+    test_path.write_text("\n".join(lines), encoding="utf-8")
 
 
 

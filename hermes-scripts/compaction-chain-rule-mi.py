@@ -26,7 +26,7 @@ from pathlib import Path
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 def _cache_dir() -> Path:
@@ -72,12 +72,12 @@ def chain_stats(pre: str, mid: str, post: str) -> dict:
     y = (mid or '').encode('utf-8', errors='replace')
     z = (post or '').encode('utf-8', errors='replace')
     yz = y + b'\n' + z
-    hx, hy, i_xy = mi_proxy(x, y)
-    _, hz, i_xz = mi_proxy(x, z)
+    hx, _hy, i_xy = mi_proxy(x, y)
+    _, _hz, i_xz = mi_proxy(x, z)
     _, _, i_xyz = mi_proxy(x, yz)
     # I(X;Z|Y) ≈ H(X,Y)+H(Y,Z)-H(Y)-H(X,Y,Z)  — skip; use residual
     i_xz_y = max(0.0, i_xyz - i_xy)
-    residual = abs(i_xyz - (i_xy + i_xz_y))  # tautological 0; keep DPI
+    abs(i_xyz - (i_xy + i_xz_y))  # tautological 0; keep DPI
     dpi_ok = bool(i_xyz + 1e-6 >= i_xy * (1.0 - SLACK) or hx == 0)
     # Compaction should not increase I(X; later) beyond I(X; earlier,later)
     mono_ok = bool(i_xz <= i_xyz + max(8.0, SLACK * max(hx, 1.0)))

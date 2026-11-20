@@ -24,7 +24,7 @@ from pathlib import Path
 
 # --- Profile awareness ---
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (
     (_hermes_base / 'profiles' / _hermes_profile)
     if _hermes_profile and 'profiles' not in str(_hermes_base)
@@ -55,7 +55,7 @@ def _save_state(state: dict) -> None:
 
 def _atomic_append(path: Path, obj: dict) -> None:
     try:
-        with open(path, 'a') as f:
+        with open(path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(obj) + '\n')
             f.flush()
     except OSError:
@@ -221,9 +221,6 @@ def self_test() -> dict:
     failures = []
     # Use a temp dir to isolate state
     td = Path(tempfile.mkdtemp())
-    orig_state = _STATE_FILE
-    orig_regress = _REGRESS_LOG
-    orig_consist = _CONSIST
 
     # Monkey-patch paths for test
     # Test via direct function calls with temp state, patching module globals

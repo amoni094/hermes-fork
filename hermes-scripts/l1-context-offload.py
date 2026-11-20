@@ -248,7 +248,7 @@ def cmd_evict(session_id: str, dry_run: bool = False, intent: str = ""):
         p = Path(meta["path"])
         if not p.exists():
             continue
-        content = p.read_text()
+        content = p.read_text(encoding="utf-8")
         if not dry_run:
             summary = _haiku_summarize(content, label, intent=intent or meta.get("intent") or "")
             cold_content = (
@@ -256,7 +256,7 @@ def cmd_evict(session_id: str, dry_run: bool = False, intent: str = ""):
                 f"_Evicted at {ts}. Original size: {meta['size']} chars._\n\n"
                 f"{summary}\n"
             )
-            p.write_text(cold_content)
+            p.write_text(cold_content, encoding="utf-8")
             idx[label]["tier"] = "cold"
             idx[label]["evicted_at"] = ts
             idx[label]["summary_size"] = len(cold_content)

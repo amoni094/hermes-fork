@@ -448,7 +448,7 @@ if __name__ == "__main__":
 
         asn_h0 = numerator / kl_p0_p1 if kl_p0_p1 > 0 else float("inf")
         asn_h1 = numerator / kl_p1_p0 if kl_p1_p0 > 0 else float("inf")
-        max_rec = int(_math.ceil(max(asn_h0, asn_h1) * 1.5))
+        max_rec = _math.ceil(max(asn_h0, asn_h1) * 1.5)
 
         print("WALD2-2 ASN Bounds")
         print(f"  H0: p = {p0}   H1: p = {p1}")
@@ -507,8 +507,8 @@ if __name__ == "__main__":
                 # At h=0, mgf_eq=0; we bracket near h in [-10, 10] excluding 0
                 try:
                     # Check sign at boundaries to bracket
-                    f_lo = mgf_eq(-8, p)
-                    f_hi = mgf_eq(8, p)
+                    mgf_eq(-8, p)
+                    mgf_eq(8, p)
                     # h=0 is always a root; find the other one
                     # Try positive side first (p < p0 favours H0, h < 0; p > p0 h > 0)
                     # Search in small segments to avoid landing on h≈0

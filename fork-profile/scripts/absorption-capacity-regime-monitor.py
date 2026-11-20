@@ -29,7 +29,7 @@ import argparse
 import json
 import math
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import numpy as np
@@ -114,7 +114,7 @@ def _second_derivative_sign(ys: list[float]) -> int:
 
 
 def run_monitor(dry_run: bool = False) -> int:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     alarms: list[str] = []
     results: list[dict] = []
 
@@ -165,7 +165,7 @@ def run_monitor(dry_run: bool = False) -> int:
 
         # Exponential decay fit
         try:
-            a, b, c = _fit_exponential_decay(relevances)
+            a, b, _c = _fit_exponential_decay(relevances)
             result["decay_rate_b"] = round(b, 4)
             if b < EFOLDING_MIN and b > -0.5:
                 # b close to 0 means flat but not random noise — genuine saturation

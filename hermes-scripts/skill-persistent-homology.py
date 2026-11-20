@@ -256,10 +256,10 @@ def vietoris_rips_persistence(G: nx.Graph) -> dict:
             bi_u = uf.birth_index[ru]
             bi_v = uf.birth_index[rv]
             if bi_u <= bi_v:
-                survivor_root, killed_root = ru, rv
+                _survivor_root, _killed_root = ru, rv
                 killed_size = old_size_v
             else:
-                survivor_root, killed_root = rv, ru
+                _survivor_root, _killed_root = rv, ru
                 killed_size = old_size_u
 
             h0_bars.append({

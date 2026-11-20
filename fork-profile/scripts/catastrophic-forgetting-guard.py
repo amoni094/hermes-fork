@@ -22,11 +22,9 @@ import argparse
 import datetime
 from pathlib import Path
 
-_hh = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
-if _hh.name == "fork" and _hh.parent.name == "profiles":
-    _FORK_ROOT = _hh
-else:
-    _FORK_ROOT = _hh / "profiles" / "fork"
+_HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+_hh = str(_HERMES_HOME)
+_FORK_ROOT = _HERMES_HOME if ("profiles" in _hh and _hh.endswith("fork")) else _HERMES_HOME / "profiles/fork"
 SHADOW_REGISTRY = _FORK_ROOT / "logs/skill-shadow-registry.jsonl"
 FORGET_LOG = _FORK_ROOT / "logs/forgetting-guard.jsonl"
 FORGET_LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -115,7 +113,7 @@ def main() -> None:
         sys.exit(0)
 
     try:
-        current_content = skill_path.read_text()
+        current_content = skill_path.read_text(encoding="utf-8")
     except OSError:
         # Cannot read skill file — pass through (no basis to block)
         return

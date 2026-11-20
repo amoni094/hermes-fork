@@ -103,7 +103,7 @@ def _hits_from_content(content, hits: set) -> None:
 def _extract_skill_hits(session_path: Path) -> set:
     hits: set = set()
     try:
-        for line in session_path.read_text(errors="replace").splitlines():
+        for line in session_path.read_text(encoding="utf-8", errors="replace").splitlines():
             if not line.strip():
                 continue
             try:
@@ -136,7 +136,7 @@ def _session_ended_successfully(session_path: Path) -> Optional[bool]:
     """
     last_role = None
     try:
-        for line in session_path.read_text(errors="replace").splitlines():
+        for line in session_path.read_text(encoding="utf-8", errors="replace").splitlines():
             if not line.strip():
                 continue
             try:

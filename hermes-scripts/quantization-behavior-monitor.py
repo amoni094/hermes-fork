@@ -51,7 +51,7 @@ def _extract_tools(session_path: Path) -> tuple[list[str], int]:
     """Return (tool_names, total_chars)."""
     tools      = []
     total_chars = 0
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev      = json.loads(line)
             content = ev.get("api_content", ev.get("content", ""))

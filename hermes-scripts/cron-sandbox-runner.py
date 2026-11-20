@@ -23,7 +23,7 @@ import tempfile
 from pathlib import Path
 
 _raw_home = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 if _raw_home.parent.name == 'profiles':
     _hermes_base = _raw_home.parent.parent
     _hermes_root = _raw_home

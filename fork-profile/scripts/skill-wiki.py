@@ -42,7 +42,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
 
@@ -84,7 +84,7 @@ VALID_SECTIONS = (
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _safe_name(name: str) -> str:
@@ -157,7 +157,7 @@ def cmd_upsert(args: argparse.Namespace) -> int:
         if text not in existing:
             doc.setdefault("results", []).append(entry)
         else:
-            print(f"[wiki] duplicate result text, skipped", file=sys.stderr)
+            print("[wiki] duplicate result text, skipped", file=sys.stderr)
             return 0
 
     p = _save(doc)
@@ -235,7 +235,7 @@ def cmd_prune(args: argparse.Namespace) -> int:
     from datetime import timedelta
     WIKI_DIR.mkdir(parents=True, exist_ok=True)
     cutoff_days = getattr(args, "days", 90)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=cutoff_days)
+    cutoff = datetime.now(UTC) - timedelta(days=cutoff_days)
     pruned = 0
     for p in WIKI_DIR.glob("*.json"):
         try:
@@ -245,7 +245,7 @@ def cmd_prune(args: argparse.Namespace) -> int:
         updated = doc.get("last_updated")
         if updated:
             try:
-                dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+                dt = datetime.fromisoformat(updated)
                 if dt < cutoff and doc.get("access_count", 0) == 0:
                     p.unlink()
                     pruned += 1

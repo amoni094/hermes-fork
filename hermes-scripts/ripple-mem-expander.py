@@ -205,7 +205,7 @@ def ripple_expand(query: str, topk: int = 5) -> list[dict]:
         "signature_l1": (sig_feat[:3] if sig_feat else None),
     }
     try:
-        with open(RECALL_LOG, "a") as f:
+        with open(RECALL_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry) + "\n")
     except OSError:
         pass

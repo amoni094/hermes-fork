@@ -14,15 +14,18 @@ from collections import defaultdict
 from pathlib import Path
 
 _HH = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_HP = os.environ.get('HERMES_PROFILE', '')
+_HP = os.environ.get('HERMES_PROFILE', 'fork')
 _PROFILE_ROOT = _HH if (_HP and _HH.name == _HP and _HH.parent.name == 'profiles') else ((_HH / 'profiles' / _HP) if _HP else _HH)
+_HH_BASE = _HH if _HH.name == '.hermes' else (_HH.parent.parent if _HH.parent.name == 'profiles' else _HH)
 CALIB_LOG = _PROFILE_ROOT / 'cache' / 'calibration-log.jsonl'
+# Fallback: base hermes calibration-log may have real scope entries when fork log has none
+CALIB_LOG_FALLBACK = _HH_BASE / 'cache' / 'calibration-log.jsonl'
 BETA_STATE = _PROFILE_ROOT / 'cache' / 'skill-beta-state.json'
 
 Z_95 = 1.96
 PASS_LIFT = 0.05
 MIN_N = 5
-SKIP_SCOPES = frozenset({'MISSING'})
+SKIP_SCOPES = frozenset({'MISSING', 'ue_blackbox', 'L2', 'L3'})
 
 
 def _finite_unit(x: float):
@@ -149,6 +152,10 @@ def compute_lifts(entries: list) -> dict:
         var_wo = _sample_var([sess_mean[s] for s in without_s])
         if n_with > 0 and n_without > 0:
             se = math.sqrt(var_w / n_with + var_wo / n_without)
+            # SE floor: prevent zero-variance collapse producing false PASS at n=MIN_N.
+            # Minimum SE treated as if one unit of variance across all n samples.
+            se_floor = math.sqrt(1.0 / n_with + 1.0 / n_without) / (n_with + n_without)
+            se = max(se, se_floor)
         else:
             se = 0.0
         ci_lo = lift - Z_95 * se
@@ -213,40 +220,40 @@ def self_test() -> int:
     records = []
     for i in range(8):
         records.append({
-            'session_id': f'help-{i}',
+            'session_id': 'help-%d' % i,
             'scope': 'helpful-skill',
             'ue_score': 0.08,
             'ts': '2026-01-01T00:00:00Z',
         })
         records.append({
-            'session_id': f'help-{i}',
+            'session_id': 'help-%d' % i,
             'scope': 'helpful-skill',
             'ue_score': 0.12,
             'ts': '2026-01-01T00:00:01Z',
         })
     for i in range(8):
         records.append({
-            'session_id': f'hurt-{i}',
+            'session_id': 'hurt-%d' % i,
             'scope': 'unhelpful-skill',
             'ue_score': 0.82,
             'ts': '2026-01-01T00:00:00Z',
         })
         records.append({
-            'session_id': f'hurt-{i}',
+            'session_id': 'hurt-%d' % i,
             'scope': 'unhelpful-skill',
             'ue_score': 0.88,
             'ts': '2026-01-01T00:00:01Z',
         })
     for i in range(8):
         records.append({
-            'session_id': f'base-{i}',
+            'session_id': 'base-%d' % i,
             'scope': 'baseline-skill',
             'ue_score': 0.40,
             'ts': '2026-01-01T00:00:00Z',
         })
     for i in range(3):
         records.append({
-            'session_id': f'tiny-{i}',
+            'session_id': 'tiny-%d' % i,
             'scope': 'rare-skill',
             'ue_score': 0.20,
             'ts': '2026-01-01T00:00:00Z',
@@ -342,7 +349,13 @@ def main(argv=None) -> int:
     if args.self_test:
         return self_test()
     load_beta_state(BETA_STATE)
-    results = compute_lifts(load_entries(CALIB_LOG))
+    # Use primary calibration-log; fall back to base-hermes log if primary has 0 usable entries
+    calib_path = CALIB_LOG
+    entries = load_entries(calib_path)
+    if not entries and CALIB_LOG_FALLBACK != CALIB_LOG and CALIB_LOG_FALLBACK.exists():
+        calib_path = CALIB_LOG_FALLBACK
+        entries = load_entries(calib_path)
+    results = compute_lifts(entries)
     skill = (args.skill or '').strip()
     results = filter_skill(results, skill if skill else None)
     if args.report and not args.json:

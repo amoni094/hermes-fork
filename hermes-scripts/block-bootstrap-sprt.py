@@ -32,7 +32,7 @@ from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (
     (_hermes_base / 'profiles' / _hermes_profile)
     if _hermes_profile and 'profiles' not in str(_hermes_base)
@@ -132,8 +132,8 @@ def empirical_quantile(values: list[float], q: float) -> float:
     if q >= 1:
         return xs[-1]
     idx = q * (len(xs) - 1)
-    lo = int(math.floor(idx))
-    hi = int(math.ceil(idx))
+    lo = math.floor(idx)
+    hi = math.ceil(idx)
     if lo == hi:
         return xs[lo]
     w = idx - lo
@@ -363,7 +363,7 @@ def main(argv=None) -> int:
         'oc_boot_alpha': (out.get('oc_boot_rho') or {}).get('empirical_alpha'),
         'oc_iid_alpha': (out.get('oc_wald_iid') or {}).get('empirical_alpha'),
     }))
-    return 1 if out.get('alarm') else 0
+    return 1 if out.get('write_error') else 0  # ADV2-017: alarm is not a process failure
 
 
 if __name__ == '__main__':

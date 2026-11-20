@@ -10,8 +10,6 @@ Monitored files and their max-stale thresholds:
   - calibration-log.jsonl: 48h (gate-audit / threshold-updater reads it)
   - skill-beta-state.json: 24h (bandit posteriors must be updated regularly)
   - routing-regret-log.jsonl: 48h (FTRL vs uniform comparison)
-  - msprt-shadow-gate.json: 26h (mSPRT gate calibration)
-  - block-bootstrap-sprt.json: 48h (SPRT A_boot calibration)
 """
 from __future__ import annotations
 import os
@@ -33,39 +31,28 @@ if not _hermes_base.is_dir():
 ALARM_PATH = _hermes_root / "cache" / "staleness-alarms.jsonl"
 CACHE_DIR = _hermes_root / "cache"
 
-# (filename, max_age_hours, label)
 MONITORED = [
-    ("routing-calibration.jsonl", 48, "routing calibration"),
-    ("calibration-log.jsonl",     48, "gate-audit / threshold-updater"),
-    ("skill-beta-state.json",     24, "bandit posteriors"),
-    ("routing-regret-log.jsonl",  48, "FTRL vs uniform"),
-    ("msprt-shadow-gate.json",    26, "msprt gate calibration"),
-    ("block-bootstrap-sprt.json", 48, "SPRT A_boot calibration"),
+    ("routing-calibration.jsonl", 48 * 3600),
+    ("calibration-log.jsonl",     48 * 3600),
+    ("skill-beta-state.json",     24 * 3600),
+    ("routing-regret-log.jsonl",  48 * 3600),
 ]
 
 def main():
     now = time.time()
     alarms = []
     ok = []
-    for fname, max_age_h, label in MONITORED:
-        max_age_s = max_age_h * 3600
+    for fname, max_age_s in MONITORED:
         fpath = CACHE_DIR / fname
         if not fpath.exists():
-            alarms.append({
-                "file": fname, "issue": "missing",
-                "max_age_h": max_age_h, "label": label,
-            })
+            alarms.append({"file": fname, "issue": "missing", "max_age_h": max_age_s / 3600})
         else:
             age_s = now - fpath.stat().st_mtime
             age_h = age_s / 3600
             if age_s > max_age_s:
-                alarms.append({
-                    "file": fname, "issue": "stale",
-                    "age_h": round(age_h, 1), "max_age_h": max_age_h,
-                    "label": label,
-                })
+                alarms.append({"file": fname, "issue": "stale", "age_h": round(age_h, 1), "max_age_h": max_age_s / 3600})
             else:
-                ok.append(f"{fname} ({age_h:.1f}h old, {label})")
+                ok.append(f"{fname} ({age_h:.1f}h old)")
 
     for entry in ok:
         print(f"[OK] {entry}")
@@ -75,7 +62,7 @@ def main():
         ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         for a in alarms:
             a["ts"] = ts
-            with open(ALARM_PATH, "a") as f:
+            with open(ALARM_PATH, "a", encoding="utf-8") as f:
                 f.write(json.dumps(a) + "\n")
             print(f"[ALARM] {a['file']}: {a['issue']} (max {a['max_age_h']}h)", file=sys.stderr)
         # exit 0: alarms written to stderr + ALARM_PATH; cron-safe (Clarke et al. AG(monitor→safe))

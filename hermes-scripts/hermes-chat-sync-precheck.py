@@ -15,7 +15,7 @@ def get_last_sync_time():
     """Extract last synced timestamp from the live-sync note frontmatter."""
     if not LIVE_SYNC_NOTE.exists():
         return None
-    for line in LIVE_SYNC_NOTE.read_text().splitlines():
+    for line in LIVE_SYNC_NOTE.read_text(encoding="utf-8").splitlines():
         if line.startswith("last_synced:"):
             ts = line.split(":", 1)[1].strip().strip('"\'\' ')
             try:

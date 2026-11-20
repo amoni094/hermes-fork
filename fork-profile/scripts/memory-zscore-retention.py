@@ -37,7 +37,7 @@ import re
 import sqlite3
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 FACTS_DIR = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))) / "staging.md"
@@ -49,7 +49,7 @@ MIN_FACTS_FOR_ZSCORE = 8   # std is unstable below this
 
 
 def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def now_iso() -> str:
@@ -112,7 +112,7 @@ def _recency_score(row: dict) -> float:
     if not vf:
         return 0.5
     try:
-        dt = datetime.fromisoformat(vf.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(vf)
         age_days = (now_utc() - dt).days
         return max(0.0, 1.0 - age_days / 30.0)
     except Exception:
@@ -283,6 +283,23 @@ def main() -> None:
     mean, std = analysis["mean"], analysis["std"]
     z_scores  = analysis["z_scores"]
 
+    # Wave 18: 1D Kalman on the composite-score mean (Murphy). Fail-open.
+    try:
+        import importlib.util as _ilu_k
+        _kpath = Path(__file__).resolve().parent / "memory-kalman-latent.py"
+        if not _kpath.exists() or _kpath.stat().st_size < 2000:
+            _kpath = Path.home() / ".hermes" / "hermes-scripts" / "memory-kalman-latent.py"
+        if _kpath.exists():
+            _ks = _ilu_k.spec_from_file_location("memory_kalman_latent", str(_kpath))
+            if _ks and _ks.loader:
+                _km = _ilu_k.module_from_spec(_ks)
+                _ks.loader.exec_module(_km)
+                _kst = _km.step("zscore_mean", float(mean), Q=1e-4, R=max(0.01, float(std) ** 2))
+                analysis["kalman_mean"] = _kst.get("x")
+                analysis["kalman_P"] = _kst.get("P")
+    except Exception:
+        pass
+
     keep, demote = [], []
     for i, (fact, score, z) in enumerate(zip(facts, scores, z_scores)):
         entry = {
@@ -306,6 +323,8 @@ def main() -> None:
         "demote_count": len(demote),
         "demoted":      demote,
         "dry_run":      not args.apply,
+        "kalman_mean":  analysis.get("kalman_mean"),
+        "kalman_P":     analysis.get("kalman_P"),
     }
 
     if args.apply and demote:

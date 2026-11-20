@@ -23,7 +23,7 @@ from pathlib import Path
 import os
 from pathlib import Path
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 GAMMA = 0.1
@@ -58,7 +58,7 @@ def _atomic_write_json(path: Path, obj) -> None:
 
 def _load_json(path: Path, default):
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding='utf-8'))
     except (OSError, FileNotFoundError, json.JSONDecodeError):
         return default
 
@@ -66,7 +66,7 @@ def _load_json(path: Path, default):
 def _append_jsonl(path: Path, obj: dict) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, 'a') as f:
+        with open(path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(obj) + '\n')
     except Exception:
         pass
@@ -216,7 +216,7 @@ def run(cache: Path | None = None, reward_skill: str | None = None,
         T += 1
     p = mixed_strategy(weights)
     exp3_pairs = list(zip(names, p))
-    e_name, e_sc, e_gap = top1(exp3_pairs)
+    e_name, e_sc, _e_gap = top1(exp3_pairs)
     if bm25_scores is None:
         bm25_scores = bm25_self_scores(index if isinstance(index, dict) else {}, names)
     # normalize bm25 to simplex-ish for gap comparability
@@ -225,7 +225,7 @@ def run(cache: Path | None = None, reward_skill: str | None = None,
         b_pairs = [(k, v / mx) for k, v in bm25_scores.items() if k in set(names)]
     else:
         b_pairs = [(k, 0.0) for k in names]
-    b_name, b_sc, b_gap = top1(b_pairs)
+    b_name, b_sc, _b_gap = top1(b_pairs)
     conflict = bool(e_name and b_name and e_name != b_name and abs(e_sc - b_sc) > GAP)
     new_state = {
         'ts': time.time(),

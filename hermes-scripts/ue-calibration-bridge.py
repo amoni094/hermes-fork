@@ -120,7 +120,7 @@ def _append_jsonl(path: Path, obj: Any) -> None:
 def _entry_id(row: dict) -> str:
     ts = row.get("ts")
     qh = row.get("query_hash") or ""
-    return "%s:%s" % (qh, ts)
+    return f"{qh}:{ts}"
 
 
 def predicted_confidence(row: dict) -> Optional[float]:
@@ -286,30 +286,30 @@ def self_test() -> int:
 
     # DPI unit checks
     c1 = predicted_confidence(rows[0])
-    check(c1 is not None and abs(c1 - 0.5) < 1e-9, "DPI min(0.8, 0.5) => 0.5 got %s" % c1)
+    check(c1 is not None and abs(c1 - 0.5) < 1e-9, f"DPI min(0.8, 0.5) => 0.5 got {c1}")
     c2 = predicted_confidence(rows[1])
-    check(c2 is not None and abs(c2 - 0.1) < 1e-9, "no logprob 1-0.9=0.1 got %s" % c2)
+    check(c2 is not None and abs(c2 - 0.1) < 1e-9, f"no logprob 1-0.9=0.1 got {c2}")
     c3 = predicted_confidence(rows[2])
-    check(c3 is not None and abs(c3 - 0.3) < 1e-9, "DPI clamp 1.0 to 0.3 got %s" % c3)
+    check(c3 is not None and abs(c3 - 0.3) < 1e-9, f"DPI clamp 1.0 to 0.3 got {c3}")
     check(c3 <= 0.3, "DPI upper bound")
     c4 = predicted_confidence(rows[3])
     check(c4 == 0.0, "empty_input conf")
     c5 = predicted_confidence({"composite_ue": 2.5})
-    check(c5 == 0.0, "ue>1 clips then 1-1=0 got %s" % c5)
+    check(c5 == 0.0, f"ue>1 clips then 1-1=0 got {c5}")
     c6 = predicted_confidence({"composite_ue": -1})
-    check(c6 == 0.0, "negative ue must fail-closed conf=0 got %s" % c6)
+    check(c6 == 0.0, f"negative ue must fail-closed conf=0 got {c6}")
 
     syn = sync(since_hours=24)
-    check(syn["appended"] >= 3, "appended %s" % syn)
+    check(syn["appended"] >= 3, f"appended {syn}")
     # idempotent
     syn2 = sync(since_hours=24)
-    check(syn2["appended"] == 0, "not idempotent: %s" % syn2)
+    check(syn2["appended"] == 0, f"not idempotent: {syn2}")
 
     # calibration rows valid and DPI-respecting
     cal_rows = list(_iter_jsonl(_calib_path()) or [])
     for cr in cal_rows:
         pc = _clip01(cr.get("predicted_confidence"), default=99)
-        check(0.0 <= pc <= 1.0, "calib conf range %s" % cr)
+        check(0.0 <= pc <= 1.0, f"calib conf range {cr}")
         check(cr.get("scope") == SCOPE, "scope")
         check("query_hash" in cr and "ts" in cr, "schema")
 

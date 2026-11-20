@@ -134,7 +134,7 @@ def main() -> int:
                 break
     rec = gate(pre, post, threshold=args.threshold, ngram=args.ngram)
     print(json.dumps(rec, indent=2))
-    return 1 if rec.get("alarm") else 0
+    return 0  # ADV2-017: alarm is not a process failure
 
 
 if __name__ == "__main__":

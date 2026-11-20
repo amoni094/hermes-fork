@@ -50,7 +50,7 @@ import math
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Optional
 
@@ -245,7 +245,7 @@ class SideInfoMemoryFilter:
     def _log(self, stats: dict, suppressed: list[dict]) -> None:
         FILTER_LOG.parent.mkdir(parents=True, exist_ok=True)
         entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "stats": stats,
             "suppressed_ids": [
                 f.get("memory_id", f.get("id", "?")) for f in suppressed

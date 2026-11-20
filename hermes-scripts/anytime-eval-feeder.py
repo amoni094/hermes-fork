@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (
     (_hermes_base / 'profiles' / _hermes_profile)
     if _hermes_profile and 'profiles' not in str(_hermes_base)
@@ -59,10 +59,8 @@ def _clip_score(val) -> float | None:
         return None
     if s != s:  # NaN
         return None
-    if s < 0.0:
-        s = 0.0
-    if s > 1.0:
-        s = 1.0
+    s = max(s, 0.0)
+    s = min(s, 1.0)
     return s
 
 
@@ -109,6 +107,9 @@ def feed(calib_path: Path, out_path: Path, state_path: Path, limit: int) -> dict
                         if last_ts and ts <= last_ts:
                             skipped += 1
                             continue
+                        if rec.get('scope') == 'ue_blackbox':
+                            skipped += 1
+                            continue
                         score = _clip_score(rec.get('predicted_confidence'))
                         if score is None:
                             skipped += 1
@@ -119,8 +120,7 @@ def feed(calib_path: Path, out_path: Path, state_path: Path, limit: int) -> dict
                             'source': 'calibration-log',
                         }) + '\n')
                         written += 1
-                        if ts > max_ts:
-                            max_ts = ts
+                        max_ts = max(max_ts, ts)
             finally:
                 fcntl.flock(lf, fcntl.LOCK_UN)
     except OSError as exc:
@@ -140,7 +140,7 @@ def feed(calib_path: Path, out_path: Path, state_path: Path, limit: int) -> dict
 
 def _self_test() -> int:
     import shutil
-    td = Path(tempfile.mkdtemp(prefix='aef-%s-' % uuid.uuid4().hex[:8]))
+    td = Path(tempfile.mkdtemp(prefix=f'aef-{uuid.uuid4().hex[:8]}-'))
     try:
         calib = td / 'calibration-log.jsonl'
         out = td / 'eval-scores.jsonl'
@@ -151,6 +151,7 @@ def _self_test() -> int:
             {'ts': '2026-01-01T00:00:02+00:00', 'scope': 'c'},
             'not-json',
             {'ts': '2026-01-01T00:00:03+00:00', 'predicted_confidence': 0.2},
+            {'ts': '2026-01-01T00:00:04+00:00', 'predicted_confidence': 0.01, 'scope': 'ue_blackbox', 'tool_name': 'terminal'},
         ]
         calib.write_text(
             '\n'.join(json.dumps(r) if isinstance(r, dict) else r for r in rows) + '\n',
@@ -188,7 +189,7 @@ def main() -> None:
         try:
             sys.exit(_self_test())
         except Exception as exc:
-            print('[anytime-eval-feeder] --self-test FAIL: %s' % exc)
+            print(f'[anytime-eval-feeder] --self-test FAIL: {exc}')
             sys.exit(1)
     result = feed(Path(args.calib), Path(args.out), Path(args.state), int(args.limit))
     print(json.dumps(result, indent=2))

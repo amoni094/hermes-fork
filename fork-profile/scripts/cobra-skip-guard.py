@@ -64,7 +64,7 @@ def rules(tool: str, query: str, context_tools: list[str], context_chars: int) -
     """
     query_tokens = len(query.split()) if query else 0
     tool_info = TOOL_COSTS.get(tool, {})
-    tool_class = tool_info.get("class", "unknown")
+    tool_info.get("class", "unknown")
 
     # Rule 1: web_search after hindsight_recall already returned sufficient context
     # Counterfactual: if hindsight already returned >5000 chars, marginal benefit
@@ -100,10 +100,7 @@ def rules(tool: str, query: str, context_tools: list[str], context_chars: int) -
     # disabled until context_tools is extended to carry (tool, query) pairs. Left in place
     # as a stub; do not rely on it for real duplicate detection.
     # TODO: extend --context-has-tool to accept "toolname:query" pairs, then re-enable.
-    # NOT IMPLEMENTED: Rule 3 context-has-tool check -- disabled pending gateway session integration
-    if False and (tool in ("read_file", "search_files", "session_search", "skills_list")
-            and tool in context_tools
-            and query and any(query in ct for ct in context_tools)):
+    if False:
         return True, (
             f"{tool} skipped: identical call already made this turn. "
             "Re-calling with the same query returns the same output (CoBRA Rule 3). "
@@ -238,7 +235,7 @@ def main():
             print(json.dumps({"error": "sklearn not available"}))
             sys.exit(2)
         # Serialize coefficients
-        import numpy as np  # noqa: F811
+        import numpy as np
         probe_data = {
             "coef": np.array(clf.coef_).tolist(),
             "intercept": np.array(clf.intercept_).tolist(),

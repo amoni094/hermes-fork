@@ -55,7 +55,7 @@ MIN_CALLS           = 5     # skip sessions with fewer tool calls
 
 def _extract_tool_calls(session_path: Path) -> list[str]:
     tools = []
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev = json.loads(line)
             # Tool calls appear as role=assistant with tool_use blocks

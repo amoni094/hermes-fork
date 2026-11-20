@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 import argparse
@@ -23,7 +23,7 @@ import sqlite3
 import sys
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 CACHE = _hermes_root / 'cache'
 RANKING_PATH = CACHE / 'causal-critique-ranking.json'
@@ -36,7 +36,7 @@ CONFOUND_KEYS = ('confound_flag', 'confound_flagged', 'confound_rate', 'confound
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _coerce_float(v, default=0.0) -> float:
@@ -114,7 +114,12 @@ def _entry_counts(entry: dict) -> tuple:
     total = entry.get('total', entry.get('n', entry.get('n_tasks')))
     ic = entry.get('interventional_correct')
     if ic is None:
-        ic = 1.0 if _coerce_bool(entry.get('intervention_validated')) else 0.0
+        # intervention_validated explicitly set -> use it
+        # interventional_flag=True with no validated key -> treat as validated (flag implies success)
+        validated = entry.get('intervention_validated')
+        if validated is None:
+            validated = entry.get('interventional_flag')
+        ic = 1.0 if _coerce_bool(validated) else 0.0
         if total is None:
             total = 1.0
     total = _coerce_float(total, 1.0)
@@ -123,7 +128,10 @@ def _entry_counts(entry: dict) -> tuple:
     if cr is None:
         if 'confound_flag' in entry or 'confound_flagged' in entry:
             flagged = _coerce_bool(entry.get('confound_flagged', entry.get('confound_flag')))
-            cr = 1.0 if flagged else 0.0
+            # confound_flag=True means a confound was detected and flagged (penalises score),
+            # but flag presence alone doesn't mean rate=1.0 (fully confounded).
+            # Use 0.5 as a conservative penalty when no explicit confound_rate is given.
+            cr = 0.5 if flagged else 0.0
         else:
             cr = 0.0
     return ic, total, _coerce_float(cr)
@@ -290,7 +298,7 @@ def scores_from_tasks(tasks: list) -> dict:
         ic, total, cr = _entry_counts(t)
         buckets[sid]['ic'] += ic
         buckets[sid]['n'] += max(1.0, total)
-        buckets[sid]['conf'] += cr if cr <= 1.0 else 1.0
+        buckets[sid]['conf'] += min(cr, 1.0)
     out = {}
     for sid, b in buckets.items():
         cr = b['conf'] / max(1.0, b['n'])
@@ -321,8 +329,8 @@ def _self_test() -> int:
     scores = scores_from_tasks(tasks)
     a = scores['A']
     b = scores['B']
-    assert a >= 0.75, 'A=%s expected >=0.75' % a
-    assert b <= 0.50, 'B=%s expected <=0.50' % b
+    assert a >= 0.75, f'A={a} expected >=0.75'
+    assert b <= 0.50, f'B={b} expected <=0.50'
     assert abs(a - b) > 0.1, (a, b)
     # Hard core: outcome_correct alone must NOT increase the score
     hist = {'skills': {'C': {'causal_coherence_score': 0.40, 'n': 1, 'history': []}}}
@@ -367,7 +375,7 @@ def _self_test() -> int:
         shm = Path(str(tmp_db) + '-shm')
         wal.unlink(missing_ok=True)
         shm.unlink(missing_ok=True)
-    print('[causal-regret-minimizer] --self-test PASS A=%.3f B=%.3f' % (a, b))
+    print(f'[causal-regret-minimizer] --self-test PASS A={a:.3f} B={b:.3f}')
     return 0
 
 
@@ -380,7 +388,7 @@ def main() -> int:
         try:
             return _self_test()
         except Exception as exc:
-            print('[causal-regret-minimizer] --self-test FAIL: %s' % exc)
+            print(f'[causal-regret-minimizer] --self-test FAIL: {exc}')
             return 1
     try:
         state = run_live(RANKING_PATH, COHERENCE_PATH, EVENTS_JSONL, EVENTS_DB)

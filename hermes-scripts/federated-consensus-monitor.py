@@ -61,7 +61,7 @@ def _entropy(p: np.ndarray) -> float:
 
 def jsd(distributions: list[np.ndarray]) -> float:
     """Jensen-Shannon divergence across k distributions."""
-    k    = len(distributions)
+    len(distributions)
     mean = np.mean(distributions, axis=0)
     h_mean = _entropy(mean)
     h_each = np.mean([_entropy(d) for d in distributions])
@@ -91,7 +91,7 @@ def compute_consensus(outputs: list[str]) -> dict:
 
 def _extract_assistant_outputs(session_path: Path) -> list[str]:
     outputs = []
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev = json.loads(line)
             if ev.get("role") == "assistant":

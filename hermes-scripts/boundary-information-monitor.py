@@ -82,7 +82,7 @@ def _score_response(text: str) -> tuple[float, list[str]]:
 
 def analyse_session(session_path: Path) -> dict:
     responses  = []
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev   = json.loads(line)
             role = ev.get("role", "")

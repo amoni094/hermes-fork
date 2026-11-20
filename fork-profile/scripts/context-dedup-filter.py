@@ -168,8 +168,7 @@ class ContextDedupFilter:
             for kn in kept_ngrams_per:
                 pairs_checked += 1
                 j = _jaccard(block_ngrams, kn)
-                if j > max_jaccard:
-                    max_jaccard = j
+                max_jaccard = max(max_jaccard, j)
 
             # Check containment in union of kept
             containment = _containment(block_ngrams, kept_ngrams_union)

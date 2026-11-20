@@ -70,7 +70,7 @@ import atexit as _atexit
 _RECONCILE_LOCK = '/tmp/l1-graphiti-reconcile.lock'
 _RECONCILE_LOCK_HELD = False
 try:
-    _lock_fd = open(_RECONCILE_LOCK, 'w')
+    _lock_fd = open(_RECONCILE_LOCK, 'w', encoding="utf-8")
     _fcntl.flock(_lock_fd, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
     _RECONCILE_LOCK_HELD = True
     def _release_reconcile_lock():
@@ -233,7 +233,7 @@ def parse_staging_to_rows(path: pathlib.Path) -> list[dict]:
     rows = []
     if not path.exists() or path.stat().st_size == 0:
         return rows
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line.startswith("-"):
             continue

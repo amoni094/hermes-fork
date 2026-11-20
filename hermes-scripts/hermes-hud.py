@@ -74,7 +74,7 @@ def show_hud():
         _cfg_path = Path("/var/home/rainbow/.hermes/config.yaml")
         _max_children = 10
         if _cfg_path.exists():
-            _cfg = _yaml.safe_load(_cfg_path.read_text()) or {}
+            _cfg = _yaml.safe_load(_cfg_path.read_text(encoding="utf-8")) or {}
             _max_children = (_cfg.get("delegation") or {}).get("max_concurrent_children", 10)
     except Exception:
         _max_children = 10

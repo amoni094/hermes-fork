@@ -64,7 +64,7 @@ def _load_skill_keywords() -> dict[str, set[str]]:
 def _extract_skill_queries(session_path: Path) -> list[str]:
     """Extract skill_view tool calls from session."""
     queries = []
-    for line in session_path.read_text().splitlines():
+    for line in session_path.read_text(encoding="utf-8").splitlines():
         try:
             ev      = json.loads(line)
             content = ev.get("api_content", ev.get("content", ""))

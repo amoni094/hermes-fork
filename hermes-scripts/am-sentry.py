@@ -152,9 +152,9 @@ def check_anchor_density(text: str) -> tuple[bool, str]:
     """
     if len(text) > 1000:
         # Check in sliding 400-char windows
-        windows = [text[i:i+400] for i in range(0, len(text)-400, 200)]
+        [text[i:i+400] for i in range(0, len(text)-400, 200)]
     else:
-        windows = [text]
+        pass
 
     text_lower = text.lower()
     groups_found = []

@@ -104,7 +104,7 @@ def _last_tool_from_state(state_path: Path) -> str:
     """Extract the last tool call from a JSONL state file."""
     if not state_path.exists():
         return "START"
-    lines = state_path.read_text(errors="ignore").splitlines()
+    lines = state_path.read_text(encoding="utf-8", errors="ignore").splitlines()
     for line in reversed(lines):
         try:
             obj = json.loads(line)
@@ -167,7 +167,7 @@ def cmd_state(state_file: str) -> int:
         "frontier": frontier,
     }
     try:
-        with open(EXPOSURE_LOG, "a") as f:
+        with open(EXPOSURE_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
     except OSError:
         pass

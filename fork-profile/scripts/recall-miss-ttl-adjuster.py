@@ -149,7 +149,7 @@ def main():
     }
     try:
         GAIN_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(GAIN_HISTORY_PATH, "a") as fh:
+        with open(GAIN_HISTORY_PATH, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(payload) + "\n")
     except Exception:
         pass
