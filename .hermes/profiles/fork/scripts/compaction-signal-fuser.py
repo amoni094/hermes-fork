@@ -27,8 +27,10 @@ THRESHOLD = 0.6
 
 SIGNAL_SPECS = (
     ("relevance-compaction-trigger", "compaction-trigger-signal.json"),
-    ("prequential-compaction-trigger", "prequential-state.json"),
-    ("context-ac-rate", "context-ac-rate-state.json"),
+    # prequential writes a JSONL (last line); handled specially in collect_signals
+    ("prequential-compaction-trigger", "prequential-compaction-log.jsonl"),
+    # context-ac-rate writes per-segment JSON; n_compact>0 => COMPACT
+    ("context-ac-rate", "context-ac-rate-segments.json"),
 )
 
 
@@ -117,11 +119,50 @@ def fuse_recommendations(recs: list[tuple[str, str | None]]) -> dict[str, Any]:
     }
 
 
+def _load_jsonl_last(path: Path) -> dict | None:
+    """Read the last JSON object from a JSONL file."""
+    try:
+        if not path.is_file():
+            return None
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for line in reversed(lines):
+            line = line.strip()
+            if line:
+                data = json.loads(line)
+                return data if isinstance(data, dict) else None
+        return None
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return None
+
+
+def _normalize_ac_rate(payload: dict) -> str | None:
+    """context-ac-rate-segments.json: n_compact > 0 means COMPACT signal."""
+    if not payload:
+        return None
+    n_compact = payload.get("n_compact", 0)
+    n_retain = payload.get("n_retain", 0)
+    if isinstance(n_compact, (int, float)) and n_compact > 0:
+        return "COMPACT"
+    if isinstance(n_retain, (int, float)) and n_retain > 0 and n_compact == 0:
+        return "HOLD"
+    return None
+
+
 def collect_signals(cache_dir: Path) -> list[tuple[str, str | None]]:
     out: list[tuple[str, str | None]] = []
     for name, filename in SIGNAL_SPECS:
-        payload = _load_json(cache_dir / filename)
-        rec = _normalize_recommend(payload) if payload else None
+        path = cache_dir / filename
+        if filename.endswith(".jsonl"):
+            # prequential writes JSONL; read last line
+            payload = _load_jsonl_last(path)
+            rec = _normalize_recommend(payload) if payload else None
+        elif name == "context-ac-rate":
+            # ac-rate writes segment summary; derive from n_compact field
+            payload = _load_json(path)
+            rec = _normalize_ac_rate(payload) if payload else None
+        else:
+            payload = _load_json(path)
+            rec = _normalize_recommend(payload) if payload else None
         out.append((name, rec))
     return out
 
@@ -197,13 +238,15 @@ def _self_test() -> int:
         assert payload2["n_signals"] == 0, payload2
 
         # Two COMPACT files on disk fuse above threshold.
+        # relevance writes JSON with field "signal"
         _atomic_write_json(
             empty / "compaction-trigger-signal.json",
-            {"recommend": "COMPACT", "mean_relevance": 0.1},
+            {"signal": "COMPACT", "mean_relevance_old": 0.3, "mean_relevance_recent": 0.1},
         )
-        _atomic_write_json(
-            empty / "prequential-state.json",
-            {"recommendation": "COMPACT", "rate_delta": -0.04},
+        # prequential writes JSONL with field "recommendation" (lowercase)
+        (empty / "prequential-compaction-log.jsonl").write_text(
+            '{"recommendation": "compact", "rate_delta": -0.04}\n',
+            encoding="utf-8",
         )
         payload3 = run(cache_dir=empty, write=True)
         assert payload3["p_compact"] > 0.6, payload3
