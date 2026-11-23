@@ -489,6 +489,13 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     # Write JSON output
     out_path = Path(args.out)
+    # When running in demo/self-test mode and no explicit --out was given, redirect to a
+    # temp file so the self-test never touches the production audit path.
+    if args.demo and args.out == str(AUDIT_PATH):
+        import tempfile as _tf_demo
+        _demo_fd, _demo_tmp = _tf_demo.mkstemp(suffix=".json", prefix="gate_audit_demo_")
+        import os as _os_demo; _os_demo.close(_demo_fd)
+        out_path = Path(_demo_tmp)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     # P8A-08 fix: atomic write via tempfile+os.replace (matches calibration_loop.py pattern).
     import tempfile as _tempfile
