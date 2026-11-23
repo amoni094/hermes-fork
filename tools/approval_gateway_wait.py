@@ -25,8 +25,8 @@ logger = logging.getLogger("tools.approval")
 
 class _ApprovalEntry:
     """One pending dangerous-command approval inside a gateway session."""
-    __slots__ = ("authority", "cancelled", "card_deny_only", "data", "event", "expired", "identity", "observers",
-                 "owner", "reason", "result", "settle")
+    __slots__ = ("acknowledged", "authority", "cancelled", "card_deny_only", "data", "event", "expired",
+                 "identity", "observers", "owner", "reason", "result", "settle")
 
     def __init__(self, data: dict):
         self.owner = None
@@ -54,6 +54,8 @@ class _ApprovalEntry:
         self.cancelled: str | None = None
         # The prompt timed out unanswered; followers woken by its event adopt that timeout.
         self.expired = False
+        # Client receipt of this request (``ack_gateway_approval``); slots-only so setattr cannot invent it.
+        self.acknowledged = False
 
 
 def _identity_digest(text) -> str:
