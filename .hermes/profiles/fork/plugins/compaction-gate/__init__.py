@@ -37,7 +37,8 @@ On pre_compress gate fire:
   1. Extract up to MAX_FACTS MDL-scored sentences from conversation history.
   2. Dedup by SHA-256 of normalised text.
   3. Write surviving facts to compaction_gate_facts (SQLite + FTS5 cgf_fts).
-  4. Build a [HINDSIGHT CONTEXT ...] block (future hook return path).
+  4. Build a [HINDSIGHT CONTEXT ...] block and return it as
+     ``{"hindsight_context": block}`` so the host can inject it.
 
 Information-theoretic extensions
 ================================
@@ -255,6 +256,41 @@ def _check_hhr(session_id: str, conn: sqlite3.Connection) -> tuple[bool, bool]:
         return False, False
 
 
+_FUSED_P_THRESHOLD = 0.65
+_FUSED_MAX_AGE_S = 3600.0
+
+
+def _check_fused_signal() -> bool:
+    """Read cache/compaction-fused-signal.json; fire_full if fresh FUSE_COMPACT."""
+    try:
+        path = _profile_root() / "cache" / "compaction-fused-signal.json"
+        if not path.is_file():
+            return False
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return False
+        if str(data.get("recommend") or "") != "FUSE_COMPACT":
+            return False
+        try:
+            p_compact = float(data.get("p_compact") or 0.0)
+        except (TypeError, ValueError):
+            return False
+        if p_compact < _FUSED_P_THRESHOLD:
+            return False
+        ts_raw = data.get("ts")
+        if not isinstance(ts_raw, str) or not ts_raw.strip():
+            return False
+        ts = datetime.fromisoformat(ts_raw)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        age = datetime.now(UTC) - ts.astimezone(UTC)
+        if age.total_seconds() > _FUSED_MAX_AGE_S or age.total_seconds() < 0:
+            return False
+        return True
+    except Exception:
+        return False
+
+
 def _check_gate(session_id: str, turn_count: int, conn: sqlite3.Connection,
                 context_tokens: int = 0) -> tuple[bool, bool]:
     """
@@ -306,6 +342,16 @@ def _check_gate(session_id: str, turn_count: int, conn: sqlite3.Connection,
     if hard:
         _last_fire[session_id] = (turn_count, time.time())
         return True, False
+
+    # Fused multi-trigger posterior (naive-Bayes log-odds). Fresh FUSE_COMPACT
+    # with p_compact >= 0.65 is an additional hard-gate source.
+    try:
+        if _check_fused_signal():  # sibling may define this; fail-open if absent
+            _last_fire[session_id] = (turn_count, time.time())
+            return True, False
+    except Exception:
+        pass
+
     if soft:
         return False, True
 
@@ -622,8 +668,9 @@ def pre_compress(
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """
-    Main hook. Returns {} always (fail-open).
-    On gate fire: extracts MDL facts, persists to SQLite, logs outcome.
+    Main hook. Fail-open: returns {} on skip/error.
+    On full gate fire: extracts MDL facts, persists to SQLite, logs outcome,
+    and returns ``{"hindsight_context": block}`` when the auto-draw is non-empty.
     ``messages`` is an optional snapshot from the host (future-compat);
     falls back to agent._session_messages / conversation_history.
     """
@@ -714,6 +761,7 @@ def pre_compress(
 
             record["elapsed_ms"] = round((time.monotonic() - t0) * 1000, 2)
             _append_log(record)
+            return {"hindsight_context": context_block} if context_block else {}
         finally:
             conn.close()
 
