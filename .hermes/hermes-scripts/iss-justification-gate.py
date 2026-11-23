@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 CACHE = _hermes_root / 'cache'
 OUT = CACHE / 'iss-justification.json'
@@ -44,7 +44,16 @@ def justify(composite: dict, passivity: dict, circle: dict, nyquist_bridge: dict
     pas_ok = (not pas_missing) and (not bool(passivity.get('alarm')))
     cir_ok = (not cir_missing) and (not bool(circle.get('alarm')))
     nyq_ok = (not nyq_missing) and (not bool(nyquist_bridge.get('alarm')))
-    lyap = (not composite_missing) and bool(composite.get('overall_ok'))
+    # AUDIT-14: do not require composite.overall_ok (that field ANDs this
+    # gate's justified_ok — circular). Use Lyapunov/ISS/timescale components.
+    lyap = (not composite_missing) and bool(
+        composite.get('overall_ok')
+        or (
+            composite.get('lyapunov_ok')
+            and composite.get('iss_ok')
+            and composite.get('two_timescale_ok')
+        )
+    )
     justified = lyap and pas_ok and cir_ok and nyq_ok
     return {
         'composite_ok': lyap,

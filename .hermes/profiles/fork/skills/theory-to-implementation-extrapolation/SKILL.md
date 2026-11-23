@@ -100,6 +100,8 @@ Convexity (Boyd): if the lifted problem is convex, dualize; duality gap is a sto
 
 **Tractability gate.** The mapped operation must be implementable as: (a) SQL or JSON queries over SQLite, (b) a bounded Python pass over a query result set, or (c) a cron *script* (not a `command` field -- cron ignores `command`) located under the active profile's `scripts/` directory with a `kind: interval` job using `minutes:`. Unbounded iterative solvers do not belong in synchronous hooks. If none of these fit, keep the design in the pedagogical Layer 1 only, or reject the mapping.
 
+**Video/lecture channel mining tractability filter.** When mining a video series (e.g. 3B1B, lecture playlists) for hermes-fork components, apply this additional filter before building: reject any idea requiring (a) numpy/scipy/torch/GPU, (b) model weights or embeddings loaded at runtime, (c) ANS/zstd codec reimplementation (zstd already uses ANS internally), or (d) quantum hardware. Accept only stdlib + zlib + sqlite3 + math + cmath + re + json + random + collections. This filter eliminates ~40% of otherwise-appealing proposals before any implementation cost is incurred. See hermes-fork-theory-implementation skill → '3B1B Video Library Mining' section for the full list of REJECT decisions and their rationale.
+
 Parametricity (types): free theorems from the type are property tests. If the type is `forall`, write the free theorem before the body.
 
 ---

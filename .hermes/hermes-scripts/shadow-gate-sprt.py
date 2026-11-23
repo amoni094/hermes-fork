@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 OUT_PATH = _hermes_root / 'cache' / 'shadow-sprt-decisions.json'
@@ -218,6 +218,16 @@ def evaluate_groups(rows: list[dict]) -> list[dict]:
     return out
 
 
+def _load_promoted_flags() -> set:
+    """Load flags already promoted from the promotion ledger (if present)."""
+    ledger_path = _hermes_root / 'cache' / 'promotion-ledger.json'
+    try:
+        obj = json.loads(ledger_path.read_text())
+        return set((obj.get('promoted') or {}).keys())
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return set()
+
+
 def run() -> dict:
     try:  # ADV21-022: H-I7 wrap — never crash cron caller
         rows = load_telemetry()
@@ -227,6 +237,18 @@ def run() -> dict:
         decisions = evaluate_groups(rows)
     except Exception:
         decisions = []
+    # Filter out PROMOTE decisions for flags already in the promotion ledger.
+    # This prevents promotion-at-most-once from raising false duplicate alarms
+    # when a promoted flag's LLR remains above threshold (scores don't decay).
+    try:
+        already_promoted = _load_promoted_flags()
+        if already_promoted:
+            decisions = [
+                d for d in decisions
+                if not (d.get('decision') == 'PROMOTE' and d.get('flag') in already_promoted)
+            ]
+    except Exception:
+        pass  # never block the run on ledger filtering
     summary = {
         'ts': datetime.now(timezone.utc).isoformat(),
         'theorem': 'Wald Sequential Analysis SPRT; alpha=beta=0.05; N(3,1) vs N(4,1)',

@@ -12,6 +12,7 @@ l1-extract writing memory-facts/YYYY-MM-DD.md.
 """
 from __future__ import annotations
 
+import glob
 import importlib.machinery
 import importlib.util
 import math
@@ -38,7 +39,17 @@ _PYC_CANDIDATES = [
     _HERE / "__pycache__" / "l1-promote.cpython-311.pyc",
 ]
 
-_SYS_PYTHON = "/usr/bin/python3.14"
+def _find_py() -> str:
+    for _p in glob.glob("/var/home/rainbow/.hermes/tools/python-3.14.9+*/bin/python3"):
+        return os.path.realpath(_p)
+    for _p in ["/usr/bin/python3.14", "/usr/bin/python3.13", "/usr/bin/python3.12"]:
+        if os.path.exists(_p):
+            return _p
+    return "/usr/bin/python3"
+
+
+_SYS_PYTHON = _find_py()
+del _find_py
 
 
 def _pyc_magic(path: Path) -> bytes:
@@ -50,7 +61,7 @@ def _pyc_magic(path: Path) -> bytes:
 
 def _reexec_if_wrong_python() -> None:
     """If our pyc is compiled for a different Python, re-exec under system python3."""
-    pyc = next((p for p in _PYC_CANDIDATES if p.exists() and p.stat().st_size > 0), None)
+    pyc = next((p for p in _PYC_CANDIDATES if p.exists() and p.stat().st_size > 20000), None)
     if pyc is None:
         return
     pyc_magic = _pyc_magic(pyc)
@@ -60,7 +71,7 @@ def _reexec_if_wrong_python() -> None:
 
 
 def _load():
-    pyc = next((p for p in _PYC_CANDIDATES if p.exists() and p.stat().st_size > 0), None)
+    pyc = next((p for p in _PYC_CANDIDATES if p.exists() and p.stat().st_size > 20000), None)
     if pyc is None:
         print("l1-promote bytecode missing — cannot run", file=sys.stderr)
         sys.exit(1)

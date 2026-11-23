@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 CACHE = _hermes_root / 'cache'
 OUT = CACHE / 'sprt-measurement-tamper.json'
@@ -46,7 +46,8 @@ def detect(scores: list[float], n_zero_err: int, n_turns: int) -> dict:
         mean = statistics.mean(scores)
         if mean >= H1 - 1e-9 and var < 0.01:
             flags.append('collapsed_at_h1')
-    if n_turns >= 8 and n_zero_err == n_turns:
+    # None-score rows are not numeric evidence; require real scores.
+    if len(scores) >= 8 and n_turns >= 8 and n_zero_err == n_turns:
         flags.append('identically_zero_error_rate')
     return {
         'n_scores': len(scores),
@@ -79,15 +80,26 @@ def _load_scores() -> tuple[list[float], int, int]:
                 continue
             if not isinstance(obj, dict):
                 continue
+            scores_dict = obj.get('scores')
+            if isinstance(scores_dict, dict) and all(v is None for v in scores_dict.values()):
+                # Insufficient data, not zero-error. Skip entirely.
+                continue
             n += 1
             s = obj.get('score')
-            if isinstance(s, (int, float)):
+            if isinstance(s, (int, float)) and not isinstance(s, bool):
                 scores.append(float(s))
-            err = obj.get('error') or obj.get('had_error')
-            if err in (0, False, None) or obj.get('error_rate') == 0:
+            has_numeric = isinstance(s, (int, float)) and not isinstance(s, bool)
+            if isinstance(scores_dict, dict) and any(
+                v is not None and isinstance(v, (int, float)) and not isinstance(v, bool)
+                for v in scores_dict.values()
+            ):
+                has_numeric = True
+            err = obj.get('error') if 'error' in obj else obj.get('had_error')
+            # None means unscored, not zero errors.
+            if has_numeric and (err in (0, False) or obj.get('error_rate') == 0):
                 n_zero += 1
-        if scores:
-            break
+        # First readable jsonl is canonical (even if all rows were None-scored).
+        break
     return scores, n_zero, n
 
 
@@ -111,6 +123,12 @@ def self_test() -> int:
     r2 = detect([3.0, 4.0, 2.0, 5.0, 3.5, 4.2, 2.8, 3.9], 3, 8)
     if r2['alarm']:
         failures.append(f'natural spread {r2}')
+    r3 = detect([], 5306, 5306)
+    if r3['alarm'] or 'identically_zero_error_rate' in r3['flags']:
+        failures.append(f'no numeric scores must not identically_zero {r3}')
+    r4 = detect([3.1, 3.9, 2.5, 4.2, 3.3, 4.0, 2.8, 3.7], 8, 8)
+    if 'identically_zero_error_rate' not in r4['flags']:
+        failures.append(f'numeric scores with explicit zero-err should flag {r4}')
     if failures:
         print(json.dumps({'self_test': 'FAIL', 'failures': failures}))
         return 1

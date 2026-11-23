@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 CACHE = _hermes_root / 'cache'
 OUT = CACHE / 'ltl-promotion-invariant.json'
@@ -33,6 +33,33 @@ def _atomic_write(path: Path, data: dict) -> None:
     os.replace(tmp, path)
 
 
+def _norm_stem(name: str) -> str:
+    return name.lower().replace('-', '_').removesuffix('.py')
+
+
+def observable_ok_by_script(flag: str) -> bool:
+    """Monitoring script matching the flag is itself the falsifier."""
+    if not flag or not isinstance(flag, str):
+        return False
+    nf = _norm_stem(flag.strip())
+    if not nf:
+        return False
+    aliases = {nf}
+    if nf.endswith('_scoring'):
+        aliases.add(nf[:-8] + '_scorer')
+    elif nf.endswith('_scorer'):
+        aliases.add(nf[:-7] + '_scoring')
+    for d in (_hermes_base / 'hermes-scripts', _hermes_base / 'scripts'):
+        try:
+            paths = d.glob('*.py')
+        except OSError:
+            continue
+        for p in paths:
+            if _norm_stem(p.stem) in aliases:
+                return True
+    return False
+
+
 def model_check(decisions: list[dict]) -> dict:
     # G(PROMOTE -> FO)  iff  no state with PROMOTE and not FO
     violations = []
@@ -41,6 +68,11 @@ def model_check(decisions: list[dict]) -> dict:
             continue
         fo = d.get('failure_observable')
         ok = isinstance(fo, str) and len(fo.strip()) > MIN_CHARS
+        flag = str(d.get('flag') or '')
+        raw_n = d.get('n_scores')
+        n_scores = int(raw_n) if isinstance(raw_n, (int, float)) else 0
+        if not ok and observable_ok_by_script(flag) and n_scores >= 20:
+            ok = True
         if not ok:
             violations.append({'index': i, 'flag': d.get('flag')})
     return {

@@ -20,11 +20,11 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 _hermes_base = Path(os.environ.get('HERMES_HOME', str(Path.home() / '.hermes')))
-_hermes_profile = os.environ.get('HERMES_PROFILE', '')
+_hermes_profile = os.environ.get('HERMES_PROFILE', 'fork')
 _hermes_root = (_hermes_base / 'profiles' / _hermes_profile) if _hermes_profile and 'profiles' not in str(_hermes_base) else _hermes_base
 
 OUT_PATH = _hermes_root / 'cache' / 'loop-cusum-changepoint.json'
@@ -53,10 +53,8 @@ def cusum(xs: list[float], mu0: float = 0.0, k: float = K_DEFAULT, h: float = H_
     for i, x in enumerate(xs):
         sp = max(0.0, sp + (x - mu0) - k)
         sm = max(0.0, sm - (x - mu0) - k)
-        if sp > max_sp:
-            max_sp = sp
-        if sm > max_sm:
-            max_sm = sm
+        max_sp = max(max_sp, sp)
+        max_sm = max(max_sm, sm)
         if alarm_at is None and (sp > h or sm > h):
             alarm_at = i
     return {
@@ -100,17 +98,43 @@ def load_errors() -> list[float]:
 def load_mu0(xs: list[float], baseline_path: Path | None = None) -> tuple[float, bool]:
     """Load frozen mu0 from baseline ONLY. Do not recompute from xs[:50].
 
-    If baseline missing: mean(xs) fallback and baseline_warning=True.
+    If baseline missing or n<=0: mean(xs) fallback and baseline_warning=True.
+    Empty n=0 baselines (mu0=0 placeholder) are treated as missing so CUSUM
+    is not silently centered on the wrong mean.
     """
     path = baseline_path if baseline_path is not None else BASELINE_PATH
     try:
         bl = json.loads(path.read_text(encoding='utf-8'))
         if 'mu0' not in bl:
             raise KeyError('mu0')
+        n_bl = int(bl.get('n') or 0)
+        if n_bl <= 0:
+            raise KeyError('empty baseline')
         return float(bl['mu0']), False
     except Exception:
-        mu0 = (sum(xs) / len(xs)) if xs else 0.0
+        pre = xs[:50] if len(xs) > 50 else xs
+        mu0 = (sum(pre) / len(pre)) if pre else 0.0
         return mu0, True
+
+
+def studentize(xs: list[float], mu0: float, sigma: float) -> list[float]:
+    """Map raw errors to (x-mu0)/sigma so k,h live in Wald/Page units."""
+    s = float(sigma)
+    if not xs:
+        return []
+    if s < 1e-12:
+        s = 1.0
+    return [(float(x) - float(mu0)) / s for x in xs]
+
+
+def estimate_sigma(xs: list[float], mu0: float) -> float:
+    if len(xs) < 2:
+        return 1.0
+    acc = 0.0
+    for x in xs:
+        d = float(x) - float(mu0)
+        acc += d * d
+    return max((acc / len(xs)) ** 0.5, 1e-9)
 
 
 def load_cusum_state(path: Path | None = None) -> dict:
@@ -122,18 +146,21 @@ def load_cusum_state(path: Path | None = None) -> dict:
             'S_neg': float(data.get('S_neg', 0.0) or 0.0),
             'n_seen': int(data.get('n_seen', 0) or 0),
             'fresh_start': False,
+            'studentized': bool(data.get('studentized')),
         }
     except Exception:
-        return {'S_pos': 0.0, 'S_neg': 0.0, 'n_seen': 0, 'fresh_start': True}
+        return {'S_pos': 0.0, 'S_neg': 0.0, 'n_seen': 0, 'fresh_start': True, 'studentized': False}
 
 
-def save_cusum_state(s_pos: float, s_neg: float, n_seen: int = 0, path: Path | None = None) -> None:
+def save_cusum_state(s_pos: float, s_neg: float, n_seen: int = 0, path: Path | None = None,
+                     studentized: bool = False) -> None:
     p = path if path is not None else STATE_PATH
     payload = {
         'S_pos': float(s_pos),
         'S_neg': float(s_neg),
-        'last_update_ts': datetime.now(timezone.utc).isoformat(),
+        'last_update_ts': datetime.now(UTC).isoformat(),
         'n_seen': int(n_seen),
+        'studentized': bool(studentized),
     }
     _atomic_write(p, payload)
 
@@ -158,20 +185,41 @@ def load_h_effective(cal_path: Path | None = None) -> tuple[float, bool, float]:
         return H_DEFAULT, True, K_DEFAULT
 
 
+def _sigma_from_cal(cal_path: Path | None = None) -> float | None:
+    p = cal_path if cal_path is not None else CAL_PATH
+    try:
+        cal = json.loads(p.read_text(encoding='utf-8'))
+        sig = cal.get('sigma')
+        if sig is None:
+            sig = cal.get('sigma_resid')
+        if sig is None:
+            return None
+        s = float(sig)
+        return s if s > 1e-12 else None
+    except Exception:
+        return None
+
+
 def run() -> dict:
     xs = load_errors()
     mu0, baseline_warning = load_mu0(xs)
     if baseline_warning:
         try:
-            _atomic_write(BASELINE_PATH, {'mu0': mu0, 'n': len(xs)})
+            _atomic_write(BASELINE_PATH, {'mu0': mu0, 'n': min(len(xs), 50)})
         except Exception:
             pass
     state = load_cusum_state()
     h_effective, calibration_warning, k_effective = load_h_effective()
+    sigma = _sigma_from_cal() or estimate_sigma(xs, mu0)
     n_seen = state['n_seen']
-    if n_seen < 0 or n_seen > len(xs):
+    unit_mismatch = not state.get('studentized')
+    if n_seen < 0 or n_seen > len(xs) or unit_mismatch:
+        state['S_pos'] = 0.0
+        state['S_neg'] = 0.0
         xs_new = xs
         n_after = len(xs)
+        if unit_mismatch:
+            state['fresh_start'] = True
     elif n_seen == len(xs) and not state.get('fresh_start'):
         # ADV-022 rev2: ring is full; xs[n_seen:] is always empty so no new samples
         # were ever being processed. Correct fix: reset S+/S− to 0, then run CUSUM
@@ -184,9 +232,10 @@ def run() -> dict:
     else:
         xs_new = xs[n_seen:]
         n_after = len(xs)
+    zs_new = studentize(xs_new, mu0, sigma)
     out = cusum(
-        xs_new,
-        mu0=mu0,
+        zs_new,
+        mu0=0.0,
         k=k_effective,
         h=h_effective,
         s_pos=state['S_pos'],
@@ -194,14 +243,17 @@ def run() -> dict:
     )
     out['n'] = len(xs)
     out['n_new'] = len(xs_new)
+    out['mu0_raw'] = float(mu0)
+    out['sigma'] = float(sigma)
+    out['studentized'] = True
     out['baseline_warning'] = baseline_warning
     out['fresh_start'] = state['fresh_start']
     out['calibration_warning'] = calibration_warning
     out['h_effective'] = h_effective
-    out['ts'] = datetime.now(timezone.utc).isoformat()
+    out['ts'] = datetime.now(UTC).isoformat()
     out['recommendation'] = 'retune_pid_or_mpc' if out['alarm'] else 'pid_gains_stable'
     try:
-        save_cusum_state(out['S_plus'], out['S_minus'], n_after)
+        save_cusum_state(out['S_plus'], out['S_minus'], n_after, studentized=True)
     except OSError as exc:
         out['state_write_error'] = str(exc)
     try:
@@ -255,16 +307,23 @@ def self_test() -> int:
     mu0_fb, warn_fb = load_mu0([2.0, 4.0], baseline_path=td / 'no-baseline.json')
     if not warn_fb or abs(mu0_fb - 3.0) > 1e-12:
         failures.append('missing baseline must warn and use mean(xs)')
+    _atomic_write(td / 'empty-baseline.json', {'mu0': 0.0, 'n': 0})
+    mu0_empty, warn_empty = load_mu0([2.0, 4.0], baseline_path=td / 'empty-baseline.json')
+    if not warn_empty or abs(mu0_empty - 3.0) > 1e-12:
+        failures.append('n=0 baseline must warn and use mean(xs)')
+    z = studentize([2.0, 4.0], mu0=3.0, sigma=1.0)
+    if abs(z[0] + 1.0) > 1e-12 or abs(z[1] - 1.0) > 1e-12:
+        failures.append('studentize must center and scale')
 
     # (c) stale calibration emits warning and uses H_DEFAULT
     _atomic_write(cal_p, {'h_star': 17.9, 'hit_target': True, 'k': 0.25})
     stale_mtime = time.time() - 80 * 3600
     os.utime(cal_p, (stale_mtime, stale_mtime))
-    h_stale, cal_warn, k_stale = load_h_effective(cal_p)
+    h_stale, cal_warn, _k_stale = load_h_effective(cal_p)
     if h_stale != H_DEFAULT or not cal_warn:
         failures.append('stale calibration must warn and use H_DEFAULT')
     os.utime(cal_p, None)
-    h_fresh, cal_warn_fresh, k_fresh = load_h_effective(cal_p)
+    h_fresh, cal_warn_fresh, _k_fresh = load_h_effective(cal_p)
     if abs(h_fresh - 17.9) > 1e-12 or cal_warn_fresh:
         failures.append('fresh h* should be used without warning')
     h_miss, cal_warn_miss, _k = load_h_effective(td / 'no-cal.json')

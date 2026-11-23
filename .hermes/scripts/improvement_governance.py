@@ -46,6 +46,7 @@ import threading
 import time
 from dataclasses import dataclass, field, asdict
 from enum import Enum
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Literal
 
@@ -60,6 +61,8 @@ _root = (
 )
 # Ledger always lives at the profile root (not nested further with profiles/).
 DEFAULT_LEDGER = _root / "logs" / "improvement-proposals.jsonl"
+DEDUP_WINDOW_HOURS = 24
+DEDUP_LOOKBACK = 50
 _RATE_STATE_PATH = _root / 'cache' / 'governance-rate-state.json'
 
 
@@ -191,6 +194,71 @@ def _default_failure_observable(change_type: str, target: str, description: str)
         return f"Change '{target}' ({d_snippet}) produces measurable regression in quality or stability metrics within 14 days."
 
 
+
+def _parse_proposal_ts(ts) -> float | None:
+    """Parse proposal timestamp to epoch seconds. None if unparseable."""
+    if ts is None:
+        return None
+    if isinstance(ts, (int, float)):
+        try:
+            return float(ts)
+        except (TypeError, ValueError):
+            return None
+    s = str(ts).strip()
+    if not s:
+        return None
+    try:
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def _recent_description_dup(description: str, ledger: Path | None = None) -> dict | None:
+    """Return newest last-N ledger entry with same description in-window.
+
+    Matches only pending_review/approved rows created within DEDUP_WINDOW_HOURS.
+    Empty/missing ledger or mismatched/expired rows yield None.
+    """
+    path = ledger or DEFAULT_LEDGER
+    if not path.exists():
+        return None
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    recent: list[dict] = []
+    for line in lines[-DEDUP_LOOKBACK:]:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            recent.append(obj)
+    now = time.time()
+    window_s = DEDUP_WINDOW_HOURS * 3600
+    for entry in reversed(recent):
+        if entry.get("description") != description:
+            continue
+        if entry.get("state") not in ("pending_review", "approved"):
+            continue
+        created = _parse_proposal_ts(
+            entry.get("proposed_at") or entry.get("updated_at") or entry.get("created_at")
+        )
+        if created is None:
+            continue
+        if now - created <= window_s:
+            return entry
+    return None
+
+
 def propose_improvement(
     change_type: str,
     target: str,
@@ -204,6 +272,9 @@ def propose_improvement(
     Create a new proposal and append to the ledger (JSONL, append-only).
     Returns the proposal dict.
     """
+    dup = _recent_description_dup(description, ledger)
+    if dup is not None:
+        return dup
     risk = classify_change_risk(change_type, target)  # type: ignore[arg-type]
     causal_effect = _causal_effect_estimate(target, description, evidence)
     fo = failure_observable or _default_failure_observable(change_type, target, description)
@@ -387,10 +458,11 @@ def _cmd_propose(args) -> int:
         session_id=session_id,
         evidence=args.evidence or [],
     )
-    # Auto-approve if LOW risk
-    risk = classify_change_risk(args.change_type, args.target)  # type: ignore[arg-type]
-    if risk == ImprovementRiskLevel.LOW:
-        proposal = auto_approve_if_low(proposal)
+    # Auto-approve if LOW risk. Skip when description-dedup returned an existing row.
+    if proposal.get("state") == "pending_review":
+        risk = classify_change_risk(args.change_type, args.target)  # type: ignore[arg-type]
+        if risk == ImprovementRiskLevel.LOW:
+            proposal = auto_approve_if_low(proposal)
     print(json.dumps(proposal, indent=2))
     return 0
 

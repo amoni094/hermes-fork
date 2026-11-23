@@ -91,8 +91,65 @@ pw = backend_for_handle('vault_HANDLE').resolve_password('vault_HANDLE')
 - `/admin/wireless?form=wireless_2g` — 2.4GHz settings
 - `/admin/system?form=sysmode` — system mode
 
+## Calling the API after login
+
+Make API calls via `fetch()` inside the camofox tab, not direct curl. Example:
+
+```javascript
+// In a tab evaluate call after login:
+const stok = "<stok>";
+const r = await fetch(`/cgi-bin/luci/;stok=${stok}/admin/firmware?form=upgrade`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'operation=read'
+});
+const data = await r.json(); // {success: true, data: {hardware_version, firmware_version, ...}}
+```
+
+The browser session's sysauth cookies are sent automatically. See ## Batch query pattern to do all queries before navigation kills `_sa`.
+
+## Batch query pattern (avoid navigation race)
+
+After login the SPA navigates immediately, destroying `_sa`. Do all queries in one `evaluate` call using `fetch()` with the stok directly (not `_sa`):
+
+```python
+batch_js = f'''(async () => {{
+    const stok = {json.dumps(stok)};
+    const reqs = [
+        ['/admin/firmware?form=upgrade', 'operation=read'],
+        ['/admin/system?form=sysmode', 'operation=read'],
+    ];
+    const out = {{}};
+    for (const [form, body] of reqs) {{
+        const url = `/cgi-bin/luci/;stok=${{stok}}${{form}}`;
+        try {{
+            const r = await fetch(url, {{method:'POST',
+                headers:{{'Content-Type':'application/x-www-form-urlencoded'}},body}});
+            out[form] = await r.json();
+        }} catch(e) {{ out[form] = {{err:String(e)}}; }}
+    }}
+    return JSON.stringify(out);
+}})()'''
+```
+
+## Known working endpoints (via fetch in-tab)
+
+- `/admin/firmware?form=upgrade` — `{hardware_version, firmware_version, model, ...}`
+- `/admin/system?form=sysmode` — `{mode: 'router', support: 'yes'}`
+- `/admin/wireless?form=wireless_2g` — 2.4GHz config
+- `/login?form=get_deviceInfo` — `{model}` (no auth needed, GET or POST)
+
+## Known NOT working from curl (errorcode: timeout = session mismatch)
+
+- `/admin/status?form=device_info` — "no such callback"
+- `/admin/status?form=wan` — "no such callback"
+- Direct curl to /admin/* always returns timeout even with Cookie header
+
 ## Important Pitfalls
 
+- **`_discover_chunks` fix**: `update-store-*.js` is a dynamic import — it never appears in `document.querySelectorAll('script[src]')`. The function now fetches the index chunk source via `fetch()` and extracts the store chunk name with `CHUNK_STORE_RE.search()`. The old DOM-polling approach always timed out.
+- **API requires browser-origin fetch**: Direct curl calls to `/cgi-bin/luci/;stok=.../admin/*` return `{"errorcode":"timeout"}` even with the correct cookie. Calls must be made via `fetch()` inside the camofox tab (same origin). Use the batch JS pattern in ## Calling the API after login.
+- **sysauth cookie**: After login, the router sets `sysauth` and `sysauth_http` cookies. These are required for all /admin/* API calls and are automatically included when using fetch() inside the tab.
 - **Access control blacklist blocks ALL traffic** (LAN + internet), not just internet. Not suitable for printer isolation if LAN printing is needed.
 - The `ignoreHTTPSErrors` patch must be reverted after use (security).
 - Vault password must be injected via JSON in POST body (not subprocess argv).

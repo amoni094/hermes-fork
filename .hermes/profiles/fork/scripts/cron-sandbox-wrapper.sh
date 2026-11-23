@@ -115,6 +115,11 @@ if [[ ! -f "$POLICY" ]]; then
 fi
 
 ENV_FROM=()
+# Re-export HERMES_PYTHON (captured before the unset block) so the inner wrapper
+# invocation inside the sandbox can also pick the right python interpreter.
+if [[ -n "${_JOB_HERMES_PYTHON:-}" ]]; then
+  ENV_FROM+=(--env "HERMES_PYTHON=${_JOB_HERMES_PYTHON}")
+fi
 for _k in HERMES_HOME HERMES_PROFILE HERMES_CRON_SESSION HOME PATH TMPDIR; do
   if [[ -n "${!_k:-}" ]]; then
     ENV_FROM+=(--env-from "$_k")
@@ -196,6 +201,14 @@ _add_bind "$HOME/.local/bin" true
 # exist and fork wrappers cannot runpy the canonical scripts.
 _add_bind "$HOME/.hermes/hermes-scripts" true
 _add_bind "$HOME/.hermes/scripts" true
+# W7-H2: bind the hermes store python 3.14 so l1-extract/l1-promote can re-exec
+# when the system python (3.15+) cannot load the cpython-314.pyc bytecode.
+for _py_bin in "$HOME"/.hermes/tools/python-3.14.9+*/bin; do
+  [[ -d "$_py_bin" ]] && _add_bind "$_py_bin" true || true
+  _py_root="${_py_bin%/bin}"
+  [[ -d "$_py_root/lib" ]] && _add_bind "$_py_root/lib" true || true
+done
+unset _py_bin _py_root
 _add_bind "$PROFILE_ROOT/scripts" true
 _add_bind "$PROFILE_ROOT/skills" true
 _add_bind "$PROFILE_ROOT/hooks" true

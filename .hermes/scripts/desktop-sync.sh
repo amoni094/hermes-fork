@@ -5,6 +5,7 @@
 #
 # What gets backed up:
 #   ~/.hermes/{skills,memory-facts,cron,scripts,config.yaml,memory/,state/,resources/}
+#   ~/.hermes/profiles/fork/{skills,memory-facts,memories,scripts,config.yaml,cron/jobs.json}
 #   ~/.hindsight/  (excl. models/ and logs)
 #   FalkorDB RDB snapshot  (Graphiti knowledge graph)
 #   Postgres dump  (Hindsight vector store, ~hindsight db)
@@ -13,7 +14,8 @@
 
 set -euo pipefail
 
-DESKTOP_HOST="admin@100.88.247.70"
+DESKTOP_HOST_TS="admin@100.88.247.70"
+DESKTOP_HOST_LAN="admin@192.168.0.181"
 DESKTOP_BASE="F:/Hermes"
 LOG="$HOME/.hermes/logs/desktop-sync.log"
 STAMP=$(date '+%Y-%m-%d %H:%M:%S')
@@ -34,10 +36,18 @@ log() { echo "[$STAMP] $*" | tee -a "$LOG"; }
 
 SSH_OPTS="-o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=no"
 
-# --- 1. Reachability check ---
-if ! ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
-    "$DESKTOP_HOST" "echo ok" &>/dev/null; then
-    log "SKIP: desktop not reachable"
+# --- 1. Reachability check (Tailscale first, LAN fallback) ---
+DESKTOP_HOST=""
+for _host in "$DESKTOP_HOST_TS" "$DESKTOP_HOST_LAN"; do
+    if ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no \
+        "$_host" "echo ok" &>/dev/null; then
+        DESKTOP_HOST="$_host"
+        break
+    fi
+done
+
+if [[ -z "$DESKTOP_HOST" ]]; then
+    log "SKIP: desktop not reachable (tried Tailscale $DESKTOP_HOST_TS and LAN $DESKTOP_HOST_LAN)"
     exit 0
 fi
 log "Desktop reachable — starting sync to $DESKTOP_BASE"
@@ -78,6 +88,36 @@ if [[ -f "$HERMES_ARCHIVE" ]]; then
         && rotate_desktop "F:\\Hermes\\hermes-home" "hermes-*.tar.gz" 3 \
         && log "Hermes synced (${SIZE})" \
         || { log "ERROR: hermes scp failed"; ERRORS=$((ERRORS+1)); }
+fi
+
+# --- 2b. Hermes fork profile (skills, memory, cron config — no output cache) ---
+log "Syncing Hermes fork profile ..."
+FORK_ARCHIVE="$TMPDIR_SYNC/hermes-fork-${DATE}.tar.gz"
+
+tar -czf "$FORK_ARCHIVE" \
+    --exclude='*.pyc' \
+    --exclude='__pycache__' \
+    --exclude='*.sock' \
+    --exclude='.hermes/profiles/fork/cron/output' \
+    --exclude='.hermes/profiles/fork/logs' \
+    --exclude='.hermes/profiles/fork/cache' \
+    --exclude='.hermes/profiles/fork/sessions' \
+    --exclude='.hermes/profiles/fork/terminal-sessions' \
+    --exclude='.hermes/profiles/fork/audio_cache' \
+    --exclude='.hermes/profiles/fork/image_cache' \
+    --exclude='.hermes/profiles/fork/images' \
+    --exclude='.hermes/profiles/fork/browser_screenshots' \
+    -C "$HOME" \
+    .hermes/profiles/fork/ \
+    2>/dev/null
+[[ -s "$FORK_ARCHIVE" ]] || { log "ERROR: fork tar produced empty archive"; ERRORS=$((ERRORS+1)); }
+
+if [[ -f "$FORK_ARCHIVE" ]]; then
+    SIZE=$(du -sh "$FORK_ARCHIVE" | cut -f1)
+    scp $SSH_OPTS "$FORK_ARCHIVE" "${DESKTOP_HOST}:${DESKTOP_BASE}/hermes-fork/hermes-fork-${DATE}.tar.gz" 2>&1 | tee -a "$LOG" \
+        && rotate_desktop "F:\\Hermes\\hermes-fork" "hermes-fork-*.tar.gz" 3 \
+        && log "Hermes fork profile synced (${SIZE})" \
+        || { log "ERROR: fork scp failed"; ERRORS=$((ERRORS+1)); }
 fi
 
 # --- 3. ~/.hindsight (excl. models — they're 500MB HuggingFace weights, reinstallable) ---

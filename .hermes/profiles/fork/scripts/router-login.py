@@ -390,14 +390,14 @@ def _create_tab_with_ssl_retry():
 
 
 def _discover_chunks(tab_id):
+    # Step 1: find index chunk from DOM script tags
     chunks_js = """
     Array.from(document.querySelectorAll('script[src]'))
         .map(s => s.src.replace(location.origin, ''))
     """
     deadline = time.monotonic() + POLL_TIMEOUT_S
-    found = []
     index_chunk = None
-    store_chunk = None
+    found = []
     while True:
         scripts_raw = eval_js(tab_id, chunks_js)
         if isinstance(scripts_raw, list):
@@ -412,16 +412,30 @@ def _discover_chunks(tab_id):
             found = []
         srcs = [s for s in found if isinstance(s, str)]
         index_chunk = next((s for s in srcs if CHUNK_INDEX_RE.search(s)), None)
-        store_chunk = next((s for s in srcs if CHUNK_STORE_RE.search(s)), None)
-        if index_chunk and store_chunk:
-            return index_chunk, store_chunk, srcs
-        if time.monotonic() >= deadline:
+        if index_chunk:
             break
+        if time.monotonic() >= deadline:
+            raise RuntimeError(
+                f"chunk discovery timed out waiting for index-* script[src]; found: {found}"
+            )
         time.sleep(POLL_INTERVAL_S)
-    raise RuntimeError(
-        "chunk discovery timed out waiting for index-* / update-store-* script[src]; "
-        f"found: {found}"
-    )
+
+    # Step 2: fetch the index chunk and extract update-store chunk name from it
+    # update-store is a dynamic import — it never appears as a DOM script tag.
+    fetch_js = f"""(async () => {{
+        const r = await fetch({json.dumps(index_chunk)});
+        return await r.text();
+    }})()"""
+    index_src = eval_js(tab_id, fetch_js, timeout=15)
+    if not isinstance(index_src, str) or not index_src:
+        raise RuntimeError(f"Failed to fetch index chunk source: {index_src!r}")
+    m = CHUNK_STORE_RE.search(index_src)
+    if not m:
+        raise RuntimeError(
+            f"Could not find update-store-*.js reference in index chunk ({len(index_src)} bytes)"
+        )
+    store_chunk = "./js/" + m.group(0)
+    return index_chunk, store_chunk, srcs
 
 
 def _import_modules(tab_id, index_chunk, store_chunk):

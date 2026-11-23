@@ -12,6 +12,7 @@ partial YYYY-MM-DD.md while extract is still writing L1 candidates.
 """
 from __future__ import annotations
 
+import glob
 import importlib.machinery
 import importlib.util
 import os
@@ -51,13 +52,17 @@ _PYC_CANDIDATES = [
     _HERE / "__pycache__" / "l1-extract.cpython-311.pyc",
 ]
 
-# Resolve python3.14 with fallback to lower versions (fragile if hardcoded; Silverblue
-# updates via rpm-ostree can remove 3.14 between rebases). ADV-FIX-2 (2026-09-22).
-_SYS_PYTHON = next(
-    (_v for _v in ["/usr/bin/python3.14", "/usr/bin/python3.13", "/usr/bin/python3.12"]
-     if __import__("os").path.exists(_v)),
-    "/usr/bin/python3",  # last resort: system default (may be 3.11)
-)
+def _find_py() -> str:
+    for _p in glob.glob("/var/home/rainbow/.hermes/tools/python-3.14.9+*/bin/python3"):
+        return os.path.realpath(_p)
+    for _p in ["/usr/bin/python3.14", "/usr/bin/python3.13", "/usr/bin/python3.12"]:
+        if os.path.exists(_p):
+            return _p
+    return "/usr/bin/python3"
+
+
+_SYS_PYTHON = _find_py()
+del _find_py
 
 
 def _pyc_magic(path: Path) -> bytes:
@@ -68,20 +73,46 @@ def _pyc_magic(path: Path) -> bytes:
 
 
 def _reexec_if_wrong_python() -> None:
-    """If our pyc is compiled for a different Python, re-exec under system python3."""
-    pyc = next((p for p in _PYC_CANDIDATES if p.exists() and p.stat().st_size > 0), None)
+    """If our pyc is compiled for a different Python, re-exec under the matching interpreter.
+
+    In the openshell sandbox, sys.executable is /usr/bin/python3 (system python).
+    _SYS_PYTHON resolves to the hermes python 3.14 binary.  When the pyc magic
+    mismatches, we re-exec under _SYS_PYTHON (3.14) so it can load the 3.14 bytecode.
+    If _SYS_PYTHON is not executable here (sandbox restriction), os.execv raises
+    PermissionError which is caught and re-raised with a clearer message.
+    """
+    pyc = next((p for p in _PYC_CANDIDATES if p.exists() and p.stat().st_size > 20000), None)
     if pyc is None:
         return
     pyc_magic = _pyc_magic(pyc)
     our_magic = importlib.util.MAGIC_NUMBER
     if pyc_magic != our_magic and sys.executable != _SYS_PYTHON:
-        os.execv(_SYS_PYTHON, [_SYS_PYTHON] + sys.argv)
+        try:
+            os.execv(_SYS_PYTHON, [_SYS_PYTHON] + sys.argv)
+        except (PermissionError, OSError) as exc:
+            print(
+                f"l1-extract: pyc magic mismatch (pyc={pyc_magic!r} this={our_magic!r}) "
+                f"and re-exec to {_SYS_PYTHON!r} failed: {exc}. "
+                "Add the hermes python binary to the openshell sandbox policy (binaries + read_only).",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
 
 def _load():
-    pyc = next((p for p in _PYC_CANDIDATES if p.exists() and p.stat().st_size > 0), None)
+    pyc = next((p for p in _PYC_CANDIDATES if p.exists() and p.stat().st_size > 20000), None)
     if pyc is None:
         print("l1-extract bytecode missing — cannot run", file=sys.stderr)
+        sys.exit(1)
+    pyc_magic = _pyc_magic(pyc)
+    our_magic = importlib.util.MAGIC_NUMBER
+    if pyc_magic != our_magic:
+        print(
+            f"l1-extract: pyc magic mismatch — pyc={pyc_magic!r} this interpreter={our_magic!r}. "
+            f"Expected _reexec_if_wrong_python() to have switched to the matching python. "
+            f"Current interpreter: {sys.executable!r}. Target: {_SYS_PYTHON!r}.",
+            file=sys.stderr,
+        )
         sys.exit(1)
     loader = importlib.machinery.SourcelessFileLoader("l1_extract_restored", str(pyc))
     spec = importlib.util.spec_from_file_location("l1_extract_restored", str(pyc), loader=loader)
