@@ -81,7 +81,7 @@ HHR_THRESHOLD = 0.35          # after_tokens/before_tokens ratio below → poor 
 HHR_K = 3                     # kept for test/backward compat; gate uses SPRT not fixed-K
 _SPRT_ALPHA = 0.05            # max false-compress rate
 _SPRT_BETA = 0.10             # max miss rate
-_SPRT_H0_LOW = 0.35           # H0: HHR above this = healthy
+_SPRT_H0_LOW = HHR_THRESHOLD  # alias — H0: HHR above this = healthy
 _SPRT_EPS = 0.01              # density floor to avoid log(0)
 _SPRT_MAX_ROWS = 20           # look back at most 20 telemetry rows
 _DEFAULT_DEPTH = 1100         # legacy config key alias
@@ -805,20 +805,59 @@ def _ensure_telemetry_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _kw_int(src: dict[str, Any], *names: str) -> int | None:
+    """First convertible int among *names*; None if all missing/invalid."""
+    for name in names:
+        val = src.get(name)
+        if val is None or isinstance(val, bool):
+            continue
+        try:
+            return int(val)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 def on_post_compaction(
     session_id: str = "",
     before_tokens: int | None = None,
     after_tokens: int | None = None,
     kind: str | None = None,
-    **_kwargs: Any,
+    **kwargs: Any,
 ) -> None:
     """Record one committed compaction pass in compaction_telemetry.
 
     Fail-open: any exception is swallowed. This is the sole production
     writer for compaction_telemetry; without it the HHR branch of
     _check_hhr() always returns (False, False).
+
+    Token counts: host paths disagree on names. fire_post_compaction
+    (compaction_events) passes before_tokens/after_tokens; the v1
+    compaction payload and some callers use tokens_before/tokens_after.
+    Probe all known aliases; missing values stay NULL.
     """
     try:
+        merged = {
+            "before_tokens": before_tokens,
+            "after_tokens": after_tokens,
+            "kind": kind,
+            **kwargs,
+        }
+        after = _kw_int(
+            merged,
+            "after_tokens",
+            "tokens_after",
+            "context_tokens_after",
+            "compressed_tokens",
+        )
+        before = _kw_int(
+            merged,
+            "before_tokens",
+            "tokens_before",
+            "context_tokens_before",
+            "original_tokens",
+        )
+        kind_val = merged.get("kind") or merged.get("reason") or ""
         conn = _open_db()
         if conn is None:
             return
@@ -830,16 +869,16 @@ def on_post_compaction(
                 "VALUES (?, ?, ?, ?, ?)",
                 (
                     session_id or "",
-                    int(after_tokens) if after_tokens is not None else None,
-                    int(before_tokens) if before_tokens is not None else None,
-                    kind or "",
+                    after,
+                    before,
+                    kind_val if isinstance(kind_val, str) else str(kind_val),
                     time.time(),
                 ),
             )
             conn.commit()
             logger.debug(
                 "compaction-gate: telemetry row: session=%s before=%s after=%s kind=%s",
-                session_id, before_tokens, after_tokens, kind,
+                session_id, before, after, kind_val,
             )
         finally:
             conn.close()
