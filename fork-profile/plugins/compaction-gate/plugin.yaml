@@ -1,11 +1,13 @@
 name: compaction-gate
-version: "1.1.0"
+version: "1.2.0"
 description: >-
   Session-depth gate + MDL fact scoring on pre_compress.
-  Extracts facts to SQLite (compaction_gate_facts) before lossy
-  compression. Fail-open; never blocks compression.
+  Writes compaction_telemetry via post_compaction to activate HHR branch.
+  Extracts facts to SQLite (compaction_gate_facts) before lossy compression.
+  Fail-open; never blocks compression.
 hooks:
   - pre_compress
+  - post_compaction
 provides_hooks:
   - pre_compress
 settings:

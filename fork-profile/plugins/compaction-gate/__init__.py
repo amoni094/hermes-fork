@@ -5,28 +5,35 @@ Does not mutate messages, the compressor, or conversation history.
 
 Architecture
 ============
-Fires on the pre_compress hook before ContextCompressor.compress() runs.
+Two hooks are registered:
 
-Gate triggers (either condition fires):
-  1. turn_count >= TURN_THRESHOLD (default 1100)
-  2. Head-hit-rate from compaction_telemetry < HHR_THRESHOLD for K consecutive rows
+post_compaction
+  Fires after every committed compression pass. Writes one row to
+  compaction_telemetry(session_id, after_tokens, before_tokens, kind,
+  created_at) in state.db. This activates the HHR branch of the gate —
+  without it the HHR path is permanently inactive.
+
+pre_compress
+  Fires before ContextCompressor.compress() runs. Gate triggers
+  (either condition fires):
+    1. turn_count >= TURN_THRESHOLD (default 1100)
+    2. Head-hit-rate (after_tokens/before_tokens) < HHR_THRESHOLD for
+       HHR_K consecutive rows in compaction_telemetry
 
 Hysteresis: once fired for session S at turn T, won't fire again until
-turn T + HYSTERESIS_TURNS (default 200). Prevents redundant extraction on
+T + HYSTERESIS_TURNS (default 200). Prevents redundant extraction on
 tightly-spaced compression events.
 
-Short-to-medium bridge: single low-HHR row (not 3) sets a soft-gate flag
-(no fact extraction, just logging) so we can track the transition.
+Short-to-medium bridge: 1 <= low_rows < HHR_K -> soft gate (log only,
+no fact extraction) to track the transition window.
 
-On gate fire:
+On pre_compress gate fire:
   1. Extract up to MAX_FACTS MDL-scored sentences from conversation history.
   2. Dedup by SHA-256 of normalised text.
   3. Write surviving facts to compaction_gate_facts (SQLite + FTS5 cgf_fts).
-  4. Build a [HINDSIGHT CONTEXT ...] block from the top facts and log it
-     (returned dict is a no-op today; shaped for future hook return paths).
+  4. Build a [HINDSIGHT CONTEXT ...] block (future hook return path).
 
-The public entry-point exposed to the host is ``pre_compress``.
-``on_pre_compress`` is kept as a legacy alias.
+``pre_compress`` is the public hook name; ``on_pre_compress`` is a legacy alias.
 """
 from __future__ import annotations
 
@@ -49,7 +56,7 @@ logger = logging.getLogger("compaction-gate")
 ISS_GAIN = 0.35
 TURN_THRESHOLD = 1100         # gate fires when turn_count >= this
 HYSTERESIS_TURNS = 200        # min turns between fires for same session
-HHR_THRESHOLD = 0.10          # after_tokens/before_tokens ratio below → poor HHR
+HHR_THRESHOLD = 0.35          # after_tokens/before_tokens ratio below → poor HHR (< 35% retained)
 HHR_K = 3                     # consecutive low-HHR rows needed for hard gate
 _DEFAULT_DEPTH = 1100         # legacy config key alias
 _DEFAULT_MDL = 0.1
@@ -524,6 +531,69 @@ def pre_compress(
 on_pre_compress = pre_compress
 
 
+# ── post_compaction hook — writes compaction_telemetry rows ───────────────
+
+def _ensure_telemetry_schema(conn: sqlite3.Connection) -> None:
+    """Create compaction_telemetry if absent. Idempotent."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS compaction_telemetry (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id   TEXT    NOT NULL,
+            after_tokens INTEGER,
+            before_tokens INTEGER,
+            kind         TEXT    NOT NULL DEFAULT '',
+            created_at   REAL    NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS ct_session_idx
+        ON compaction_telemetry(session_id)
+    """)
+    conn.commit()
+
+
+def on_post_compaction(
+    session_id: str = "",
+    before_tokens: int | None = None,
+    after_tokens: int | None = None,
+    kind: str | None = None,
+    **_kwargs: Any,
+) -> None:
+    """Record one committed compaction pass in compaction_telemetry.
+
+    Fail-open: any exception is swallowed. This is the sole production
+    writer for compaction_telemetry; without it the HHR branch of
+    _check_hhr() always returns (False, False).
+    """
+    try:
+        conn = _open_db()
+        if conn is None:
+            return
+        try:
+            _ensure_telemetry_schema(conn)
+            conn.execute(
+                "INSERT INTO compaction_telemetry"
+                "(session_id, after_tokens, before_tokens, kind, created_at)"
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    session_id or "",
+                    int(after_tokens) if after_tokens is not None else None,
+                    int(before_tokens) if before_tokens is not None else None,
+                    kind or "",
+                    time.time(),
+                ),
+            )
+            conn.commit()
+            logger.debug(
+                "compaction-gate: telemetry row: session=%s before=%s after=%s kind=%s",
+                session_id, before_tokens, after_tokens, kind,
+            )
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.debug("compaction-gate: on_post_compaction fail-open: %s", exc)
+
+
 # ── plugin registration ───────────────────────────────────────────────────
 
 def register(ctx: Any) -> None:
@@ -534,6 +604,7 @@ def register(ctx: Any) -> None:
             logger.debug("compaction-gate: disabled via settings.enabled")
             return
         ctx.register_hook("pre_compress", pre_compress)
-        logger.debug("compaction-gate: registered pre_compress")
+        ctx.register_hook("post_compaction", on_post_compaction)
+        logger.debug("compaction-gate: registered pre_compress + post_compaction")
     except Exception as exc:
         logger.warning("compaction-gate: register failed (fail-open): %s", exc)
