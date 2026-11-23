@@ -195,6 +195,10 @@ def _card_target(session_key: str, request_id: Optional[str]):
     return next((e for e in _gateway_queues.get(session_key) or [] if e.data.get("request_id") == request_id), None)
 
 
+# Upstream name; tests and gateway card code import this. Same lookup as ``_card_target``.
+_entry_for_request = _card_target
+
+
 def restrict_gateway_approval_card_to_deny(session_key: str, request_id: Optional[str], restricted: bool = True) -> None:
     """Mark a pending request whose card could not show the whole command: a card tap may only deny it.
     Every request starts marked; ``restricted=False`` lifts the mark once its card shows the whole command."""
