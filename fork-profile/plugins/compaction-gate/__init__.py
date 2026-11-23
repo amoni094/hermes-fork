@@ -37,6 +37,18 @@ On pre_compress gate fire:
   3. Write surviving facts to compaction_gate_facts (SQLite + FTS5 cgf_fts).
   4. Build a [HINDSIGHT CONTEXT ...] block (future hook return path).
 
+Information-theoretic extensions
+================================
+1. Role-weighted sentence scoring (information bottleneck). User text is
+   high-relevance Y; tool_result is low-relevance noise. Facts carry a
+   role weight that tightens/loosens the MDL min-saving threshold.
+2. Fill-rate adaptive gate (rate-distortion). When context_tokens /
+   context_limit >= _FILL_RATE_AGGRESSIVE, TOKEN_THRESHOLD is reduced so
+   the gate fires earlier at high fill (higher distortion tolerance).
+3. Query-relevant fact retrieval (Wyner-Ziv). ``_auto_draw`` ranks
+   persisted facts by TF-IDF-like overlap with recent user terms (decoder
+   side information) instead of recency alone.
+
 ``pre_compress`` is the public hook name; ``on_pre_compress`` is a legacy alias.
 """
 from __future__ import annotations
@@ -44,6 +56,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import sqlite3
@@ -71,6 +84,15 @@ _MAX_MSG_CHARS = 4000
 _JACCARD_DUP = 0.85
 _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+|\n+")
 _WORD_RE = re.compile(r"[a-z0-9]{2,}")
+_ROLE_WEIGHTS = {
+    "user": 1.0,
+    "assistant": 0.7,
+    "tool_result": 0.3,
+    "tool": 0.3,
+    "system": 0.5,
+}
+_FILL_RATE_AGGRESSIVE = 0.80
+_DEFAULT_CONTEXT_LIMIT = 200_000
 
 # ── module-level state (reset by tests via _schema_ready / _last_fire) ────
 _CTX: Any = None
@@ -218,6 +240,15 @@ def _check_gate(session_id: str, turn_count: int, conn: sqlite3.Connection,
     # Read tunable threshold from config (falls back to module constant)
     depth_threshold = _cfg_int("depth_threshold", TURN_THRESHOLD)
     token_threshold = _cfg_int("token_threshold", TOKEN_THRESHOLD)
+    # Rate-distortion: at high fill, tolerate more distortion — fire earlier.
+    try:
+        context_limit = _cfg_int("context_limit", _DEFAULT_CONTEXT_LIMIT)
+        if context_tokens > 0 and context_limit > 0:
+            fill_rate = context_tokens / context_limit
+            if fill_rate >= _FILL_RATE_AGGRESSIVE:
+                token_threshold = int(token_threshold * 0.75)
+    except Exception:
+        pass
     # Hysteresis: keyed on turn count when available, timestamp otherwise.
     # _last_fire stores (last_turns, last_ts) per session.
     last_entry = _last_fire.get(session_id)
@@ -277,32 +308,44 @@ def _text_of(msg: Any) -> str:
     return ""
 
 
-def _extract_facts(messages: list[Any]) -> list[str]:
-    facts: list[str] = []
-    seen: set[str] = set()
-    for msg in messages:
-        if not isinstance(msg, dict):
-            continue
-        role = str(msg.get("role") or "").lower()
-        if role in {"tool", "system", "tool_result"}:
-            continue
-        text = _text_of(msg).strip()
-        if not text:
-            continue
-        if len(text) > _MAX_MSG_CHARS:
-            text = text[:_MAX_MSG_CHARS]
-        for chunk in _SENTENCE_RE.split(text):
-            fact = " ".join(chunk.split())
-            if len(fact) < _MIN_FACT_CHARS:
+def _role_weight(role: str) -> float:
+    try:
+        return max(0.1, min(1.0, float(_ROLE_WEIGHTS.get(role, 0.5))))
+    except Exception:
+        return 0.5
+
+
+def _extract_facts(messages: list[Any]) -> list[tuple[str, float]]:
+    """Extract (text, role_weight) pairs. Fail-open to unweighted user facts."""
+    try:
+        facts: list[tuple[str, float]] = []
+        seen: set[str] = set()
+        for msg in messages:
+            if not isinstance(msg, dict):
                 continue
-            key = fact.lower()
-            if key in seen:
+            role = str(msg.get("role") or "user").lower() or "user"
+            weight = _role_weight(role)
+            text = _text_of(msg).strip()
+            if not text:
                 continue
-            seen.add(key)
-            facts.append(fact)
-            if len(facts) >= _MAX_FACTS:
-                return facts
-    return facts
+            if len(text) > _MAX_MSG_CHARS:
+                text = text[:_MAX_MSG_CHARS]
+            min_chars = _MIN_FACT_CHARS * 2 if role in {"tool_result", "tool"} else _MIN_FACT_CHARS
+            for chunk in _SENTENCE_RE.split(text):
+                fact = " ".join(chunk.split())
+                if len(fact) < min_chars:
+                    continue
+                key = fact.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                facts.append((fact, weight))
+                if len(facts) >= _MAX_FACTS:
+                    return facts
+        return facts
+    except Exception as exc:
+        logger.debug("compaction-gate: _extract_facts fail-open: %s", exc)
+        return []
 
 
 def _zlib_len(s: str) -> int:
@@ -311,28 +354,61 @@ def _zlib_len(s: str) -> int:
     return len(zlib.compress(s.encode("utf-8"), 6))
 
 
+def _normalize_fact_weights(facts: list[Any]) -> list[tuple[str, float]]:
+    """Accept list[str] or list[tuple[str, float]]; default weight 1.0."""
+    out: list[tuple[str, float]] = []
+    for f in facts:
+        if isinstance(f, str):
+            out.append((f, 1.0))
+            continue
+        if isinstance(f, (tuple, list)) and f:
+            text = str(f[0])
+            if len(f) >= 2:
+                try:
+                    w = max(0.1, min(1.0, float(f[1])))
+                except Exception:
+                    w = 1.0
+            else:
+                w = 1.0
+            out.append((text, w))
+            continue
+        out.append((str(f), 1.0))
+    return out
+
+
 def _score_facts(
-    facts: list[str], min_saving: float
+    facts: list[tuple[str, float]] | list[str], min_saving: float
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """MDL: joint zlib length vs leave-one-out. Low saving => redundant."""
+    """MDL: joint zlib length vs leave-one-out. Low saving => redundant.
+
+    Role weight adjusts the MDL threshold: effective_min = min_saving / weight.
+    User facts (weight 1.0) keep the baseline; tool_result (0.3) must save more.
+    Plain list[str] is treated as weight 1.0 for backward compatibility.
+    """
     scored: list[dict[str, Any]] = []
     flagged: list[dict[str, Any]] = []
-    if not facts:
+    try:
+        weighted = _normalize_fact_weights(facts)
+    except Exception:
+        weighted = [(str(f), 1.0) for f in facts]
+    if not weighted:
         return scored, flagged
-    if len(facts) == 1:
+    texts = [t for t, _ in weighted]
+    if len(weighted) == 1:
         item = {
-            "text": facts[0][:400],
+            "text": texts[0][:400],
             "mdl_saving": 1.0,
-            "bytes": len(facts[0].encode("utf-8")),
+            "bytes": len(texts[0].encode("utf-8")),
             "redundant": False,
             "reason": "",
+            "weight": weighted[0][1],
         }
         return [item], []
-    joined = "\n".join(facts)
+    joined = "\n".join(texts)
     l_all = _zlib_len(joined)
     kept_words: list[set[str]] = []
-    for i, fact in enumerate(facts):
-        others = [f for j, f in enumerate(facts) if j != i]
+    for i, (fact, weight) in enumerate(weighted):
+        others = [t for j, t in enumerate(texts) if j != i]
         l_wo = _zlib_len("\n".join(others)) if others else 0
         l_self = max(_zlib_len(fact), 1)
         saving = (l_wo + l_self - l_all) / float(l_self)
@@ -345,7 +421,11 @@ def _score_facts(
                 redundant = True
                 reason = "jaccard"
                 break
-        if not redundant and saving < min_saving:
+        try:
+            effective_min = min_saving / weight if weight else min_saving
+        except Exception:
+            effective_min = min_saving
+        if not redundant and saving < effective_min:
             redundant = True
             reason = "mdl"
         item = {
@@ -354,6 +434,7 @@ def _score_facts(
             "bytes": len(fact.encode("utf-8")),
             "redundant": redundant,
             "reason": reason,
+            "weight": weight,
         }
         scored.append(item)
         if redundant:
@@ -396,22 +477,67 @@ def _persist_facts(
 
 # ── retrieval / auto-draw ─────────────────────────────────────────────────
 
-def _auto_draw(conn: sqlite3.Connection, session_id: str, limit: int = 20) -> str:
+def _tfidf_score(fact_text: str, query_terms: set[str]) -> float:
+    """Term-overlap score: query hits / sqrt(|fact words|). Fail-open to 0.0."""
+    try:
+        if not query_terms:
+            return 0.0
+        words = _WORD_RE.findall((fact_text or "").lower())
+        if not words:
+            return 0.0
+        hits = sum(1 for w in words if w in query_terms)
+        return hits / math.sqrt(len(words))
+    except Exception:
+        return 0.0
+
+
+def _auto_draw(
+    conn: sqlite3.Connection,
+    session_id: str,
+    limit: int = 20,
+    query_terms: set[str] | None = None,
+) -> str:
     """
-    Retrieve the most recent persisted facts for session_id.
+    Retrieve persisted facts for session_id.
+    With query_terms: rank up to limit*3 candidates by TF-IDF overlap,
+    tie-break created_at DESC. Without: recency only.
     Returns a [HINDSIGHT CONTEXT ...] block string, or "" if none.
     """
     try:
-        rows = conn.execute(
-            "SELECT fact_text FROM compaction_gate_facts "
-            "WHERE session_id=? ORDER BY created_at DESC LIMIT ?",
-            (session_id, limit),
-        ).fetchall()
+        use_query = bool(query_terms)
+        fetch_limit = (limit * 3) if use_query else limit
+        if use_query:
+            rows = conn.execute(
+                "SELECT fact_text, created_at FROM compaction_gate_facts "
+                "WHERE session_id=? ORDER BY created_at DESC LIMIT ?",
+                (session_id, fetch_limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT fact_text FROM compaction_gate_facts "
+                "WHERE session_id=? ORDER BY created_at DESC LIMIT ?",
+                (session_id, fetch_limit),
+            ).fetchall()
     except Exception:
         return ""
     if not rows:
         return ""
-    lines = [r[0] for r in rows]
+    lines: list[str]
+    if use_query:
+        try:
+            scored: list[tuple[float, float, str]] = []
+            for r in rows:
+                text = r[0]
+                created = float(r[1]) if len(r) > 1 and r[1] is not None else 0.0
+                scored.append((_tfidf_score(text, query_terms or set()), created, text))
+            scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+            lines = [t for _, _, t in scored[:limit]]
+        except Exception:
+            lines = [r[0] for r in rows[:limit]]
+    else:
+        lines = [r[0] for r in rows]
+    if not lines:
+        return ""
     block = "[HINDSIGHT CONTEXT — pre-compression fact archive]\n" + "\n".join(
         f"- {line}" for line in lines
     )
@@ -509,6 +635,14 @@ def pre_compress(
                 "n_inserted": 0,
                 "iss_gain": ISS_GAIN,
             }
+            try:
+                ctx_tokens = int(context_tokens or 0)
+                context_limit = _cfg_int("context_limit", _DEFAULT_CONTEXT_LIMIT)
+                fill_rate = (ctx_tokens / context_limit) if ctx_tokens > 0 and context_limit > 0 else 0.0
+                record["fill_rate"] = round(fill_rate, 4)
+                record["context_limit"] = context_limit
+            except Exception:
+                record["fill_rate"] = 0.0
 
             if fire_soft:
                 record["note"] = "short_to_medium_transition"
@@ -531,7 +665,19 @@ def pre_compress(
             n_inserted = _persist_facts(conn, sid, scored)
             record["n_inserted"] = n_inserted
 
-            context_block = _auto_draw(conn, sid)
+            context_block = ""
+            try:
+                query_terms: set[str] = set()
+                for msg in hist[-6:]:
+                    if isinstance(msg, dict) and msg.get("role") == "user":
+                        query_terms |= set(_WORD_RE.findall(_text_of(msg).lower()))
+                context_block = _auto_draw(conn, sid, query_terms=query_terms)
+            except Exception as exc:
+                logger.debug("compaction-gate: query draw fail-open: %s", exc)
+                try:
+                    context_block = _auto_draw(conn, sid)
+                except Exception:
+                    context_block = ""
             if context_block:
                 record["hindsight_chars"] = len(context_block)
 
@@ -636,3 +782,89 @@ def register(ctx: Any) -> None:
         logger.debug("compaction-gate: registered pre_compress + post_compaction")
     except Exception as exc:
         logger.warning("compaction-gate: register failed (fail-open): %s", exc)
+
+
+def _self_test() -> int:
+    """Exercise the three information-theoretic extensions. Returns pass count."""
+    passed = 0
+
+    msgs = [
+        {"role": "user", "content": "The user wants a compact representation of session facts now."},
+        {"role": "tool_result", "content": "short noise"},
+        {
+            "role": "tool_result",
+            "content": "tool payload " + ("x" * (_MIN_FACT_CHARS * 2)),
+        },
+        {
+            "role": "assistant",
+            "content": "The assistant reply discusses information bottleneck weighting clearly.",
+        },
+    ]
+    extracted = _extract_facts(msgs)
+    assert all(isinstance(x, tuple) and len(x) == 2 for x in extracted), extracted
+    assert any(abs(w - 1.0) < 1e-9 for _, w in extracted)
+    assert any(abs(w - 0.7) < 1e-9 for _, w in extracted)
+    assert any(abs(w - 0.3) < 1e-9 for _, w in extracted)
+    assert not any("short noise" in t for t, _ in extracted)
+    scored_plain, _ = _score_facts(["A unique fact about compression theory and gates xx."], 0.1)
+    assert scored_plain and scored_plain[0]["mdl_saving"] == 1.0
+    passed += 1
+
+    class _FakeCtx:
+        def get_config(self, key: str, default: Any = None) -> Any:
+            if key == "context_limit":
+                return 100_000
+            return default
+
+    global _CTX, _last_fire
+    prev_ctx, prev_fire = _CTX, dict(_last_fire)
+    try:
+        _CTX = _FakeCtx()
+        _last_fire.clear()
+        conn = sqlite3.connect(":memory:")
+        ff, fs = _check_gate("fill-low", 0, conn, context_tokens=80_000)
+        assert ff and not fs, (ff, fs)
+        _last_fire.clear()
+        _CTX = None
+        ff2, _ = _check_gate("fill-base", 0, conn, context_tokens=80_000)
+        assert not ff2
+        conn.close()
+    finally:
+        _CTX = prev_ctx
+        _last_fire.clear()
+        _last_fire.update(prev_fire)
+    passed += 1
+
+    assert _tfidf_score("alpha beta gamma", set()) == 0.0
+    assert _tfidf_score("alpha beta gamma", {"alpha"}) > 0.0
+    conn = sqlite3.connect(":memory:")
+    _schema_ready_prev = _schema_ready
+    try:
+        globals()["_schema_ready"] = False
+        _ensure_schema(conn)
+        ts = time.time()
+        relevant = "Wyner Ziv side information ranks memory facts by query overlap"
+        stale = "Unrelated cooking recipe uses unsalted butter and flour only"
+        for fact, created in ((relevant, ts), (stale, ts + 1.0)):
+            dh = _dedup_hash(fact)
+            conn.execute(
+                "INSERT INTO compaction_gate_facts"
+                "(session_id, topic, fact_text, confidence, created_at, dedup_hash)"
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                ("s-q", "auto", fact, 1.0, created, dh),
+            )
+        conn.commit()
+        recency = _auto_draw(conn, "s-q", limit=1)
+        assert stale in recency and relevant not in recency
+        ranked = _auto_draw(conn, "s-q", limit=1, query_terms={"wyner", "ziv", "query"})
+        assert relevant in ranked
+    finally:
+        conn.close()
+        globals()["_schema_ready"] = _schema_ready_prev
+    passed += 1
+    return passed
+
+
+if __name__ == "__main__":
+    n = _self_test()
+    print(f"self-test ok ({n} checks)")
