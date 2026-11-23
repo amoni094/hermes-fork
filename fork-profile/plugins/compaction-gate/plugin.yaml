@@ -1,13 +1,14 @@
 name: compaction-gate
-version: "1.0.0"
+version: "1.1.0"
 description: >-
-  Session-depth gate plus MDL fact scoring on pre_compress.
-  Fail-open. Observability JSONL only; never blocks compression.
+  Session-depth gate + MDL fact scoring on pre_compress.
+  Extracts facts to SQLite (compaction_gate_facts) before lossy
+  compression. Fail-open; never blocks compression.
 hooks:
   - pre_compress
 provides_hooks:
   - pre_compress
 settings:
   enabled: true
-  depth_threshold: 50
+  depth_threshold: 1100
   mdl_min_saving: 0.1

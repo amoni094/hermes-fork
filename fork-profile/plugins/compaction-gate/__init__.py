@@ -2,23 +2,56 @@
 
 Fail-open: any exception is swallowed so compression always proceeds.
 Does not mutate messages, the compressor, or conversation history.
+
+Architecture
+============
+Fires on the pre_compress hook before ContextCompressor.compress() runs.
+
+Gate triggers (either condition fires):
+  1. turn_count >= TURN_THRESHOLD (default 1100)
+  2. Head-hit-rate from compaction_telemetry < HHR_THRESHOLD for K consecutive rows
+
+Hysteresis: once fired for session S at turn T, won't fire again until
+turn T + HYSTERESIS_TURNS (default 200). Prevents redundant extraction on
+tightly-spaced compression events.
+
+Short-to-medium bridge: single low-HHR row (not 3) sets a soft-gate flag
+(no fact extraction, just logging) so we can track the transition.
+
+On gate fire:
+  1. Extract up to MAX_FACTS MDL-scored sentences from conversation history.
+  2. Dedup by SHA-256 of normalised text.
+  3. Write surviving facts to compaction_gate_facts (SQLite + FTS5 cgf_fts).
+  4. Build a [HINDSIGHT CONTEXT ...] block from the top facts and log it
+     (returned dict is a no-op today; shaped for future hook return paths).
+
+The public entry-point exposed to the host is ``pre_compress``.
+``on_pre_compress`` is kept as a legacy alias.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 import re
+import sqlite3
 import time
+import threading
 import zlib
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("compaction-gate")
 
+# ── tunables ──────────────────────────────────────────────────────────────
 ISS_GAIN = 0.35
-_DEFAULT_DEPTH = 50
+TURN_THRESHOLD = 1100         # gate fires when turn_count >= this
+HYSTERESIS_TURNS = 200        # min turns between fires for same session
+HHR_THRESHOLD = 0.10          # after_tokens/before_tokens ratio below → poor HHR
+HHR_K = 3                     # consecutive low-HHR rows needed for hard gate
+_DEFAULT_DEPTH = 1100         # legacy config key alias
 _DEFAULT_MDL = 0.1
 _MAX_FACTS = 40
 _MIN_FACT_CHARS = 24
@@ -27,10 +60,15 @@ _JACCARD_DUP = 0.85
 _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+|\n+")
 _WORD_RE = re.compile(r"[a-z0-9]{2,}")
 
+# ── module-level state (reset by tests via _schema_ready / _last_fire) ────
 _CTX: Any = None
-# _LOG_PATH is derived dynamically via _log_path(); this module-level constant is unused.
-# Kept for backward compatibility with any external references but _log_path() is authoritative.
+_schema_ready: bool = False
+_schema_lock = threading.Lock()
+# session_id -> last turn_count at which the gate fired (hysteresis guard)
+_last_fire: dict[str, int] = {}
 
+
+# ── path helpers ──────────────────────────────────────────────────────────
 
 def _profile_root() -> Path:
     hh = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
@@ -43,6 +81,10 @@ def _profile_root() -> Path:
             return cand
     fork = Path.home() / ".hermes" / "profiles" / "fork"
     return fork if fork.is_dir() else hh
+
+
+def _db_path() -> Path:
+    return _profile_root() / "state.db"
 
 
 def _log_path() -> Path:
@@ -66,26 +108,120 @@ def _append_log(record: dict[str, Any]) -> None:
         os.close(fd)
 
 
-def _cfg_int(key: str, default: int) -> int:
-    ctx = _CTX
-    if ctx is None:
-        return default
-    try:
-        raw = ctx.get_config(key, default)
-        return int(raw if raw is not None else default)
-    except Exception:
-        return default
+# ── SQLite schema ─────────────────────────────────────────────────────────
+
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    """Create compaction_gate_facts + FTS5 shadow cgf_fts. Idempotent."""
+    global _schema_ready
+    if _schema_ready:
+        return
+    with _schema_lock:
+        if _schema_ready:
+            return  # double-checked locking
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS compaction_gate_facts (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id  TEXT    NOT NULL,
+                topic       TEXT    NOT NULL DEFAULT '',
+                fact_text   TEXT    NOT NULL,
+                confidence  REAL    NOT NULL DEFAULT 1.0,
+                created_at  REAL    NOT NULL,
+                dedup_hash  TEXT    NOT NULL UNIQUE
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS cgf_session_idx
+            ON compaction_gate_facts(session_id)
+        """)
+        # FTS5 content table backed by compaction_gate_facts
+        conn.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS cgf_fts
+            USING fts5(fact_text, content='compaction_gate_facts', content_rowid='id')
+        """)
+        conn.commit()
+        _schema_ready = True
 
 
-def _cfg_float(key: str, default: float) -> float:
-    ctx = _CTX
-    if ctx is None:
-        return default
+def _open_db() -> sqlite3.Connection | None:
+    """Open the profile state.db; return None on any error (fail-open)."""
     try:
-        raw = ctx.get_config(key, default)
-        return float(raw if raw is not None else default)
+        path = _db_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(path), check_same_thread=False, timeout=5.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        _ensure_schema(conn)
+        return conn
+    except Exception as exc:
+        logger.debug("compaction-gate: db open failed: %s", exc)
+        return None
+
+
+# ── gate logic ────────────────────────────────────────────────────────────
+
+def _check_hhr(session_id: str, conn: sqlite3.Connection) -> tuple[bool, bool]:
+    """
+    Check head-hit-rate from compaction_telemetry.
+    Returns (hard_gate, soft_gate):
+      hard_gate: K consecutive low-HHR rows exist
+      soft_gate: exactly 1 low-HHR row (short→medium transition)
+    """
+    try:
+        rows = conn.execute(
+            "SELECT after_tokens, before_tokens FROM compaction_telemetry "
+            "WHERE session_id=? ORDER BY id DESC LIMIT ?",
+            (session_id, HHR_K)
+        ).fetchall()
     except Exception:
-        return default
+        logger.debug("compaction-gate: compaction_telemetry absent or unreadable; HHR gate inactive")
+        return False, False
+
+    if not rows:
+        return False, False
+
+    low_rows = [r for r in rows if r[1] and (r[0] / r[1]) < HHR_THRESHOLD]
+    if len(low_rows) >= HHR_K:
+        return True, False
+    if len(low_rows) == 1:
+        return False, True
+    return False, False
+
+
+def _check_gate(session_id: str, turn_count: int, conn: sqlite3.Connection) -> tuple[bool, bool]:
+    """
+    Decide whether the gate fires for this session.
+    Returns (fire_full, fire_soft):
+      fire_full: extract and persist facts
+      fire_soft: log-only transition signal (no facts written)
+    Applies hysteresis: once fired at turn T, won't fire_full again until T+HYSTERESIS_TURNS.
+    Records the fire turn in _last_fire.
+    """
+    # Hysteresis check
+    last = _last_fire.get(session_id, 0)
+    if last and (turn_count - last) < HYSTERESIS_TURNS:
+        return False, False
+
+    # Hard gate: turn threshold
+    if turn_count >= TURN_THRESHOLD:
+        _last_fire[session_id] = turn_count
+        return True, False
+
+    # HHR-based gate
+    hard, soft = _check_hhr(session_id, conn)
+    if hard:
+        _last_fire[session_id] = turn_count
+        return True, False
+    if soft:
+        return False, True
+
+    return False, False
+
+
+# ── fact extraction + scoring ─────────────────────────────────────────────
+
+def _dedup_hash(fact: str) -> str:
+    """SHA-256 of lowercased, whitespace-normalised fact text (hex, 64 chars)."""
+    normalised = " ".join(fact.lower().split())
+    return hashlib.sha256(normalised.encode("utf-8")).hexdigest()
 
 
 def _text_of(msg: Any) -> str:
@@ -150,7 +286,6 @@ def _score_facts(
     if not facts:
         return scored, flagged
     if len(facts) == 1:
-        # Singleton: cannot be redundant with respect to other facts.
         item = {
             "text": facts[0][:400],
             "mdl_saving": 1.0,
@@ -166,8 +301,6 @@ def _score_facts(
         others = [f for j, f in enumerate(facts) if j != i]
         l_wo = _zlib_len("\n".join(others)) if others else 0
         l_self = max(_zlib_len(fact), 1)
-        # Unique information: joint encoding shorter than independent parts.
-        # saving ~ 0 when the fact is already implied by the rest.
         saving = (l_wo + l_self - l_all) / float(l_self)
         words = set(_WORD_RE.findall(fact.lower()))
         reason = ""
@@ -196,6 +329,85 @@ def _score_facts(
     return scored, flagged
 
 
+# ── persistence ───────────────────────────────────────────────────────────
+
+def _persist_facts(
+    conn: sqlite3.Connection, session_id: str, scored: list[dict[str, Any]]
+) -> int:
+    """Write non-redundant facts to compaction_gate_facts + cgf_fts. Returns count inserted."""
+    inserted = 0
+    ts = time.time()
+    for item in scored:
+        if item.get("redundant"):
+            continue
+        text = item["text"]
+        dh = _dedup_hash(text)
+        existing = conn.execute(
+            "SELECT id FROM compaction_gate_facts WHERE dedup_hash=?", (dh,)
+        ).fetchone()
+        if existing:
+            continue
+        conn.execute(
+            "INSERT INTO compaction_gate_facts"
+            "(session_id, topic, fact_text, confidence, created_at, dedup_hash)"
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (session_id, "auto", text, round(item.get("mdl_saving", 1.0), 4), ts, dh),
+        )
+        rowid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute("INSERT INTO cgf_fts(rowid, fact_text) VALUES (?, ?)", (rowid, text))
+        inserted += 1
+    conn.commit()
+    return inserted
+
+
+# ── retrieval / auto-draw ─────────────────────────────────────────────────
+
+def _auto_draw(conn: sqlite3.Connection, session_id: str, limit: int = 20) -> str:
+    """
+    Retrieve the most recent persisted facts for session_id.
+    Returns a [HINDSIGHT CONTEXT ...] block string, or "" if none.
+    """
+    try:
+        rows = conn.execute(
+            "SELECT fact_text FROM compaction_gate_facts "
+            "WHERE session_id=? ORDER BY created_at DESC LIMIT ?",
+            (session_id, limit),
+        ).fetchall()
+    except Exception:
+        return ""
+    if not rows:
+        return ""
+    lines = [r[0] for r in rows]
+    block = "[HINDSIGHT CONTEXT — pre-compression fact archive]\n" + "\n".join(
+        f"- {line}" for line in lines
+    )
+    return block
+
+
+# ── config helpers ────────────────────────────────────────────────────────
+
+def _cfg_int(key: str, default: int) -> int:
+    ctx = _CTX
+    if ctx is None:
+        return default
+    try:
+        raw = ctx.get_config(key, default)
+        return int(raw if raw is not None else default)
+    except Exception:
+        return default
+
+
+def _cfg_float(key: str, default: float) -> float:
+    ctx = _CTX
+    if ctx is None:
+        return default
+    try:
+        raw = ctx.get_config(key, default)
+        return float(raw if raw is not None else default)
+    except Exception:
+        return default
+
+
 def _history(agent: Any) -> list[Any]:
     if agent is None:
         return []
@@ -205,68 +417,108 @@ def _history(agent: Any) -> list[Any]:
     return []
 
 
-def on_pre_compress(
+# ── public hook entry-point ───────────────────────────────────────────────
+
+def pre_compress(
     session_id: str = "",
     turn_count: int = 0,
     context_tokens: int = 0,
     trigger_reason: str = "auto",
     agent: Any = None,
     **_kwargs: Any,
-) -> None:
-    """VALID_HOOKS name is pre_compress (not on_pre_compress). Fail-open."""
+) -> dict[str, Any]:
+    """
+    Main hook. Returns {} always (fail-open).
+    On gate fire: extracts MDL facts, persists to SQLite, logs outcome.
+    """
     t0 = time.monotonic()
     try:
-        depth = _cfg_int("depth_threshold", _DEFAULT_DEPTH)
         min_saving = _cfg_float("mdl_min_saving", _DEFAULT_MDL)
-        turns = int(turn_count or 0)
         hist = _history(agent)
+        turns = int(turn_count or 0)
         if turns <= 0:
             turns = len(hist)
-        record: dict[str, Any] = {
-            "ts": _now_iso(),
-            "session_id": session_id or getattr(agent, "session_id", "") or "",
-            "turn_count": turns,
-            "context_tokens": int(context_tokens or 0),
-            "trigger_reason": trigger_reason or "auto",
-            "depth_threshold": depth,
-            "mdl_min_saving": min_saving,
-            "gated": False,
-            "n_facts": 0,
-            "n_redundant": 0,
-            "iss_gain": ISS_GAIN,
-        }
-        if turns <= depth:
-            record["gated"] = True
-            record["skip"] = "depth"
+
+        sid = session_id or getattr(agent, "session_id", "") or ""
+
+        conn = _open_db()
+        if conn is None:
+            _append_log({
+                "ts": _now_iso(), "session_id": sid,
+                "error": "db_unavailable", "fail_open": True,
+            })
+            return {}
+
+        try:
+            fire_full, fire_soft = _check_gate(sid, turns, conn)
+
+            record: dict[str, Any] = {
+                "ts": _now_iso(),
+                "session_id": sid,
+                "turn_count": turns,
+                "context_tokens": int(context_tokens or 0),
+                "trigger_reason": trigger_reason or "auto",
+                "depth_threshold": TURN_THRESHOLD,
+                "mdl_min_saving": min_saving,
+                "gated": not fire_full and not fire_soft,
+                "fire_full": fire_full,
+                "fire_soft": fire_soft,
+                "n_facts": 0,
+                "n_redundant": 0,
+                "n_inserted": 0,
+                "iss_gain": ISS_GAIN,
+            }
+
+            if fire_soft:
+                record["note"] = "short_to_medium_transition"
+                record["elapsed_ms"] = round((time.monotonic() - t0) * 1000, 2)
+                _append_log(record)
+                return {}
+
+            if not fire_full:
+                record["skip"] = "depth"
+                record["elapsed_ms"] = round((time.monotonic() - t0) * 1000, 2)
+                _append_log(record)
+                return {}
+
+            # Gate fired — extract, score, persist
+            facts = _extract_facts(hist)
+            scored, flagged = _score_facts(facts, min_saving)
+            record["n_facts"] = len(scored)
+            record["n_redundant"] = len(flagged)
+
+            n_inserted = _persist_facts(conn, sid, scored)
+            record["n_inserted"] = n_inserted
+
+            context_block = _auto_draw(conn, sid)
+            if context_block:
+                record["hindsight_chars"] = len(context_block)
+
             record["elapsed_ms"] = round((time.monotonic() - t0) * 1000, 2)
             _append_log(record)
-            return
-        facts = _extract_facts(hist)
-        scored, flagged = _score_facts(facts, min_saving)
-        record["n_facts"] = len(scored)
-        record["n_redundant"] = len(flagged)
-        record["redundant"] = [
-            {"text": x["text"][:160], "reason": x["reason"], "mdl_saving": x["mdl_saving"]}
-            for x in flagged[:12]
-        ]
-        record["elapsed_ms"] = round((time.monotonic() - t0) * 1000, 2)
-        _append_log(record)
-        return
+        finally:
+            conn.close()
+
     except Exception as exc:
         logger.debug("compaction-gate: fail-open: %s", exc)
         try:
-            _append_log(
-                {
-                    "ts": _now_iso(),
-                    "session_id": session_id or "",
-                    "error": type(exc).__name__,
-                    "fail_open": True,
-                }
-            )
+            _append_log({
+                "ts": _now_iso(),
+                "session_id": session_id or "",
+                "error": type(exc).__name__,
+                "fail_open": True,
+            })
         except Exception:
             pass
-        return
 
+    return {}
+
+
+# Legacy alias
+on_pre_compress = pre_compress
+
+
+# ── plugin registration ───────────────────────────────────────────────────
 
 def register(ctx: Any) -> None:
     global _CTX
@@ -275,7 +527,7 @@ def register(ctx: Any) -> None:
         if not bool(ctx.get_config("enabled", True)):
             logger.debug("compaction-gate: disabled via settings.enabled")
             return
-        ctx.register_hook("pre_compress", on_pre_compress)
+        ctx.register_hook("pre_compress", pre_compress)
         logger.debug("compaction-gate: registered pre_compress")
     except Exception as exc:
         logger.warning("compaction-gate: register failed (fail-open): %s", exc)
