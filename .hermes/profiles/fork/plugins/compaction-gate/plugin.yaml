@@ -1,10 +1,10 @@
 name: compaction-gate
-version: "1.3.0"
+version: "1.4.0"
 description: >-
   Session-depth gate + MDL fact scoring on pre_compress.
   Writes compaction_telemetry via post_compaction to activate HHR branch.
-  Extracts facts to SQLite (compaction_gate_facts) before lossy compression.
-  Fail-open; never blocks compression.
+  HHR uses Wald SPRT (replaces fixed-K streak). Extracts facts to SQLite
+  (compaction_gate_facts) before lossy compression. Fail-open; never blocks compression.
 hooks:
   - pre_compress
   - post_compaction

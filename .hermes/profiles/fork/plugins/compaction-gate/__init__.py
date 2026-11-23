@@ -20,16 +20,18 @@ pre_compress
     2. context_tokens >= TOKEN_THRESHOLD (default 100 000) — the host
        post_tool overflow path where _session_messages is empty and
        turn_count=0 (token count is the reliable signal there)
-    3. Head-hit-rate (after_tokens/before_tokens) < HHR_THRESHOLD for
-       HHR_K consecutive rows in compaction_telemetry
+    3. Head-hit-rate SPRT (Wald 1945) on after_tokens/before_tokens
+       from compaction_telemetry — replaces the fixed-K consecutive
+       streak. H1 (needs compress) when LLR >= A; H0 (healthy) when
+       LLR <= B; soft gate when 0 < LLR < A.
 
 Hysteresis: once fired for session S, won't fire again until either:
 - turn_count - last_turn_count >= HYSTERESIS_TURNS (turn-based path), or
 - time.time() - last_fire_ts >= HYSTERESIS_TURNS*2 seconds (token path, turn_count=0).
 Prevents redundant extraction on tightly-spaced compression events.
 
-Short-to-medium bridge: 1 <= low_rows < HHR_K -> soft gate (log only,
-no fact extraction) to track the transition window.
+Short-to-medium bridge: SPRT LLR in (0, A) -> soft gate (log only,
+no fact extraction) while evidence trends toward H1.
 
 On pre_compress gate fire:
   1. Extract up to MAX_FACTS MDL-scored sentences from conversation history.
@@ -75,7 +77,12 @@ TURN_THRESHOLD = 1100         # gate fires when turn_count >= this
 TOKEN_THRESHOLD = 100_000     # gate fires when context_tokens >= this (host post_tool path)
 HYSTERESIS_TURNS = 200        # min turns between fires for same session
 HHR_THRESHOLD = 0.35          # after_tokens/before_tokens ratio below → poor HHR (< 35% retained)
-HHR_K = 3                     # consecutive low-HHR rows needed for hard gate
+HHR_K = 3                     # kept for test/backward compat; gate uses SPRT not fixed-K
+_SPRT_ALPHA = 0.05            # max false-compress rate
+_SPRT_BETA = 0.10             # max miss rate
+_SPRT_H0_LOW = 0.35           # H0: HHR above this = healthy
+_SPRT_EPS = 0.01              # density floor to avoid log(0)
+_SPRT_MAX_ROWS = 20           # look back at most 20 telemetry rows
 _DEFAULT_DEPTH = 1100         # legacy config key alias
 _DEFAULT_MDL = 0.1
 _MAX_FACTS = 40
@@ -194,34 +201,50 @@ def _open_db() -> sqlite3.Connection | None:
 
 def _check_hhr(session_id: str, conn: sqlite3.Connection) -> tuple[bool, bool]:
     """
-    Check head-hit-rate from compaction_telemetry.
+    Wald SPRT on head-hit-rate from compaction_telemetry.
+
+    H0: healthy (HHR >= _SPRT_H0_LOW). H1: needs compress (HHR < _SPRT_H0_LOW).
     Returns (hard_gate, soft_gate):
-      hard_gate: K consecutive low-HHR rows exist
-      soft_gate: 1 ≤ low-HHR rows < K (short→medium transition)
+      hard_gate: LLR >= A (H1 accepted)
+      soft_gate: 0 < LLR < A (trending toward H1; log-only)
+    Fail-open: any exception returns (False, False).
     """
     try:
+        a_bound = math.log((1.0 - _SPRT_BETA) / _SPRT_ALPHA)
+        b_bound = math.log(_SPRT_BETA / (1.0 - _SPRT_ALPHA))
         rows = conn.execute(
             "SELECT after_tokens, before_tokens FROM compaction_telemetry "
             "WHERE session_id=? ORDER BY id DESC LIMIT ?",
-            (session_id, HHR_K)
+            (session_id, _SPRT_MAX_ROWS),
         ).fetchall()
+        if not rows:
+            return False, False
+
+        llr = 0.0
+        for r in rows:
+            if not (
+                isinstance(r[0], (int, float))
+                and isinstance(r[1], (int, float))
+                and r[1] > 0
+            ):
+                continue
+            hhr = r[0] / r[1]
+            f1 = (1.0 / _SPRT_H0_LOW) if hhr < _SPRT_H0_LOW else _SPRT_EPS
+            f0 = _SPRT_EPS if hhr < _SPRT_H0_LOW else (1.0 / (1.0 - _SPRT_H0_LOW))
+            llr += math.log(f1 / f0)
+
+        if llr >= a_bound:
+            return True, False
+        if llr <= b_bound:
+            return False, False
+        if llr > 0:
+            return False, True
+        return False, False
     except Exception:
-        logger.debug("compaction-gate: compaction_telemetry absent or unreadable; HHR gate inactive")
+        logger.debug(
+            "compaction-gate: compaction_telemetry absent or unreadable; HHR gate inactive"
+        )
         return False, False
-
-    if not rows:
-        return False, False
-
-    low_rows = [
-        r for r in rows
-        if isinstance(r[0], (int, float)) and isinstance(r[1], (int, float))
-        and r[1] > 0 and (r[0] / r[1]) < HHR_THRESHOLD
-    ]
-    if len(low_rows) >= HHR_K:
-        return True, False
-    if 0 < len(low_rows) < HHR_K:
-        return False, True
-    return False, False
 
 
 def _check_gate(session_id: str, turn_count: int, conn: sqlite3.Connection,
