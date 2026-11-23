@@ -16,3 +16,4 @@ settings:
   depth_threshold: 1100
   token_threshold: 100000
   mdl_min_saving: 0.1
+  context_limit: 200000
