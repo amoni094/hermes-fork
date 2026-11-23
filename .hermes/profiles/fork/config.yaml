@@ -363,11 +363,16 @@ plugins:
         enabled: true
     compaction-gate:
       settings:
-        depth_threshold: 50
+        depth_threshold: 1100
         mdl_min_saving: 0.1
     lambda-tuner:
       settings:
         enabled: true
+    deductive-verifier:
+      settings:
+        block_on_critical: true
+        warn_on_high: true
+        max_eval_ms: 5
   disabled: []
 cron:
   allow_agent_scheduling: false
@@ -397,7 +402,7 @@ hooks:
   pre_compress:
     - command: /var/home/rainbow/.hermes/profiles/fork/hooks/pre-compact.sh
       timeout: 10
-_config_version: 53
+_config_version: 54
 adaptive_reasoning:
   adaptive_sc:
     cost_model: cached
