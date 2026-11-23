@@ -187,7 +187,7 @@ def _current_from_log() -> int | None:
     matches = re.findall(
         r"(?:prompt_tokens|context_tokens|current_tokens|approx_tokens)[=:\s]+(\d{3,8})",
         tail,
-        flags=re.I,
+        flags=re.IGNORECASE,
     )
     if not matches:
         return None
@@ -388,7 +388,7 @@ def wavelet_energy_prune(
         if tok.lower() in prot:
             kept_idx.add(i)
     running = sum(energy[i] for i in kept_idx)
-    min_keep = max(1, int(math.ceil(n * min(1.0, max(0.0, keep_ratio)))))
+    min_keep = max(1, math.ceil(n * min(1.0, max(0.0, keep_ratio))))
     for i in order:
         if len(kept_idx) >= min_keep and running / total_e >= energy_threshold:
             break
@@ -550,7 +550,7 @@ def _self_test() -> int:
         {"bits": 0.0, "route_raw": "skill-a", "route_compressed": "skill-b"},
         {"bits": 0.0, "route_raw": "skill-a", "route_compressed": "skill-a"},
     ]
-    est = estimate_decision_rd(recs)
+    estimate_decision_rd(recs)
     # With D=0.5 and H>0, R=0 may be below bound
     recs0 = [
         {"bits": 10.0, "route_raw": "a", "route_compressed": "a"},

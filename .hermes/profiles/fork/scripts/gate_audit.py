@@ -448,7 +448,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description="Gate audit script for Jev verification infrastructure."
     )
-    parser.add_argument("--demo", action="store_true",
+    parser.add_argument("--self-test", "--demo", action="store_true", dest="demo",
                         help="Run with synthetic gate decision demo data (exit 0)")
     parser.add_argument("--report", action="store_true",
                         help="Print human-readable audit report")

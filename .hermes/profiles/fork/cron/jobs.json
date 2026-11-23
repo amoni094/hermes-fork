@@ -693,15 +693,15 @@
       "schedule_display": "every 10m",
       "repeat": {
         "times": null,
-        "completed": 7604
+        "completed": 7605
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-06-26T11:06:08.602796+10:00",
-      "next_run_at": "2026-11-23T22:32:52.425174+11:00",
-      "last_run_at": "2026-11-23T22:22:52.425174+11:00",
+      "next_run_at": "2026-11-23T22:43:53.401893+11:00",
+      "last_run_at": "2026-11-23T22:33:53.401893+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -717,9 +717,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T22:21:52.812615+11:00",
-        "dispatched_at": "2026-11-23T22:22:49.671498+11:00",
-        "lateness_seconds": 56.9,
+        "scheduled_at": "2026-11-23T22:32:52.425174+11:00",
+        "dispatched_at": "2026-11-23T22:33:49.690499+11:00",
+        "lateness_seconds": 57.3,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -1715,14 +1715,14 @@
       },
       "state": "scheduled",
       "created_at": "2026-09-22T15:29:09.530109+10:00",
-      "next_run_at": "2026-11-23T22:33:56.252806+11:00",
-      "last_run_at": "2026-11-23T22:18:56.252806+11:00",
+      "next_run_at": "2026-11-23T22:50:02.877526+11:00",
+      "last_run_at": "2026-11-23T22:35:02.877526+11:00",
       "last_status": "ok",
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T22:17:56.525211+11:00",
-        "dispatched_at": "2026-11-23T22:18:49.647874+11:00",
-        "lateness_seconds": 53.1,
+        "scheduled_at": "2026-11-23T22:33:56.252806+11:00",
+        "dispatched_at": "2026-11-23T22:34:49.640833+11:00",
+        "lateness_seconds": 53.4,
         "kind": "on_time"
       },
       "fire_claim": null,
@@ -5957,7 +5957,7 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cbf-loop-constraint.py",
       "no_agent": true,
       "description": "CBF gate between loop-PID output and irreversible actions",
-      "next_run_at": "2026-11-23T22:37:00+11:00",
+      "next_run_at": "2026-11-23T23:07:00+11:00",
       "env": {
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
@@ -5966,13 +5966,13 @@
       "enabled": true,
       "state": "scheduled",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T22:07:00+11:00",
-        "dispatched_at": "2026-11-23T22:07:49.736083+11:00",
+        "scheduled_at": "2026-11-23T22:37:00+11:00",
+        "dispatched_at": "2026-11-23T22:37:49.654798+11:00",
         "lateness_seconds": 49.7,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T22:08:08.017855+11:00",
+      "last_run_at": "2026-11-23T22:37:53.288610+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -8974,7 +8974,127 @@
       "timeout_seconds": 120,
       "priority": 3,
       "next_run_at": "2026-11-23T23:32:51.589941+11:00"
+    },
+    {
+      "id": "rd-compaction-advisor-0001",
+      "name": "rd-compaction-advisor",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 30,
+        "display": "every 30m"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/rd-compaction-advisor.py",
+      "no_agent": true,
+      "description": "Rate-distortion advisor; writes cache/rd-compaction-advisory.json + rd-lambda-target.json consumed by context-pressure-guard plugin",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes/profiles/fork",
+        "HERMES_NO_SANDBOX": "1"
+      },
+      "last_dispatch": null,
+      "fire_claim": null,
+      "last_run_at": null,
+      "last_status": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled",
+      "last_error": null,
+      "profile": "fork",
+      "enabled": true,
+      "timeout_seconds": 120,
+      "priority": 3,
+      "next_run_at": "2026-11-23T23:11:49.646567+11:00"
+    },
+    {
+      "id": "jev-gate-nightly-0001",
+      "name": "jev-gate-nightly",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 0 * * *",
+        "display": "0 0 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/jev-gate-nightly.py",
+      "no_agent": true,
+      "description": "Nightly JEV gate audit; reads jev-turn-scores.jsonl from jev-turn-evaluator plugin; gates compaction quality decisions",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes/profiles/fork",
+        "HERMES_NO_SANDBOX": "1"
+      },
+      "last_dispatch": null,
+      "fire_claim": null,
+      "last_run_at": null,
+      "last_status": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled",
+      "last_error": null,
+      "profile": "fork",
+      "enabled": true,
+      "timeout_seconds": 180,
+      "priority": 3,
+      "next_run_at": "2026-11-24T00:00:00+11:00"
+    },
+    {
+      "id": "gate-audit-0001",
+      "name": "gate-audit",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 30,
+        "display": "every 30m"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/gate_audit.py",
+      "no_agent": true,
+      "description": "Jev gate audit; writes cache/gate-audit.json + calibration-log.json consumed by alarm-aggregator pipeline",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes/profiles/fork",
+        "HERMES_NO_SANDBOX": "1"
+      },
+      "last_dispatch": null,
+      "fire_claim": null,
+      "last_run_at": null,
+      "last_status": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled",
+      "last_error": null,
+      "profile": "fork",
+      "enabled": true,
+      "timeout_seconds": 120,
+      "priority": 3,
+      "next_run_at": "2026-11-23T23:11:49.646567+11:00"
+    },
+    {
+      "id": "skill-router-index-0001",
+      "name": "skill-router-index",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 120,
+        "display": "every 120m"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/skill-router-index.py",
+      "no_agent": true,
+      "description": "Rebuilds routing-weights.json from skill metadata; consumed by memory-query-router",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes/profiles/fork",
+        "HERMES_NO_SANDBOX": "1"
+      },
+      "last_dispatch": null,
+      "fire_claim": null,
+      "last_run_at": null,
+      "last_status": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled",
+      "last_error": null,
+      "profile": "fork",
+      "enabled": true,
+      "timeout_seconds": 180,
+      "priority": 3,
+      "next_run_at": "2026-11-24T00:41:49.646567+11:00"
     }
   ],
-  "updated_at": "2026-11-23T22:32:51.934283+11:00"
+  "updated_at": "2026-11-23T22:41:49.911587+11:00"
 }

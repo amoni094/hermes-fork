@@ -764,7 +764,7 @@ def cmd_build(incremental: bool = False):
 
     # Strip tfidf from the JSON (rebuild at query time from tokens)
     index = {
-        "built_at": datetime.now(timezone.utc).isoformat(),
+        "built_at": datetime.now(_dt.UTC).isoformat(),
         "total": len(skills),
         "skills": [
             {
@@ -865,12 +865,12 @@ def route(query_text: str, top: int = 5) -> list[dict]:
     AMBIGUITY_GAP = 0.12
     LATTICE_BOOST = 0.15
     if len(scored) >= 2:
-        gap = scored[0][0] - scored[1][0]
+        _gap = scored[0][0] - scored[1][0]
         if should_semantic_fallback(scored, AMBIGUITY_GAP) and LATTICE_SCRIPT.exists():
             try:
                 _lat = subprocess.run(
                     [sys.executable, str(LATTICE_SCRIPT), "--query", query_text, "--top-k", "5"],
-                    capture_output=True, text=True, timeout=10,
+                    capture_output=True, text=True, timeout=10, check=False,
                 )
                 lattice_hits = json.loads(_lat.stdout) if _lat.returncode == 0 else []
             except Exception:
@@ -913,7 +913,7 @@ def route(query_text: str, top: int = 5) -> list[dict]:
             _proc = subprocess.run(
                 [sys.executable, str(_SCRIPTS / "soft-bellman-skill-router.py"),
                  "--query", query_text, "--top", "3"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, timeout=5, check=False,
             )
             # Output is human-readable table; parse "  SKILL P Q N" lines
             _suggestion = None
@@ -937,7 +937,7 @@ def route(query_text: str, top: int = 5) -> list[dict]:
             _proc = subprocess.run(
                 [sys.executable, str(_SCRIPTS / "kl-skill-prior.py"),
                  "--top", "3"] + query_text.split(),
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, timeout=5, check=False,
             )
             _kl_data = json.loads(_proc.stdout) if _proc.returncode == 0 and _proc.stdout.strip() else []
             if _kl_data and isinstance(_kl_data, list) and _kl_data[0].get("name"):
@@ -955,7 +955,7 @@ def route(query_text: str, top: int = 5) -> list[dict]:
             _proc = subprocess.run(
                 [sys.executable, str(_SCRIPTS / "pareto-phase-router.py"),
                  "--task", query_text, "--dry-run"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, timeout=5, check=False,
             )
             # Output: table line "  TASK_PREVIEW  PHASE  SELECTED_ROUTES"
             # Last non-empty data line after the header contains routes
@@ -978,7 +978,7 @@ def route(query_text: str, top: int = 5) -> list[dict]:
             _proc = subprocess.run(
                 [sys.executable, str(_SCRIPTS / "privacy-constrained-skill-router.py"),
                  "--task", query_text, "--skill", "any", "--dry-run"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, timeout=5, check=False,
             )
             # Parse verdict from output: "✓/✗  task_preview  skill  verdict"
             _verdict = None
@@ -997,7 +997,7 @@ def route(query_text: str, top: int = 5) -> list[dict]:
             _proc = subprocess.run(
                 [sys.executable, str(_SCRIPTS / "online-threshold-skill-router.py"),
                  query_text],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, timeout=5, check=False,
             )
             # Parse "Selected: SKILL_NAME" line from output
             _selected = None
@@ -1022,7 +1022,7 @@ def route(query_text: str, top: int = 5) -> list[dict]:
 
 
 def cmd_query(query_text: str):
-    skills, idf, index = load_index_with_tfidf()
+    skills, idf, _index = load_index_with_tfidf()
     q_tokens = tokenize(query_text)
     # Query vectorisation: use BM25 TF to match document scoring.
     # For short queries, length normalisation (b) is set to 0 (avgdl=dl=1 → no length penalty).
@@ -1062,13 +1062,13 @@ def cmd_query(query_text: str):
     semantic_reranked = False
 
     if len(scored) >= 2:
-        gap = scored[0][0] - scored[1][0]
+        _gap = scored[0][0] - scored[1][0]
         if should_semantic_fallback(scored, AMBIGUITY_GAP) and LATTICE_SCRIPT.exists():
             try:
                 _lat_result = subprocess.run(
                     [sys.executable, str(LATTICE_SCRIPT),
                      "--query", query_text, "--top-k", "5"],
-                    capture_output=True, text=True, timeout=10,
+                    capture_output=True, text=True, timeout=10, check=False,
                 )
                 lattice_hits = (
                     json.loads(_lat_result.stdout)
@@ -1214,7 +1214,7 @@ def cmd_compile_patterns():
         has_risk = bool(NESTED_QUANT_RE.search(pattern_str))
 
         try:
-            compiled = re.compile(pattern_str, re.IGNORECASE)
+            re.compile(pattern_str, re.IGNORECASE)
             compiled_ok += 1
         except re.error as exc:
             warnings.append((skill["name"], pattern_str[:100], f"compile error: {exc}"))
@@ -1246,7 +1246,7 @@ def cmd_compile_patterns():
 
 
 def cmd_check():
-    skills, idf, index = load_index_with_tfidf()
+    skills, _idf, _index = load_index_with_tfidf()
     print(f"Checking {len(skills)} skills for high-overlap pairs (threshold={OVERLAP_THRESHOLD})...\n")
     flags = []
     for i in range(len(skills)):
@@ -1262,7 +1262,7 @@ def cmd_check():
         print(f"Found {len(flags)} high-overlap pairs:\n")
         for sim, a, b in flags:
             print(f"  {sim:.3f}  {a}  <->  {b}")
-        print(f"\n(These pairs may confuse routing — consider tightening descriptions or merging)")
+        print("\n(These pairs may confuse routing — consider tightening descriptions or merging)")
 
     dups = flag_near_duplicate_triggers(skills, min_dist=5)
     if dups:

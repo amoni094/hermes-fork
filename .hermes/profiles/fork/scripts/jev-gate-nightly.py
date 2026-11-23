@@ -32,7 +32,7 @@ import json
 import os
 import statistics
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes" / "profiles" / "fork")))
@@ -57,9 +57,9 @@ def parse_args() -> argparse.Namespace:
 def load_window(path: Path, window_days: int) -> list[dict]:
     if not path.exists():
         return []
-    cutoff = datetime.now(tz=timezone.utc).timestamp() - window_days * 86400
+    cutoff = datetime.now(tz=UTC).timestamp() - window_days * 86400
     out = []
-    with path.open() as f:
+    with path.open(encoding='utf-8') as f:
         for lineno, line in enumerate(f, 1):
             line = line.strip()
             if not line:
@@ -154,13 +154,13 @@ def main() -> int:
         print(json.dumps({
             "verdict": v, "reason": reason, "metrics": m,
             "window_days": args.window, "scores_file": str(args.scores_file),
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "timestamp": datetime.now(tz=UTC).isoformat(),
         }, indent=2, default=str))
     else:
         sep = "=" * 60
         ms = m["mean_score"]
         print(f"\n{sep}")
-        print(f"  jev-gate-nightly — jev-turn-evaluator promotion gate")
+        print("  jev-gate-nightly — jev-turn-evaluator promotion gate")
         print(f"  Window {args.window}d | {args.scores_file.name}")
         print(f"{sep}")
         print(f"  Total turns  : {m['total_turns']}")
