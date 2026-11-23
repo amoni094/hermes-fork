@@ -17,7 +17,10 @@ pre_compress
   Fires before ContextCompressor.compress() runs. Gate triggers
   (either condition fires):
     1. turn_count >= TURN_THRESHOLD (default 1100)
-    2. Head-hit-rate (after_tokens/before_tokens) < HHR_THRESHOLD for
+    2. context_tokens >= TOKEN_THRESHOLD (default 100 000) — the host
+       post_tool overflow path where _session_messages is empty and
+       turn_count=0 (token count is the reliable signal there)
+    3. Head-hit-rate (after_tokens/before_tokens) < HHR_THRESHOLD for
        HHR_K consecutive rows in compaction_telemetry
 
 Hysteresis: once fired for session S at turn T, won't fire again until
@@ -55,6 +58,7 @@ logger = logging.getLogger("compaction-gate")
 # ── tunables ──────────────────────────────────────────────────────────────
 ISS_GAIN = 0.35
 TURN_THRESHOLD = 1100         # gate fires when turn_count >= this
+TOKEN_THRESHOLD = 100_000     # gate fires when context_tokens >= this (host post_tool path)
 HYSTERESIS_TURNS = 200        # min turns between fires for same session
 HHR_THRESHOLD = 0.35          # after_tokens/before_tokens ratio below → poor HHR (< 35% retained)
 HHR_K = 3                     # consecutive low-HHR rows needed for hard gate
@@ -72,7 +76,7 @@ _CTX: Any = None
 _schema_ready: bool = False
 _schema_lock = threading.Lock()
 # session_id -> last turn_count at which the gate fired (hysteresis guard)
-_last_fire: dict[str, int] = {}
+_last_fire: dict[str, tuple[int, float]] = {}
 
 
 # ── path helpers ──────────────────────────────────────────────────────────
@@ -197,7 +201,8 @@ def _check_hhr(session_id: str, conn: sqlite3.Connection) -> tuple[bool, bool]:
     return False, False
 
 
-def _check_gate(session_id: str, turn_count: int, conn: sqlite3.Connection) -> tuple[bool, bool]:
+def _check_gate(session_id: str, turn_count: int, conn: sqlite3.Connection,
+                context_tokens: int = 0) -> tuple[bool, bool]:
     """
     Decide whether the gate fires for this session.
     Returns (fire_full, fire_soft):
@@ -206,24 +211,33 @@ def _check_gate(session_id: str, turn_count: int, conn: sqlite3.Connection) -> t
     Applies hysteresis: once fired at turn T, won't fire_full again until T+HYSTERESIS_TURNS.
     Records the fire turn in _last_fire.
     depth_threshold is read from config at call-time so operators can tune without restart.
+    Token gate: fires when context_tokens >= token_threshold (host post_tool overflow path where
+    _session_messages is empty and turn_count is 0).
     """
     # Read tunable threshold from config (falls back to module constant)
     depth_threshold = _cfg_int("depth_threshold", TURN_THRESHOLD)
+    token_threshold = _cfg_int("token_threshold", TOKEN_THRESHOLD)
+    # Hysteresis: keyed on turn count when available, timestamp otherwise.
+    # _last_fire stores (last_turns, last_ts) per session.
+    last_entry = _last_fire.get(session_id)
+    if last_entry is not None:
+        last_turns, last_ts = last_entry if isinstance(last_entry, tuple) else (last_entry, 0.0)
+        # Turn-count hysteresis (reliable when host supplies nonzero turns)
+        if turn_count > 0 and last_turns > 0 and (turn_count - last_turns) < HYSTERESIS_TURNS:
+            return False, False
+        # Time-based hysteresis for token-triggered path (at least HYSTERESIS_TURNS*2 seconds)
+        if turn_count == 0 and last_ts and (time.time() - last_ts) < (HYSTERESIS_TURNS * 2):
+            return False, False
 
-    # Hysteresis check
-    last = _last_fire.get(session_id, 0)
-    if last and (turn_count - last) < HYSTERESIS_TURNS:
-        return False, False
-
-    # Hard gate: turn threshold
-    if turn_count >= depth_threshold:
-        _last_fire[session_id] = turn_count
+    # Hard gate: turn threshold OR token overflow (post_tool path)
+    if turn_count >= depth_threshold or (context_tokens >= token_threshold > 0):
+        _last_fire[session_id] = (turn_count, time.time())
         return True, False
 
     # HHR-based gate
     hard, soft = _check_hhr(session_id, conn)
     if hard:
-        _last_fire[session_id] = turn_count
+        _last_fire[session_id] = (turn_count, time.time())
         return True, False
     if soft:
         return False, True
@@ -471,7 +485,7 @@ def pre_compress(
             return {}
 
         try:
-            fire_full, fire_soft = _check_gate(sid, turns, conn)
+            fire_full, fire_soft = _check_gate(sid, turns, conn, context_tokens=int(context_tokens or 0))
 
             record: dict[str, Any] = {
                 "ts": _now_iso(),
