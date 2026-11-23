@@ -13,7 +13,7 @@
   <a href="https://nousresearch.com"><img src="https://img.shields.io/badge/Built%20by-Nous%20Research-blueviolet?style=for-the-badge" alt="Built by Nous Research"></a>
 </p>
 
-**227 commits ahead of upstream. 24 active plugins. 266 enabled scheduled jobs. 6 new agent modules.**
+**396 commits ahead of upstream. 24 active plugins. 162 enabled scheduled jobs. 6 new agent modules.**
 
 ---
 
@@ -196,7 +196,7 @@ The fork modifies what happens at compress time and measures quality in backgrou
 
 **jev-compaction plugin** — the most significant compaction modification. Replaces the tool-result pruning step with a scored version: tool results are ranked by recency and relevance density, divided into tiers, and the middle tier is scored for informativeness using up to 8 secondary model calls per compaction. Fail-open.
 
-**compaction-gate plugin** — observability only, does not block. Runs quality checks and appends a record to a log. If it's early in the session, it logs a skip notice instead.
+**compaction-gate plugin** — compression gate using Wald SPRT on head-hit-rate. Fires before compression: scores MDL facts, injects a hindsight context block, and can defer or suppress compression when the SPRT signal says the compressor is healthy. Also writes quality metrics per compression.
 
 **context-pressure-guard plugin** — computes a compression signal based on how much pressure the context is under and writes it to a cache file for use by other components.
 
@@ -211,8 +211,8 @@ A separate evaluation tool compresses a saved transcript under different policie
 Scheduled quality metrics that run on a cron schedule (not modifying the compressor):
 - Nightly compression quality score — precision and recall between pre/post compression. Alarms if precision drops below 0.3 (fabrication risk) or recall below 0.2 (too much lost).
 - Hourly typical-set coverage score
-- Every 30 minutes: a compression advisor writes a signal to a cache file
-- Every 15 minutes: a compression quality monitor
+- Every 30 minutes: a compression quality monitor and an rd-compaction advisor
+- Every 2 hours: a compression signal fuser
 
 ---
 
@@ -259,7 +259,7 @@ Lambda-tuner existed in the codebase as a shipped-but-not-deployed plugin. The f
 |---|---|---|
 | `hindsight` | Every turn | The primary long-term memory backend. Retains every turn asynchronously. Recalls relevant past observations before each turn. |
 | `jev-compaction` | At compress time | Replaces the tool-result pruning step with a scored version. Up to 8 secondary model calls per compression to judge informativeness. |
-| `compaction-gate` | At compress time | Observability: computes compression quality and logs it. Does not block anything. |
+| `compaction-gate` | At compress time | Compression gate with Wald SPRT on head-hit-rate. Fires before compression: scores MDL facts, injects a hindsight context block, and can defer or suppress compression via the SPRT signal. Also logs quality metrics per compression. |
 | `context-pressure-guard` | At compress time | Computes a compression pressure signal and writes it to a cache file. |
 | `billion-context` | At compress time, on tool results | Growth-gated compression. Folds tool results to compact JSON before summarisation. Offloads oversized tool results to disk. |
 | `lambda-tuner` | On each message, at compress time, on session start/end, on tool results | Classifies the session as research, coding, or mixed. Applies the matching compression profile. Scores message complexity. Pre-compresses large tool outputs. |
@@ -301,7 +301,7 @@ Lambda-tuner existed in the codebase as a shipped-but-not-deployed plugin. The f
 
 ## Infrastructure and scheduling
 
-**Scheduled jobs**: 270 total, 266 enabled. The majority are research or alarm scripts that write to cache and are not in any critical path. The ones that matter for agent operation:
+**Scheduled jobs**: 209 total, 162 enabled. The majority are research or alarm scripts that write to cache and are not in any critical path. The ones that matter for agent operation:
 
 | Job | Schedule | Role |
 |---|---|---|
