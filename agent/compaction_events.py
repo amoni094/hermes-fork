@@ -240,14 +240,16 @@ def provider_native_payload(*, session_id: str, compression_count: Any = None) -
 def fire_pre_compress(
     *, session_id: str, turn_count: int = 0, context_tokens: int = 0, trigger_reason: str = "auto",
     agent: Any = None,
-) -> None:
+) -> dict[str, Any]:
     """The ``pre_compress`` plugin hook, fired BEFORE ContextCompressor.compress() begins.
-    Callbacks are isolated by the dispatcher. Non-blocking: wrapped in contextlib.suppress."""
+    Callbacks are isolated by the dispatcher. Non-blocking: wrapped in contextlib.suppress.
+    Returns a merged dict of plugin results (e.g. ``hindsight_context``); ``{}`` on skip/error."""
     from hermes_cli.lifecycle import has_hook, invoke_hook
 
+    merged: dict[str, Any] = {}
     if has_hook("pre_compress"):
         with contextlib.suppress(Exception):
-            invoke_hook(
+            hook_results = invoke_hook(
                 "pre_compress",
                 session_id=session_id,
                 turn_count=turn_count,
@@ -255,6 +257,13 @@ def fire_pre_compress(
                 trigger_reason=trigger_reason,
                 agent=agent,
             )
+            if isinstance(hook_results, dict):
+                merged.update(hook_results)
+            elif isinstance(hook_results, list):
+                for item in hook_results:
+                    if isinstance(item, dict):
+                        merged.update(item)
+    return merged
 
 
 def fire_post_compaction(

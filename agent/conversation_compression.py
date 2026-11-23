@@ -3846,6 +3846,7 @@ class _Attempt:
     seed: dict[str, Any]
     durable_cooldown_authoritative: Optional[bool] = None
     durable_cooldown_state: Optional[dict[str, Any]] = None
+    hindsight_context: str = ""
 
     def restore_compressor(self, compressor: Any) -> None:
         """Roll the compressor back to this attempt's snapshot (durable cooldown included)."""
@@ -3858,6 +3859,7 @@ class _Attempt:
 def _begin_compression_attempt(
     agent: Any, *, force: bool, defer_notification: bool, trigger: Optional[str] = None,
     approx_tokens: Optional[int] = None, overflow_reason: Optional[str] = None,
+    messages: Optional[list] = None,
 ) -> _Attempt:
     """Snapshot + claim the compressor, reset per-attempt agent signals, build this attempt's telemetry seed
     (written to the compressor only at dispatch, in ``_run_summary_phase``).
@@ -3888,20 +3890,35 @@ def _begin_compression_attempt(
         "attempt_id": attempt_id, "session_id": getattr(agent, "session_id", None) or "", "trigger_source": trigger,
         "overflow_reason": overflow_reason,
     }
+    hindsight = ""
     with contextlib.suppress(Exception):
         agent._compression_attempt_id = attempt_id
         from hermes_cli.observability.shared_metrics_events import begin_compression_attempt
 
         begin_compression_attempt(trigger, approx_tokens or getattr(agent.context_compressor, "last_prompt_tokens", None))
         from agent.compaction_events import fire_pre_compress
-        fire_pre_compress(
+        result = fire_pre_compress(
             session_id=getattr(agent, "session_id", None) or "",
             context_tokens=approx_tokens or getattr(agent.context_compressor, "last_prompt_tokens", None) or 0,
             trigger_reason=trigger,
             turn_count=len(getattr(agent, "conversation_history", None) or []),
             agent=agent,
         )
-    return _Attempt(snapshot, generation, started_at, seed)
+        hindsight = result.get("hindsight_context", "") if isinstance(result, dict) else ""
+        if hindsight:
+            try:
+                if isinstance(messages, list):
+                    already_present = any(
+                        isinstance(m, dict) and m.get("role") == "system" and str(m.get("content", "")).startswith("[HINDSIGHT")
+                        for m in messages[:5]
+                    )
+                    if not already_present:
+                        hindsight_msg = {"role": "system", "content": hindsight}
+                        insert_pos = 1 if messages and isinstance(messages[0], dict) and messages[0].get("role") == "system" else 0
+                        messages.insert(insert_pos, hindsight_msg)
+            except Exception:
+                pass
+    return _Attempt(snapshot, generation, started_at, seed, hindsight_context=hindsight if isinstance(hindsight, str) else "")
 
 
 def _route_codex_compaction(
@@ -3993,7 +4010,7 @@ def compress_context(
     """
     attempt = _begin_compression_attempt(
         agent, force=force, defer_notification=defer_context_engine_notification, trigger=trigger,
-        approx_tokens=approx_tokens, overflow_reason=overflow_reason,
+        approx_tokens=approx_tokens, overflow_reason=overflow_reason, messages=messages,
     )
 
     # Codex owns the real thread; route compaction to its own compact (config
@@ -4203,6 +4220,19 @@ def compress_context(
             failure_class=("session_split_failed" if split_status in {"failed_not_indexed", "aborted"} else None),
             commit_started_at=commit.commit_started_at, attempt_seed=attempt.seed, history_rewritten=rewritten,
         )
+        try:
+            _hs = attempt.hindsight_context if isinstance(getattr(attempt, "hindsight_context", ""), str) else ""
+            if _hs and isinstance(compressed, list):
+                already_present = any(
+                    isinstance(m, dict) and m.get("role") == "system" and str(m.get("content", "")).startswith("[HINDSIGHT")
+                    for m in compressed[:5]
+                )
+                if not already_present:
+                    hindsight_msg = {"role": "system", "content": _hs}
+                    insert_pos = 1 if compressed and isinstance(compressed[0], dict) and compressed[0].get("role") == "system" else 0
+                    compressed.insert(insert_pos, hindsight_msg)
+        except Exception:
+            pass
         return compressed, new_system_prompt
     finally:
         # Release the old lock after rotation bookkeeping so a waking contender sees the new session id.
