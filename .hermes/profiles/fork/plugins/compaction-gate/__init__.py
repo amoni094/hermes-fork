@@ -181,7 +181,7 @@ def _check_hhr(session_id: str, conn: sqlite3.Connection) -> tuple[bool, bool]:
     low_rows = [r for r in rows if r[1] and (r[0] / r[1]) < HHR_THRESHOLD]
     if len(low_rows) >= HHR_K:
         return True, False
-    if len(low_rows) == 1:
+    if 0 < len(low_rows) < HHR_K:
         return False, True
     return False, False
 
@@ -409,11 +409,13 @@ def _cfg_float(key: str, default: float) -> float:
 
 
 def _history(agent: Any) -> list[Any]:
+    """Try every known attribute name AIAgent uses for its message store."""
     if agent is None:
         return []
-    hist = getattr(agent, "conversation_history", None)
-    if isinstance(hist, list):
-        return hist
+    for attr in ("_session_messages", "conversation_history", "_messages"):
+        hist = getattr(agent, attr, None)
+        if isinstance(hist, list) and hist:
+            return hist
     return []
 
 
@@ -425,16 +427,20 @@ def pre_compress(
     context_tokens: int = 0,
     trigger_reason: str = "auto",
     agent: Any = None,
+    messages: list | None = None,
     **_kwargs: Any,
 ) -> dict[str, Any]:
     """
     Main hook. Returns {} always (fail-open).
     On gate fire: extracts MDL facts, persists to SQLite, logs outcome.
+    ``messages`` is an optional snapshot from the host (future-compat);
+    falls back to agent._session_messages / conversation_history.
     """
     t0 = time.monotonic()
     try:
         min_saving = _cfg_float("mdl_min_saving", _DEFAULT_MDL)
-        hist = _history(agent)
+        # Prefer explicitly supplied snapshot; fall back to agent store
+        hist = list(messages) if isinstance(messages, list) and messages else _history(agent)
         turns = int(turn_count or 0)
         if turns <= 0:
             turns = len(hist)
@@ -460,7 +466,7 @@ def pre_compress(
                 "trigger_reason": trigger_reason or "auto",
                 "depth_threshold": TURN_THRESHOLD,
                 "mdl_min_saving": min_saving,
-                "gated": not fire_full and not fire_soft,
+                "gated": not (fire_full or fire_soft),  # True = gate blocked, compression proceeds unmodified
                 "fire_full": fire_full,
                 "fire_soft": fire_soft,
                 "n_facts": 0,
