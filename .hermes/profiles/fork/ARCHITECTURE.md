@@ -286,7 +286,8 @@ Live plugins under ~/.hermes/profiles/fork/plugins/, enabled in config.yaml plug
   jev-turn-evaluator     - in plugins.enabled (shadow gate, shadow_jev_evaluator=true; Wave 19 GATE CLOSED)
   memory-ransac-gate     - post_tool_call RANSAC outlier gate; rejects tool results that are geometric outliers relative to memory corpus; fail-open (Wave 18 ADV-001 fixed)
   camofox                - Camofox anti-detection browser tools over camofox-browser REST (browser_navigate/snapshot/click/type/...)
-  deductive-verifier     - pre_tool_call semantic predicate gate; blocks CRITICAL command patterns (complements governance-hard-block)
+  deductive-verifier     - pre_tool_call semantic predicate gate; blocks CRITICAL command patterns (complements governance-hard-block); DV-B-001 fixed: returns message= not reason= so dispatcher actually enforces blocks
+  compaction-gate        - pre_compress + post_compaction; session-depth gate (TURN_THRESHOLD=1100) + HHR branch (after_tokens/before_tokens < 0.35 for K=3 consecutive passes); on_post_compaction writes compaction_telemetry to state.db activating HHR; MDL fact scoring + SHA-256 dedup; persists to compaction_gate_facts (SQLite + FTS5 cgf_fts); fail-open (never blocks compression); writes cache/compaction-gate-log.jsonl (operator-only dark output — CG-F-001)
   post-tool-compliance   - post_tool_call observation-only compliance scorer; writes cache/compliance-scores.jsonl (fail-open)
   decision-audit         - post_tool_call resolvability logger; every 10 calls writes decision-audit-log.jsonl + delegation_audit (fail-open)
   skill-access-logger    - post_tool_call shadow hook; logs skill_view to cache/skill-access.log and cache/calibration-log.jsonl (scope=skill_name) for skill-graph-builder co-access edges (fail-open)
