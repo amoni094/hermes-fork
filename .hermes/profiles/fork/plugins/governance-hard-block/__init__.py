@@ -67,7 +67,7 @@ _AST_DBM_WRITE: frozenset[str] = frozenset({"n", "c", "w"})
 _AST_ALL_WRITE_STARTS: frozenset[str] = frozenset({"w", "a", "x", "n", "c", "r+"})
 
 
-def _unwrap_to_dict(node: "ast.expr") -> "ast.Dict | None":
+def _unwrap_to_dict(node: ast.expr) -> ast.Dict | None:
     """Try to extract an ast.Dict from common wrapper expressions.
 
     Fail-closed: when multiple dict candidates exist (BoolOp, IfExp),
@@ -137,7 +137,7 @@ def _unwrap_to_dict(node: "ast.expr") -> "ast.Dict | None":
         # Peel walrus on the index itself
         while isinstance(idx_node, ast.NamedExpr):
             idx_node = idx_node.value
-        idx: "int | None" = _resolve_const_int(idx_node)
+        idx: int | None = _resolve_const_int(idx_node)
         # Resolve the container — may itself be a Subscript chain or BoolOp/IfExp list
         container = _unwrap_to_dict_seq(node.value)
         if container is not None:
@@ -164,7 +164,7 @@ def _unwrap_to_dict(node: "ast.expr") -> "ast.Dict | None":
     return None
 
 
-def _resolve_const_int(node: "ast.expr") -> "int | None":
+def _resolve_const_int(node: ast.expr) -> int | None:
     """Fold a constant integer expression: Constant, bool, UnaryOp +/-, BinOp on constants."""
     if node is None:
         return None
@@ -199,14 +199,14 @@ def _resolve_const_int(node: "ast.expr") -> "int | None":
     return None
 
 
-def _dict_subscript_lookup(d: "ast.Dict", key_node: "ast.expr") -> "ast.Dict | None":
+def _dict_subscript_lookup(d: ast.Dict, key_node: ast.expr) -> ast.Dict | None:
     """Look up key_node in a Dict literal and return _unwrap_to_dict of the matched value.
 
     Supports Constant (str/int/bool) keys. When key is unresolvable, fail-closed:
     scan all values for a write-mode dict.
     """
     # Try to resolve the key to a Python scalar
-    key_val: "object" = None
+    key_val: object = None
     has_key = False
     while isinstance(key_node, ast.NamedExpr):
         key_node = key_node.value
@@ -242,7 +242,7 @@ def _dict_subscript_lookup(d: "ast.Dict", key_node: "ast.expr") -> "ast.Dict | N
     return None
 
 
-def _unwrap_to_dict_seq(node: "ast.expr") -> "list | None":
+def _unwrap_to_dict_seq(node: ast.expr) -> list | None:
     """Return a Python list of AST nodes from a literal List or Tuple,
     or through Subscript chains, BoolOp, and IfExp wrappers.
 
@@ -310,7 +310,7 @@ def _unwrap_to_dict_seq(node: "ast.expr") -> "list | None":
         return _unwrap_to_dict_seq(elem)
 
 
-def _get_const_str(node: "ast.expr | None") -> "str | None":
+def _get_const_str(node: ast.expr | None) -> str | None:
     """Return the string value if node is a constant str (or parenthesised str).
 
     Unwraps NamedExpr (walrus operator) to its value, since
@@ -326,7 +326,7 @@ def _get_const_str(node: "ast.expr | None") -> "str | None":
     return None
 
 
-def _extract_kv_from_dict(d: ast.Dict) -> "dict[str, str]":
+def _extract_kv_from_dict(d: ast.Dict) -> dict[str, str]:
     """Extract str->str pairs from a dict literal, recursing into spread sub-dicts.
 
     Handles open(**{**{'mode': 'w'}, 'file': '...'}) by recursing when a None
@@ -348,7 +348,7 @@ def _extract_kv_from_dict(d: ast.Dict) -> "dict[str, str]":
     return kv
 
 
-def _dict_has_write_mode(kv: "dict[str, str]") -> bool:
+def _dict_has_write_mode(kv: dict[str, str]) -> bool:
     """Return True if kv contains a write-mode 'mode' or 'flag' key."""
     for key in ("mode", "flag"):
         v = kv.get(key)
@@ -357,7 +357,7 @@ def _dict_has_write_mode(kv: "dict[str, str]") -> bool:
     return False
 
 
-def _resolve_func_name(func: ast.expr) -> "tuple[str | None, bool, bool]":
+def _resolve_func_name(func: ast.expr) -> tuple[str | None, bool, bool]:
     """Return (func_name, is_dbm, is_opaque).
 
     is_opaque=True when callee is a Call/Subscript/etc whose name cannot be
@@ -655,10 +655,10 @@ def _ledger_path() -> Path:
     return _hermes_home() / "logs" / "improvement-proposals.jsonl"
 
 
-def load_latest_proposals(ledger: Optional[Path] = None) -> Dict[str, dict]:
+def load_latest_proposals(ledger: Optional[Path] = None) -> dict[str, dict]:
     """Newest state per proposal id. Fail-closed: missing ledger => empty."""
     path = ledger or _ledger_path()
-    seen: Dict[str, dict] = {}
+    seen: dict[str, dict] = {}
     try:
         if not path.is_file():
             return seen
@@ -679,7 +679,7 @@ def load_latest_proposals(ledger: Optional[Path] = None) -> Dict[str, dict]:
     return seen
 
 
-def has_approved_proposal(target_path: str, proposals: Optional[Dict[str, dict]] = None) -> bool:
+def has_approved_proposal(target_path: str, proposals: Optional[dict[str, dict]] = None) -> bool:
     """True iff some proposal in approved/deployed covers *target_path*.
 
     ADV-031: realpath-suffix check only. No basename short-circuits.
@@ -737,7 +737,7 @@ def _norm_path(p: str) -> str:
     try:
         return os.path.realpath(os.path.abspath(p))  # resolve symlinks (ADV fix)
     except OSError:
-        return os.path.abspath(p) if p else p
+        return os.path.realpath(os.path.abspath(p)) if p else p
 
 
 def is_bootstrap_exception(path: str) -> bool:
@@ -771,8 +771,8 @@ def is_high_risk_target(path: str) -> bool:
     return False
 
 
-def _string_values(args: Any) -> List[str]:
-    out: List[str] = []
+def _string_values(args: Any) -> list[str]:
+    out: list[str] = []
     if args is None:
         return out
     if isinstance(args, str):
@@ -795,8 +795,8 @@ _PATHISH = re.compile(
 )
 
 
-def extract_candidate_paths(args: Any) -> List[str]:
-    paths: List[str] = []
+def extract_candidate_paths(args: Any) -> list[str]:
+    paths: list[str] = []
     if isinstance(args, dict):
         for key in ("path", "file", "filename", "target", "dest", "destination",
                     "output", "src", "source", "old", "new"):
@@ -846,11 +846,11 @@ def looks_like_rename_or_copy(args: Any) -> bool:
     return bool(_RENAME_PRIMITIVES.search(blob) or _SHELL_RENAME.search(blob))
 
 
-def _deny(message: str) -> Dict[str, Any]:
+def _deny(message: str) -> dict[str, Any]:
     return {"action": "block", "message": message}
 
 
-def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
+def evaluate_write(tool_name: str, args: Any) -> Optional[dict[str, Any]]:
     """Pure decision. None = allow, dict with action=block = DENY."""
     if tool_name in _READ_SAFE:
         return None
@@ -1072,7 +1072,7 @@ def evaluate_write(tool_name: str, args: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
-def pre_tool_call(tool_name: str = "", args: Any = None, **_kwargs) -> Optional[Dict[str, Any]]:
+def pre_tool_call(tool_name: str = "", args: Any = None, **_kwargs) -> Optional[dict[str, Any]]:
     """Fail-closed for HIGH-risk writes. Not H-I7."""
     try:
         return evaluate_write(tool_name, args or {})

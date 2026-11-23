@@ -81,7 +81,7 @@ HHR_THRESHOLD = 0.35          # after_tokens/before_tokens ratio below → poor 
 HHR_K = 3                     # kept for test/backward compat; gate uses SPRT not fixed-K
 _SPRT_ALPHA = 0.05            # max false-compress rate
 _SPRT_BETA = 0.10             # max miss rate
-_SPRT_H0_LOW = 0.35           # H0: HHR above this = healthy
+_SPRT_H0_LOW = HHR_THRESHOLD  # alias — H0: HHR above this = healthy
 _SPRT_EPS = 0.01              # density floor to avoid log(0)
 _SPRT_MAX_ROWS = 20           # look back at most 20 telemetry rows
 _DEFAULT_DEPTH = 1100         # legacy config key alias
