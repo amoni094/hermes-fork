@@ -170,7 +170,7 @@ def _check_hhr(session_id: str, conn: sqlite3.Connection) -> tuple[bool, bool]:
     Check head-hit-rate from compaction_telemetry.
     Returns (hard_gate, soft_gate):
       hard_gate: K consecutive low-HHR rows exist
-      soft_gate: exactly 1 low-HHR row (short→medium transition)
+      soft_gate: 1 ≤ low-HHR rows < K (short→medium transition)
     """
     try:
         rows = conn.execute(
@@ -185,7 +185,11 @@ def _check_hhr(session_id: str, conn: sqlite3.Connection) -> tuple[bool, bool]:
     if not rows:
         return False, False
 
-    low_rows = [r for r in rows if r[1] and (r[0] / r[1]) < HHR_THRESHOLD]
+    low_rows = [
+        r for r in rows
+        if isinstance(r[0], (int, float)) and isinstance(r[1], (int, float))
+        and r[1] > 0 and (r[0] / r[1]) < HHR_THRESHOLD
+    ]
     if len(low_rows) >= HHR_K:
         return True, False
     if 0 < len(low_rows) < HHR_K:
@@ -201,14 +205,18 @@ def _check_gate(session_id: str, turn_count: int, conn: sqlite3.Connection) -> t
       fire_soft: log-only transition signal (no facts written)
     Applies hysteresis: once fired at turn T, won't fire_full again until T+HYSTERESIS_TURNS.
     Records the fire turn in _last_fire.
+    depth_threshold is read from config at call-time so operators can tune without restart.
     """
+    # Read tunable threshold from config (falls back to module constant)
+    depth_threshold = _cfg_int("depth_threshold", TURN_THRESHOLD)
+
     # Hysteresis check
     last = _last_fire.get(session_id, 0)
     if last and (turn_count - last) < HYSTERESIS_TURNS:
         return False, False
 
     # Hard gate: turn threshold
-    if turn_count >= TURN_THRESHOLD:
+    if turn_count >= depth_threshold:
         _last_fire[session_id] = turn_count
         return True, False
 

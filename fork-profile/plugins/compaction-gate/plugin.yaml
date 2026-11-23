@@ -10,6 +10,7 @@ hooks:
   - post_compaction
 provides_hooks:
   - pre_compress
+  - post_compaction
 settings:
   enabled: true
   depth_threshold: 1100
