@@ -90,12 +90,12 @@ def test_short_to_medium_gate(mc):
     # One low-HHR row: LLR > 0; hard if LLR >= A, else soft
     mc.execute("CREATE TABLE IF NOT EXISTS compaction_telemetry(id INTEGER PRIMARY KEY, session_id TEXT, after_tokens INTEGER, before_tokens INTEGER)")
     mc.execute("INSERT INTO compaction_telemetry(session_id,after_tokens,before_tokens)VALUES(?,?,?)", ("s7", 200, 1000))
-    mc.commit(); ff, fs = cg._check_gate("s7", 200, mc)
+    mc.commit(); ff, fs = cg._check_hhr("s7", mc)
     assert (fs and not ff) or (ff and not fs)
 
 def test_hhr_zero_rows_no_gate(mc):
     mc.execute("CREATE TABLE IF NOT EXISTS compaction_telemetry(id INTEGER PRIMARY KEY, session_id TEXT, after_tokens INTEGER, before_tokens INTEGER)")
-    mc.commit(); ff, fs = cg._check_gate("s8", 200, mc)
+    mc.commit(); ff, fs = cg._check_hhr("s8", mc)
     assert not ff and not fs
 
 def test_hhr_sprt_soft_mixed(mc):
@@ -103,5 +103,5 @@ def test_hhr_sprt_soft_mixed(mc):
     mc.execute("CREATE TABLE IF NOT EXISTS compaction_telemetry(id INTEGER PRIMARY KEY, session_id TEXT, after_tokens INTEGER, before_tokens INTEGER)")
     mc.execute("INSERT INTO compaction_telemetry(session_id,after_tokens,before_tokens)VALUES(?,?,?)", ("s9", 200, 1000))
     mc.execute("INSERT INTO compaction_telemetry(session_id,after_tokens,before_tokens)VALUES(?,?,?)", ("s9", 700, 1000))
-    mc.commit(); ff, fs = cg._check_gate("s9", 200, mc)
+    mc.commit(); ff, fs = cg._check_hhr("s9", mc)
     assert fs and not ff
