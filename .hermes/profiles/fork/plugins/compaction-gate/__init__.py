@@ -23,9 +23,10 @@ pre_compress
     3. Head-hit-rate (after_tokens/before_tokens) < HHR_THRESHOLD for
        HHR_K consecutive rows in compaction_telemetry
 
-Hysteresis: once fired for session S at turn T, won't fire again until
-T + HYSTERESIS_TURNS (default 200). Prevents redundant extraction on
-tightly-spaced compression events.
+Hysteresis: once fired for session S, won't fire again until either:
+- turn_count - last_turn_count >= HYSTERESIS_TURNS (turn-based path), or
+- time.time() - last_fire_ts >= HYSTERESIS_TURNS*2 seconds (token path, turn_count=0).
+Prevents redundant extraction on tightly-spaced compression events.
 
 Short-to-medium bridge: 1 <= low_rows < HHR_K -> soft gate (log only,
 no fact extraction) to track the transition window.
@@ -75,7 +76,7 @@ _WORD_RE = re.compile(r"[a-z0-9]{2,}")
 _CTX: Any = None
 _schema_ready: bool = False
 _schema_lock = threading.Lock()
-# session_id -> last turn_count at which the gate fired (hysteresis guard)
+# session_id -> (last_turn_count, last_fire_timestamp) hysteresis guard
 _last_fire: dict[str, tuple[int, float]] = {}
 
 
@@ -222,12 +223,16 @@ def _check_gate(session_id: str, turn_count: int, conn: sqlite3.Connection,
     last_entry = _last_fire.get(session_id)
     if last_entry is not None:
         last_turns, last_ts = last_entry if isinstance(last_entry, tuple) else (last_entry, 0.0)
-        # Turn-count hysteresis (reliable when host supplies nonzero turns)
-        if turn_count > 0 and last_turns > 0 and (turn_count - last_turns) < HYSTERESIS_TURNS:
-            return False, False
-        # Time-based hysteresis for token-triggered path (at least HYSTERESIS_TURNS*2 seconds)
-        if turn_count == 0 and last_ts and (time.time() - last_ts) < (HYSTERESIS_TURNS * 2):
-            return False, False
+        elapsed = time.time() - last_ts if last_ts else float("inf")
+        if turn_count > 0 and last_turns > 0:
+            # Turn-based hysteresis: both sides have real turn counts
+            if (turn_count - last_turns) < HYSTERESIS_TURNS:
+                return False, False
+        else:
+            # Time-based hysteresis: covers token path (turn_count=0) and
+            # token→turn transition (last_turns=0 but fired recently)
+            if elapsed < (HYSTERESIS_TURNS * 2):
+                return False, False
 
     # Hard gate: turn threshold OR token overflow (post_tool path)
     if turn_count >= depth_threshold or (context_tokens >= token_threshold > 0):
@@ -468,6 +473,7 @@ def pre_compress(
     t0 = time.monotonic()
     try:
         min_saving = _cfg_float("mdl_min_saving", _DEFAULT_MDL)
+        depth_threshold = _cfg_int("depth_threshold", TURN_THRESHOLD)
         # Prefer explicitly supplied snapshot; fall back to agent store
         hist = list(messages) if isinstance(messages, list) and messages else _history(agent)
         turns = int(turn_count or 0)
@@ -493,7 +499,7 @@ def pre_compress(
                 "turn_count": turns,
                 "context_tokens": int(context_tokens or 0),
                 "trigger_reason": trigger_reason or "auto",
-                "depth_threshold": TURN_THRESHOLD,
+                "depth_threshold": depth_threshold,
                 "mdl_min_saving": min_saving,
                 "gated": not (fire_full or fire_soft),  # True = gate blocked, compression proceeds unmodified
                 "fire_full": fire_full,
