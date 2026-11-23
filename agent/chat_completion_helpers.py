@@ -2104,7 +2104,7 @@ def try_activate_fallback(agent, reason: FailoverReason | None = None, reset_at=
             agent._reasoning_echo_flag = bool(fb.get("reasoning_echo", False))
             if hasattr(agent, "_transport_cache"):
                 agent._transport_cache.clear()
-            from agent.turn_recovery import reset_codex_reasoning_replay
+            from agent.turn_recovery_codex import reset_codex_reasoning_replay
             reset_codex_reasoning_replay(agent)
             agent._fallback_activated = True
 
