@@ -142,14 +142,14 @@
     "first_seen_at": null,
     "last_patched_at": "2026-10-08T06:56:04.100685+00:00",
     "last_reused_patch_generation": 2,
-    "last_used_at": "2026-11-23T09:24:33.726247+00:00",
-    "last_viewed_at": "2026-11-23T09:24:33.666914+00:00",
+    "last_used_at": "2026-11-23T10:36:13.482679+00:00",
+    "last_viewed_at": "2026-11-23T10:36:13.436384+00:00",
     "patch_count": 2,
     "patch_generation": 2,
     "pinned": false,
     "state": "active",
-    "use_count": 10,
-    "view_count": 10
+    "use_count": 11,
+    "view_count": 11
   },
   "anchored-context-distillation": {
     "archived_at": null,
@@ -1828,15 +1828,15 @@
     "created_by": null,
     "first_seen_at": null,
     "last_patched_at": "2026-11-23T09:51:07.082334+00:00",
-    "last_reused_patch_generation": 7,
-    "last_used_at": "2026-11-23T09:49:35.566119+00:00",
-    "last_viewed_at": "2026-11-23T09:49:35.526350+00:00",
+    "last_reused_patch_generation": 9,
+    "last_used_at": "2026-11-23T10:33:43.364324+00:00",
+    "last_viewed_at": "2026-11-23T10:33:43.344874+00:00",
     "patch_count": 9,
     "patch_generation": 9,
     "pinned": false,
     "state": "active",
-    "use_count": 6,
-    "view_count": 6
+    "use_count": 7,
+    "view_count": 7
   },
   "hermes-fork-regression-prevention": {
     "archived_at": null,
@@ -2167,14 +2167,14 @@
     "first_seen_at": null,
     "last_patched_at": "2026-11-23T10:06:26.877196+00:00",
     "last_reused_patch_generation": 26,
-    "last_used_at": "2026-11-23T10:30:02.584229+00:00",
-    "last_viewed_at": "2026-11-23T10:30:02.573643+00:00",
+    "last_used_at": "2026-11-23T10:36:13.399431+00:00",
+    "last_viewed_at": "2026-11-23T10:36:13.374894+00:00",
     "patch_count": 26,
     "patch_generation": 26,
     "pinned": false,
     "state": "active",
-    "use_count": 87,
-    "view_count": 87
+    "use_count": 89,
+    "view_count": 89
   },
   "hermes-research": {
     "archived_at": null,
@@ -3284,14 +3284,14 @@
     "created_by": null,
     "last_patched_at": null,
     "last_reused_patch_generation": 0,
-    "last_used_at": "2026-11-23T08:48:09.471408+00:00",
-    "last_viewed_at": "2026-11-23T08:48:09.394867+00:00",
+    "last_used_at": "2026-11-23T10:36:13.510459+00:00",
+    "last_viewed_at": "2026-11-23T10:36:13.451121+00:00",
     "patch_count": 0,
     "patch_generation": 0,
     "pinned": false,
     "state": "active",
-    "use_count": 116,
-    "view_count": 116
+    "use_count": 117,
+    "view_count": 117
   },
   "protonvpn-nm-automation": {
     "archived_at": null,
@@ -3376,14 +3376,14 @@
     "first_seen_at": null,
     "last_patched_at": "2026-11-20T01:00:53.912396+00:00",
     "last_reused_patch_generation": 292,
-    "last_used_at": "2026-11-23T10:06:35.926403+00:00",
-    "last_viewed_at": "2026-11-23T10:06:35.912074+00:00",
+    "last_used_at": "2026-11-23T10:36:13.465813+00:00",
+    "last_viewed_at": "2026-11-23T10:36:13.418054+00:00",
     "patch_count": 292,
     "patch_generation": 292,
     "pinned": false,
     "state": "active",
-    "use_count": 320,
-    "view_count": 320
+    "use_count": 322,
+    "view_count": 322
   },
   "recursive-pr-review-loop": {
     "archived_at": null,
