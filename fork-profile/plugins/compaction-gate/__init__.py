@@ -221,6 +221,14 @@ def _check_hhr(session_id: str, conn: sqlite3.Connection) -> tuple[bool, bool]:
         if not rows:
             return False, False
 
+        # Piecewise-uniform densities on [0, θ] vs (θ, 1]. The off-support
+        # floor must be high enough that ONE poor HHR stays in (0, A) (soft
+        # gate) while HHR_K consecutive poor rows still accept H1.
+        f1_low = 1.0 / _SPRT_H0_LOW
+        f0_high = 1.0 / (1.0 - _SPRT_H0_LOW)
+        one_obs_cap = f1_low / math.exp(a_bound)  # LLR == A at this eps
+        eps = max(_SPRT_EPS, one_obs_cap * 1.25)
+
         llr = 0.0
         for r in rows:
             if not (
@@ -230,8 +238,8 @@ def _check_hhr(session_id: str, conn: sqlite3.Connection) -> tuple[bool, bool]:
             ):
                 continue
             hhr = r[0] / r[1]
-            f1 = (1.0 / _SPRT_H0_LOW) if hhr < _SPRT_H0_LOW else _SPRT_EPS
-            f0 = _SPRT_EPS if hhr < _SPRT_H0_LOW else (1.0 / (1.0 - _SPRT_H0_LOW))
+            f1 = f1_low if hhr < _SPRT_H0_LOW else eps
+            f0 = eps if hhr < _SPRT_H0_LOW else f0_high
             llr += math.log(f1 / f0)
 
         if llr >= a_bound:
