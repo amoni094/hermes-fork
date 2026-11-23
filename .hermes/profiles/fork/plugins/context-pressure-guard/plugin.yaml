@@ -1,0 +1,17 @@
+name: context-pressure-guard
+version: "1.0.0"
+description: >
+  Closes ARCHITECTURE.md TIER 2 gap #6: reads the pressure log written by
+  context-pressure-reader.py and injects a [CONTEXT PRESSURE HIGH] context
+  hint into the LLM call when consecutive HIGH pressure turns >= 2, nudging
+  the model toward concise replies before the compressor fires.
+provides_hooks:
+  - pre_llm_call
+  - pre_compress
+hooks:
+  - pre_llm_call
+  - pre_compress
+settings:
+  enabled: true
+  consecutive_threshold: 2
+  pressure_source: "~/.hermes/cache/*pressure*.jsonl (or turn_usage*.jsonl)"

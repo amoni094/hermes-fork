@@ -1,0 +1,7 @@
+name: memory-ransac-gate
+description: RANSAC inlier gate on post_tool_call before memory commit (Szeliski). Fail-open.
+version: "1.0.0"
+type: hook
+entry: plugin.py
+hooks:
+  - post_tool_call

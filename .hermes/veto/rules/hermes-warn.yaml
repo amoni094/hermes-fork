@@ -1,0 +1,320 @@
+version: "1.0"
+name: "hermes-warn"
+description: >
+  Warn rules for Hermes — logged to audit trail, tool still executes.
+  Covers destructive-but-sometimes-legitimate patterns worth noting.
+
+rules:
+  - id: warn-etc-write
+    name: Warn on /etc writes
+    description: Flag writes targeting system configuration paths.
+    enabled: true
+    severity: high
+    action: warn
+    tools:
+      - write_file
+      - mcp__write_file
+      - patch
+      - mcp__patch
+    condition_groups:
+      - - field: arguments.path
+          operator: starts_with
+          value: '/etc/'
+
+  - id: warn-curl-pipe-sh
+    name: Warn on curl/wget piped to shell
+    description: Flag command patterns that download and execute scripts.
+    enabled: true
+    severity: high
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '(curl|wget)\s+.*\|\s*(ba)?sh'
+
+  - id: warn-git-force-push
+    name: Warn on git force push
+    description: Flag git push --force which can destroy remote history.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'git\s+push\s+.*(-f\b|--force\b)'
+
+  - id: warn-systemctl-stop
+    name: Warn on stopping system services
+    description: Flag systemctl stop/disable/mask commands.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'systemctl\s+(stop|disable|mask)\s'
+
+  - id: warn-chmod-777
+    name: Warn on world-writable chmod
+    description: Flag chmod 777 or similar world-writable permission sets.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'chmod\s+(-R\s+)?[0-7]*7[0-7]{2}\s'
+
+  - id: warn-env-var-shell-exec
+    name: Warn on env-var-assigned command execution
+    description: >
+      Warn when a command assigns a string to a variable and then executes it
+      via $VAR or eval, which can indirectly bypass pattern-based blocks.
+      Legitimate in build scripts; flag for audit review.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '[A-Z_][A-Z0-9_]*=["''][^"'']{10,}["'']\s*;?\s*\$\1'
+      - - field: arguments.command
+          operator: matches
+          value: '(CMD|COMMAND|RUN|EXEC)=["\''`].*["\''`]\s*;?\s*\$\{'
+
+  - id: warn-heredoc-exec
+    name: Warn on heredoc written to file then executed
+    description: >
+      Warn on patterns that write a heredoc to a file and immediately execute it.
+      Can be used to deliver obfuscated scripts outside veto's inline inspection.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: 'cat\s*<<\s*[''"]?EOF[''"]?.*chmod.*\+x'
+      - - field: arguments.command
+          operator: matches
+          value: 'cat\s*<<\s*[''"]?EOF[''"]?.*\|\s*(ba)?sh'
+
+  - id: warn-cdp-attach
+    name: Warn on external CDP attach attempts
+    description: >
+      Warn when a terminal command attempts to connect to the local Chrome
+      DevTools Protocol endpoint (localhost:9222). Any local process can
+      attach to CDP while a browser session is live and read cookies/navigate.
+    enabled: true
+    severity: high
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '(localhost|127\.0\.0\.1):9222'
+      - - field: arguments.command
+          operator: matches
+          value: '--remote-debugging-port'
+
+  # ── Pass-2 additions (2026-07-01) ────────────────────────────────────────────
+
+  - id: warn-sudo-usage
+    name: Warn on privilege escalation via sudo/pkexec/doas
+    description: >
+      Flag any command that escalates privileges. On this immutable Fedora
+      Silverblue host, root-level changes to /usr are ineffective or dangerous;
+      privileged actions deserve an explicit audit trail.
+    enabled: true
+    severity: high
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '(^|[\s;&|`])(sudo|pkexec|doas)\s'
+
+  - id: warn-rpm-ostree-mutation
+    name: Warn on rpm-ostree host mutations
+    description: >
+      Flag rpm-ostree install/override/rebase/deploy, which mutate the immutable
+      base image and require a reboot. These change the host system state and
+      should be surfaced for review, not run silently.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '\brpm-ostree\s+(install|override|rebase|deploy|uninstall|reset)\b'
+
+  - id: warn-secret-file-read-exfil
+    name: Warn on reading secret files piped to network
+    description: >
+      Flag commands that read known secret files (~/.hermes/.env, auth.json,
+      id_rsa, .netrc, aws credentials) and pipe them into curl/wget/nc, a
+      classic exfiltration shape worth an audit note.
+    enabled: true
+    severity: high
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '(\.hermes/\.env|(^|/|\s)\.env(\s|$)|auth\.json|id_rsa|id_ed25519|\.netrc|\.aws/credentials).*\|\s*(curl|wget|nc|ncat|socat)\b'
+      - - field: arguments.command
+          operator: matches
+          value: '(curl|wget|nc|ncat|socat)\b.*(\.hermes/\.env|(^|/|\s)\.env(\s|$)|auth\.json|id_rsa|id_ed25519|\.netrc|\.aws/credentials)'
+
+  # ── CIPS tool-argument injection rules (arXiv:2608.20658, sweep 22) ─────────
+  # Malicious payloads embedded in tool arguments that redirect or hijack
+  # downstream tool calls. Three patterns from CIPS taxonomy:
+
+  - id: warn-cips-instruction-in-arg
+    name: Warn on prompt/instruction payload embedded in tool argument value
+    description: >
+      Flag tool arguments whose values contain instruction-shaped text that looks
+      like a system prompt or agent directive embedded inside a data field
+      (e.g., a file path or search query that contains "ignore previous",
+      "you are now", "your new task", "disregard all", "forget the above").
+      Classic CIPS argument-shadowing vector.
+    enabled: true
+    severity: high
+    action: warn
+    tools:
+      - terminal
+      - mcp__terminal
+      - write_file
+      - mcp__write_file
+      - patch
+      - mcp__patch
+      - web_search
+      - web_extract
+    condition_groups:
+      - - field: arguments.command
+          operator: matches
+          value: '(ignore\s+(previous|prior|all|above)|you\s+are\s+now\s+a|your\s+new\s+(task|instruction)|disregard\s+(all|previous)|forget\s+(the\s+above|all\s+previous))'
+      - - field: arguments.path
+          operator: matches
+          value: '(ignore\s+(previous|prior)|you\s+are\s+now|disregard\s+all)'
+      - - field: arguments.content
+          operator: matches
+          value: '(ignore\s+(previous|prior|all|above)\s+instruction|you\s+are\s+now\s+a\s+\w+\s+assistant|your\s+new\s+task\s+is)'
+      - - field: arguments.query
+          operator: matches
+          value: '(ignore\s+(previous|prior)|you\s+are\s+now|disregard\s+all\s+instruction)'
+
+  - id: warn-cips-cross-tool-redirect
+    name: Warn on cross-tool redirect instruction in argument
+    description: >
+      Flag argument values containing explicit cross-tool redirection — text
+      that instructs the model to call a different tool than intended, e.g.,
+      "instead call terminal with", "now execute rm", "run the following command".
+      CIPS chained tool-arg poisoning pattern.
+    enabled: true
+    severity: high
+    action: warn
+    tools:
+      - write_file
+      - mcp__write_file
+      - web_extract
+    condition_groups:
+      - - field: arguments.content
+          operator: matches
+          value: '(instead\s+call\s+terminal|now\s+execute\s+rm|run\s+the\s+following\s+command|execute\s+this\s+in\s+terminal|call\s+terminal\s+with)'
+      - - field: arguments.content
+          operator: matches
+          value: '(now\s+use\s+write_file|call\s+patch\s+with|invoke\s+terminal\s+to)'
+
+  - id: warn-cips-url-embedded-instruction
+    name: Warn on instruction payload embedded in URL arguments
+    description: >
+      Flag web_extract/web_search URL arguments where the URL itself contains
+      encoded instruction fragments (common prompt injection via URL path or
+      query param). CIPS argument-value injection via web source.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - web_extract
+      - web_search
+    condition_groups:
+      - - field: arguments.urls
+          operator: matches
+          value: '(%22|%27|%3C|%3E).{0,200}(ignore|disregard|you\s+are\s+now|new\s+instruction)'
+      - - field: arguments.query
+          operator: matches
+          value: 'site:[^\s]+\s+(ignore\s+previous|you\s+are\s+now\s+a|disregard)'
+
+  # ── End CIPS rules ───────────────────────────────────────────────────────────
+
+
+
+  - id: warn-html-img-src-exfil
+    name: Warn on auto-loading img/fetch beacon in written HTML/markdown
+    description: >
+      Flag writes of HTML/markdown containing an <img src>, fetch(), or
+      background-image pointing at an off-host URL that carries query-string
+      data. Auto-loaded remote resources are a classic zero-click exfiltration
+      channel that leaks context the moment the document is rendered.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - write_file
+      - mcp__write_file
+      - patch
+      - mcp__patch
+    condition_groups:
+      - - field: arguments.content
+          operator: matches
+          value: '<img[^>]+src\s*=\s*[''"]https?://[^''"]+\?[^''"]+[''"]'
+      - - field: arguments.content
+          operator: matches
+          value: '(url\(\s*[''"]?https?://[^)]+\?|fetch\(\s*[''"]https?://[^''"]+\?)'
+
+  - id: warn-css-visibility-conceal
+    name: Warn on hidden/zero-size content in written HTML/CSS
+    description: >
+      Flag writes that hide content via display:none, visibility:hidden,
+      opacity:0, or 1px/0px sizing combined with off-host references. Attackers
+      conceal injected instructions or exfil beacons this way so a human review
+      of the rendered page does not reveal them.
+    enabled: true
+    severity: medium
+    action: warn
+    tools:
+      - write_file
+      - mcp__write_file
+      - patch
+      - mcp__patch
+    condition_groups:
+      - - field: arguments.content
+          operator: matches
+          value: '(display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0|(width|height)\s*:\s*[01]px)[\s\S]{0,200}https?://'

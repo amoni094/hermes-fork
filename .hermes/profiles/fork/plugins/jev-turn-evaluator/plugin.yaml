@@ -1,0 +1,12 @@
+name: jev-turn-evaluator
+version: "1.0"
+description: >
+  Shadow post-LLM evaluator. Observes conversation quality via JEV metrics
+  (justifiability, elegance, verifiability). Shadow-only: reads and writes
+  telemetry only; never mutates conversation_history.
+enabled: true
+hooks:
+  - post_llm_call
+config:
+  shadow_jev_evaluator: false
+  telemetry_path: "~/.hermes/profiles/fork/cache/jev-telemetry.jsonl"

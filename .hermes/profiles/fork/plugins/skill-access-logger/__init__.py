@@ -13,7 +13,7 @@ Hook kwargs for post_tool_call (from _emit_post_tool_call_hook):
 """
 from __future__ import annotations
 import json, logging, os
-from datetime import datetime, timezone, UTC
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -61,11 +61,16 @@ def _on_post_tool_call(
         except Exception:
             pass
         entry = json.dumps({
-            'ts': datetime.now(UTC).isoformat(),
+            'ts': datetime.now(timezone.utc).isoformat(),
             'skill': skill_name,
             'session': str(session_id or '')[:36],
         })
         with open(str(log_path), 'a') as f:
+            try:
+                import fcntl
+                fcntl.flock(f, fcntl.LOCK_EX)
+            except Exception:
+                pass
             f.write(entry + '\n')
     except Exception as exc:
         logger.debug('skill-access-logger: %s', exc)

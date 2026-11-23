@@ -1,0 +1,17 @@
+---
+name: barber-bayesian-reasoning-ml
+description: Use when doing Bayesian machine learning.
+category: textbook
+---
+
+## Overview
+
+Mathematical/computational reference. See source PDF for full content.
+
+## Structure / Chapters
+
+- (see source PDF)
+
+## Key Techniques
+
+<!-- textbook-stub: see source PDF -->

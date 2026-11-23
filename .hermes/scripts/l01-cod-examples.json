@@ -1,0 +1,136 @@
+{
+  "math": [
+    {
+      "q": "If there are 3 cars in the parking lot and 2 more cars arrive, how many cars are in the parking lot?",
+      "reasoning": "3 + 2 = 5.",
+      "answer": "5"
+    },
+    {
+      "q": "Janet's ducks lay 16 eggs per day. She eats 3 for breakfast and bakes 4 into muffins. She sells the remainder at $2/egg. How much does she make daily?",
+      "reasoning": "16 - 3 - 4 = 9. 9 \u00d7 $2 = $18.",
+      "answer": "$18"
+    },
+    {
+      "q": "A train travels 60 mph for 2.5 hours. How far does it go?",
+      "reasoning": "60 \u00d7 2.5 = 150 miles.",
+      "answer": "150 miles"
+    },
+    {
+      "q": "If a shirt costs $25 and is 20% off, what is the sale price?",
+      "reasoning": "25 \u00d7 0.8 = 20.",
+      "answer": "$20"
+    }
+  ],
+  "date": [
+    {
+      "q": "If today is Tuesday, what day will it be in 17 days?",
+      "reasoning": "17 mod 7 = 3. Tue + 3 = Fri.",
+      "answer": "Friday"
+    },
+    {
+      "q": "Jane was born on March 3, 1999. How old is she on March 3, 2026?",
+      "reasoning": "2026 - 1999 = 27.",
+      "answer": "27"
+    },
+    {
+      "q": "A project starts Jan 15 and takes 6 weeks. When does it end?",
+      "reasoning": "Jan 15 + 42 days = Feb 26.",
+      "answer": "February 26"
+    },
+    {
+      "q": "What is 9:30am EST in UTC?",
+      "reasoning": "EST = UTC-5. 9:30 + 5 = 14:30.",
+      "answer": "14:30 UTC"
+    }
+  ],
+  "sports": [
+    {
+      "q": "Is the following plausible? A player scored 70 points in an NBA game.",
+      "reasoning": "Record is 100 (Chamberlain). 70 is rare, not impossible.",
+      "answer": "Yes, plausible."
+    },
+    {
+      "q": "Which team won more Super Bowls: Patriots or Steelers?",
+      "reasoning": "Patriots 6, Steelers 6. Tied.",
+      "answer": "Tied at 6 each."
+    },
+    {
+      "q": "Can a tennis player win a set 7-5?",
+      "reasoning": "Yes \u2014 standard tiebreak at 6-6, or 7-5 with break at 5-5.",
+      "answer": "Yes."
+    }
+  ],
+  "logic": [
+    {
+      "q": "If all Bloops are Razzies and all Razzies are Lazzies, are all Bloops definitely Lazzies?",
+      "reasoning": "Bloops \u2286 Razzies \u2286 Lazzies \u2192 Bloops \u2286 Lazzies.",
+      "answer": "Yes."
+    },
+    {
+      "q": "5 machines make 5 widgets in 5 minutes. How long for 100 machines to make 100 widgets?",
+      "reasoning": "Each machine: 1 widget in 5 min. 100 machines: 100 widgets in 5 min.",
+      "answer": "5 minutes"
+    },
+    {
+      "q": "A bat and ball cost $1.10. The bat costs $1 more than the ball. How much does the ball cost?",
+      "reasoning": "ball = x; bat = x+1. x + x+1 = 1.10 \u2192 2x = 0.10 \u2192 x = 0.05.",
+      "answer": "$0.05"
+    }
+  ],
+  "factual": [
+    {
+      "q": "What is the capital of France?",
+      "reasoning": "France capital: Paris.",
+      "answer": "Paris"
+    },
+    {
+      "q": "How many sides does a hexagon have?",
+      "reasoning": "Hex = 6.",
+      "answer": "6"
+    },
+    {
+      "q": "What is the chemical symbol for gold?",
+      "reasoning": "Au (aurum).",
+      "answer": "Au"
+    }
+  ],
+  "code": [
+    {
+      "q": "Write a Python function that returns True if a number is even.",
+      "reasoning": "Even: n % 2 == 0. Return bool.",
+      "answer": "def is_even(n): return n % 2 == 0"
+    },
+    {
+      "q": "How do you reverse a list in Python?",
+      "reasoning": "Built-in: lst[::-1] or lst.reverse().",
+      "answer": "lst[::-1] (new list) or lst.reverse() (in-place)"
+    },
+    {
+      "q": "Fix this Python: for i in range(10) print(i)",
+      "reasoning": "Missing colon after range(10).",
+      "answer": "for i in range(10): print(i)"
+    },
+    {
+      "q": "Write a function to check if a string is a palindrome.",
+      "reasoning": "Compare s == s[::-1].",
+      "answer": "def is_palindrome(s): return s == s[::-1]"
+    }
+  ],
+  "general": [
+    {
+      "q": "What is the largest planet in the solar system?",
+      "reasoning": "Size order: Jupiter > Saturn > ...",
+      "answer": "Jupiter"
+    },
+    {
+      "q": "Convert 100 Fahrenheit to Celsius.",
+      "reasoning": "(100-32) \u00d7 5/9 = 37.8.",
+      "answer": "37.8\u00b0C"
+    },
+    {
+      "q": "How many bytes in a kilobyte?",
+      "reasoning": "1 KB = 1024 bytes (binary).",
+      "answer": "1024"
+    }
+  ]
+}

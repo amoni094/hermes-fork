@@ -1,0 +1,24 @@
+{
+  "ts": "2026-11-16T06:41:53.271583+00:00",
+  "theorem": "Popper falsifiability: a governance rule is a testable prediction with an observable outcome variable",
+  "rules": [
+    {
+      "id": "gov-lyapunov-iss",
+      "proposition": "If the agent loop is ISS, then the ISS Lyapunov residual mean(\u0394V + \u03b1V \u2212 \u03b3\u0169\u00b2) is \u2264 0 on the last 200 loop-pid samples and mean V in the last quintile is \u2264 4\u00d7 the first quintile.",
+      "outcome_variable": "cache/loop-lyapunov-stability.json:iss_ok, mean_iss_residual, exploding",
+      "falsified_when": "iss_ok is false or exploding is true on a run with n_unique_ts>=3"
+    },
+    {
+      "id": "gov-cusum-arl0",
+      "proposition": "With studentized Page CUSUM (k=0.25, h=h*) the in-control ARL_0 on pre-change PID error is \u2265 500.",
+      "outcome_variable": "cache/cusum-h-calibration.json:ARL0_h_star, hit_target",
+      "falsified_when": "hit_target is false or ARL0_h_star < 500 after a fresh calibration with n_series>=200"
+    },
+    {
+      "id": "gov-compliance-label",
+      "proposition": "Calibrated compliance accuracy (PAV isotonic of review scores onto outcome labels) is \u2265 0.70 on windows of n\u226550 labeled reviews.",
+      "outcome_variable": "cache/compliance-calibration.json:mean_calibrated, mean_label, n",
+      "falsified_when": "n>=50 and mean_calibrated < 0.70"
+    }
+  ]
+}

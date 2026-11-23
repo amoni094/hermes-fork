@@ -1,0 +1,5 @@
+Defaults:rainbow !requiretty
+rainbow ALL=(root) NOPASSWD: /usr/bin/rpm-ostree upgrade
+rainbow ALL=(root) NOPASSWD: /usr/bin/flatpak update -y --system
+rainbow ALL=(root) NOPASSWD: /usr/bin/dnf upgrade --refresh -y
+rainbow ALL=(root) NOPASSWD: /usr/sbin/reboot
