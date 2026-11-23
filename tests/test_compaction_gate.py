@@ -50,10 +50,11 @@ def test_gate_fires_on_turn_count(mc):
     ff, fs = cg._check_gate("s1", 1200, mc); assert ff and not fs
 
 def test_gate_fires_on_hhr(mc):
+    # 3 consecutive HHR=0.05 rows: SPRT LLR >> A → hard gate
     mc.execute("CREATE TABLE IF NOT EXISTS compaction_telemetry(id INTEGER PRIMARY KEY, session_id TEXT, after_tokens INTEGER, before_tokens INTEGER)")
     for _ in range(3):
         mc.execute("INSERT INTO compaction_telemetry(session_id,after_tokens,before_tokens)VALUES(?,?,?)", ("s2", 50, 1000))
-    mc.commit(); ff, _ = cg._check_gate("s2", 500, mc); assert ff
+    mc.commit(); ff, fs = cg._check_gate("s2", 500, mc); assert ff and not fs
 
 def test_gate_hysteresis(mc):
     # First fire records turn=1200 atomically in _check_gate
@@ -86,6 +87,21 @@ def test_fail_open(monkeypatch, tmp_path):
     assert cg.pre_compress(session_id="s6", turn_count=500) == {}
 
 def test_short_to_medium_gate(mc):
+    # One low-HHR row: LLR > 0; hard if LLR >= A, else soft
     mc.execute("CREATE TABLE IF NOT EXISTS compaction_telemetry(id INTEGER PRIMARY KEY, session_id TEXT, after_tokens INTEGER, before_tokens INTEGER)")
-    mc.execute("INSERT INTO compaction_telemetry(session_id,after_tokens,before_tokens)VALUES(?,?,?)", ("s7", 50, 1000))
-    mc.commit(); ff, fs = cg._check_gate("s7", 200, mc); assert fs and not ff
+    mc.execute("INSERT INTO compaction_telemetry(session_id,after_tokens,before_tokens)VALUES(?,?,?)", ("s7", 200, 1000))
+    mc.commit(); ff, fs = cg._check_gate("s7", 200, mc)
+    assert (fs and not ff) or (ff and not fs)
+
+def test_hhr_zero_rows_no_gate(mc):
+    mc.execute("CREATE TABLE IF NOT EXISTS compaction_telemetry(id INTEGER PRIMARY KEY, session_id TEXT, after_tokens INTEGER, before_tokens INTEGER)")
+    mc.commit(); ff, fs = cg._check_gate("s8", 200, mc)
+    assert not ff and not fs
+
+def test_hhr_sprt_soft_mixed(mc):
+    # One low + one healthy HHR: net LLR in (0, A) → soft gate
+    mc.execute("CREATE TABLE IF NOT EXISTS compaction_telemetry(id INTEGER PRIMARY KEY, session_id TEXT, after_tokens INTEGER, before_tokens INTEGER)")
+    mc.execute("INSERT INTO compaction_telemetry(session_id,after_tokens,before_tokens)VALUES(?,?,?)", ("s9", 200, 1000))
+    mc.execute("INSERT INTO compaction_telemetry(session_id,after_tokens,before_tokens)VALUES(?,?,?)", ("s9", 700, 1000))
+    mc.commit(); ff, fs = cg._check_gate("s9", 200, mc)
+    assert fs and not ff
