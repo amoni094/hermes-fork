@@ -195,19 +195,19 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/pre-compact-annotate-0001.sh",
       "no_agent": true,
       "description": "Every 15m R-D compaction advisory",
-      "next_run_at": "2026-11-23T22:00:00+11:00",
+      "next_run_at": "2026-11-23T23:00:00+11:00",
       "env": {
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:30:00+11:00",
-        "dispatched_at": "2026-11-23T21:30:52.886768+11:00",
-        "lateness_seconds": 52.9,
+        "scheduled_at": "2026-11-23T22:30:00+11:00",
+        "dispatched_at": "2026-11-23T22:30:49.656018+11:00",
+        "lateness_seconds": 49.7,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:31:21.908514+11:00",
+      "last_run_at": "2026-11-23T22:31:35.577850+11:00",
       "last_status": "ok",
       "failure_streak": 0,
       "last_delivery_error": null,
@@ -461,15 +461,15 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-11-23T22:00:00+11:00",
+      "next_run_at": "2026-11-24T00:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T20:00:00+11:00",
-        "dispatched_at": "2026-11-23T20:00:12.184143+11:00",
-        "lateness_seconds": 12.2,
+        "scheduled_at": "2026-11-23T22:00:00+11:00",
+        "dispatched_at": "2026-11-23T22:00:49.617288+11:00",
+        "lateness_seconds": 49.6,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T20:01:03.977650+11:00",
+      "last_run_at": "2026-11-23T22:01:32.263847+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -693,15 +693,15 @@
       "schedule_display": "every 10m",
       "repeat": {
         "times": null,
-        "completed": 7599
+        "completed": 7604
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-06-26T11:06:08.602796+10:00",
-      "next_run_at": "2026-11-23T21:38:53.698757+11:00",
-      "last_run_at": "2026-11-23T21:28:53.698757+11:00",
+      "next_run_at": "2026-11-23T22:32:52.425174+11:00",
+      "last_run_at": "2026-11-23T22:22:52.425174+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -717,9 +717,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:27:52.463550+11:00",
-        "dispatched_at": "2026-11-23T21:28:49.627508+11:00",
-        "lateness_seconds": 57.2,
+        "scheduled_at": "2026-11-23T22:21:52.812615+11:00",
+        "dispatched_at": "2026-11-23T22:22:49.671498+11:00",
+        "lateness_seconds": 56.9,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -816,15 +816,15 @@
       "schedule_display": "every 245m",
       "repeat": {
         "times": null,
-        "completed": 413
+        "completed": 414
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-07-01T20:18:29.618545+10:00",
-      "next_run_at": "2026-11-23T22:29:45.733385+11:00",
-      "last_run_at": "2026-11-23T18:24:45.733385+11:00",
+      "next_run_at": "2026-11-24T02:35:17.413584+11:00",
+      "last_run_at": "2026-11-23T22:30:17.413584+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -835,9 +835,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T18:23:45.036007+11:00",
-        "dispatched_at": "2026-11-23T18:24:35.930466+11:00",
-        "lateness_seconds": 50.9,
+        "scheduled_at": "2026-11-23T22:29:45.733385+11:00",
+        "dispatched_at": "2026-11-23T22:29:49.649104+11:00",
+        "lateness_seconds": 3.9,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -1503,15 +1503,15 @@
       "schedule_display": "every 90m",
       "repeat": {
         "times": null,
-        "completed": 378
+        "completed": 379
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-30T12:47:26.633369+10:00",
-      "next_run_at": "2026-11-23T21:36:06.618318+11:00",
-      "last_run_at": "2026-11-23T20:06:06.618318+11:00",
+      "next_run_at": "2026-11-23T23:07:04.610064+11:00",
+      "last_run_at": "2026-11-23T21:37:04.610064+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -1522,9 +1522,9 @@
       "workdir": null,
       "fire_claim": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T20:05:47.449924+11:00",
-        "dispatched_at": "2026-11-23T20:05:49.644308+11:00",
-        "lateness_seconds": 2.2,
+        "scheduled_at": "2026-11-23T21:36:06.618318+11:00",
+        "dispatched_at": "2026-11-23T21:36:49.652635+11:00",
+        "lateness_seconds": 43.0,
         "kind": "on_time"
       },
       "profile": "fork",
@@ -1715,14 +1715,14 @@
       },
       "state": "scheduled",
       "created_at": "2026-09-22T15:29:09.530109+10:00",
-      "next_run_at": "2026-11-23T21:46:02.303793+11:00",
-      "last_run_at": "2026-11-23T21:31:02.303793+11:00",
+      "next_run_at": "2026-11-23T22:33:56.252806+11:00",
+      "last_run_at": "2026-11-23T22:18:56.252806+11:00",
       "last_status": "ok",
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:30:06.024129+11:00",
-        "dispatched_at": "2026-11-23T21:30:52.886768+11:00",
-        "lateness_seconds": 46.9,
+        "scheduled_at": "2026-11-23T22:17:56.525211+11:00",
+        "dispatched_at": "2026-11-23T22:18:49.647874+11:00",
+        "lateness_seconds": 53.1,
         "kind": "on_time"
       },
       "fire_claim": null,
@@ -1751,15 +1751,15 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-11-23T22:12:59.309864+11:00",
+      "next_run_at": "2026-11-23T23:13:59.420690+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:11:58.863322+11:00",
-        "dispatched_at": "2026-11-23T21:12:50.070310+11:00",
-        "lateness_seconds": 51.2,
+        "scheduled_at": "2026-11-23T22:12:59.309864+11:00",
+        "dispatched_at": "2026-11-23T22:13:50.264885+11:00",
+        "lateness_seconds": 51.0,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:12:59.309864+11:00",
+      "last_run_at": "2026-11-23T22:13:59.420690+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -2197,17 +2197,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-11-23T22:13:02.049948+11:00",
-      "last_run_at": "2026-11-23T21:13:02.049948+11:00",
+      "next_run_at": "2026-11-23T23:14:08.734449+11:00",
+      "last_run_at": "2026-11-23T22:14:08.734449+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:12:00.499940+11:00",
-        "dispatched_at": "2026-11-23T21:12:50.070310+11:00",
-        "lateness_seconds": 49.6,
+        "scheduled_at": "2026-11-23T22:13:02.049948+11:00",
+        "dispatched_at": "2026-11-23T22:13:50.264885+11:00",
+        "lateness_seconds": 48.2,
         "kind": "on_time"
       },
       "last_failure": {
@@ -2239,17 +2239,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-11-23T22:13:01.672351+11:00",
-      "last_run_at": "2026-11-23T21:13:01.672351+11:00",
+      "next_run_at": "2026-11-23T23:14:03.303866+11:00",
+      "last_run_at": "2026-11-23T22:14:03.303866+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:12:01.617784+11:00",
-        "dispatched_at": "2026-11-23T21:12:50.070310+11:00",
-        "lateness_seconds": 48.5,
+        "scheduled_at": "2026-11-23T22:13:01.672351+11:00",
+        "dispatched_at": "2026-11-23T22:13:50.264885+11:00",
+        "lateness_seconds": 48.6,
         "kind": "on_time"
       },
       "last_failure": {
@@ -2281,17 +2281,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-11-23T22:12:58.246980+11:00",
-      "last_run_at": "2026-11-23T21:12:58.246980+11:00",
+      "next_run_at": "2026-11-23T23:14:00.706035+11:00",
+      "last_run_at": "2026-11-23T22:14:00.706035+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:11:57.107027+11:00",
-        "dispatched_at": "2026-11-23T21:12:50.070310+11:00",
-        "lateness_seconds": 53.0,
+        "scheduled_at": "2026-11-23T22:12:58.246980+11:00",
+        "dispatched_at": "2026-11-23T22:13:50.264885+11:00",
+        "lateness_seconds": 52.0,
         "kind": "on_time"
       },
       "last_failure": {
@@ -2319,17 +2319,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-11-23T22:12:58.675019+11:00",
-      "last_run_at": "2026-11-23T21:12:58.675019+11:00",
+      "next_run_at": "2026-11-23T23:13:59.869780+11:00",
+      "last_run_at": "2026-11-23T22:13:59.869780+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:11:58.602773+11:00",
-        "dispatched_at": "2026-11-23T21:12:50.070310+11:00",
-        "lateness_seconds": 51.5,
+        "scheduled_at": "2026-11-23T22:12:58.675019+11:00",
+        "dispatched_at": "2026-11-23T22:13:50.264885+11:00",
+        "lateness_seconds": 51.6,
         "kind": "on_time"
       },
       "last_failure": {
@@ -2357,17 +2357,17 @@
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
       },
-      "next_run_at": "2026-11-23T21:46:03.291108+11:00",
-      "last_run_at": "2026-11-23T21:16:03.291108+11:00",
+      "next_run_at": "2026-11-23T22:47:57.045584+11:00",
+      "last_run_at": "2026-11-23T22:17:57.045584+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
       "fire_claim": null,
       "last_delivery_error": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:15:03.566442+11:00",
-        "dispatched_at": "2026-11-23T21:15:53.810188+11:00",
-        "lateness_seconds": 50.2,
+        "scheduled_at": "2026-11-23T22:17:00.459498+11:00",
+        "dispatched_at": "2026-11-23T22:17:49.715612+11:00",
+        "lateness_seconds": 49.3,
         "kind": "on_time"
       },
       "last_failure": {
@@ -2425,20 +2425,20 @@
       },
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandboxed/real-options-fanout-gate-0001.sh",
       "description": "Applies real-options theory to gate/defer subagent fan-out decisions. GAP-4 wiring fix.",
-      "next_run_at": "2026-11-23T21:46:03.912059+11:00",
+      "next_run_at": "2026-11-23T22:47:57.923246+11:00",
       "no_agent": true,
       "env": {
         "HERMES_HOME": "/var/home/rainbow/.hermes/profiles/fork",
         "HERMES_PROFILE": "fork"
       },
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:15:03.328932+11:00",
-        "dispatched_at": "2026-11-23T21:15:53.810188+11:00",
-        "lateness_seconds": 50.5,
+        "scheduled_at": "2026-11-23T22:16:59.510080+11:00",
+        "dispatched_at": "2026-11-23T22:17:49.715612+11:00",
+        "lateness_seconds": 50.2,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:16:03.912059+11:00",
+      "last_run_at": "2026-11-23T22:17:57.923246+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -2512,14 +2512,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-23T22:15:15.988771+11:00",
+      "next_run_at": "2026-11-23T23:16:02.756400+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:14:14.883727+11:00",
-        "dispatched_at": "2026-11-23T21:14:51.977195+11:00",
-        "lateness_seconds": 37.1,
+        "scheduled_at": "2026-11-23T22:15:15.988771+11:00",
+        "dispatched_at": "2026-11-23T22:15:49.673073+11:00",
+        "lateness_seconds": 33.7,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-23T21:15:15.988771+11:00",
+      "last_run_at": "2026-11-23T22:16:02.756400+11:00",
       "schedule_display": "every 60m",
       "skills": [],
       "skill": null,
@@ -2634,14 +2634,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-23T22:05:57.607448+11:00",
+      "next_run_at": "2026-11-24T00:06:57.610339+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T20:05:46.559983+11:00",
-        "dispatched_at": "2026-11-23T20:05:49.644308+11:00",
-        "lateness_seconds": 3.1,
+        "scheduled_at": "2026-11-23T22:05:57.607448+11:00",
+        "dispatched_at": "2026-11-23T22:06:49.617373+11:00",
+        "lateness_seconds": 52.0,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-23T20:05:57.607448+11:00",
+      "last_run_at": "2026-11-23T22:06:57.610339+11:00",
       "last_failure": {
         "at": "2026-11-22T12:26:35.915275+11:00",
         "detail": "Restart-safe cron worker dispatch failed: cron external worker exited before ownership acknowledgement (exit 1); worker stderr: Failed to start transient scope unit: Transaction for hermes-worker-cron-loop-model-comparison-0001-exec-cac68c8947794b07b60030b126880417.scope/start is destructive (app.slice has 'stop' job queued, but 'start' is included in transaction)."
@@ -2714,14 +2714,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-23T22:05:58.099306+11:00",
+      "next_run_at": "2026-11-24T00:06:58.798773+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T20:05:47.403706+11:00",
-        "dispatched_at": "2026-11-23T20:05:49.644308+11:00",
-        "lateness_seconds": 2.2,
+        "scheduled_at": "2026-11-23T22:05:58.099306+11:00",
+        "dispatched_at": "2026-11-23T22:06:49.617373+11:00",
+        "lateness_seconds": 51.5,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-23T20:05:58.099306+11:00",
+      "last_run_at": "2026-11-23T22:06:58.798773+11:00",
       "last_failure": {
         "at": "2026-11-22T12:26:36.141923+11:00",
         "detail": "Restart-safe cron worker dispatch failed: cron external worker exited before ownership acknowledgement (exit 1); worker stderr: Failed to start transient scope unit: Transaction for hermes-worker-cron-nyquist-timescale-bridge-0001-exec-9cfeba7bb38e40a0a52688a8e54c3a7e.scope/start is destructive (systemd-exit.service has 'start' job queued, but 'stop' is included in transaction)."
@@ -2755,14 +2755,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-23T22:05:59.854860+11:00",
+      "next_run_at": "2026-11-24T00:06:58.274170+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T20:05:46.937384+11:00",
-        "dispatched_at": "2026-11-23T20:05:49.644308+11:00",
-        "lateness_seconds": 2.7,
+        "scheduled_at": "2026-11-23T22:05:59.854860+11:00",
+        "dispatched_at": "2026-11-23T22:06:49.617373+11:00",
+        "lateness_seconds": 49.8,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-23T20:05:59.854860+11:00",
+      "last_run_at": "2026-11-23T22:06:58.274170+11:00",
       "last_failure": {
         "at": "2026-11-22T12:26:36.291627+11:00",
         "detail": "Restart-safe cron worker dispatch failed: cron external worker exited before ownership acknowledgement (exit 1); worker stderr: Failed to start transient scope unit: Transaction for hermes-worker-cron-loop-cusum-changepoint-0001-exec-745f1af375ad4ea79c0a837054ae6cd3.scope/start is destructive (systemd-exit.service has 'start' job queued, but 'stop' is included in transaction)."
@@ -2796,14 +2796,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-23T21:46:14.150268+11:00",
+      "next_run_at": "2026-11-23T22:48:12.217560+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:15:12.743948+11:00",
-        "dispatched_at": "2026-11-23T21:15:53.810188+11:00",
-        "lateness_seconds": 41.1,
+        "scheduled_at": "2026-11-23T22:17:16.655987+11:00",
+        "dispatched_at": "2026-11-23T22:17:49.715612+11:00",
+        "lateness_seconds": 33.1,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-23T21:16:14.150268+11:00",
+      "last_run_at": "2026-11-23T22:18:12.217560+11:00",
       "last_failure": {
         "at": "2026-11-22T12:26:30.563979+11:00",
         "detail": "Restart-safe cron worker dispatch failed: cron external worker exited before ownership acknowledgement (exit 1); worker stderr: Failed to start transient scope unit: Transaction for hermes-worker-cron-wave21c-alarm-bridge-0001-exec-4ecd6abd942040168d93e3f5a5d76ad3.scope/start is destructive (systemd-exit.service has 'start' job queued, but 'stop' is included in transaction)."
@@ -2919,14 +2919,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-23T22:07:04.481013+11:00",
+      "next_run_at": "2026-11-24T00:07:58.185268+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T20:05:53.625039+11:00",
-        "dispatched_at": "2026-11-23T20:06:54.685307+11:00",
-        "lateness_seconds": 61.1,
+        "scheduled_at": "2026-11-23T22:07:04.481013+11:00",
+        "dispatched_at": "2026-11-23T22:07:49.736083+11:00",
+        "lateness_seconds": 45.3,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-23T20:07:04.481013+11:00",
+      "last_run_at": "2026-11-23T22:07:58.185268+11:00",
       "last_failure": {
         "at": "2026-11-22T12:26:36.349197+11:00",
         "detail": "Restart-safe cron worker dispatch failed: cron external worker exited before ownership acknowledgement (exit 1); worker stderr: Failed to start transient scope unit: Transaction for hermes-worker-cron-pid-passivity-index-0001-exec-176e1d40b07d4c68af43203c17b633a9.scope/start is destructive (shutdown.target has 'start' job queued, but 'stop' is included in transaction)."
@@ -2960,14 +2960,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-23T22:07:03.962480+11:00",
+      "next_run_at": "2026-11-24T00:07:58.850341+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T20:05:55.320439+11:00",
-        "dispatched_at": "2026-11-23T20:06:54.685307+11:00",
-        "lateness_seconds": 59.4,
+        "scheduled_at": "2026-11-23T22:07:03.962480+11:00",
+        "dispatched_at": "2026-11-23T22:07:49.736083+11:00",
+        "lateness_seconds": 45.8,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-23T20:07:03.962480+11:00",
+      "last_run_at": "2026-11-23T22:07:58.850341+11:00",
       "last_failure": {
         "at": "2026-11-22T12:26:36.558069+11:00",
         "detail": "Restart-safe cron worker dispatch failed: cron external worker exited before ownership acknowledgement (exit 1); worker stderr: Failed to start transient scope unit: Transaction for hermes-worker-cron-pid-circle-criterion-0001-exec-da14cb269e9e41d8be6dd2dd5e00e517.scope/start is destructive (shutdown.target has 'start' job queued, but 'stop' is included in transaction)."
@@ -3042,14 +3042,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-23T22:07:03.600935+11:00",
+      "next_run_at": "2026-11-24T00:07:58.563836+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T20:05:56.688332+11:00",
-        "dispatched_at": "2026-11-23T20:06:54.685307+11:00",
-        "lateness_seconds": 58.0,
+        "scheduled_at": "2026-11-23T22:07:03.600935+11:00",
+        "dispatched_at": "2026-11-23T22:07:49.736083+11:00",
+        "lateness_seconds": 46.1,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-23T20:07:03.600935+11:00",
+      "last_run_at": "2026-11-23T22:07:58.563836+11:00",
       "last_failure": {
         "at": "2026-11-22T12:26:36.770863+11:00",
         "detail": "Restart-safe cron worker dispatch failed: cron external worker exited before ownership acknowledgement (exit 1); worker stderr: Failed to start transient scope unit: Transaction for hermes-worker-cron-loop-rollout-horizon-0001-exec-cfecf7c4562d4292aa515a7d29642ba5.scope/start is destructive (shutdown.target has 'start' job queued, but 'stop' is included in transaction)."
@@ -3124,14 +3124,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-23T22:07:13.431770+11:00",
+      "next_run_at": "2026-11-24T00:08:11.826947+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T20:05:59.735817+11:00",
-        "dispatched_at": "2026-11-23T20:06:54.685307+11:00",
-        "lateness_seconds": 54.9,
+        "scheduled_at": "2026-11-23T22:07:13.431770+11:00",
+        "dispatched_at": "2026-11-23T22:07:49.736083+11:00",
+        "lateness_seconds": 36.3,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-23T20:07:13.431770+11:00",
+      "last_run_at": "2026-11-23T22:08:11.826947+11:00",
       "last_failure": {
         "at": "2026-11-22T12:26:36.877683+11:00",
         "detail": "Restart-safe cron worker dispatch failed: cron external worker exited before ownership acknowledgement (exit 1); worker stderr: Failed to start transient scope unit: Transaction for hermes-worker-cron-soares-halt-liveness-0001-exec-aa1db9cd119f428ca50e565e0b44b22c.scope/start is destructive (app.slice has 'stop' job queued, but 'start' is included in transaction)."
@@ -3165,14 +3165,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-23T22:07:10.356326+11:00",
+      "next_run_at": "2026-11-24T00:08:12.082602+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T20:06:01.801614+11:00",
-        "dispatched_at": "2026-11-23T20:06:54.685307+11:00",
-        "lateness_seconds": 52.9,
+        "scheduled_at": "2026-11-23T22:07:10.356326+11:00",
+        "dispatched_at": "2026-11-23T22:07:49.736083+11:00",
+        "lateness_seconds": 39.4,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-23T20:07:10.356326+11:00",
+      "last_run_at": "2026-11-23T22:08:12.082602+11:00",
       "last_failure": {
         "at": "2026-11-22T12:26:36.960271+11:00",
         "detail": "Restart-safe cron worker dispatch failed: cron external worker exited before ownership acknowledgement (exit 1); worker stderr: Failed to start transient scope unit: Transaction for hermes-worker-cron-cusum-gain-freeze-0001-exec-a4aab294fdb14924a7827c9606b7a342.scope/start is destructive (exit.target has 'start' job queued, but 'stop' is included in transaction)."
@@ -3247,14 +3247,14 @@
       "fire_claim": null,
       "timeout_seconds": 1800,
       "priority": 3,
-      "next_run_at": "2026-11-23T21:46:20.342291+11:00",
+      "next_run_at": "2026-11-23T22:48:07.037248+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:15:16.908490+11:00",
-        "dispatched_at": "2026-11-23T21:15:53.810188+11:00",
-        "lateness_seconds": 36.9,
+        "scheduled_at": "2026-11-23T22:17:16.318275+11:00",
+        "dispatched_at": "2026-11-23T22:17:49.715612+11:00",
+        "lateness_seconds": 33.4,
         "kind": "on_time"
       },
-      "last_run_at": "2026-11-23T21:16:20.342291+11:00",
+      "last_run_at": "2026-11-23T22:18:07.037248+11:00",
       "last_failure": {
         "at": "2026-11-22T12:26:30.757920+11:00",
         "detail": "Restart-safe cron worker dispatch failed: cron external worker exited before ownership acknowledgement (exit 1); worker stderr: Failed to start transient scope unit: Transaction for hermes-worker-cron-iss-justification-gate-0001-exec-068421cd67114d7ba57c43d70713d229.scope/start is destructive (shutdown.target has 'start' job queued, but 'stop' is included in transaction)."
@@ -3913,15 +3913,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-23T22:00:00+11:00",
+      "next_run_at": "2026-11-23T23:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:30:00+11:00",
-        "dispatched_at": "2026-11-23T21:30:52.886768+11:00",
-        "lateness_seconds": 52.9,
+        "scheduled_at": "2026-11-23T22:30:00+11:00",
+        "dispatched_at": "2026-11-23T22:30:49.656018+11:00",
+        "lateness_seconds": 49.7,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:31:01.437294+11:00",
+      "last_run_at": "2026-11-23T22:31:08.836235+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4012,15 +4012,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-23T22:00:00+11:00",
+      "next_run_at": "2026-11-23T23:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:00:00+11:00",
-        "dispatched_at": "2026-11-23T21:00:53.473113+11:00",
-        "lateness_seconds": 53.5,
+        "scheduled_at": "2026-11-23T22:00:00+11:00",
+        "dispatched_at": "2026-11-23T22:00:49.617288+11:00",
+        "lateness_seconds": 49.6,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:01:02.428606+11:00",
+      "last_run_at": "2026-11-23T22:00:58.069001+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4111,15 +4111,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-23T22:00:00+11:00",
+      "next_run_at": "2026-11-23T23:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:00:00+11:00",
-        "dispatched_at": "2026-11-23T21:00:53.473113+11:00",
-        "lateness_seconds": 53.5,
+        "scheduled_at": "2026-11-23T22:00:00+11:00",
+        "dispatched_at": "2026-11-23T22:00:49.617288+11:00",
+        "lateness_seconds": 49.6,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:01:02.754668+11:00",
+      "last_run_at": "2026-11-23T22:00:58.492280+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4144,15 +4144,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-23T22:00:00+11:00",
+      "next_run_at": "2026-11-23T23:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:00:00+11:00",
-        "dispatched_at": "2026-11-23T21:00:53.473113+11:00",
-        "lateness_seconds": 53.5,
+        "scheduled_at": "2026-11-23T22:00:00+11:00",
+        "dispatched_at": "2026-11-23T22:00:49.617288+11:00",
+        "lateness_seconds": 49.6,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:01:11.977778+11:00",
+      "last_run_at": "2026-11-23T22:01:05.254519+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4342,15 +4342,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-23T22:00:00+11:00",
+      "next_run_at": "2026-11-23T23:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:30:00+11:00",
-        "dispatched_at": "2026-11-23T21:30:52.886768+11:00",
-        "lateness_seconds": 52.9,
+        "scheduled_at": "2026-11-23T22:30:00+11:00",
+        "dispatched_at": "2026-11-23T22:30:49.656018+11:00",
+        "lateness_seconds": 49.7,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:31:01.957784+11:00",
+      "last_run_at": "2026-11-23T22:31:09.243952+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4408,15 +4408,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-23T22:00:00+11:00",
+      "next_run_at": "2026-11-23T23:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:30:00+11:00",
-        "dispatched_at": "2026-11-23T21:30:52.886768+11:00",
-        "lateness_seconds": 52.9,
+        "scheduled_at": "2026-11-23T22:30:00+11:00",
+        "dispatched_at": "2026-11-23T22:30:49.656018+11:00",
+        "lateness_seconds": 49.7,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:31:04.974724+11:00",
+      "last_run_at": "2026-11-23T22:31:03.507078+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4441,15 +4441,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-23T22:00:00+11:00",
+      "next_run_at": "2026-11-23T23:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:30:00+11:00",
-        "dispatched_at": "2026-11-23T21:30:52.886768+11:00",
-        "lateness_seconds": 52.9,
+        "scheduled_at": "2026-11-23T22:30:00+11:00",
+        "dispatched_at": "2026-11-23T22:30:49.656018+11:00",
+        "lateness_seconds": 49.7,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:31:09.148039+11:00",
+      "last_run_at": "2026-11-23T22:31:11.564553+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4474,15 +4474,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-23T22:00:00+11:00",
+      "next_run_at": "2026-11-23T23:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:30:00+11:00",
-        "dispatched_at": "2026-11-23T21:30:52.886768+11:00",
-        "lateness_seconds": 52.9,
+        "scheduled_at": "2026-11-23T22:30:00+11:00",
+        "dispatched_at": "2026-11-23T22:30:49.656018+11:00",
+        "lateness_seconds": 49.7,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:31:11.086736+11:00",
+      "last_run_at": "2026-11-23T22:31:15.917818+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4507,15 +4507,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-23T22:00:00+11:00",
+      "next_run_at": "2026-11-23T23:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:30:00+11:00",
-        "dispatched_at": "2026-11-23T21:30:52.886768+11:00",
-        "lateness_seconds": 52.9,
+        "scheduled_at": "2026-11-23T22:30:00+11:00",
+        "dispatched_at": "2026-11-23T22:30:49.656018+11:00",
+        "lateness_seconds": 49.7,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:31:08.160832+11:00",
+      "last_run_at": "2026-11-23T22:31:19.554015+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4606,15 +4606,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-23T22:00:00+11:00",
+      "next_run_at": "2026-11-23T23:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:30:00+11:00",
-        "dispatched_at": "2026-11-23T21:30:52.886768+11:00",
-        "lateness_seconds": 52.9,
+        "scheduled_at": "2026-11-23T22:30:00+11:00",
+        "dispatched_at": "2026-11-23T22:30:49.656018+11:00",
+        "lateness_seconds": 49.7,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:31:15.074126+11:00",
+      "last_run_at": "2026-11-23T22:31:19.177213+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -4837,15 +4837,15 @@
         "HERMES_PROFILE": "fork"
       },
       "timeout_seconds": 120,
-      "next_run_at": "2026-11-23T22:00:00+11:00",
+      "next_run_at": "2026-11-23T23:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:30:00+11:00",
-        "dispatched_at": "2026-11-23T21:30:52.886768+11:00",
-        "lateness_seconds": 52.9,
+        "scheduled_at": "2026-11-23T22:30:00+11:00",
+        "dispatched_at": "2026-11-23T22:30:49.656018+11:00",
+        "lateness_seconds": 49.7,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:31:16.759293+11:00",
+      "last_run_at": "2026-11-23T22:31:24.291961+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -5363,15 +5363,15 @@
       "timeout_seconds": 120,
       "priority": 3,
       "name": "routing-alarm-bridge",
-      "next_run_at": "2026-11-23T22:00:00+11:00",
+      "next_run_at": "2026-11-23T23:00:00+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:30:00+11:00",
-        "dispatched_at": "2026-11-23T21:30:52.886768+11:00",
-        "lateness_seconds": 52.9,
+        "scheduled_at": "2026-11-23T22:30:00+11:00",
+        "dispatched_at": "2026-11-23T22:30:49.656018+11:00",
+        "lateness_seconds": 49.7,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:31:18.121251+11:00",
+      "last_run_at": "2026-11-23T22:31:26.450252+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -5462,15 +5462,15 @@
       "schedule_display": "every 60m",
       "repeat": {
         "times": null,
-        "completed": 375
+        "completed": 376
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-10-09T11:59:45.592461+11:00",
-      "next_run_at": "2026-11-23T22:13:55.908751+11:00",
-      "last_run_at": "2026-11-23T21:13:55.908751+11:00",
+      "next_run_at": "2026-11-23T23:14:55.988074+11:00",
+      "last_run_at": "2026-11-23T22:14:55.988074+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -5485,9 +5485,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:12:55.740510+11:00",
-        "dispatched_at": "2026-11-23T21:13:49.646602+11:00",
-        "lateness_seconds": 53.9,
+        "scheduled_at": "2026-11-23T22:13:55.908751+11:00",
+        "dispatched_at": "2026-11-23T22:14:49.666463+11:00",
+        "lateness_seconds": 53.8,
         "kind": "on_time"
       },
       "fire_claim": null,
@@ -5957,7 +5957,7 @@
       "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/cbf-loop-constraint.py",
       "no_agent": true,
       "description": "CBF gate between loop-PID output and irreversible actions",
-      "next_run_at": "2026-11-23T21:37:00+11:00",
+      "next_run_at": "2026-11-23T22:37:00+11:00",
       "env": {
         "HERMES_PROFILE": "fork",
         "HERMES_HOME": "/var/home/rainbow/.hermes"
@@ -5966,13 +5966,13 @@
       "enabled": true,
       "state": "scheduled",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:07:00+11:00",
-        "dispatched_at": "2026-11-23T21:07:49.656480+11:00",
+        "scheduled_at": "2026-11-23T22:07:00+11:00",
+        "dispatched_at": "2026-11-23T22:07:49.736083+11:00",
         "lateness_seconds": 49.7,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:07:59.076147+11:00",
+      "last_run_at": "2026-11-23T22:08:08.017855+11:00",
       "last_status": "ok",
       "last_error": null,
       "failure_streak": 0,
@@ -7122,15 +7122,15 @@
       "schedule_display": "every 60m",
       "repeat": {
         "times": null,
-        "completed": 51
+        "completed": 52
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:16:06.060823+11:00",
-      "next_run_at": "2026-11-23T22:13:08.578384+11:00",
-      "last_run_at": "2026-11-23T21:13:08.578384+11:00",
+      "next_run_at": "2026-11-23T23:14:04.030998+11:00",
+      "last_run_at": "2026-11-23T22:14:04.030998+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -7152,9 +7152,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:12:02.083497+11:00",
-        "dispatched_at": "2026-11-23T21:12:50.070310+11:00",
-        "lateness_seconds": 48.0,
+        "scheduled_at": "2026-11-23T22:13:08.578384+11:00",
+        "dispatched_at": "2026-11-23T22:13:50.264885+11:00",
+        "lateness_seconds": 41.7,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -7239,15 +7239,15 @@
       "schedule_display": "every 30m",
       "repeat": {
         "times": null,
-        "completed": 99
+        "completed": 101
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:18:01.204837+11:00",
-      "next_run_at": "2026-11-23T21:45:59.611669+11:00",
-      "last_run_at": "2026-11-23T21:15:59.611669+11:00",
+      "next_run_at": "2026-11-23T22:47:53.375373+11:00",
+      "last_run_at": "2026-11-23T22:17:53.375373+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -7269,9 +7269,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:14:59.315017+11:00",
-        "dispatched_at": "2026-11-23T21:15:53.810188+11:00",
-        "lateness_seconds": 54.5,
+        "scheduled_at": "2026-11-23T22:17:02.476025+11:00",
+        "dispatched_at": "2026-11-23T22:17:49.715612+11:00",
+        "lateness_seconds": 47.2,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -7299,15 +7299,15 @@
       "schedule_display": "every 30m",
       "repeat": {
         "times": null,
-        "completed": 99
+        "completed": 101
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:30:19.288760+11:00",
-      "next_run_at": "2026-11-23T21:46:03.672604+11:00",
-      "last_run_at": "2026-11-23T21:16:03.672604+11:00",
+      "next_run_at": "2026-11-23T22:47:56.405682+11:00",
+      "last_run_at": "2026-11-23T22:17:56.405682+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -7329,9 +7329,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:15:02.457623+11:00",
-        "dispatched_at": "2026-11-23T21:15:53.810188+11:00",
-        "lateness_seconds": 51.4,
+        "scheduled_at": "2026-11-23T22:17:03.142512+11:00",
+        "dispatched_at": "2026-11-23T22:17:49.715612+11:00",
+        "lateness_seconds": 46.6,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -7473,15 +7473,15 @@
       "schedule_display": "every 60m",
       "repeat": {
         "times": null,
-        "completed": 51
+        "completed": 52
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:30:19.834944+11:00",
-      "next_run_at": "2026-11-23T22:13:11.055549+11:00",
-      "last_run_at": "2026-11-23T21:13:11.055549+11:00",
+      "next_run_at": "2026-11-23T23:14:06.279078+11:00",
+      "last_run_at": "2026-11-23T22:14:06.279078+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -7503,9 +7503,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:12:03.533154+11:00",
-        "dispatched_at": "2026-11-23T21:12:50.070310+11:00",
-        "lateness_seconds": 46.5,
+        "scheduled_at": "2026-11-23T22:13:11.055549+11:00",
+        "dispatched_at": "2026-11-23T22:13:50.264885+11:00",
+        "lateness_seconds": 39.2,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -7533,15 +7533,15 @@
       "schedule_display": "every 60m",
       "repeat": {
         "times": null,
-        "completed": 51
+        "completed": 52
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:35:59.560195+11:00",
-      "next_run_at": "2026-11-23T22:13:52.939441+11:00",
-      "last_run_at": "2026-11-23T21:13:52.939441+11:00",
+      "next_run_at": "2026-11-23T23:14:52.910918+11:00",
+      "last_run_at": "2026-11-23T22:14:52.910918+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -7563,9 +7563,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:12:53.387028+11:00",
-        "dispatched_at": "2026-11-23T21:13:49.646602+11:00",
-        "lateness_seconds": 56.3,
+        "scheduled_at": "2026-11-23T22:13:52.939441+11:00",
+        "dispatched_at": "2026-11-23T22:14:49.666463+11:00",
+        "lateness_seconds": 56.7,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -7593,15 +7593,15 @@
       "schedule_display": "every 30m",
       "repeat": {
         "times": null,
-        "completed": 98
+        "completed": 100
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:58:04.632777+11:00",
-      "next_run_at": "2026-11-23T21:46:12.588446+11:00",
-      "last_run_at": "2026-11-23T21:16:12.588446+11:00",
+      "next_run_at": "2026-11-23T22:47:59.657469+11:00",
+      "last_run_at": "2026-11-23T22:17:59.657469+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -7623,9 +7623,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:15:05.257514+11:00",
-        "dispatched_at": "2026-11-23T21:15:53.810188+11:00",
-        "lateness_seconds": 48.6,
+        "scheduled_at": "2026-11-23T22:17:03.421535+11:00",
+        "dispatched_at": "2026-11-23T22:17:49.715612+11:00",
+        "lateness_seconds": 46.3,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -7653,15 +7653,15 @@
       "schedule_display": "every 60m",
       "repeat": {
         "times": null,
-        "completed": 51
+        "completed": 52
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:58:04.771075+11:00",
-      "next_run_at": "2026-11-23T22:13:53.521604+11:00",
-      "last_run_at": "2026-11-23T21:13:53.521604+11:00",
+      "next_run_at": "2026-11-23T23:14:53.480383+11:00",
+      "last_run_at": "2026-11-23T22:14:53.480383+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -7683,9 +7683,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:12:53.043948+11:00",
-        "dispatched_at": "2026-11-23T21:13:49.646602+11:00",
-        "lateness_seconds": 56.6,
+        "scheduled_at": "2026-11-23T22:13:53.521604+11:00",
+        "dispatched_at": "2026-11-23T22:14:49.666463+11:00",
+        "lateness_seconds": 56.1,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -7713,15 +7713,15 @@
       "schedule_display": "every 30m",
       "repeat": {
         "times": null,
-        "completed": 98
+        "completed": 100
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:58:04.908316+11:00",
-      "next_run_at": "2026-11-23T21:46:06.685433+11:00",
-      "last_run_at": "2026-11-23T21:16:06.685433+11:00",
+      "next_run_at": "2026-11-23T22:48:00.342539+11:00",
+      "last_run_at": "2026-11-23T22:18:00.342539+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -7743,9 +7743,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:15:06.090285+11:00",
-        "dispatched_at": "2026-11-23T21:15:53.810188+11:00",
-        "lateness_seconds": 47.7,
+        "scheduled_at": "2026-11-23T22:17:09.330452+11:00",
+        "dispatched_at": "2026-11-23T22:17:49.715612+11:00",
+        "lateness_seconds": 40.4,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -7773,15 +7773,15 @@
       "schedule_display": "every 30m",
       "repeat": {
         "times": null,
-        "completed": 98
+        "completed": 100
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:58:05.034248+11:00",
-      "next_run_at": "2026-11-23T21:46:07.028958+11:00",
-      "last_run_at": "2026-11-23T21:16:07.028958+11:00",
+      "next_run_at": "2026-11-23T22:48:00.971148+11:00",
+      "last_run_at": "2026-11-23T22:18:00.971148+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -7803,9 +7803,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:15:06.697451+11:00",
-        "dispatched_at": "2026-11-23T21:15:53.810188+11:00",
-        "lateness_seconds": 47.1,
+        "scheduled_at": "2026-11-23T22:17:08.783369+11:00",
+        "dispatched_at": "2026-11-23T22:17:49.715612+11:00",
+        "lateness_seconds": 40.9,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -7833,15 +7833,15 @@
       "schedule_display": "every 60m",
       "repeat": {
         "times": null,
-        "completed": 51
+        "completed": 52
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:58:21.493470+11:00",
-      "next_run_at": "2026-11-23T22:13:56.840876+11:00",
-      "last_run_at": "2026-11-23T21:13:56.840876+11:00",
+      "next_run_at": "2026-11-23T23:14:56.932348+11:00",
+      "last_run_at": "2026-11-23T22:14:56.932348+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -7863,9 +7863,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:13:02.598584+11:00",
-        "dispatched_at": "2026-11-23T21:13:49.646602+11:00",
-        "lateness_seconds": 47.0,
+        "scheduled_at": "2026-11-23T22:13:56.840876+11:00",
+        "dispatched_at": "2026-11-23T22:14:49.666463+11:00",
+        "lateness_seconds": 52.8,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -7950,15 +7950,15 @@
       "schedule_display": "every 30m",
       "repeat": {
         "times": null,
-        "completed": 98
+        "completed": 100
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:58:21.828569+11:00",
-      "next_run_at": "2026-11-23T21:46:10.898656+11:00",
-      "last_run_at": "2026-11-23T21:16:10.898656+11:00",
+      "next_run_at": "2026-11-23T22:48:02.651229+11:00",
+      "last_run_at": "2026-11-23T22:18:02.651229+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -7980,9 +7980,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:15:07.939964+11:00",
-        "dispatched_at": "2026-11-23T21:15:53.810188+11:00",
-        "lateness_seconds": 45.9,
+        "scheduled_at": "2026-11-23T22:17:09.110383+11:00",
+        "dispatched_at": "2026-11-23T22:17:49.715612+11:00",
+        "lateness_seconds": 40.6,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -8067,15 +8067,15 @@
       "schedule_display": "every 60m",
       "repeat": {
         "times": null,
-        "completed": 51
+        "completed": 52
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:58:22.118042+11:00",
-      "next_run_at": "2026-11-23T22:15:04.307214+11:00",
-      "last_run_at": "2026-11-23T21:15:04.307214+11:00",
+      "next_run_at": "2026-11-23T23:15:53.130730+11:00",
+      "last_run_at": "2026-11-23T22:15:53.130730+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -8097,9 +8097,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:14:04.933753+11:00",
-        "dispatched_at": "2026-11-23T21:14:51.977195+11:00",
-        "lateness_seconds": 47.0,
+        "scheduled_at": "2026-11-23T22:15:04.307214+11:00",
+        "dispatched_at": "2026-11-23T22:15:49.673073+11:00",
+        "lateness_seconds": 45.4,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -8127,15 +8127,15 @@
       "schedule_display": "every 60m",
       "repeat": {
         "times": null,
-        "completed": 51
+        "completed": 52
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:58:22.261953+11:00",
-      "next_run_at": "2026-11-23T22:15:04.615483+11:00",
-      "last_run_at": "2026-11-23T21:15:04.615483+11:00",
+      "next_run_at": "2026-11-23T23:15:58.900076+11:00",
+      "last_run_at": "2026-11-23T22:15:58.900076+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -8157,9 +8157,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:14:06.205953+11:00",
-        "dispatched_at": "2026-11-23T21:14:51.977195+11:00",
-        "lateness_seconds": 45.8,
+        "scheduled_at": "2026-11-23T22:15:04.615483+11:00",
+        "dispatched_at": "2026-11-23T22:15:49.673073+11:00",
+        "lateness_seconds": 45.1,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -8237,15 +8237,15 @@
       "schedule_display": "every 60m",
       "repeat": {
         "times": null,
-        "completed": 51
+        "completed": 52
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:58:22.572273+11:00",
-      "next_run_at": "2026-11-23T22:15:07.530712+11:00",
-      "last_run_at": "2026-11-23T21:15:07.530712+11:00",
+      "next_run_at": "2026-11-23T23:15:52.948844+11:00",
+      "last_run_at": "2026-11-23T22:15:52.948844+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -8267,9 +8267,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:14:06.402845+11:00",
-        "dispatched_at": "2026-11-23T21:14:51.977195+11:00",
-        "lateness_seconds": 45.6,
+        "scheduled_at": "2026-11-23T22:15:07.530712+11:00",
+        "dispatched_at": "2026-11-23T22:15:49.673073+11:00",
+        "lateness_seconds": 42.1,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -8461,15 +8461,15 @@
       "schedule_display": "every 60m",
       "repeat": {
         "times": null,
-        "completed": 51
+        "completed": 52
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T14:58:23.164867+11:00",
-      "next_run_at": "2026-11-23T22:15:08.422766+11:00",
-      "last_run_at": "2026-11-23T21:15:08.422766+11:00",
+      "next_run_at": "2026-11-23T23:15:56.453572+11:00",
+      "last_run_at": "2026-11-23T22:15:56.453572+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -8491,9 +8491,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:14:08.318708+11:00",
-        "dispatched_at": "2026-11-23T21:14:51.977195+11:00",
-        "lateness_seconds": 43.7,
+        "scheduled_at": "2026-11-23T22:15:08.422766+11:00",
+        "dispatched_at": "2026-11-23T22:15:49.673073+11:00",
+        "lateness_seconds": 41.3,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -8521,15 +8521,15 @@
       "schedule_display": "every 60m",
       "repeat": {
         "times": null,
-        "completed": 51
+        "completed": 52
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-20T15:03:02.150989+11:00",
-      "next_run_at": "2026-11-23T22:15:09.177866+11:00",
-      "last_run_at": "2026-11-23T21:15:09.177866+11:00",
+      "next_run_at": "2026-11-23T23:15:56.034108+11:00",
+      "last_run_at": "2026-11-23T22:15:56.034108+11:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -8551,9 +8551,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:14:09.141514+11:00",
-        "dispatched_at": "2026-11-23T21:14:51.977195+11:00",
-        "lateness_seconds": 42.8,
+        "scheduled_at": "2026-11-23T22:15:09.177866+11:00",
+        "dispatched_at": "2026-11-23T22:15:49.673073+11:00",
+        "lateness_seconds": 40.5,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -8581,24 +8581,24 @@
       "schedule_display": "every 60m",
       "repeat": {
         "times": null,
-        "completed": 34
+        "completed": 35
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-21T19:42:36.419883+11:00",
-      "next_run_at": "2026-11-23T22:15:18.712922+11:00",
-      "last_run_at": "2026-11-23T21:15:18.712922+11:00",
+      "next_run_at": "2026-11-23T23:15:59.113746+11:00",
+      "last_run_at": "2026-11-23T22:15:59.113746+11:00",
       "last_status": "error",
       "last_error": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/hermes-scripts/routing-james-stein-shrink.py'",
       "last_delivery_error": null,
       "last_delivery_unverified": null,
       "last_failure": {
-        "at": "2026-11-23T21:15:18.712922+11:00",
+        "at": "2026-11-23T22:15:59.113746+11:00",
         "detail": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/hermes-scripts/routing-james-stein-shrink.py'"
       },
-      "failure_streak": 34,
+      "failure_streak": 35,
       "deliver": "local",
       "origin": {
         "platform": "local",
@@ -8611,9 +8611,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:14:09.594528+11:00",
-        "dispatched_at": "2026-11-23T21:14:51.977195+11:00",
-        "lateness_seconds": 42.4,
+        "scheduled_at": "2026-11-23T22:15:18.712922+11:00",
+        "dispatched_at": "2026-11-23T22:15:49.673073+11:00",
+        "lateness_seconds": 31.0,
         "kind": "on_time"
       },
       "fire_claim": null,
@@ -8820,20 +8820,20 @@
       "prompt": "",
       "skills": [],
       "skill": null,
-      "next_run_at": "2026-11-23T22:15:12.893498+11:00",
+      "next_run_at": "2026-11-23T23:16:01.981722+11:00",
       "last_dispatch": {
-        "scheduled_at": "2026-11-23T21:14:17.971158+11:00",
-        "dispatched_at": "2026-11-23T21:14:51.977195+11:00",
-        "lateness_seconds": 34.0,
+        "scheduled_at": "2026-11-23T22:15:12.893498+11:00",
+        "dispatched_at": "2026-11-23T22:15:49.673073+11:00",
+        "lateness_seconds": 36.8,
         "kind": "on_time"
       },
       "fire_claim": null,
-      "last_run_at": "2026-11-23T21:15:12.893498+11:00",
+      "last_run_at": "2026-11-23T22:16:01.981722+11:00",
       "last_status": "error",
       "last_error": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/hermes-scripts/loop-erdos-szekeres-runs.py'",
-      "failure_streak": 35,
+      "failure_streak": 36,
       "last_failure": {
-        "at": "2026-11-23T21:15:12.893498+11:00",
+        "at": "2026-11-23T22:16:01.981722+11:00",
         "detail": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/hermes-scripts/loop-erdos-szekeres-runs.py'"
       },
       "last_delivery_error": null
@@ -8881,7 +8881,100 @@
         "detail": "Blocked: script path resolves outside the scripts directory (/var/home/rainbow/.hermes/profiles/fork/scripts): '/var/home/rainbow/.hermes/hermes-scripts/routing-birthday-collision.py'"
       },
       "last_delivery_error": null
+    },
+    {
+      "id": "compaction-signal-fuser-0001",
+      "name": "compaction-signal-fuser",
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/30 * * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/compaction-signal-fuser.py",
+      "no_agent": true,
+      "description": "Naive-Bayes fusion of compaction trigger signals every 30m",
+      "next_run_at": "2026-11-23T23:00:00+11:00",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes/profiles/fork",
+        "HERMES_NO_SANDBOX": "1"
+      },
+      "last_dispatch": {
+        "scheduled_at": "2026-11-23T22:30:00+11:00",
+        "dispatched_at": "2026-11-23T22:30:49.656018+11:00",
+        "lateness_seconds": 49.7,
+        "kind": "on_time"
+      },
+      "fire_claim": null,
+      "last_run_at": "2026-11-23T22:31:23.191504+11:00",
+      "last_status": "ok",
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled",
+      "last_error": null,
+      "profile": "fork",
+      "enabled": true,
+      "timeout_seconds": 120,
+      "priority": 3
+    },
+    {
+      "id": "compaction-confidence-decay-0001",
+      "name": "compaction-confidence-decay",
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 */6 * * *"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/compaction-confidence-decay.py",
+      "no_agent": true,
+      "description": "Anderson RIF confidence decay for compaction_gate_facts every 6h",
+      "next_run_at": "2026-11-24T00:00:00+11:00",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes/profiles/fork",
+        "HERMES_NO_SANDBOX": "1"
+      },
+      "last_dispatch": null,
+      "fire_claim": null,
+      "last_run_at": null,
+      "last_status": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled",
+      "last_error": null,
+      "profile": "fork",
+      "enabled": true,
+      "timeout_seconds": 120,
+      "priority": 3
+    },
+    {
+      "id": "relevance-compaction-trigger-0001",
+      "name": "relevance-compaction-trigger",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 60,
+        "display": "every 60m"
+      },
+      "script": "/var/home/rainbow/.hermes/profiles/fork/scripts/relevance-compaction-trigger.py",
+      "no_agent": true,
+      "description": "Computes relevance drop signal; writes cache/compaction-trigger-signal.json for signal fuser",
+      "env": {
+        "HERMES_PROFILE": "fork",
+        "HERMES_HOME": "/var/home/rainbow/.hermes/profiles/fork",
+        "HERMES_NO_SANDBOX": "1"
+      },
+      "last_dispatch": null,
+      "fire_claim": null,
+      "last_run_at": null,
+      "last_status": null,
+      "failure_streak": 0,
+      "last_delivery_error": null,
+      "state": "scheduled",
+      "last_error": null,
+      "profile": "fork",
+      "enabled": true,
+      "timeout_seconds": 120,
+      "priority": 3,
+      "next_run_at": "2026-11-23T23:32:51.589941+11:00"
     }
   ],
-  "updated_at": "2026-11-23T21:31:22.010461+11:00"
+  "updated_at": "2026-11-23T22:32:51.934283+11:00"
 }
