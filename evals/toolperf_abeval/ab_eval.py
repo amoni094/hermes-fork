@@ -19,6 +19,8 @@ Usage:
       [--fast-model FAST] [--slow-model SLOW]
   python ab_eval.py run --arm orchestrated --model MODEL --reps N --pythonpath DIR
       [--fast-model FAST] [--slow-model SLOW]
+  python ab_eval.py run --arm trajectory --model MODEL --reps N --pythonpath DIR
+      [--only TASK]
   python ab_eval.py report --models MODEL1,MODEL2
 
 Tiered arm: classify each task query with hermes-scripts/model-tier-classifier.py
@@ -33,6 +35,10 @@ Falls back to the static tiered-arm path if the orchestrator is unavailable.
 meta.jsonl records tier, model, escalated, verification, and orchestrator
 fields. Report adds escalation counts and a 5-tier breakdown.
 
+Trajectory arm: one AIAgent instance per task, N user turns that share
+conversation history. Each turn has an intermediate check. meta.jsonl records
+step_results, step_pass_rate, and final_ok (all required steps passed).
+
 Environment:
   ABEVAL_ROOT    working/results root   (default: ./abeval-workspace)
   ABEVAL_HOME    HERMES_HOME for runs   (default: $ABEVAL_ROOT/home)
@@ -45,6 +51,7 @@ completed run_ids are skipped). ATOF traces land beside the meta file.
 This is the harness used for the August 2026 core-toolset performance batch
 (tracker: NousResearch/hermes-agent#77056).
 """
+import dataclasses
 import json
 import multiprocessing
 import os
@@ -53,6 +60,7 @@ import shutil
 import sys
 import time
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 
 ROOT = Path(os.environ.get("ABEVAL_ROOT", "abeval-workspace")).resolve()
@@ -60,7 +68,8 @@ HOME = Path(os.environ.get("ABEVAL_HOME", str(ROOT / "home"))).resolve()
 
 DEFAULT_FAST_MODEL = "anthropic/claude-haiku-4-5"
 DEFAULT_SLOW_MODEL = "anthropic/claude-sonnet-4-6"
-ARMS = ("baseline", "fixes", "tiered", "orchestrated")
+ARMS = ("baseline", "fixes", "tiered", "orchestrated", "trajectory")
+TABLE_ARMS = ("baseline", "fixes", "tiered", "orchestrated")
 ORCH_TIERS = ("fast", "math", "longctx", "tooluse", "reason")
 
 TASKS = {
@@ -176,6 +185,181 @@ TASKS = {
         "DAY:PERSON1,PERSON2 (one meeting per line, alphabetical names). "
         "Then reply SCHEDULED=<number of meetings scheduled>."
     ),
+}
+
+
+# ---------------------------------------------------------------------------
+# Trajectory tasks: multi-turn sequences for the 'trajectory' arm
+# Each task is a list of Step dicts: {prompt, check, required}
+# ---------------------------------------------------------------------------
+@dataclasses.dataclass
+class TrajStep:
+    prompt: str
+    check: Callable[[str, Path], bool]
+    required: bool = True
+
+
+TRAJECTORY_TASKS: dict[str, list[TrajStep]] = {
+    "traj_refactor_chain": [
+        TrajStep(
+            prompt=(
+                "Read {WORK}/proj/app.py and identify all functions. "
+                "List them with their line numbers. Reply LISTED=<count>."
+            ),
+            check=lambda reply, work: (
+                "LISTED=" in reply
+                and any(c.isdigit() for c in reply.split("LISTED=")[-1][:3])
+            ),
+            required=True,
+        ),
+        TrajStep(
+            prompt=(
+                "Now refactor the `process` function in {WORK}/proj/app.py so it "
+                "validates that `data` is a dict before processing. If `data` is "
+                "not a dict, raise ValueError('expected dict'). Write the updated "
+                "file. Reply VALIDATED=OK."
+            ),
+            check=lambda reply, work: (
+                "VALIDATED=OK" in reply
+                and "isinstance" in (work / "proj" / "app.py").read_text(encoding="utf-8")
+            ),
+            required=True,
+        ),
+        TrajStep(
+            prompt=(
+                "Add a unit test for the ValueError case to {WORK}/proj/test_app.py. "
+                "The test must call process() with a non-dict and assert ValueError "
+                "is raised. Reply TEST_ADDED=OK."
+            ),
+            check=lambda reply, work: (
+                "TEST_ADDED=OK" in reply
+                and (work / "proj" / "test_app.py").exists()
+                and "ValueError" in (work / "proj" / "test_app.py").read_text(
+                    encoding="utf-8")
+            ),
+            required=True,
+        ),
+        TrajStep(
+            prompt=(
+                "Run the test file {WORK}/proj/test_app.py using the terminal tool "
+                "and report the result. Reply TESTS_PASS=OK if all pass, "
+                "TESTS_FAIL=<error> if not."
+            ),
+            check=lambda reply, work: "TESTS_PASS=OK" in reply,
+            required=False,
+        ),
+        TrajStep(
+            prompt=(
+                "Write a one-line summary of all changes made across this session "
+                "to {WORK}/proj/CHANGES.txt. Then reply DONE=OK."
+            ),
+            check=lambda reply, work: (
+                "DONE=OK" in reply and (work / "proj" / "CHANGES.txt").exists()
+            ),
+            required=True,
+        ),
+    ],
+    "traj_debug_fix_verify": [
+        TrajStep(
+            prompt=(
+                "Run {WORK}/proj/broken.py using the terminal tool. Report the "
+                "error. Reply ERROR=<error type>."
+            ),
+            check=lambda reply, work: "ERROR=" in reply,
+            required=True,
+        ),
+        TrajStep(
+            prompt=(
+                "Fix the bug in {WORK}/proj/broken.py so it runs without error. "
+                "Write the fix. Reply FIXED=OK."
+            ),
+            check=lambda reply, work: "FIXED=OK" in reply,
+            required=True,
+        ),
+        TrajStep(
+            prompt=(
+                "Verify the fix works: run {WORK}/proj/broken.py again. If it "
+                "outputs the expected value (55), reply VERIFIED=OK. If not, "
+                "describe what happened."
+            ),
+            check=lambda reply, work: "VERIFIED=OK" in reply,
+            required=True,
+        ),
+        TrajStep(
+            prompt=(
+                "The function in {WORK}/proj/broken.py is supposed to work for "
+                "any integer input, not just the default. Call it with n=100 and "
+                "report the result. Reply RESULT=<value>."
+            ),
+            check=lambda reply, work: "RESULT=5050" in reply,
+            required=True,
+        ),
+    ],
+    "traj_incremental_build": [
+        TrajStep(
+            prompt=(
+                "Create a Python module at {WORK}/proj/calculator.py with a class "
+                "Calculator that has methods: add(a,b), subtract(a,b), "
+                "multiply(a,b), divide(a,b) (raises ZeroDivisionError if b==0). "
+                "Reply MODULE=OK."
+            ),
+            check=lambda reply, work: (
+                "MODULE=OK" in reply
+                and (work / "proj" / "calculator.py").exists()
+                and "Calculator" in (work / "proj" / "calculator.py").read_text(
+                    encoding="utf-8")
+            ),
+            required=True,
+        ),
+        TrajStep(
+            prompt=(
+                "Add a history feature: Calculator should maintain a list "
+                "`self.history` of all operations performed. Each entry is a dict: "
+                "{'op': 'add', 'a': 1, 'b': 2, 'result': 3}. Update "
+                "{WORK}/proj/calculator.py. Reply HISTORY=OK."
+            ),
+            check=lambda reply, work: (
+                "HISTORY=OK" in reply
+                and "history" in (work / "proj" / "calculator.py").read_text(
+                    encoding="utf-8")
+            ),
+            required=True,
+        ),
+        TrajStep(
+            prompt=(
+                "Add a method `undo()` that removes the last history entry and "
+                "returns the previous result (or None if empty). Update "
+                "{WORK}/proj/calculator.py. Reply UNDO=OK."
+            ),
+            check=lambda reply, work: (
+                "UNDO=OK" in reply
+                and "undo" in (work / "proj" / "calculator.py").read_text(
+                    encoding="utf-8")
+            ),
+            required=True,
+        ),
+        TrajStep(
+            prompt=(
+                "Write a test script {WORK}/proj/test_calc.py that: (1) creates a "
+                "Calculator, (2) calls add(3,4), multiply(2,5), undo(), (3) asserts "
+                "history has 1 entry after undo, (4) prints CALC_TEST=OK if all "
+                "assertions pass. Reply TEST_WRITTEN=OK."
+            ),
+            check=lambda reply, work: (
+                "TEST_WRITTEN=OK" in reply
+                and (work / "proj" / "test_calc.py").exists()
+            ),
+            required=True,
+        ),
+        TrajStep(
+            prompt=(
+                "Run {WORK}/proj/test_calc.py using the terminal tool and report "
+                "the output. Reply CALC_PASS=OK if it prints CALC_TEST=OK."
+            ),
+            check=lambda reply, work: "CALC_PASS=OK" in reply,
+            required=False,
+        ),
+    ],
 }
 
 
@@ -446,6 +630,39 @@ def make_sandbox(work: Path):
     return proj
 
 
+def make_traj_sandbox(work: Path):
+    """Create files needed by trajectory tasks under {WORK}/proj."""
+    proj = work / "proj"
+    if proj.exists():
+        shutil.rmtree(proj)
+    proj.mkdir(parents=True)
+    (proj / "app.py").write_text(
+        "def load(path):\n"
+        "    with open(path) as f:\n"
+        "        return f.read()\n"
+        "\n"
+        "def process(data):\n"
+        "    return {k: v * 2 for k, v in data.items()}\n"
+        "\n"
+        "def save(path, content):\n"
+        "    with open(path, 'w') as f:\n"
+        "        f.write(str(content))\n",
+        encoding="utf-8",
+    )
+    # Bug: missing colon after range(1, n+1). After fix, sum_to() == 55.
+    (proj / "broken.py").write_text(
+        "def sum_to(n=10):\n"
+        "    total = 0\n"
+        "    for i in range(1, n+1)\n"
+        "        total += i\n"
+        "    return total\n"
+        "\n"
+        "print(sum_to())\n",
+        encoding="utf-8",
+    )
+    return proj
+
+
 SUCCESS = {
     "err_python_env": lambda t, w: "ENV_OK_4477" in t,
     "err_replay_patch": lambda t, w: "CONFIG_OK_881" in t and (
@@ -666,6 +883,195 @@ def _abeval_worker(pythonpath: str, hermes_home: str, relay_toml: str,
             pass
 
 
+def _trajectory_inner(pythonpath, hermes_home, work_str, task_name, model,
+                      session_id, result_q, api_key=None, extra_env=None):
+    """One AIAgent, N turns sharing conversation history. Spawn target."""
+    import os
+    import sys
+    extra_env = extra_env or {}
+    for k, v in extra_env.items():
+        if v is not None:
+            os.environ[str(k)] = str(v)
+    provider, _, _ = model.partition("/")
+    env_map = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
+    env_var = env_map.get(provider, f"{provider.upper()}_API_KEY")
+    if api_key and not os.environ.get(env_var):
+        os.environ[env_var] = api_key
+    for p in reversed(pythonpath.split(os.pathsep)):
+        if p and p not in sys.path:
+            sys.path.insert(0, p)
+    os.environ["HERMES_HOME"] = hermes_home
+    os.environ["HERMES_ACCEPT_HOOKS"] = "1"
+    existing_pp = os.environ.get("PYTHONPATH", "")
+    os.environ["PYTHONPATH"] = (
+        pythonpath if not existing_pp else pythonpath + os.pathsep + existing_pp
+    )
+    os.chdir(work_str)
+
+    out, rc = "", 1
+    results = []
+    agent = None
+    history = None
+    try:
+        from run_agent import AIAgent
+        provider, _, model_name = model.partition("/")
+        agent = AIAgent(
+            api_key=api_key if provider == "anthropic" else (
+                os.environ.get(env_var) or api_key),
+            base_url=None,
+            provider=provider or None,
+            model=model_name or model,
+            session_id=session_id,
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+            skip_background_review=True,
+            max_iterations=30,
+            platform="toolperf_abeval",
+            cwd=work_str,
+        )
+        workdir = Path(work_str)
+        steps = TRAJECTORY_TASKS[task_name]
+        last_out = ""
+        for i, step in enumerate(steps):
+            prompt = step.prompt.replace("{WORK}", str(workdir))
+            kwargs = {}
+            if history is not None:
+                kwargs["conversation_history"] = history
+            result = agent.run_conversation(prompt, **kwargs)
+            if isinstance(result, dict):
+                reply = result.get("final_response", "") or ""
+                history = result.get("messages") or history
+            else:
+                reply = str(result or "")
+            last_out = reply
+            ok = False
+            try:
+                ok = bool(step.check(reply, workdir))
+            except Exception:
+                ok = False
+            results.append({
+                "step": i,
+                "prompt_prefix": prompt[:60],
+                "ok": ok,
+                "required": step.required,
+            })
+        out, rc = last_out, 0
+    except Exception as e:
+        out, rc = f"{type(e).__name__}: {e}", 1
+    finally:
+        if agent is not None:
+            try:
+                agent.close()
+            except Exception:
+                pass
+        try:
+            n = len(results) or 1
+            step_pass_rate = sum(1 for r in results if r["ok"]) / n if results else 0.0
+            final_ok = bool(results) and all(
+                r["ok"] for r in results if r["required"])
+            result_q.put({
+                "out": out,
+                "rc": rc,
+                "step_results": results,
+                "step_pass_rate": step_pass_rate,
+                "final_ok": final_ok,
+            })
+        except Exception:
+            pass
+
+
+def _trajectory_worker(task_name, model, rep, root, pythonpath, extra_env):
+    """Run one trajectory task-rep: sandbox, one AIAgent, N turns, meta.jsonl."""
+    extra_env = extra_env or {}
+    root = Path(root)
+    run_id = f"{task_name}-r{rep}"
+    resdir = root / "results" / model.replace("/", "_") / "trajectory"
+    resdir.mkdir(parents=True, exist_ok=True)
+    meta_path = resdir / "meta.jsonl"
+    done = set()
+    if meta_path.exists():
+        for line in meta_path.read_text(encoding="utf-8-sig").splitlines():
+            try:
+                done.add(json.loads(line)["run_id"])
+            except (ValueError, KeyError):
+                continue
+    if run_id in done:
+        return None
+    workdir = root / "runs" / model.replace("/", "_") / "trajectory" / run_id
+    workdir.mkdir(parents=True, exist_ok=True)
+    make_traj_sandbox(workdir)
+
+    session_id = f"abeval-trajectory-{run_id}"
+    provider, _, _ = model.partition("/")
+    api_key = _read_provider_key_from_config(provider)
+    real_hermes_home = extra_env.get("HERMES_HOME") or os.environ.get(
+        "HERMES_HOME", str(HOME))
+
+    ctx = multiprocessing.get_context("spawn")
+    result_q = ctx.Queue()
+    proc = ctx.Process(
+        target=_trajectory_inner,
+        args=(pythonpath, str(real_hermes_home), str(workdir), task_name,
+              model, session_id, result_q),
+        kwargs={"api_key": api_key, "extra_env": extra_env},
+    )
+    t0 = time.time()
+    proc.start()
+    proc.join(timeout=600)
+    payload = None
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(timeout=10)
+        if proc.is_alive():
+            proc.kill()
+            proc.join(timeout=5)
+        out, rc = "", -9
+        step_results = []
+        step_pass_rate = 0.0
+        final_ok = False
+    else:
+        try:
+            payload = result_q.get(timeout=5)
+            out = (payload.get("out") or "").strip()
+            rc = int(payload.get("rc", 1))
+            step_results = payload.get("step_results") or []
+            step_pass_rate = float(payload.get("step_pass_rate") or 0.0)
+            final_ok = bool(payload.get("final_ok"))
+        except Exception:
+            out, rc = "", proc.exitcode if proc.exitcode not in (None, 0) else 1
+            step_results = []
+            step_pass_rate = 0.0
+            final_ok = False
+    dt = time.time() - t0
+    if rc != 0 and not out.strip() and not step_results:
+        print(f"[trajectory/{model}] {run_id} INFRA-CRASH exit={rc} "
+              f"{dt:.0f}s — not recorded, will retry on resume", flush=True)
+        return None
+    rec = {
+        "run_id": run_id,
+        "task": task_name,
+        "rep": rep,
+        "arm": "trajectory",
+        "model": model,
+        "wall_s": round(dt, 1),
+        "exit": rc,
+        "tail": "\n".join(out.splitlines()[-12:]),
+        "step_results": step_results,
+        "step_pass_rate": round(step_pass_rate, 4),
+        "final_ok": final_ok,
+    }
+    with open(meta_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec) + "\n")
+    print(f"[trajectory/{model}] {task_name}-r{rep} {dt:.0f}s "
+          f"steps={len(step_results)} ok={final_ok}", flush=True)
+    return {
+        "ok": final_ok,
+        "step_pass_rate": step_pass_rate,
+        "step_results": step_results,
+    }
+
+
 def _orchestrated_worker(pythonpath, hermes_home, relay_toml, work_dir, query,
                          slow_model, fast_model, session_id, api_keys, result_q,
                          timeout=300):
@@ -837,6 +1243,17 @@ def _read_provider_key_from_config(provider: str) -> str | None:
 def run(arm: str, model: str, reps: int, pythonpath: str, only=None,
         fast_model: str | None = None, slow_model: str | None = None,
         classifier_path: str | None = None):
+    if arm == "trajectory":
+        extra_env = {}
+        if os.environ.get("HERMES_HOME"):
+            extra_env["HERMES_HOME"] = os.environ["HERMES_HOME"]
+        if os.environ.get("HERMES_PROFILE"):
+            extra_env["HERMES_PROFILE"] = os.environ["HERMES_PROFILE"]
+        tasks_to_run = [t for t in TRAJECTORY_TASKS if not only or t in only]
+        for task in tasks_to_run:
+            for rep in range(reps):
+                _trajectory_worker(task, model, rep, ROOT, pythonpath, extra_env)
+        return
     resdir = ROOT / "results" / model.replace("/", "_") / arm
     resdir.mkdir(parents=True, exist_ok=True)
     meta_path = resdir / "meta.jsonl"
@@ -1051,7 +1468,7 @@ def report(models):
         table = {}
         show_tier = False
         show_orch = False
-        for arm in ARMS:
+        for arm in TABLE_ARMS:
             meta_path = mdir / arm / "meta.jsonl"
             if not meta_path.exists():
                 continue
@@ -1084,7 +1501,7 @@ def report(models):
         agg = {a: Counter() for a in ARMS}
         aggn = Counter()
         for task in TASKS:
-            for arm in ARMS:
+            for arm in TABLE_ARMS:
                 rows = table.get(task, {}).get(arm, [])
                 if not rows:
                     continue
@@ -1109,7 +1526,7 @@ def report(models):
                 agg[arm]["escalated"] += sum(1 for r in rows if r.get("escalated"))
                 aggn[arm] += n
         print("-" * len(hdr))
-        for arm in ARMS:
+        for arm in TABLE_ARMS:
             n = aggn[arm]
             if not n:
                 continue
@@ -1129,6 +1546,50 @@ def report(models):
                 extra = sorted(t for t in tier_counts if t not in ORCH_TIERS)
                 parts.extend(f"{k}={tier_counts[k]}" for k in extra)
                 print(f"  tier breakdown: {', '.join(parts)}")
+        _report_trajectory(mdir, model)
+
+
+def _report_trajectory(mdir: Path, model: str):
+    """Per-task mean step_pass_rate, final_ok count for the trajectory arm."""
+    meta_path = mdir / "trajectory" / "meta.jsonl"
+    if not meta_path.exists():
+        return
+    by_task: dict[str, list[dict]] = {}
+    for line in meta_path.read_text(encoding="utf-8-sig").splitlines():
+        if not line.strip():
+            continue
+        try:
+            m = json.loads(line)
+        except ValueError:
+            continue
+        by_task.setdefault(m.get("task") or "?", []).append(m)
+    if not by_task:
+        return
+    print(f"\n--- trajectory arm ({model}) ---")
+    hdr = f"{'task':24s} | {'n':>2s} {'final_ok':>8s} {'step%':>6s} {'wall':>6s}"
+    print(hdr)
+    print("-" * len(hdr))
+    tot_n = tot_ok = 0
+    tot_spr = tot_wall = 0.0
+    for task in list(TRAJECTORY_TASKS) + [
+        t for t in by_task if t not in TRAJECTORY_TASKS]:
+        rows = by_task.get(task, [])
+        if not rows:
+            continue
+        n = len(rows)
+        ok_n = sum(1 for r in rows if r.get("final_ok"))
+        mean_spr = sum(float(r.get("step_pass_rate") or 0) for r in rows) / n
+        mean_wall = sum(float(r.get("wall_s") or 0) for r in rows) / n
+        print(f"{task:24s} | {n:2d} {ok_n:3d}/{n:<3d} {100 * mean_spr:5.0f}% "
+              f"{mean_wall:5.0f}s")
+        tot_n += n
+        tot_ok += ok_n
+        tot_spr += mean_spr * n
+        tot_wall += mean_wall * n
+    if tot_n:
+        print("-" * len(hdr))
+        print(f"{'TOTAL':24s} | {tot_n:2d} {tot_ok:3d}/{tot_n:<3d} "
+              f"{100 * tot_spr / tot_n:5.0f}% {tot_wall / tot_n:5.0f}s")
 
 
 if __name__ == "__main__":
