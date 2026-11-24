@@ -2,8 +2,9 @@
 """Hard A/B evaluation for core-toolset changes: baseline vs fixes.
 
 Runs a battery of error-inducing tasks (each derived from a waste class
-measured in the production session DB) through `hermes chat` twice — once per
-arm — and scores every run from its NeMo Relay ATOF trace plus wall clock:
+measured in the production session DB) through an in-process AIAgent worker
+twice — once per arm — and scores every run from its NeMo Relay ATOF trace
+plus wall clock:
 
   - llm_calls (turns), tool_calls, tool_errors, retry_after_error
   - total tool-result bytes fed to the model, wall seconds, task success
@@ -29,10 +30,10 @@ This is the harness used for the August 2026 core-toolset performance batch
 (tracker: NousResearch/hermes-agent#77056).
 """
 import json
+import multiprocessing
 import os
 import re
 import shutil
-import subprocess
 import sys
 import time
 from collections import Counter
@@ -143,6 +144,90 @@ SUCCESS = {
 }
 
 
+def _abeval_worker(pythonpath: str, hermes_home: str, relay_toml: str,
+                   work_str: str, query: str, model: str, session_id: str,
+                   result_q):
+    """Run one ab_eval task in a fresh process with relay ATOF wired."""
+    import os
+    import sys
+
+    # Arm isolation: prepend this arm's pythonpath (spawn starts a clean interp).
+    for p in reversed(pythonpath.split(os.pathsep)):
+        if p and p not in sys.path:
+            sys.path.insert(0, p)
+
+    os.environ["HERMES_HOME"] = hermes_home
+    os.environ["HERMES_NEMO_RELAY_PLUGINS_TOML"] = relay_toml
+    os.environ["HERMES_ACCEPT_HOOKS"] = "1"
+    existing_pp = os.environ.get("PYTHONPATH", "")
+    os.environ["PYTHONPATH"] = (
+        pythonpath if not existing_pp else pythonpath + os.pathsep + existing_pp
+    )
+    os.chdir(work_str)
+
+    out, rc = "", 1
+    lease = None
+    agent = None
+    try:
+        from agent import relay_runtime
+        # Force relay plugin host init with the ATOF config.
+        relay_runtime.get_runtime()
+
+        # Open relay conversation scope so ATOF events fire.
+        lease = relay_runtime.SESSION_COORDINATOR.acquire_conversation(
+            profile_key=relay_runtime.current_profile_key(),
+            session_id=session_id,
+            platform="toolperf_abeval",
+        )
+
+        from run_agent import AIAgent
+        provider, _, model_name = model.partition("/")
+        api_key = None
+        if provider == "anthropic":
+            api_key = os.environ.get("ANTHROPIC_API_KEY") or None
+
+        agent = AIAgent(
+            api_key=api_key,
+            base_url=None,
+            provider=provider or None,
+            model=model_name or model,
+            session_id=session_id,
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+            skip_background_review=True,
+            max_iterations=30,
+            platform="toolperf_abeval",
+            cwd=work_str,
+        )
+
+        result = agent.run_conversation(query)
+        if isinstance(result, dict):
+            out = result.get("final_response", "") or ""
+        else:
+            out = str(result or "")
+        rc = 0
+    except Exception as e:
+        out, rc = f"{type(e).__name__}: {e}", 1
+    finally:
+        if agent is not None:
+            try:
+                agent.close()
+            except Exception:
+                pass
+        try:
+            from agent import relay_runtime
+            if lease is not None:
+                relay_runtime.SESSION_COORDINATOR.release_conversation(lease)
+            relay_runtime.HOST_REGISTRY.shutdown_all()
+        except Exception:
+            pass
+        try:
+            result_q.put({"out": out, "rc": rc})
+        except Exception:
+            pass
+
+
 def run(arm: str, model: str, reps: int, pythonpath: str, only=None):
     resdir = ROOT / "results" / model.replace("/", "_") / arm
     resdir.mkdir(parents=True, exist_ok=True)
@@ -175,7 +260,7 @@ kind = "observability"
 enabled = true
 
 [components.config]
-version = 3
+version = 4
 
 [components.config.atof]
 enabled = true
@@ -188,24 +273,32 @@ mode = "overwrite"
 """.strip(),
                 encoding="utf-8",
             )
-            env = dict(os.environ)
-            env.update({
-                "PYTHONPATH": pythonpath,
-                "HERMES_HOME": str(HOME),
-                "HERMES_NEMO_RELAY_PLUGINS_TOML": str(relay_config),
-            })
             q = task.replace("{WORK}", str(work))
+            session_id = f"abeval-{arm}-{run_id}"
+            ctx = multiprocessing.get_context("spawn")
+            result_q = ctx.Queue()
+            proc = ctx.Process(
+                target=_abeval_worker,
+                args=(pythonpath, str(HOME), str(relay_config), str(work),
+                      q, model, session_id, result_q),
+            )
             t0 = time.time()
-            try:
-                p = subprocess.run(
-                    [sys.executable, "-m", "hermes_cli.main", "chat", "--query", q,
-                     "--quiet", "--max-turns", "30", "--accept-hooks", "--model", model],
-                    cwd=work, env=env, capture_output=True, text=True,
-                    encoding="utf-8", errors="replace", timeout=600, check=False)
-                out = (p.stdout or "").strip()
-                rc = p.returncode
-            except subprocess.TimeoutExpired:
+            proc.start()
+            proc.join(timeout=600)
+            if proc.is_alive():
+                proc.terminate()
+                proc.join(timeout=10)
+                if proc.is_alive():
+                    proc.kill()
+                    proc.join(timeout=5)
                 out, rc = "", -9
+            else:
+                try:
+                    payload = result_q.get(timeout=5)
+                    out = (payload.get("out") or "").strip()
+                    rc = int(payload.get("rc", 1))
+                except Exception:
+                    out, rc = "", proc.exitcode if proc.exitcode not in (None, 0) else 1
             dt = time.time() - t0
             if rc != 0 and not out.strip():
                 # Startup crash / infra flake — do NOT record it as a data
