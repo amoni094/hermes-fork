@@ -98,6 +98,7 @@ ELITE_NAMES = frozenset({
 ELITE_SECURITY_NEEDLES = (
     "vulnerability", "exploit", "bypass", "privilege escalation",
     "injection", "cve", "threat model", "attack surface", "zero-day",
+    "pen test", "pentest",
 )
 _ELITE_SEC_RE = re.compile(
     r"\b(?:" + "|".join(re.escape(n) for n in ELITE_SECURITY_NEEDLES) + r")\b",
@@ -117,7 +118,8 @@ CODEISH_RE = re.compile(r'[`\{\[]|def |class |import ')
 MATH_RE = re.compile(
     r'\b(calculat|formula|proof|prove|algorithm|arithmetic|correct answer|math|'
     r'equation|sum|product|integral|derivative|eigenvalue|matrix|linear algebra|'
-    r'combinatoric|permutation)\b',
+    r'combinatoric|permutation|'
+    r'add up the first|first \d+\s+squares)\b',
     re.IGNORECASE,
 )
 # Patterns that look like math but are subject-area references, not computation requests
@@ -180,6 +182,87 @@ RECOMMENDATION_RE = re.compile(
     r"|(?:worth|better|worse)\s+(?:buying|getting|using|doing|waiting)\b"
     r")",
     re.IGNORECASE,
+)
+
+# P7: confirmations / status checks that are always fast in-session (turn_index > 0).
+_FAST_WHITELIST_EXACT = frozenset({
+    "y", "yes", "no", "ok", "done", "sure", "yep",
+    "do it", "run it", "try it", "go ahead", "proceed",
+})
+FAST_STATUS_RE = re.compile(
+    r"^(?:did|does|is|are|was|were)\s+"
+    r"(?:it|that|this|they|you|he|she)\s+"
+    r"(?:done|finished|complete|synced|working|up|running|pass|fail)\b",
+    re.IGNORECASE,
+)
+
+# P3: epistemic hedges — user wants judgment/validation, not a lookup.
+HEDGE_RE = re.compile(
+    r"\b(?:"
+    r"i\s+always\s+thought|i\s+thought|i\s+think|i\s+assumed|"
+    r"am\s+i\s+wrong|is\s+that\s+right|is\s+that\s+correct|"
+    r"right\?|correct\?|"
+    r"isnt\s+it|isn't\s+it|shouldnt\s+it|shouldn't\s+it|"
+    r"wouldnt\s+it|wouldn't\s+it"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# P4: explicit comparison/ranking. Bare '\bor\b' is too broad (skipped on purpose).
+COMPARISON_RE = re.compile(
+    r"\b(?:"
+    r"vs\.?|versus|better\s+than|worse\s+than|compared\s+to|"
+    r"difference\s+between|pros\s+and\s+cons|trade-?off"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# P5: continuation even without prior_tier.
+CONTINUATION_MARKER_RE = re.compile(
+    r"\b(?:"
+    r"what\s+about|how\s+about|and\s+also|as\s+well|"
+    r"but\s+what\s+if|and\s+if|in\s+that\s+case|"
+    r"given\s+that|considering\s+that|then\s+what|then\s+how|and\s+then|"
+    r"\balso\b|\btoo\b"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Clarifications that omit '?'. Complementary to INTERROGATIVE_RE (contractions).
+IMPLICIT_QUESTION_RE = re.compile(
+    r"\b(?:do\s+you\s+mean|does\s+that\s+mean|when\s+you\s+say|"
+    r"are\s+you\s+saying|dont\s+you\s+think|don't\s+you\s+think)\b",
+    re.IGNORECASE,
+)
+
+# Memory/research retrieval — not a mechanical one-liner.
+RESEARCH_VERB_RE = re.compile(
+    r"^(?:please\s+)?(?:recall|remember|summarise|summarize)\b",
+    re.IGNORECASE,
+)
+
+# P1 syntactic features (clause / subordinate / negation / modal).
+_CLAUSE_RE = re.compile(r"[,;]|\b(?:and|but|because|however|although)\b", re.IGNORECASE)
+_SUBORD_RE = re.compile(r"\b(?:if|when|while|unless|since|because)\b", re.IGNORECASE)
+_NEGATION_RE = re.compile(r"\b(?:not|never|no)\b|n't", re.IGNORECASE)
+_CONDITIONAL_RE = re.compile(r"\b(?:would|could|should|might|may)\b", re.IGNORECASE)
+
+# P2 named-entity pieces.
+_NE_VERSION_RE = re.compile(r"\b\d+\.\d+\b")
+_NE_IDENT_RE = re.compile(r"\b[A-Za-z][\w]*-[\w-]+")
+_NE_MODEL_RE = re.compile(
+    r"\b(?:gpt|claude|sonnet|opus|grok|haiku|deepseek|o3|o4|gemini|mistral)\b",
+    re.IGNORECASE,
+)
+
+# P6 default_safe calibration.
+_DOMAIN_KW_RE = re.compile(
+    r"\b(?:hermes|compaction|classifier|router|cron|orchestrat|"
+    r"hindsight|wiring|adversarial)\b",
+    re.IGNORECASE,
+)
+_TECH_TOKEN_RE = re.compile(
+    r"[A-Z][a-z]+[A-Z][A-Za-z0-9]*|[a-z]+_[a-z0-9_]+|\b\d+\.\d+\b"
 )
 
 TIERS = ("fast", "math", "longctx", "tooluse", "elite", "reason")
@@ -254,6 +337,67 @@ def _as_tags(value) -> list[str]:
 def _starts_code_block(query: str) -> bool:
     s = query.lstrip()
     return s.startswith("```") or s.startswith("`")
+
+
+def _syntactic_complexity(query: str) -> float:
+    """P1: lightweight clause/subordinate/negation/modal score."""
+    if not query:
+        return 0.0
+    clause = len(_CLAUSE_RE.findall(query))
+    sub = len(_SUBORD_RE.findall(query))
+    neg = len(_NEGATION_RE.findall(query))
+    cond = len(_CONDITIONAL_RE.findall(query))
+    return clause * 0.3 + sub * 0.4 + neg * 0.2 + cond * 0.3
+
+
+def _named_entity_density(query: str, words: list[str]) -> float:
+    """P2: fraction of tokens that look like names, versions, or model ids."""
+    if not words:
+        return 0.0
+    hits = 0
+    for i, w in enumerate(words):
+        raw = w.strip(".,!?;:()[]\"'`")
+        if not raw:
+            continue
+        if _NE_VERSION_RE.search(raw) or _NE_IDENT_RE.search(raw):
+            hits += 1
+            continue
+        if _NE_MODEL_RE.fullmatch(raw):
+            hits += 1
+            continue
+        if len(raw) >= 2 and raw.isupper() and raw.isalpha():
+            hits += 1
+            continue
+        if i > 0 and raw[0].isupper() and raw[1:].islower() and raw.isalpha():
+            hits += 1
+    return hits / len(words)
+
+
+def _fast_whitelist_match(query: str, turn_index: int) -> bool:
+    """P7: in-session confirmations / binary status checks."""
+    if turn_index <= 0:
+        return False
+    q = query.strip().rstrip(".!").strip().lower()
+    if q in _FAST_WHITELIST_EXACT:
+        return True
+    stripped = query.strip()
+    if FAST_STATUS_RE.search(stripped) or PAST_TENSE_STATUS_RE.search(stripped):
+        return True
+    return False
+
+
+def _calibrate_default_safe(query: str, n_words: int) -> float:
+    """P6: lift default_safe confidence when the query is clearly non-trivial."""
+    conf = 0.60
+    if any(ch in query for ch in ".!?"):
+        conf += 0.05
+    if query and _TECH_TOKEN_RE.search(query):
+        conf += 0.05
+    if n_words > 20:
+        conf += 0.05
+    if query and _DOMAIN_KW_RE.search(query):
+        conf += 0.05
+    return min(conf, 0.85)
 
 
 def _strong_directional_signal(query: str, words: list[str], context_tokens: int) -> bool:
@@ -372,7 +516,31 @@ def classify(payload: dict | None = None, **kwargs) -> dict:
     if "?" in query and n_words > 20:
         return {"tier": "reason", "reason": "complex_question", "confidence": 0.70}
 
+    # P4 comparison/ranking — never fast for short explicit comparisons.
+    if query and n_words < 20 and COMPARISON_RE.search(query):
+        return {"tier": "reason", "reason": "comparison_query", "confidence": 0.80}
+    # P3 hedges / implicit questions / research verbs: judgment, not lookup.
+    if query and HEDGE_RE.search(query):
+        return {"tier": "reason", "reason": "hedge_query", "confidence": 0.80}
+    if query and IMPLICIT_QUESTION_RE.search(query):
+        return {"tier": "reason", "reason": "implicit_question", "confidence": 0.75}
+    if query.strip() and RESEARCH_VERB_RE.search(query.strip()):
+        return {"tier": "reason", "reason": "research_recall", "confidence": 0.80}
+    # P5 implicit continuation markers (even without prior_tier).
+    if query and n_words < 12 and CONTINUATION_MARKER_RE.search(query):
+        return {"tier": "reason", "reason": "implicit_continuation", "confidence": 0.75}
+    # P1/P2: short queries that are syntactically dense or NE-dense are not simple.
+    if query.strip() and n_words < 15:
+        if _syntactic_complexity(query) >= 2.0:
+            return {"tier": "reason", "reason": "syntactic_complexity", "confidence": 0.75}
+        if _named_entity_density(query, words) > 0.3:
+            return {"tier": "reason", "reason": "named_entity_density", "confidence": 0.75}
+
     # FORCE FAST
+    # P7 whitelist is the highest-priority FAST rule (confirmations only in-session).
+    # Capability constraints above (elite/math/longctx/error) still win.
+    if _fast_whitelist_match(query, turn_index):
+        return {"tier": "fast", "reason": "fast_whitelist", "confidence": 0.90}
     if tags_l & PROCEDURE_TAGS:
         return {"tier": "fast", "reason": "procedure_skill", "confidence": 0.80}
     if prev_tool_calls >= 2 and prev_exit_code == 0 and turn_index > 0:
@@ -395,6 +563,10 @@ def classify(payload: dict | None = None, **kwargs) -> dict:
     first3 = {w.lower().rstrip(".,!?") for w in words[:3]}
     has_imperative = bool(IMPERATIVE_TASK_VERBS & first3)
     code_block = bool(CODEISH_RE.search(query)) or _starts_code_block(query)
+    # Reasoning-thread hold: do not drop a reason/elite conversation to fast
+    # just because the follow-up is short and has no '?'. Continuation_bias
+    # already covers n_words < 12; this covers the 12-14 word remainder.
+    reasoning_thread = prior_tier in ("reason", "elite")
     if (
         query.strip()
         and n_words < 15
@@ -402,10 +574,15 @@ def classify(payload: dict | None = None, **kwargs) -> dict:
         and not has_recommendation
         and not has_imperative
         and not code_block
+        and not reasoning_thread
     ):
         return {"tier": "fast", "reason": "short_simple_query", "confidence": 0.70}
 
-    return {"tier": "reason", "reason": "default_safe", "confidence": 0.60}
+    return {
+        "tier": "reason",
+        "reason": "default_safe",
+        "confidence": _calibrate_default_safe(query, n_words),
+    }
 
 
 def classify_with_model(payload: dict, tier_models: dict | None = None) -> dict:
@@ -620,6 +797,10 @@ def self_test() -> int:
     _check(d["tier"] == "elite" and d["reason"] == "security_query",
            "CVE/exploit query -> elite", failures)
 
+    d = classify({"query": "pen test the login flow"})
+    _check(d["tier"] == "elite" and d["reason"] == "security_query",
+           "pen test query -> elite", failures)
+
     d = classify({
         "query": "architect the data pipeline with fundamental tradeoff between latency and consistency in distributed system design",
         "skill_tags": [],
@@ -635,8 +816,11 @@ def self_test() -> int:
     _check(d["tier"] == "elite" and d["reason"] == "security_query",
            "CVE + 90k ctx -> elite not longctx", failures)
 
-    d = classify({"query": "compute eigenvalue of matrix"})
-    _check(d["tier"] == "math", "compute eigenvalue -> math", failures)
+    d = classify({'query': 'compute eigenvalue of matrix'})
+    _check(d['tier'] == 'math', 'compute eigenvalue -> math', failures)
+
+    d = classify({'query': 'can you just add up the first 4000 squares for me'})
+    _check(d['tier'] == 'math', 'conversational add-up squares -> math', failures)
 
     d = classify({"query": "report the value", "skill_tags": ["procedure"]})
     _check(d["tier"] == "fast" and d["reason"] == "procedure_skill",
@@ -712,6 +896,67 @@ def self_test() -> int:
 
     d = classify({'query': 'is it worth buying into now or should I wait'})
     _check(d['tier'] != 'fast', 'is it worth is recommendation not fast', failures)
+
+    # P1 syntactic complexity (short + subordinate/modal/negation stack)
+    d = classify({'query': 'if I should not go when it might fail because it could not work'})
+    _check(d['tier'] != 'fast', 'P1 complex syntax not short_simple', failures)
+    _check(d['reason'] == 'syntactic_complexity', 'P1 reason tag', failures)
+
+    # P2 named-entity density
+    d = classify({'query': 'sonnet-5-5 gpt-5.5 grok-4.6 claude-opus'})
+    _check(d['tier'] != 'fast', 'P2 NE-dense short query not fast', failures)
+    _check(d['reason'] == 'named_entity_density', 'P2 reason tag', failures)
+
+    # P3 hedging
+    d = classify({'query': 'I always thought frankston north was a nicer area'})
+    _check(d['tier'] == 'reason', 'P3 hedge I always thought -> reason', failures)
+    _check(d['reason'] == 'hedge_query', 'P3 reason tag', failures)
+
+    # P4 comparison
+    d = classify({'query': 'hermes-fork compared to hermes-main'})
+    _check(d['tier'] == 'reason', 'P4 comparison -> reason', failures)
+    _check(d['reason'] == 'comparison_query', 'P4 reason tag', failures)
+
+    # P5 implicit continuation markers
+    d = classify({'query': 'what about the other option'})
+    _check(d['tier'] == 'reason', 'P5 what about -> reason', failures)
+    _check(d['reason'] == 'implicit_continuation', 'P5 reason tag', failures)
+
+    # implicit question without '?'
+    d = classify({'query': 'when you say frankston, do you mean frankston north'})
+    _check(d['tier'] == 'reason', 'implicit do you mean -> reason', failures)
+
+    # research recall verb
+    d = classify({'query': 'recall the research you did on house buying recently'})
+    _check(d['tier'] == 'reason', 'recall research -> reason', failures)
+
+    # P6 calibration: empty stays 0.60; non-trivial default_safe is in [0.60, 0.85]
+    d = classify({'query': ''})
+    _check(d['reason'] == 'default_safe' and d['confidence'] == 0.60, 'P6 empty stays 0.60', failures)
+    d = classify({
+        'query': 'please continue with the remaining mechanical steps in this session now and then report done',
+        'turn_index': 0,
+    })
+    _check(d['reason'] == 'default_safe', 'P6 still default_safe', failures)
+    _check(0.60 <= float(d['confidence']) <= 0.85, 'P6 confidence calibrated', failures)
+
+    # P7 whitelist (turn_index > 0 only)
+    d = classify({'query': 'yes', 'turn_index': 1})
+    _check(d['tier'] == 'fast' and d['reason'] == 'fast_whitelist', 'P7 yes continuation -> fast', failures)
+    d = classify({'query': 'yes', 'turn_index': 0})
+    _check(d['reason'] != 'fast_whitelist', 'P7 yes on turn 0 not whitelist', failures)
+    d = classify({'query': 'is it synced', 'turn_index': 2})
+    _check(d['tier'] == 'fast' and d['reason'] == 'fast_whitelist', 'P7 status check -> fast', failures)
+    d = classify({'query': 'did you do a recursive adversarial pass', 'turn_index': 1, 'prior_tier': 'elite'})
+    _check(d['tier'] == 'fast' and d['reason'] == 'fast_whitelist', 'P7 past-tense status not elite thread', failures)
+
+    # reasoning-thread hold: 12-14 word follow-up stays reason
+    d = classify({
+        'query': 'there are 3-4 trees in the yard theyre not tall (no more than 2m)',
+        'turn_index': 1,
+        'prior_tier': 'reason',
+    })
+    _check(d['tier'] == 'reason', 'reasoning thread hold skips short_simple', failures)
 
     if failures:
         print("SELF-TEST FAIL: " + "; ".join(failures), file=sys.stderr)
