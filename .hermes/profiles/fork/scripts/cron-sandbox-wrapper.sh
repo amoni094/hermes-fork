@@ -223,6 +223,7 @@ _add_bind "$PROFILE_ROOT/state.db-shm" true
 _add_bind "$HOME/.hermes/memories" true
 _add_bind "$PROFILE_ROOT/memories" true
 _add_bind "$PROFILE_ROOT/cache" false
+_add_bind "$HOME/.hermes/cache" false
 _add_bind "$PROFILE_ROOT/memory-facts" false
 _add_bind "$HERMES_HOME/memory-facts" false
 _add_bind "$PROFILE_ROOT/logs" false

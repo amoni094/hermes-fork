@@ -764,7 +764,7 @@ def cmd_build(incremental: bool = False):
 
     # Strip tfidf from the JSON (rebuild at query time from tokens)
     index = {
-        "built_at": datetime.now(_dt.UTC).isoformat(),
+        "built_at": datetime.now(timezone.utc).isoformat(),
         "total": len(skills),
         "skills": [
             {

@@ -66,7 +66,7 @@ Wiring checklist sections:
   H. ARCHITECTURE.md: documented state matches actual code.
      Every newly deployed plugin must appear in the 'Deployed Plugins (fork profile)' section of `~/.hermes/profiles/fork/ARCHITECTURE.md` with: hook name(s), behaviour summary, and any dark-output JSONL files it writes. Missing entries accumulate silently — check that ALL plugins in `config.yaml plugins.enabled` are documented, not just the one being audited.
   I. HOOK COMPLETENESS: for every hook the plugin intends to provide, verify that (a) `plugin.yaml provides_hooks` lists it, (b) `plugin.yaml hooks` lists it, and (c) `register()` calls `ctx.register_hook(hook_name, fn)` with the EXACT string. A hook that is provided in `provides_hooks` but not registered in `register()` is dead code — the plugin.yaml declaration is documentation only; only the `ctx.register_hook` call wires the hook. A hook added after plugin initial review (e.g. `transform_tool_result` added later) must be added to ALL THREE places or it will silently not fire.
-  J. CALL-SITE ARGUMENT WIRING: any constant defined in a module (e.g. `DPI_TOKEN_BOUND = 512`, `FAIL_BOUND = 0.1`) but never passed as an argument to the function it gates is dead code. Grep all call sites of the gating function and confirm the constant appears as a kwarg. A constant defined at module level that is not referenced in any function call is a silent no-op — the gate runs with the function’s default, not the module-level value.
+  J. CALL-SITE ARGUMENT WIRING: any constant defined in a module (e.g. `DPI_TOKEN_BOUND = 512`, `FAIL_BOUND = 0.1`, `HHR_THRESHOLD = 0.35`) but never passed as an argument to the function it gates is dead code. When a module has BOTH a public constant (e.g. `HHR_THRESHOLD`) and a private alias (e.g. `_SPRT_H0_LOW = 0.35`) that is the actual value used by the function, the public constant is a dead alias — developer changes to it are silently ignored. Fix: make the private constant an alias for the public one: `_SPRT_H0_LOW = HHR_THRESHOLD`. Grep call sites with: `re.search(r'<fn_name>\([^)]*CONSTANT_NAME', src)` — zero matches = dead constant. Grep all call sites of the gating function and confirm the constant appears as a kwarg. A constant defined at module level that is not referenced in any function call is a silent no-op — the gate runs with the function’s default, not the module-level value.
 
   K. CTX.GET_CONFIG NESTING: `ctx.get_config(key)` in hermes-fork reads `plugins.entries.<id>.settings.<key>` first, then `.config.<key>`, then returns None. Keys placed at the root of the plugin’s config.yaml entry (not under `.settings`) are never returned, so the hook silently uses its default (typically False/None). After enabling any plugin that uses `ctx.get_config`, verify the config.yaml entry has a `.settings` block with the expected keys nested inside it.
 
@@ -88,6 +88,8 @@ Wiring checklist sections:
   L. CRON JOB COMPLETENESS — for each script-only cron job:
      - `no_agent: true` must be set (prevents agent pool spawn for script-only work).
      - Producer jobs must be scheduled strictly before their consumer jobs. A consumer that reads a DB written by a producer must run at least one schedule window after the producer; sharing the same cron time is a race. Default to: producer at HH:30, consumer at HH+1:00.
+     - **Missing argv = silent wrong behaviour**: a cron job entry with no `argv` field for a script that requires arguments runs with zero args. If `main()` calls `parser.error()` or `sys.exit(1)` when required args are absent, the job silently fails every run with no output file. Always add `argv` to the job entry. For scripts with log-based auto-detection mode, use `["--from-log"]`; for index-build scripts, use `["--build"]`.
+     - **Inline-only scripts cannot be standalone cron jobs**: a script that requires live session data as file arguments (e.g. `--window FILE --new-chunk FILE`) exits 0 silently with no args (graceful no-op) but writes nothing — it cannot autonomously generate its own inputs from a cron schedule. These scripts are call-time tools, not periodic batch jobs. When one is registered as a cron job, it runs every interval and produces no output. Leave the job registration (it harms nothing — exits 0), but do not expect it to populate its output log; that log is populated only when the script is called inline during live session processing.
      - When adding a consumer job, verify a producer job exists and is scheduled in jobs.json. A consumer with no producer job writes an empty/stale DB every run.
 
      - *Null-script jobs*: jobs in jobs.json with script=None. These are silently skipped by the scheduler. Either delete them or assign a real implementation.
@@ -101,8 +103,15 @@ Wiring checklist sections:
      to `True` when the gate did NOT fire (i.e. compression proceeded unmodified) has
      inverted semantics — every downstream reader will misinterpret it. Rule: `gated`
      (or `blocked`, `fired`, `active`) should be `True` when the gate/block/event
-     actually fired. Correct: `"gated": not (fire_full or fire_soft)` with a comment
-     distinguishing the value. Flag inverted fields as MEDIUM in the audit report.
+     actually fired.
+
+     However: `"gated": not (fire_full or fire_soft)` with an inline comment
+     `# True = gate blocked, compression proceeds unmodified` is intentional — this
+     encodes 'the gate is engaged / blocking', not 'compression fired'. Before flagging
+     as inverted, check the accompanying comment and confirm the semantics are
+     unambiguous to a downstream consumer. If the comment is absent or ambiguous, flag
+     LOW and add a comment clarifying intended polarity. Do NOT require a rename unless
+     the polarity is genuinely wrong after reading the comment.
 
   O. DUAL PLUGIN COPY SYNC: some plugins exist in TWO places — the live profile directory
      (`profiles/fork/plugins/<name>/`) AND the hermes-fork git repo's snapshot directory
@@ -110,10 +119,71 @@ Wiring checklist sections:
      copy is synced before committing. A stale repo copy is LOW severity but confuses
      future sessions that clone the repo without the profile overlay. Sync command:
 
-         cp profiles/fork/plugins/<name>/__init__.py \
-            ~/.hermes/hermes-fork/fork-profile/plugins/<name>/__init__.py
+         cp /var/home/rainbow/.hermes/profiles/fork/plugins/<name>/__init__.py \
+            /var/home/rainbow/.hermes/hermes-fork/fork-profile/plugins/<name>/__init__.py
 
-     Check diff before committing: `diff <live> <repo>` must produce no output.
+     Check diff before committing: live and repo `__init__.py` must have equal line count
+     and identical content (`python3 -c "assert open(live).read() == open(repo).read()"`).
+     Commit the repo copy to hermes-fork separately (it's a different git repo) — this
+     requires a pull-rebase if profiles/fork already pushed ahead: `git pull --rebase origin main && git push origin main`.
+
+     Quick staleness check (run before each commit wave):
+
+         import shutil
+         live = PROFILE / 'plugins' / NAME / '__init__.py'
+         repo = FORK / 'fork-profile' / 'plugins' / NAME / '__init__.py'
+         if repo.exists() and live.read_text() != repo.read_text():
+             shutil.copy2(live, repo)  # sync, then commit repo separately
+
+  T. TOKEN-GATE VS TURN-GATE: when a plugin uses `turn_count` as the gate trigger,
+     verify what the host ACTUALLY passes. On the `post_tool` overflow path,
+     `fire_pre_compress` is called before `ContextCompressor.compress()` runs — at that
+     point `agent._session_messages` is empty (messages for the current turn have not yet
+     been appended), so turn_count=0 on every call. The depth gate never fires even at
+     120k context tokens. Fix: add a `TOKEN_THRESHOLD` constant and gate on
+     `context_tokens >= token_threshold` as a second condition:
+
+         TOKEN_THRESHOLD = 100_000  # context_tokens is reliable on post_tool path
+
+         def _check_gate(session_id, turn_count, conn, context_tokens=0):
+             depth_threshold = _cfg_int("depth_threshold", TURN_THRESHOLD)
+             token_threshold = _cfg_int("token_threshold", TOKEN_THRESHOLD)
+             ...
+             if turn_count >= depth_threshold or (context_tokens >= token_threshold > 0):
+                 fire()
+
+     Expose token_threshold in plugin.yaml settings and wire it through _cfg_int.
+     Symptom of the missing token gate: JSONL log shows `context_tokens: 120000,
+     turn_count: 0, skip: depth` on every compression call in a live session.
+
+  U. HYSTERESIS STATE TYPE: when `_last_fire` stores bare int turn counts, hysteresis
+     is broken for the token-gate path (turn_count=0 always). After firing,
+     `_last_fire[sid] = 0`; on the next call `if last:` is falsy (0 is falsy), so
+     hysteresis never applies — the gate fires on every compression call.
+     Fix: store `(turn_count, timestamp)` tuples. Apply hysteresis in two modes:
+
+         last_turns, last_ts = last_entry if isinstance(last_entry, tuple) else (last_entry, 0.0)
+         elapsed = time.time() - last_ts if last_ts else float("inf")
+         if turn_count > 0 and last_turns > 0:
+             if (turn_count - last_turns) < HYSTERESIS_TURNS: return False, False
+         else:  # token path or token→turn transition
+             if elapsed < (HYSTERESIS_TURNS * 2): return False, False
+
+     The else branch also covers the token→turn transition: after a token-triggered fire
+     stores (0, ts), the next call with real turn_count=50 has last_turns=0, falls into
+     the else branch, and is suppressed by the time check. Without this, the
+     token→turn path re-fires immediately (last_turns=0 skips turn check; time check
+     was gated on `turn_count==0` only in the naive version).
+
+  V. LOGGED CONFIG VALUE MUST MATCH LIVE VALUE: when a plugin computes a live threshold
+     via `_cfg_int('depth_threshold', TURN_THRESHOLD)` inside `_check_gate`, the JSONL
+     log record must use the COMPUTED value, not the module constant. If pre_compress
+     logs `"depth_threshold": TURN_THRESHOLD`, operator overrides via config.yaml are
+     invisible in the log — the record always shows the hardcoded default. Fix: compute
+     `depth_threshold = _cfg_int(...)` in pre_compress scope (not only inside
+     _check_gate) so the same variable is available for both the _check_gate call and
+     the log record. Pyright will catch the NameError if the variable is used in a
+     return value but only defined inside a called function.
 
   P. HOOK-DATA CIRCUIT COMPLETENESS: for every plugin hook that READS from a data store
      (e.g. reads compaction_telemetry to compute HHR), verify there is a corresponding
@@ -217,12 +287,28 @@ classification/decision. The cron audit will produce a `cache/last-session-type.
 
 ## Pitfalls
 
-Pitfall: profile-config and main are independent roots in amoni094/hermes-fork — they
-cannot be git-merged. To sync a live plugin fix from the profile directory into the
-repository: (1) cp the live __init__.py and plugin.yaml into
-`hermes-fork/fork-profile/plugins/<name>/`, (2) commit to hermes-fork main, (3) push.
-Never attempt `git merge profile-config` from the main branch; it creates unrelated-
-histories errors or corrupts the repo root.
+Pitfall: profile-config and main in the profiles/fork repo have unrelated git histories
+(branched from different roots). `git merge profile-config` from main fails with
+"no history in common". The correct merge path:
+
+  1. First clear ALL tracked-modified and untracked-blocker files from the working tree.
+     `git status --short` → commit tracked modifications with `git add -u && git commit`.
+     Move untracked files that would be overwritten (`AGENTS.md`, `SOUL.md`, `.npmrc`)
+     using `mv <file> /tmp/<stash>` — the git error message names them explicitly.
+     The profiles/fork repo root is `/var/home/rainbow` (not the fork subdir) — files
+     like `AGENTS.md` are at `/var/home/rainbow/AGENTS.md`, not inside the fork dir.
+  2. `git checkout main`
+  3. `git merge --allow-unrelated-histories --no-ff profile-config -m "merge msg"`
+  4. Resolve add/add conflicts (usually skill-access-logger, skill-routing-nudge) with
+     `git checkout --theirs -- <path>` then `git add -f <path>` (note `-f` required
+     because root .gitignore ignores `.hermes/`).
+  5. `git commit --no-edit && git push origin main`
+  6. Restore stashed files with `mv /tmp/<stash> <original-path>`.
+  7. `git checkout profile-config` to return to working branch.
+
+  To sync a live plugin fix into the hermes-fork git repo (separate repo):
+  cp the live __init__.py and plugin.yaml into
+  `hermes-fork/fork-profile/plugins/<name>/`, then commit + push to hermes-fork main.
 
 Pitfall: when initialising or first committing a profile-config branch, add a `.gitignore`
 before staging any files: `printf '__pycache__/\n*.pyc\n*.pyo\n' >> .gitignore && git add
@@ -329,6 +415,54 @@ errors, policy table gaps, shadow compliance failures, and config drift between
 documentation and actual state.
 
 Both are required. Design audit gates implementation; wiring audit gates deployment.
+
+## Hindsight Bank Pre-Creation
+
+The hindsight plugin resolves `bank_id_template = 'hermes-{profile}'` at startup. If the resolved bank (e.g. `hermes-fork`) does not exist in the Hindsight API, auto-retain calls fall back to `hermes-default`, mixing fork session memories with the default profile. The bank auto-creates on first retain but only if the auto-retain code path fires (requires a compaction event). Pre-create the bank at session setup or profile bootstrap:
+
+    import urllib.request, json
+    payload = json.dumps({"name": "hermes-fork", "mission": ""}).encode()
+    req = urllib.request.Request(
+        "http://127.0.0.1:9177/v1/default/banks/hermes-fork",
+        data=payload, headers={"Content-Type": "application/json"}, method="PUT"
+    )
+    resp = urllib.request.urlopen(req, timeout=5)
+    # 200 = created or already exists (idempotent)
+
+Verify: `GET /v1/default/banks` → bank_id `hermes-fork` appears in list.
+
+The `GET /v1/default/banks/<bank_id>` endpoint returns 405 (no GET by ID). Use `GET /v1/default/banks/<bank_id>/profile` or `GET /v1/default/banks/<bank_id>/stats` for per-bank queries.
+
+## on_post_compaction Hook: Token Kwarg Names
+
+When the Hermes runtime fires `post_compaction`, it passes token counts as `tokens_before` and `tokens_after` kwargs (not `before_tokens`/`after_tokens`). A naive INSERT that reads `kwargs.get('before_tokens')` returns None for every row. Probe order for maximum compatibility:
+
+    before = (
+        kwargs.get('tokens_before')
+        or kwargs.get('context_tokens_before')
+        or kwargs.get('before_tokens')
+    )
+    after = (
+        kwargs.get('tokens_after')
+        or kwargs.get('context_tokens_after')
+        or kwargs.get('after_tokens')
+    )
+
+Symptom of wrong kwarg names: all `before_tokens` / `after_tokens` columns in `compaction_telemetry` are NULL; SPRT has no data and falls through to `(False, False)` on every call.
+
+## Audit False-Positive Triage
+
+Audit subagents frequently mis-classify findings as MEDIUM when the code is correct. Before applying any fix, verify inline:
+
+- **block dict `message=` missing**: load module, grep all `return {` blocks for `"action".*"block"`, confirm `"message"` key is present. Do not trust a subagent assertion — the key is there in both tool-auth-gate and governance-hard-block reference implementations.
+- **`gated` field inverted**: check the inline comment. `"gated": not (fire_full or fire_soft)` with `# True = gate blocked` is intentional. Only rename/revert if the comment is absent or the polarity is demonstrably wrong.
+- **memory-query-router KeyError on missing weights**: check for `if _rw_path.exists() else {}` fallback — already present. Confirm before writing a fix.
+- **jev-gate-nightly non-atomic write**: check whether the script writes any file at all (it may be stdout-only). Import the script and check for `write_text`/`os.replace`/`_atomic_write` references first.
+- **prequential cron as HIGH**: the script exits 0 silently with no args — this is a graceful no-op, not an error exit. The fuser is fail-open on missing prequential log. Downgrade to INFO.
+
+Rule: before filing any finding as MEDIUM+, grep or inspect the actual code path and confirm the failure mode is reachable at runtime. Cold subagents have high FP rate on wiring findings (~30-50%).
+
+See `references/hindsight-api.md` for Hindsight API endpoint reference, bank pre-creation pattern, on_post_compaction token kwarg names, and audit false-positive triage notes.
 
 ## Inventory Collection Before Dispatching Audit Subagent
 

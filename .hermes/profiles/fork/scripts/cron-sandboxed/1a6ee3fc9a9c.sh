@@ -4,4 +4,5 @@
 export HERMES_OPENSHELL_TIMEOUT=21600
 # This job requires outbound HTTP (arxiv API) — run on host, not in network-isolated sandbox
 export HERMES_OPENSHELL_FALLBACK=1
+export HERMES_NO_SANDBOX=1
 exec "/var/home/rainbow/.hermes/profiles/fork/scripts/cron-sandbox-wrapper.sh" "/var/home/rainbow/.hermes/profiles/fork/scripts/research-pipeline-weekly.py" "$@"
