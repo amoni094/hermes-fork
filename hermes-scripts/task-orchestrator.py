@@ -120,38 +120,42 @@ def _parse_model_spec(spec: str, default_provider: str = "anthropic") -> dict:
 
 
 # Classify + verify are stdlib. Logged, not used to classify.
-_ORCH_DEFAULT = {"provider": "openai", "model": "gpt-5.5"}
+_ORCH_DEFAULT = {"provider": "openai", "model": "gpt-5.6-sol"}
 
 
 def _parse_orch_model(spec) -> dict:
     if isinstance(spec, dict):
         prov = str(spec.get("provider") or "openai").strip() or "openai"
-        model = str(spec.get("model") or "gpt-5.5").strip() or "gpt-5.5"
+        model = str(spec.get("model") or "gpt-5.6-sol").strip() or "gpt-5.6-sol"
         return {"provider": prov, "model": model}
     if isinstance(spec, str) and spec.strip():
         return _parse_model_spec(spec, default_provider="openai")
     return dict(_ORCH_DEFAULT)
 
 
-# Orchestrator model is tier-dependent:
-# - reason tasks: gpt-5.5 orchestrates (can handle ambiguous decomposition and
-#   verification judgment; flash can't reliably verify a reasoning task output)
-# - elite tasks: sonnet-5 orchestrates elite workers (capability match;
-#   flash verifying a security audit is a mismatch)
-# - low-confidence fallback (confidence < 0.7): gpt-5.5 (safe default)
-# - no orchestrator for fast/math/longctx/tooluse (should_orchestrate=False)
-# Note: elite WORKER = sonnet-5-5 (ceiling hedge); elite ORCHESTRATOR = sonnet-5
-# (same measured accuracy as 5-5 on elite battery, lower cost per orchestration call)
-# Switch elite orchestrator to sonnet-5-5 if sonnet-5 fails verification on future harder tasks.
+# Orchestrator model is tier-dependent and must be smarter than its worker.
+# Design principle: orchestrator judges/verifies worker output — it needs to
+# reliably detect worker failures, so it must be more capable than the worker.
+#
+# Worker tier map (from model-tier-classifier.py DEFAULT_TIER_MODELS):
+#   reason worker: openai/gpt-5.5
+#   elite worker:  anthropic/claude-sonnet-5-5
+#
+# Orchestrator choices:
+#   reason: gpt-5.6-sol (94% vs gpt-5.5's 88% on reason battery; smarter than worker)
+#   elite:  sonnet-5-5 (fallback). opus-5 10/12 (83%) and opus-5-5 11/12 (92%) on
+#           elite battery n=3 both missed the >=95% bar; principle unmet vs worker.
+#   default (confidence<0.7): gpt-5.6-sol (conservative; smarter than gpt-5.5 default)
+# - no orchestrator for high-conf fast/math/longctx/tooluse (should_orchestrate=False)
 ORCHESTRATOR_TIER_MAP: dict[str, dict[str, str]] = {
-    "reason":  {"provider": "openai",    "model": "gpt-5.5"},
-    "elite":   {"provider": "anthropic", "model": "claude-sonnet-5"},
-    "default": {"provider": "openai",    "model": "gpt-5.5"},  # low-confidence fallback
+    "reason":  {"provider": "openai",    "model": "gpt-5.6-sol"},
+    "elite":   {"provider": "anthropic", "model": "claude-sonnet-5-5"},
+    "default": {"provider": "openai",    "model": "gpt-5.6-sol"},
 }
 
 
 def get_orchestrator_model(tier: str, confidence: float) -> dict[str, str]:
-    """Return the orchestrator model for a given worker tier and classifier confidence."""
+    """Return orchestrator model. Orchestrator is always smarter than the worker."""
     try:
         conf = float(confidence)
     except (TypeError, ValueError):
@@ -920,11 +924,17 @@ def self_test() -> int:
         get_orchestrator_model("elite", 0.9) == ORCHESTRATOR_TIER_MAP["elite"],
         "orch model elite high-conf", failures)
     _check(
-        get_orchestrator_model("elite", 0.9).get("model") == "claude-sonnet-5",
-        "elite orchestrator is sonnet-5 not 5-5", failures)
+        get_orchestrator_model("reason", 0.9).get("model") == "gpt-5.6-sol",
+        "reason orchestrator is gpt-5.6-sol", failures)
+    _check(
+        get_orchestrator_model("elite", 0.9).get("model") == "claude-sonnet-5-5",
+        "elite orchestrator is sonnet-5-5 (opus-5/5-5 <95%)", failures)
     _check(
         (DEFAULT_TIER_MODELS.get("elite") or {}).get("model") == "claude-sonnet-5-5",
         "elite worker stays sonnet-5-5", failures)
+    _check(
+        get_orchestrator_model("fast", 0.4).get("model") == "gpt-5.6-sol",
+        "low-conf default orchestrator is gpt-5.6-sol", failures)
     _check(
         get_orchestrator_model("fast", 0.4) == ORCHESTRATOR_TIER_MAP["default"],
         "orch model low-conf fast -> default", failures)
