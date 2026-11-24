@@ -291,8 +291,9 @@ def _abeval_worker(pythonpath: str, hermes_home: str, relay_toml: str,
         except Exception:
             pass
         try:
-            payload = {"out": out, "rc": rc, "model": model}
+            payload = {"out": out, "rc": rc}
             if isinstance(tier_config, dict):
+                payload["model"] = model
                 payload["tier"] = tier_config.get("tier")
                 payload["decided_model"] = tier_config.get("decided_model") or model
                 payload["tier_reason"] = tier_config.get("reason")
