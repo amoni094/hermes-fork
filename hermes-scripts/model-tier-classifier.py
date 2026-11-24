@@ -152,6 +152,36 @@ PAST_TENSE_STATUS_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Contractions / tag questions that count as a '?' for short_simple_query.
+INTERROGATIVE_RE = re.compile(
+    r"\b(?:"
+    r"what(?:re|s|ve|'re|'s|'ve)\b"  # whatre, whats, whatve
+    r"|how(?:re|s|ve|'re|'s|'ve)\b"  # howre, hows
+    r"|where(?:re|s|'re|'s)\b"       # wheres
+    r"|who(?:re|s|ve|'re|'s|'ve)\b"  # whos, whove
+    r"|why(?:re|s|'re|'s)\b"         # whyre
+    r"|when(?:re|s|'re|'s)\b"        # whens
+    r"|isn't\s+it\b|isnt\s+it\b"     # tag questions
+    r"|wasn't\s+it\b|wasnt\s+it\b"
+    r"|weren't\s+(?:they|we|you)\b|werent\s+(?:they|we|you)\b"
+    r"|didn't\s+(?:you|it|that)\b|didnt\s+(?:you|it|that)\b"
+    r"|hasn't\s+it\b|hasnt\s+it\b"
+    r")",
+    re.IGNORECASE,
+)
+
+# Recommendation / research asks — not fast even without '?'.
+RECOMMENDATION_RE = re.compile(
+    r"\b(?:"
+    r"what(?:'?s)?\s+the\s+best\b"     # whats the best, what's the best
+    r"|which\s+(?:is|would|should|one)\b"  # which is better, which should I
+    r"|(?:should|would)\s+(?:i|we|you)\b"  # should I, would you
+    r"|(?:is|are)\s+it\s+worth\b"      # is it worth
+    r"|(?:worth|better|worse)\s+(?:buying|getting|using|doing|waiting)\b"
+    r")",
+    re.IGNORECASE,
+)
+
 TIERS = ("fast", "math", "longctx", "tooluse", "elite", "reason")
 
 DEFAULT_TIER_MODELS = {
@@ -221,8 +251,38 @@ def _as_tags(value) -> list[str]:
     return out
 
 
+def _starts_code_block(query: str) -> bool:
+    s = query.lstrip()
+    return s.startswith("```") or s.startswith("`")
+
+
+def _strong_directional_signal(query: str, words: list[str], context_tokens: int) -> bool:
+    """True if this query has a signal that must override continuation_bias."""
+    if query and _ELITE_SEC_RE.search(query):
+        return True
+    if query and _ELITE_AUDIT_RE.search(query):
+        return True
+    if query and MATH_RE.search(query) and not MATH_FP_RE.search(query):
+        return True
+    if query and TOOL_SCHEMA_RE.search(query):
+        return True
+    first3 = {w.lower().rstrip(".,!?") for w in words[:3]}
+    if IMPERATIVE_TASK_VERBS & first3:
+        return True
+    if context_tokens >= 80000:
+        return True
+    if _starts_code_block(query):
+        return True
+    return False
+
+
 def classify(payload: dict | None = None, **kwargs) -> dict:
-    """Return {tier, reason, confidence} for one turn. Missing keys use defaults."""
+    """Return {tier, reason, confidence} for one turn. Missing keys use defaults.
+
+    ctx keys: query, skill_tags, skill_name, context_tokens, turn_index, prior_tier,
+              prev_tool_error, prev_exit_code, prev_tier, ...
+    prior_tier and turn_index default to None and 0 if absent.
+    """
     data = dict(payload or {})
     data.update(kwargs)
 
@@ -236,6 +296,12 @@ def classify(payload: dict | None = None, **kwargs) -> dict:
     prev_large_read = _as_bool(data.get("prev_large_read"), False)
     prev_tool_error_type = _as_str(data.get("prev_tool_error_type"), "").strip()
     prev_tier = _as_str(data.get("prev_tier"), "").strip()
+    prior_raw = data.get("prior_tier")
+    prior_tier = None
+    if prior_raw is not None:
+        pt = str(prior_raw).strip().lower()
+        if pt in TIERS:
+            prior_tier = pt
 
     tags_l = {t.lower() for t in skill_tags}
     skill_name_n = _normalize_skill_name(skill_name)
@@ -311,20 +377,33 @@ def classify(payload: dict | None = None, **kwargs) -> dict:
         return {"tier": "fast", "reason": "procedure_skill", "confidence": 0.80}
     if prev_tool_calls >= 2 and prev_exit_code == 0 and turn_index > 0:
         return {"tier": "fast", "reason": "mechanical_continuation", "confidence": 0.75}
+
+    # Continuation bias: short ambiguous follow-ups inherit the previous turn's tier.
+    # Runs after elite/math/tooluse/longctx (already returned) and after explicit
+    # reason/procedure/mechanical signals. Only truly ambiguous shorts inherit.
+    if (
+        turn_index > 0
+        and n_words < 12
+        and prior_tier is not None
+        and not _strong_directional_signal(query, words, context_tokens)
+    ):
+        return {"tier": prior_tier, "reason": "continuation_bias", "confidence": 0.65}
+
     # Empty/whitespace is not a short simple query — fall through to default_safe.
+    has_question = ("?" in query) or bool(INTERROGATIVE_RE.search(query))
+    has_recommendation = bool(RECOMMENDATION_RE.search(query))
+    first3 = {w.lower().rstrip(".,!?") for w in words[:3]}
+    has_imperative = bool(IMPERATIVE_TASK_VERBS & first3)
+    code_block = bool(CODEISH_RE.search(query)) or _starts_code_block(query)
     if (
         query.strip()
         and n_words < 15
-        and "?" not in query
-        and not CODEISH_RE.search(query)
-        and turn_index == 0
+        and not has_question
+        and not has_recommendation
+        and not has_imperative
+        and not code_block
     ):
-        # Don't route fast if query starts with an imperative task verb,
-        # or if a math-looking phrase was a subject-area false positive.
-        first3_words = {w.lower().rstrip('.,!?') for w in words[:3]}
-        if not (IMPERATIVE_TASK_VERBS & first3_words) and not MATH_FP_RE.search(query):
-            return {"tier": "fast", "reason": "short_simple_query", "confidence": 0.70}
-        # else fall through to default
+        return {"tier": "fast", "reason": "short_simple_query", "confidence": 0.70}
 
     return {"tier": "reason", "reason": "default_safe", "confidence": 0.60}
 
@@ -609,6 +688,30 @@ def self_test() -> int:
 
     d = classify({'query': 'did you do a recursive adversarial pass'})
     _check(d['tier'] != 'elite', 'past-tense status check not elite', failures)  # FIX 3 guard
+
+    # FIX A: continuation bias
+    d = classify({'query': 'what about 3 grey st eltham', 'turn_index': 2, 'prior_tier': 'reason'})
+    _check(d['tier'] == 'reason', 'short follow-up inherits prior reason tier', failures)
+
+    d = classify({'query': 'hmm but theres no public transport there', 'turn_index': 3, 'prior_tier': 'reason'})
+    _check(d['tier'] == 'reason', 'continuation follow-up inherits reason', failures)
+
+    d = classify({'query': 'is it synced with local?', 'turn_index': 1, 'prior_tier': 'fast'})
+    _check(d['tier'] == 'fast', 'fast follow-up stays fast', failures)
+
+    # FIX B: interrogative contractions
+    d = classify({'query': 'whatre the key eval metrics for AI harnesses like hermes-fork'})
+    _check(d['tier'] != 'fast', 'whatre is interrogative, not fast', failures)
+
+    d = classify({'query': 'governance hardblock was deliberately switched off wasnt it'})
+    _check(d['tier'] != 'fast', 'wasnt it tag question is interrogative', failures)
+
+    # FIX C: recommendation queries
+    d = classify({'query': 'whats the best rear sway bar to get for this'})
+    _check(d['tier'] != 'fast', 'whats the best is recommendation not fast', failures)
+
+    d = classify({'query': 'is it worth buying into now or should I wait'})
+    _check(d['tier'] != 'fast', 'is it worth is recommendation not fast', failures)
 
     if failures:
         print("SELF-TEST FAIL: " + "; ".join(failures), file=sys.stderr)
