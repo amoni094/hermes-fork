@@ -15,7 +15,15 @@ of the integration branch), so measured deltas are attributable to the diff.
 Usage:
   python ab_eval.py run --arm baseline --model MODEL --reps N --pythonpath DIR
   python ab_eval.py run --arm fixes    --model MODEL --reps N --pythonpath DIR
+  python ab_eval.py run --arm tiered   --model MODEL --reps N --pythonpath DIR
+      [--fast-model FAST] [--slow-model SLOW]
   python ab_eval.py report --models MODEL1,MODEL2
+
+Tiered arm: classify each task query with hermes-scripts/model-tier-classifier.py
+(static, pre-spawn) and run the worker on fast or slow model. For --arm tiered,
+--model is ignored for routing (overridden by --slow-model); it still keys the
+results directory. Defaults: fast=anthropic/claude-haiku-4-5,
+slow=anthropic/claude-sonnet-4-6.
 
 Environment:
   ABEVAL_ROOT    working/results root   (default: ./abeval-workspace)
@@ -41,6 +49,10 @@ from pathlib import Path
 
 ROOT = Path(os.environ.get("ABEVAL_ROOT", "abeval-workspace")).resolve()
 HOME = Path(os.environ.get("ABEVAL_HOME", str(ROOT / "home"))).resolve()
+
+DEFAULT_FAST_MODEL = "anthropic/claude-haiku-4-5"
+DEFAULT_SLOW_MODEL = "anthropic/claude-sonnet-4-6"
+ARMS = ("baseline", "fixes", "tiered")
 
 TASKS = {
     # P: python-not-found + venv module confusion (terminal failure hints)
@@ -144,15 +156,63 @@ SUCCESS = {
 }
 
 
+def _hermes_scripts_dir() -> Path:
+    env = os.environ.get("HERMES_HOME", "").strip()
+    p = Path(env) if env else Path.home() / ".hermes"
+    if p.name != ".hermes" and p.parent.name == "profiles":
+        p = p.parent.parent
+    return p / "hermes-scripts"
+
+
+def _classify_turn(query: str, classifier_path: str | None = None, **fields) -> dict:
+    """Static pre-spawn classify. Fail-safe: slow / default_safe."""
+    path = Path(classifier_path) if classifier_path else (
+        _hermes_scripts_dir() / "model-tier-classifier.py")
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("_model_tier_classifier", path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"cannot load {path}")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        payload = {
+            "query": query,
+            "skill_tags": list(fields.get("skill_tags") or []),
+            "skill_name": fields.get("skill_name") or "",
+            "prev_tool_calls": int(fields.get("prev_tool_calls") or 0),
+            "prev_exit_code": int(fields.get("prev_exit_code") or 0),
+            "context_tokens": int(fields.get("context_tokens") or 0),
+            "turn_index": int(fields.get("turn_index") or 0),
+        }
+        d = mod.classify(payload)
+        if not isinstance(d, dict) or d.get("tier") not in ("fast", "slow"):
+            raise ValueError("bad classifier output")
+        conf = min(1.0, max(0.0, float(d.get("confidence") or 0.6)))
+        return {
+            "tier": d["tier"],
+            "reason": str(d.get("reason") or "default_safe"),
+            "confidence": conf,
+        }
+    except Exception as e:
+        return {
+            "tier": "slow",
+            "reason": f"classifier_error:{type(e).__name__}",
+            "confidence": 0.6,
+        }
+
+
 def _abeval_worker(pythonpath: str, hermes_home: str, relay_toml: str,
                    work_str: str, query: str, model: str, session_id: str,
-                   result_q, *, api_key: str | None = None):
+                   result_q, *, api_key: str | None = None,
+                   tier_config: dict | None = None):
     """Run one ab_eval task in a fresh process with relay ATOF wired."""
     import os
     import sys
     # Inject the API key into the spawned process environment so AIAgent can
     # authenticate.  The spawn context doesn't inherit the parent's env changes,
     # so we set it here explicitly.
+    if isinstance(tier_config, dict) and tier_config.get("decided_model"):
+        model = str(tier_config["decided_model"])
     provider, _, _ = model.partition("/")
     env_map = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
     env_var = env_map.get(provider, f"{provider.upper()}_API_KEY")
@@ -231,7 +291,13 @@ def _abeval_worker(pythonpath: str, hermes_home: str, relay_toml: str,
         except Exception:
             pass
         try:
-            result_q.put({"out": out, "rc": rc})
+            payload = {"out": out, "rc": rc, "model": model}
+            if isinstance(tier_config, dict):
+                payload["tier"] = tier_config.get("tier")
+                payload["decided_model"] = tier_config.get("decided_model") or model
+                payload["tier_reason"] = tier_config.get("reason")
+                payload["tier_confidence"] = tier_config.get("confidence")
+            result_q.put(payload)
         except Exception:
             pass
 
@@ -279,7 +345,9 @@ def _read_provider_key_from_config(provider: str) -> str | None:
         return None
 
 
-def run(arm: str, model: str, reps: int, pythonpath: str, only=None):
+def run(arm: str, model: str, reps: int, pythonpath: str, only=None,
+        fast_model: str | None = None, slow_model: str | None = None,
+        classifier_path: str | None = None):
     resdir = ROOT / "results" / model.replace("/", "_") / arm
     resdir.mkdir(parents=True, exist_ok=True)
     meta_path = resdir / "meta.jsonl"
@@ -326,15 +394,42 @@ mode = "overwrite"
             )
             q = task.replace("{WORK}", str(work))
             session_id = f"abeval-{arm}-{run_id}"
-            provider, _, _ = model.partition("/")
+            worker_model = model
+            tier_config = None
+            if arm == "tiered":
+                fast = fast_model or DEFAULT_FAST_MODEL
+                slow = slow_model or DEFAULT_SLOW_MODEL
+                cpath = classifier_path or str(
+                    _hermes_scripts_dir() / "model-tier-classifier.py")
+                decision = _classify_turn(
+                    q, cpath,
+                    # Toolperf tasks are mechanical error-recovery procedures.
+                    # Without this tag the long task templates fall through to
+                    # default_safe/slow even when nothing adversarial is present.
+                    skill_tags=["procedure"],
+                )
+                worker_model = fast if decision["tier"] == "fast" else slow
+                tier_config = {
+                    "fast_model": fast,
+                    "slow_model": slow,
+                    "classifier_path": cpath,
+                    "decided_model": worker_model,
+                    "tier": decision["tier"],
+                    "reason": decision["reason"],
+                    "confidence": decision["confidence"],
+                }
+                print(f"[{arm}/{model}] {run_id} classify "
+                      f"tier={decision['tier']} reason={decision['reason']} "
+                      f"-> {worker_model}", flush=True)
+            provider, _, _ = worker_model.partition("/")
             api_key = _read_provider_key_from_config(provider)
             ctx = multiprocessing.get_context("spawn")
             result_q = ctx.Queue()
             proc = ctx.Process(
                 target=_abeval_worker,
                 args=(pythonpath, str(HOME), str(relay_config), str(work),
-                      q, model, session_id, result_q),
-                kwargs={"api_key": api_key},
+                      q, worker_model, session_id, result_q),
+                kwargs={"api_key": api_key, "tier_config": tier_config},
             )
             t0 = time.time()
             proc.start()
@@ -351,6 +446,11 @@ mode = "overwrite"
                     payload = result_q.get(timeout=5)
                     out = (payload.get("out") or "").strip()
                     rc = int(payload.get("rc", 1))
+                    if isinstance(tier_config, dict):
+                        if payload.get("tier"):
+                            tier_config["tier"] = payload.get("tier")
+                        if payload.get("decided_model"):
+                            tier_config["decided_model"] = payload.get("decided_model")
                 except Exception:
                     out, rc = "", proc.exitcode if proc.exitcode not in (None, 0) else 1
             dt = time.time() - t0
@@ -363,9 +463,16 @@ mode = "overwrite"
             rec = {"run_id": run_id, "task": name, "rep": rep, "arm": arm,
                    "model": model, "wall_s": round(dt, 1), "exit": rc,
                    "tail": "\n".join(out.splitlines()[-12:])}
+            if isinstance(tier_config, dict):
+                rec["decided_model"] = tier_config.get("decided_model")
+                rec["tier"] = tier_config.get("tier")
+                rec["tier_reason"] = tier_config.get("reason")
+                rec["tier_confidence"] = tier_config.get("confidence")
             with open(meta_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(rec) + "\n")
-            print(f"[{arm}/{model}] {run_id} {dt:.0f}s exit={rc}", flush=True)
+            decided = rec.get("decided_model") or model
+            print(f"[{arm}/{model}] {run_id} {dt:.0f}s exit={rc} model={decided}",
+                  flush=True)
 
 
 def score_run(atof: Path):
@@ -409,7 +516,8 @@ def report(models):
         mdir = ROOT / "results" / model.replace("/", "_")
         print(f"\n================ MODEL: {model} ================")
         table = {}
-        for arm in ("baseline", "fixes"):
+        show_tier = False
+        for arm in ARMS:
             meta_path = mdir / arm / "meta.jsonl"
             if not meta_path.exists():
                 continue
@@ -421,54 +529,91 @@ def report(models):
                     ok = SUCCESS[m["task"]](m.get("tail", ""), work)
                 except Exception:
                     ok = False
+                if m.get("tier"):
+                    show_tier = True
                 table.setdefault(m["task"], {}).setdefault(arm, []).append(
-                    {**s, "ok": ok, "wall": m["wall_s"]})
+                    {**s, "ok": ok, "wall": m["wall_s"],
+                     "tier": m.get("tier") or "",
+                     "decided_model": m.get("decided_model") or ""})
         hdr = (f"{'task':20s} | {'arm':8s} | {'n':>2s} {'ok%':>4s} {'llm':>5s} "
                f"{'tool':>5s} {'errs':>5s} {'retr':>5s} {'kb':>5s} {'wall':>6s}")
+        if show_tier:
+            hdr += f" {'tier':>6s}"
         print(hdr)
         print("-" * len(hdr))
-        agg = {a: Counter() for a in ("baseline", "fixes")}
+        agg = {a: Counter() for a in ARMS}
         aggn = Counter()
         for task in TASKS:
-            for arm in ("baseline", "fixes"):
+            for arm in ARMS:
                 rows = table.get(task, {}).get(arm, [])
                 if not rows:
                     continue
                 n = len(rows)
                 mean = lambda k: sum(r.get(k, 0) for r in rows) / n
                 okp = 100 * sum(r["ok"] for r in rows) / n
-                print(f"{task:20s} | {arm:8s} | {n:2d} {okp:3.0f}% "
-                      f"{mean('llm'):5.1f} {mean('tools'):5.1f} {mean('errs'):5.1f} "
-                      f"{mean('retries'):5.1f} {mean('kb'):5.0f} {mean('wall'):5.0f}s")
+                line = (f"{task:20s} | {arm:8s} | {n:2d} {okp:3.0f}% "
+                        f"{mean('llm'):5.1f} {mean('tools'):5.1f} {mean('errs'):5.1f} "
+                        f"{mean('retries'):5.1f} {mean('kb'):5.0f} {mean('wall'):5.0f}s")
+                if show_tier:
+                    tiers = sorted({r.get("tier") or "-" for r in rows})
+                    line += f" {','.join(tiers):>6s}"
+                print(line)
                 for k in ("llm", "tools", "errs", "retries", "kb"):
                     agg[arm][k] += sum(r.get(k, 0) for r in rows)
                 agg[arm]["wall"] += sum(r["wall"] for r in rows)
                 agg[arm]["ok"] += sum(r["ok"] for r in rows)
                 aggn[arm] += n
         print("-" * len(hdr))
-        for arm in ("baseline", "fixes"):
+        for arm in ARMS:
             n = aggn[arm]
             if not n:
                 continue
             a = agg[arm]
-            print(f"{'TOTAL':20s} | {arm:8s} | {n:2d} {100 * a['ok'] / n:3.0f}% "
-                  f"{a['llm'] / n:5.1f} {a['tools'] / n:5.1f} {a['errs'] / n:5.1f} "
-                  f"{a['retries'] / n:5.1f} {a['kb'] / n:5.0f} {a['wall'] / n:5.0f}s")
+            line = (f"{'TOTAL':20s} | {arm:8s} | {n:2d} {100 * a['ok'] / n:3.0f}% "
+                    f"{a['llm'] / n:5.1f} {a['tools'] / n:5.1f} {a['errs'] / n:5.1f} "
+                    f"{a['retries'] / n:5.1f} {a['kb'] / n:5.0f} {a['wall'] / n:5.0f}s")
+            print(line)
 
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+
+    def _flag(name, default=None):
+        if name in sys.argv:
+            i = sys.argv.index(name)
+            if i + 1 < len(sys.argv):
+                return sys.argv[i + 1]
+        return default
+
     if cmd == "run":
-        arm = sys.argv[sys.argv.index("--arm") + 1]
-        model = sys.argv[sys.argv.index("--model") + 1]
-        reps = int(sys.argv[sys.argv.index("--reps") + 1])
-        pythonpath = sys.argv[sys.argv.index("--pythonpath") + 1]
-        only = (sys.argv[sys.argv.index("--only") + 1].split(",")
-                if "--only" in sys.argv else None)
-        run(arm, model, reps, pythonpath, only)
+        arm = _flag("--arm")
+        model = _flag("--model")
+        reps = int(_flag("--reps", "1"))
+        pythonpath = _flag("--pythonpath")
+        only_raw = _flag("--only")
+        only = only_raw.split(",") if only_raw else None
+        fast_model = _flag("--fast-model")
+        slow_model = _flag("--slow-model")
+        if not arm or not pythonpath:
+            print(__doc__)
+            sys.exit(2)
+        if arm == "tiered":
+            # Routing uses --slow-model / --fast-model; --model only keys results.
+            if not model:
+                model = slow_model or DEFAULT_SLOW_MODEL
+            slow_model = slow_model or DEFAULT_SLOW_MODEL
+            fast_model = fast_model or DEFAULT_FAST_MODEL
+        elif not model:
+            print(__doc__)
+            sys.exit(2)
+        run(arm, model, reps, pythonpath, only,
+            fast_model=fast_model, slow_model=slow_model)
     elif cmd == "report":
-        models = sys.argv[sys.argv.index("--models") + 1].split(",")
-        report(models)
+        models = _flag("--models")
+        if not models:
+            print(__doc__)
+            sys.exit(2)
+        report(models.split(","))
     else:
         print(__doc__)
         sys.exit(2)
