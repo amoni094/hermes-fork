@@ -299,6 +299,7 @@ def make_sandbox(work: Path):
         "4. Eve is not adjacent to Alice.\n"
         "5. Bob is not in seat 5.\n"
         "6. Carol sits to the right of Dave.\n"
+        "7. Dave is not adjacent to Carol.\n"
         "Find the unique valid seating arrangement.\n"
         "Answer format: SOLUTION=Alice:N,Bob:N,Carol:N,Dave:N,Eve:N\n",
         encoding="utf-8",
