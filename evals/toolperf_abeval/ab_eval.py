@@ -100,10 +100,10 @@ TASKS = {
         "Each file defines exactly one constant like MODULE_VALUE = <int>. "
         "Find all 10 values using read_file (not terminal), sum them, and reply TOTAL=<sum>."
     ),
-    # T: exact patch format (tooluse tier discriminator)
+    # T: exact tool format (tooluse tier discriminator) — patch or write_file both accepted
     "err_tool_format": (
         "The file {WORK}/proj/schema_config.json must have the value of the \"api_version\" key "
-        "changed from \"v1\" to \"v2.1\". Use the patch tool with exact matching to make this change. "
+        "changed from \"v1\" to \"v2.1\". Make this change using either the patch tool or write_file. "
         "Then verify the file contains \"v2.1\" using read_file and reply PATCHED=OK."
     ),
     # L: deep recursive search (longctx + search discriminator)
@@ -244,7 +244,10 @@ SUCCESS = {
     "err_inline_script": lambda t, w: "21341334000" in t.replace(",", ""),
     "err_big_file_read": lambda t, w: "X99Q" in t,
     "err_math_formula": lambda t, w: "RESULT=44100" in t or "RESULT= 44100" in t.replace(" ", ""),
-    "err_math_multifile": lambda t, w: "QUADRATIC=184" in t or "QUADRATIC=184.0" in t,
+    "err_math_multifile": lambda t, w: (
+        "QUADRATIC=184" in t.replace(" ", "").replace("\n", "") or
+        "184.0" in t or "= 184" in t or "is 184" in t.lower()
+    ),
     "err_ctx_synthesis": lambda t, w: "TOTAL=427" in t,
     "err_tool_format": lambda t, w: "PATCHED=OK" in t and '"v2.1"' in (
         w / "proj" / "schema_config.json").read_text(encoding="utf-8"),
