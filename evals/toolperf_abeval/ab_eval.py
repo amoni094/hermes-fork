@@ -70,7 +70,7 @@ DEFAULT_FAST_MODEL = "anthropic/claude-haiku-4-5"
 DEFAULT_SLOW_MODEL = "anthropic/claude-sonnet-4-6"
 ARMS = ("baseline", "fixes", "tiered", "orchestrated", "trajectory")
 TABLE_ARMS = ("baseline", "fixes", "tiered", "orchestrated")
-ORCH_TIERS = ("fast", "math", "longctx", "tooluse", "reason")
+ORCH_TIERS = ("fast", "math", "longctx", "tooluse", "reason", "elite")
 
 TASKS = {
     # P: python-not-found + venv module confusion (terminal failure hints)
@@ -735,6 +735,56 @@ SUCCESS = {
     ),
 }
 
+# Per-task skill_tags for 6-tier classify. Blanket ['procedure'] sent
+# security/math/longctx tasks to the fast model.
+TASK_TAGS: dict[str, list[str]] = {
+    "err_security_review": ["adversarial", "security-critical"],
+    "err_logic_proof": ["reasoning"],
+    "err_multi_tool_chain": ["procedure"],
+    "err_ambiguous_refactor": ["reasoning"],
+    "err_subtle_bug": ["reasoning"],
+    "err_debug_trace": ["reasoning"],
+    "err_adversarial_prompt": ["reasoning"],
+    "err_cross_file_refactor": ["reasoning"],
+    "err_multi_constraint_plan": ["reasoning"],
+    "err_math_formula": ["math"],
+    "err_math_multifile": ["math"],
+    "err_ctx_synthesis": ["longctx"],
+    "err_deep_search": ["longctx"],
+    "err_tool_format": ["schema", "tooluse"],
+}
+
+_SIX_TIERS = ("fast", "math", "longctx", "tooluse", "reason", "elite")
+_FALLBACK_TIER_MODELS = {
+    "fast": "deepseek/deepseek-flash",
+    "math": "xai/grok-4.6",
+    "longctx": "anthropic/claude-haiku-4-5",
+    "tooluse": "anthropic/claude-sonnet-4-6",
+    "reason": "openai/gpt-5.5",
+    "elite": "anthropic/claude-sonnet-5-5",
+}
+
+
+def _skill_tags_for_task(task_name: str) -> list[str]:
+    if not task_name:
+        return ["procedure"]
+    if task_name.startswith("traj_"):
+        return list(TASK_TAGS.get(task_name) or [])
+    return list(TASK_TAGS.get(task_name, ["procedure"]))
+
+
+def _model_string_from_entry(entry, fallback_tier: str = "reason") -> str:
+    if isinstance(entry, dict):
+        prov = str(entry.get("provider") or "").strip()
+        model = str(entry.get("model") or "").strip()
+        if prov and model:
+            return f"{prov}/{model}"
+        if model:
+            return model
+    elif entry:
+        return str(entry)
+    return _FALLBACK_TIER_MODELS.get(fallback_tier, _FALLBACK_TIER_MODELS["reason"])
+
 
 def _hermes_scripts_dir() -> Path:
     env = os.environ.get("HERMES_HOME", "").strip()
@@ -745,7 +795,7 @@ def _hermes_scripts_dir() -> Path:
 
 
 def _classify_turn(query: str, classifier_path: str | None = None, **fields) -> dict:
-    """Static pre-spawn classify. Fail-safe: slow / default_safe."""
+    """Static pre-spawn classify. Fail-safe: reason + DEFAULT_TIER_MODELS['reason']."""
     path = Path(classifier_path) if classifier_path else (
         _hermes_scripts_dir() / "model-tier-classifier.py")
     try:
@@ -765,19 +815,35 @@ def _classify_turn(query: str, classifier_path: str | None = None, **fields) -> 
             "turn_index": int(fields.get("turn_index") or 0),
         }
         d = mod.classify(payload)
-        if not isinstance(d, dict) or d.get("tier") not in ("fast", "slow"):
+        if not isinstance(d, dict):
             raise ValueError("bad classifier output")
+        raw = str(d.get("tier") or "reason").strip().lower()
+        if raw == "slow":
+            raw = "reason"
+        if raw not in _SIX_TIERS:
+            raw = "reason"
+        models = getattr(mod, "DEFAULT_TIER_MODELS", {}) or {}
+        entry = models.get(raw) or models.get("reason") or {}
+        model_s = _model_string_from_entry(entry, raw)
+        if isinstance(entry, dict):
+            provider = str(entry.get("provider") or "")
+        else:
+            provider = model_s.partition("/")[0]
         conf = min(1.0, max(0.0, float(d.get("confidence") or 0.6)))
         return {
-            "tier": d["tier"],
+            "tier": raw,
             "reason": str(d.get("reason") or "default_safe"),
             "confidence": conf,
+            "model": model_s,
+            "provider": provider,
         }
     except Exception as e:
         return {
-            "tier": "slow",
+            "tier": "reason",
             "reason": f"classifier_error:{type(e).__name__}",
             "confidence": 0.6,
+            "model": _FALLBACK_TIER_MODELS["reason"],
+            "provider": "openai",
         }
 
 
@@ -1074,7 +1140,7 @@ def _trajectory_worker(task_name, model, rep, root, pythonpath, extra_env):
 
 def _orchestrated_worker(pythonpath, hermes_home, relay_toml, work_dir, query,
                          slow_model, fast_model, session_id, api_keys, result_q,
-                         timeout=300):
+                         timeout=300, task_name=""):
     """Orchestrated worker: loads task-orchestrator.py and delegates."""
     import sys
     import os
@@ -1088,10 +1154,21 @@ def _orchestrated_worker(pythonpath, hermes_home, relay_toml, work_dir, query,
     os.environ['HERMES_HOME'] = hermes_home
     os.environ['HERMES_NEMO_RELAY_PLUGINS_TOML'] = relay_toml
     os.chdir(work_dir)
-    # Set API keys
+    # Set API keys (keys may already be ENV names)
     for env_var, key_val in (api_keys or {}).items():
         if key_val and not os.environ.get(env_var):
             os.environ[env_var] = key_val
+
+    tags = _skill_tags_for_task(task_name)
+    checker = SUCCESS.get(task_name)
+
+    def _accept(out, work):
+        if checker is None:
+            return True
+        try:
+            return bool(checker(str(out or ""), Path(work)))
+        except Exception:
+            return False
 
     def _put_error(exc):
         result_q.put({
@@ -1101,9 +1178,15 @@ def _orchestrated_worker(pythonpath, hermes_home, relay_toml, work_dir, query,
         })
 
     def _fallback_tiered():
-        """Static 2-tier classify + _abeval_worker when orchestrator is missing."""
-        decision = _classify_turn(query)
-        decided = fast_model if decision['tier'] == 'fast' else slow_model
+        """Static 6-tier classify + _abeval_worker when orchestrator is missing."""
+        decision = _classify_turn(query, skill_tags=tags)
+        tier = decision['tier']
+        if tier == 'fast':
+            decided = fast_model
+        elif tier in ('reason', 'slow'):
+            decided = slow_model
+        else:
+            decided = decision.get('model') or _FALLBACK_TIER_MODELS.get(tier) or slow_model
         inner = []
 
         class _Q:
@@ -1115,6 +1198,7 @@ def _orchestrated_worker(pythonpath, hermes_home, relay_toml, work_dir, query,
             'openai': 'OPENAI_API_KEY',
             'deepseek': 'DEEPSEEK_API_KEY',
             'x-ai': 'XAI_API_KEY',
+            'xai': 'XAI_API_KEY',
         }
         provider, _, _ = decided.partition('/')
         env_var = env_map.get(provider, f'{provider.upper()}_API_KEY')
@@ -1177,9 +1261,8 @@ def _orchestrated_worker(pythonpath, hermes_home, relay_toml, work_dir, query,
             slow_model_override=slow_model,
             fast_model_override=fast_model,
             timeout=timeout,
-            # Toolperf tasks are mechanical error-recovery procedures;
-            # inject procedure tag so classifier routes to fast tier by default.
-            classifier_extra={"skill_tags": ["procedure"]},
+            classifier_extra={"skill_tags": tags},
+            accept_fn=_accept if checker else None,
         )
         result_q.put({
             'out': result.get('out', ''),
@@ -1308,14 +1391,19 @@ mode = "overwrite"
             if arm == "tiered":
                 cpath = classifier_path or str(
                     _hermes_scripts_dir() / "model-tier-classifier.py")
-                decision = _classify_turn(
-                    q, cpath,
-                    # Toolperf tasks are mechanical error-recovery procedures.
-                    # Without this tag the long task templates fall through to
-                    # default_safe/slow even when nothing adversarial is present.
-                    skill_tags=["procedure"],
-                )
-                worker_model = fast if decision["tier"] == "fast" else slow
+                tags = _skill_tags_for_task(name)
+                decision = _classify_turn(q, cpath, skill_tags=tags)
+                tier = decision["tier"]
+                if tier == "fast":
+                    worker_model = fast
+                elif tier in ("reason", "slow"):
+                    worker_model = slow
+                else:
+                    worker_model = (
+                        decision.get("model")
+                        or _FALLBACK_TIER_MODELS.get(tier)
+                        or slow
+                    )
                 tier_config = {
                     "fast_model": fast,
                     "slow_model": slow,
@@ -1350,7 +1438,7 @@ mode = "overwrite"
                     target=_orchestrated_worker,
                     args=(pythonpath, real_hermes_home, str(relay_config), str(work),
                           q, slow, fast, session_id, api_keys, result_q),
-                    kwargs={"timeout": 300},
+                    kwargs={"timeout": 300, "task_name": name},
                 )
             else:
                 provider, _, _ = worker_model.partition("/")

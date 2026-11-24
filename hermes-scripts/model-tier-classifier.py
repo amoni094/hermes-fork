@@ -1,0 +1,584 @@
+#!/usr/bin/env python3
+"""Classify a single agent turn as fast|math|longctx|tooluse|elite|reason (stdlib only).
+
+Used as a library (`classify`, `classify_with_model`) and as a CLI.
+
+  python3 model-tier-classifier.py --json '{...}'
+  python3 model-tier-classifier.py --self-test
+"""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+
+def _hermes_home() -> Path:
+    """Resolve ~/.hermes even when HERMES_HOME is a profile dir.
+
+    hermes-scripts lives under ~/.hermes/, not ~/.hermes/profiles/<name>/.
+    If HERMES_HOME ends with /profiles/<name>, strip that suffix. Otherwise
+    walk up a few parents looking for hermes-scripts/.
+    """
+    env = os.environ.get("HERMES_HOME", "").strip()
+    p = Path(env) if env else Path.home() / ".hermes"
+    if p.name != ".hermes" and p.parent.name == "profiles":
+        return p.parent.parent
+    cur = p
+    for _ in range(4):
+        if (cur / "hermes-scripts").is_dir():
+            return cur
+        if cur.parent == cur:
+            break
+        cur = cur.parent
+    return p
+
+
+_hermes_base = _hermes_home()
+_hermes_profile = os.environ.get("HERMES_PROFILE", "")
+_hermes_root = (
+    (_hermes_base / "profiles" / _hermes_profile)
+    if _hermes_profile and "profiles" not in str(_hermes_base)
+    else _hermes_base
+)
+
+import argparse
+import json
+import re
+import sys
+import time
+
+
+def _normalize_skill_name(name: str) -> str:
+    """Lowercase, strip plugin: prefix, hyphens -> underscores."""
+    s = (name or "").strip().lower().removeprefix("plugin:")
+    return s.replace("-", "_")
+
+
+# Precedence: ELITE_TAGS is checked first. 'adversarial' is an elite signal
+# (security-critical work), so it lives only in ELITE_TAGS — not here.
+# Remaining ADVERSARIAL_TAGS map to reason only when elite did not match.
+# github-pr-review is adversarial review -> ELITE_NAMES (elite, not reason).
+ADVERSARIAL_TAGS = frozenset({
+    "security", "audit", "legal", "review", "critique", "analysis",
+})
+ADVERSARIAL_NAMES = frozenset({
+    _normalize_skill_name(n) for n in (
+        "github-pr-adversarial-review",
+        "coverage-led-security-audit",
+        "github-pr-review",
+        "recursive-adversarial-hardening",
+    )
+})
+PROCEDURE_TAGS = frozenset({
+    "procedure", "mechanical", "homelab", "dns", "vpn", "devops", "config",
+})
+MATH_TAGS = frozenset({
+    "math", "algorithm", "formula", "proof", "numerical", "statistics",
+})
+LONGCTX_TAGS = frozenset({
+    "longctx", "large-context", "big-file", "codebase-wide",
+})
+TOOLUSE_TAGS = frozenset({
+    "schema", "structured", "tool-use", "json-output",
+})
+ELITE_TAGS = frozenset({
+    "adversarial", "security-critical", "architecture", "compliance",
+    "legal-review", "pen-test",
+})
+ELITE_NAMES = frozenset({
+    _normalize_skill_name(n) for n in (
+        "coverage-led-security-audit",
+        "recursive-adversarial-hardening",
+        "github-pr-adversarial-review",
+        "github-pr-review",
+        "saltzer-schroeder",
+        "miller-capabilities",
+    )
+})
+ELITE_SECURITY_NEEDLES = (
+    "vulnerability", "exploit", "bypass", "privilege escalation",
+    "injection", "cve", "threat model", "attack surface", "zero-day",
+)
+_ELITE_SEC_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(n) for n in ELITE_SECURITY_NEEDLES) + r")\b",
+    re.IGNORECASE,
+)
+ELITE_ARCH_NEEDLES = (
+    "architect the", "design decision", "fundamental tradeoff",
+    "system design", "scalability concern",
+)
+REASONING_RE = re.compile(
+    r'\b(why|tradeoff|trade-off|should i|is it safe|risks?|implications?|implications|'
+    r'architect|design decision|compare|versus|vs\.|which is better|pros and cons|'
+    r'evaluate|assess)\b',
+    re.IGNORECASE,
+)
+CODEISH_RE = re.compile(r'[`\{\[]|def |class |import ')
+MATH_RE = re.compile(
+    r'\b(calculat|formula|proof|prove|algorithm|arithmetic|correct answer|math|'
+    r'equation|sum|product|integral|derivative|eigenvalue|matrix|linear algebra|'
+    r'combinatoric|permutation)\b',
+    re.IGNORECASE,
+)
+TOOL_SCHEMA_RE = re.compile(
+    r'\b(json schema|tool call|function call|structured output|patch tool|'
+    r'write_file|exact format|strict format)\b',
+    re.IGNORECASE,
+)
+
+TIERS = ("fast", "math", "longctx", "tooluse", "elite", "reason")
+
+DEFAULT_TIER_MODELS = {
+    # Calibrated 2026-11-24 via toolperf benchmark rounds 1+2+3:
+    # fast:    deepseek-flash 100% all 5 mechanical tasks vs haiku 70%; cheaper.
+    # math:    grok-4.6 100% math tasks; magistral-small rate-limited (untested).
+    # longctx: haiku 100% ctx/search; cheaper than grok for these task sizes.
+    # tooluse: sonnet-4-6 only passer on err_tool_format; o3 needs retest (n=2).
+    # reason:  gpt-5.5 100% all 4 elite tasks; cheaper than sonnet-5 (also 100%).
+    #          sonnet-4-6 and o3 both 0% on err_ambiguous_refactor — below 90% bar.
+    #          Round 4 n=3 fixed puzzle confirmed: all 6 models pass logic_proof now.
+    # elite:   sonnet-5-5 (pending harder tasks; current 4-task suite at ceiling for
+    #          all strong models — opus-4-8/gpt-5.6-sol also 100%, no discrimination).
+    "fast":    {"provider": "deepseek",  "model": "deepseek-flash"},
+    "math":    {"provider": "xai",       "model": "grok-4.6"},
+    "longctx": {"provider": "anthropic", "model": "claude-haiku-4-5"},
+    "tooluse": {"provider": "anthropic", "model": "claude-sonnet-4-6"},
+    "reason":  {"provider": "openai",    "model": "gpt-5.5"},
+    "elite":   {"provider": "anthropic", "model": "claude-sonnet-5-5"},
+}
+
+
+def _as_int(value, default: int) -> int:
+    if value is None or value is False:
+        return default
+    if value is True:
+        return 1
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_str(value, default: str = "") -> str:
+    if value is None:
+        return default
+    return str(value)
+
+
+def _as_bool(value, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value) and value != 0
+    s = str(value).strip().lower()
+    if s in ("1", "true", "yes", "on"):
+        return True
+    if s in ("0", "false", "no", "off", ""):
+        return False
+    return default
+
+
+def _as_tags(value) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple, set)):
+        return []
+    out = []
+    for item in value:
+        s = str(item).strip()
+        if s:
+            out.append(s)
+    return out
+
+
+def classify(payload: dict | None = None, **kwargs) -> dict:
+    """Return {tier, reason, confidence} for one turn. Missing keys use defaults."""
+    data = dict(payload or {})
+    data.update(kwargs)
+
+    query = _as_str(data.get("query", ""))
+    skill_tags = _as_tags(data.get("skill_tags", []))
+    skill_name = _as_str(data.get("skill_name", "")).strip()
+    prev_tool_calls = _as_int(data.get("prev_tool_calls"), 0)
+    prev_exit_code = _as_int(data.get("prev_exit_code"), 0)
+    context_tokens = _as_int(data.get("context_tokens"), 0)
+    turn_index = _as_int(data.get("turn_index"), 0)
+    prev_large_read = _as_bool(data.get("prev_large_read"), False)
+    prev_tool_error_type = _as_str(data.get("prev_tool_error_type"), "").strip()
+    prev_tier = _as_str(data.get("prev_tier"), "").strip()
+
+    tags_l = {t.lower() for t in skill_tags}
+    skill_name_n = _normalize_skill_name(skill_name)
+    words = query.split()
+    n_words = len(words)
+    qlow = query.lower()
+
+    # Signal priority (first match wins):
+    # 1. skill_tags elite (adversarial/security-critical/...)
+    # 2. skill_name elite (normalized: plugin: prefix, case, hyphens)
+    # 3. query elite keywords (word-boundary; before longctx)
+    # 4. prev-turn error -> escalate
+    # 5. context > 80k -> longctx
+    # 6. tool_schema -> tooluse
+    # 7+. math / reason / fast / default
+    if tags_l & ELITE_TAGS:
+        return {"tier": "elite", "reason": "adversarial_critical_skill", "confidence": 0.98}
+    if skill_name_n and skill_name_n in ELITE_NAMES:
+        return {"tier": "elite", "reason": "critical_skill_name", "confidence": 0.98}
+
+    # 3. elite query needles BEFORE longctx (CVE + large ctx must be elite, not haiku)
+    if query and _ELITE_SEC_RE.search(query):
+        return {"tier": "elite", "reason": "security_query", "confidence": 0.90}
+    if query and any(p in qlow for p in ELITE_ARCH_NEEDLES):
+        return {"tier": "elite", "reason": "architecture_query", "confidence": 0.85}
+
+    # reason: remaining adversarial tags/names (elite already excluded 'adversarial')
+    if tags_l & ADVERSARIAL_TAGS:
+        return {"tier": "reason", "reason": "adversarial_skill", "confidence": 0.95}
+    if skill_name_n and skill_name_n in ADVERSARIAL_NAMES:
+        return {"tier": "reason", "reason": "adversarial_skill_name", "confidence": 0.95}
+
+    # 4. error recovery: format_error -> tooluse; reason-tier fail -> elite; otherwise reason
+    if prev_exit_code != 0 and turn_index > 0:
+        if prev_tool_error_type == "format_error":
+            return {"tier": "tooluse", "reason": "tool_format_error", "confidence": 0.90}
+        if prev_tier == "reason":
+            return {"tier": "elite", "reason": "reason_escalation", "confidence": 0.95}
+        return {"tier": "reason", "reason": "prev_error_recovery", "confidence": 0.90}
+
+    # 5. longctx (after elite tags/names/needles)
+    if context_tokens > 80000:
+        return {"tier": "longctx", "reason": "very_large_context", "confidence": 0.90}
+    if tags_l & LONGCTX_TAGS:
+        return {"tier": "longctx", "reason": "longctx_skill", "confidence": 0.85}
+    if prev_large_read:
+        return {"tier": "longctx", "reason": "large_file_read", "confidence": 0.80}
+
+    # 6. tooluse (after longctx, before math)
+    if query and TOOL_SCHEMA_RE.search(query):
+        return {"tier": "tooluse", "reason": "tool_schema_query", "confidence": 0.80}
+    if tags_l & TOOLUSE_TAGS:
+        return {"tier": "tooluse", "reason": "tooluse_skill", "confidence": 0.85}
+
+    # math (before remaining reason checks; adversarial already excluded)
+    if query and MATH_RE.search(query):
+        return {"tier": "math", "reason": "math_query", "confidence": 0.85}
+    if tags_l & MATH_TAGS:
+        return {"tier": "math", "reason": "math_skill", "confidence": 0.90}
+
+    # remaining reason checks
+    if context_tokens > 40000:
+        return {"tier": "reason", "reason": "large_context", "confidence": 0.85}
+    if query and REASONING_RE.search(query):
+        return {"tier": "reason", "reason": "reasoning_query", "confidence": 0.85}
+    if "?" in query and n_words > 20:
+        return {"tier": "reason", "reason": "complex_question", "confidence": 0.70}
+
+    # FORCE FAST
+    if tags_l & PROCEDURE_TAGS:
+        return {"tier": "fast", "reason": "procedure_skill", "confidence": 0.80}
+    if prev_tool_calls >= 2 and prev_exit_code == 0 and turn_index > 0:
+        return {"tier": "fast", "reason": "mechanical_continuation", "confidence": 0.75}
+    # Empty/whitespace is not a short simple query — fall through to default_safe.
+    if (
+        query.strip()
+        and n_words < 15
+        and "?" not in query
+        and not CODEISH_RE.search(query)
+        and turn_index == 0
+    ):
+        return {"tier": "fast", "reason": "short_simple_query", "confidence": 0.70}
+
+    return {"tier": "reason", "reason": "default_safe", "confidence": 0.60}
+
+
+def classify_with_model(payload: dict, tier_models: dict | None = None) -> dict:
+    """Like classify() but adds 'provider' and 'model' to the result."""
+    result = classify(payload)
+    models = tier_models or DEFAULT_TIER_MODELS
+    tier_entry = models.get(result["tier"], models.get("reason", {}))
+    return {
+        **result,
+        "provider": tier_entry.get("provider", ""),
+        "model": tier_entry.get("model", ""),
+    }
+
+
+def classify_json(raw: str) -> dict:
+    raw = (raw or "").strip()
+    if not raw:
+        return classify({})
+    try:
+        obj = json.loads(raw)
+    except json.JSONDecodeError:
+        return classify({})
+    if not isinstance(obj, dict):
+        return classify({})
+    return classify(obj)
+
+
+def _emit(decision: dict) -> None:
+    sys.stdout.write(json.dumps(decision, ensure_ascii=False) + "\n")
+
+
+def _check(cond: bool, msg: str, failures: list) -> None:
+    if not cond:
+        failures.append(msg)
+
+
+def self_test() -> int:
+    failures: list[str] = []
+
+    d = classify({"query": "do the thing", "skill_tags": ["adversarial"]})
+    _check(d["tier"] == "elite" and d["reason"] == "adversarial_critical_skill", "adversarial skill -> elite", failures)
+
+    d = classify({
+        "query": "restart unbound on the pi",
+        "skill_tags": ["procedure"],
+        "prev_exit_code": 0,
+        "turn_index": 0,
+    })
+    _check(d["tier"] == "fast" and d["reason"] == "procedure_skill", "procedure skill -> fast", failures)
+
+    d = classify({"query": "continue", "prev_exit_code": 1, "turn_index": 1})
+    _check(d["tier"] == "reason" and d["reason"] == "prev_error_recovery", "prev error (no format_error) -> reason", failures)
+
+    d = classify({"query": "restart the vpn please", "turn_index": 0})
+    _check(d["tier"] == "fast" and d["reason"] == "short_simple_query", "short simple query -> fast", failures)
+
+    d = classify({"query": "ok", "context_tokens": 90000})
+    _check(d["tier"] == "longctx" and d["reason"] == "very_large_context", "very large context (>80k) -> longctx", failures)
+
+    d = classify({"query": "ok", "context_tokens": 50000})
+    _check(d["tier"] == "reason" and d["reason"] == "large_context", "medium context (50k) -> reason", failures)
+
+    d = classify({"query": "calculate the eigenvalue of this matrix"})
+    _check(d["tier"] == "math" and d["reason"] == "math_query", "math query -> math", failures)
+
+    d = classify({"query": "please continue with remaining steps", "skill_tags": ["algorithm"]})
+    _check(d["tier"] == "math" and d["reason"] == "math_skill", "math skill tag -> math", failures)
+
+    d = classify({"query": "use the json schema for this tool call"})
+    _check(d["tier"] == "tooluse" and d["reason"] == "tool_schema_query", "tool schema query -> tooluse", failures)
+
+    d = classify({
+        "query": "continue",
+        "prev_exit_code": 1,
+        "turn_index": 1,
+        "prev_tool_error_type": "format_error",
+    })
+    _check(d["tier"] == "tooluse" and d["reason"] == "tool_format_error", "tool format error type -> tooluse", failures)
+
+    d = classify({"query": "ok", "prev_large_read": True})
+    _check(d["tier"] == "longctx" and d["reason"] == "large_file_read", "prev large read -> longctx", failures)
+
+    d = classify({
+        "query": "please continue with the remaining mechanical steps in this session now and then report done",
+        "turn_index": 0,
+    })
+    _check(d["tier"] == "reason" and d["reason"] == "default_safe", "default no signals -> reason", failures)
+
+    # JSON round-trip / schema for all 6 tiers
+    samples = (
+        {},
+        {"query": ""},
+        {"skill_tags": []},
+        {"query": "why is this safer than the alternative approach today"},
+        {"query": "restart the vpn please", "turn_index": 0},
+        {"query": "calculate the eigenvalue"},
+        {"query": "ok", "context_tokens": 90000},
+        {"query": "use the json schema for this tool call"},
+        {"query": "do the thing", "skill_tags": ["adversarial"]},
+        {"query": "CVE exploit bypass privilege escalation", "skill_tags": []},
+    )
+    seen_tiers = set()
+    for sample in samples:
+        out = classify(sample)
+        dumped = json.dumps(out)
+        parsed = json.loads(dumped)
+        seen_tiers.add(parsed["tier"])
+        _check(parsed["tier"] in TIERS, "tier enum", failures)
+        _check(isinstance(parsed["reason"], str) and parsed["reason"], "reason non-empty", failures)
+        _check(isinstance(parsed["confidence"], (int, float)) and 0.0 <= float(parsed["confidence"]) <= 1.0,
+               "confidence in [0,1]", failures)
+    _check(set(TIERS) <= seen_tiers, "JSON round-trip valid for all 6 tiers", failures)
+
+    # Missing keys
+    d = classify({"query": "hello world today"})
+    _check(d["tier"] in TIERS and d["reason"], "missing keys graceful", failures)
+
+    # Empty query -> default reason (not short_simple)
+    d = classify({"query": ""})
+    _check(d["tier"] == "reason" and d["reason"] == "default_safe", "empty query default reason", failures)
+
+    # First-match wins when every slow+fast signal is present
+    d = classify({
+        "query": "Why is this design decision risky versus the alternative, and which is better? " + ("word " * 30),
+        "skill_tags": ["adversarial", "procedure"],
+        "skill_name": "github-pr-review",
+        "prev_exit_code": 1,
+        "prev_tool_calls": 9,
+        "context_tokens": 90000,
+        "turn_index": 3,
+    })
+    _check(d["tier"] == "elite" and d["reason"] == "adversarial_critical_skill", "first matching rule wins", failures)
+
+    # Long query timing
+    long_q = ("please continue with the remaining mechanical steps in this session now. " * 200)[:10000]
+    t0 = time.perf_counter()
+    d = classify({"query": long_q, "turn_index": 0})
+    elapsed = time.perf_counter() - t0
+    _check(elapsed < 2.0, f"10k query <2s (was {elapsed:.3f}s)", failures)
+    _check(d["tier"] in TIERS, "long query no crash", failures)
+    json.loads(json.dumps(d))
+
+    # adversarial skill_name
+    d = classify({"query": "ok", "skill_name": "coverage-led-security-audit"})
+    _check(d["reason"] == "critical_skill_name" and d["tier"] == "elite", "elite skill_name", failures)
+
+    # mechanical continuation
+    d = classify({
+        "query": "keep going with the rest of these remaining setup steps now please",
+        "prev_tool_calls": 2,
+        "prev_exit_code": 0,
+        "turn_index": 1,
+    })
+    _check(d["reason"] == "mechanical_continuation", "mechanical continuation", failures)
+
+    # complex question
+    d = classify({
+        "query": "can you help me finish this remaining setup for the home lab cluster tonight please and also check the logs after?",
+        "turn_index": 0,
+    })
+    _check(d["reason"] == "complex_question", "complex question", failures)
+
+    # classify_with_model returns provider+model
+    m = classify_with_model({"query": "calculate the eigenvalue", "skill_tags": []})
+    _check(m["tier"] == "math", "classify_with_model math tier", failures)
+    _check(isinstance(m.get("provider"), str) and isinstance(m.get("model"), str),
+           "classify_with_model provider+model", failures)
+    _check("confidence" in m and "reason" in m, "classify_with_model keeps classify fields", failures)
+
+    _check(set(DEFAULT_TIER_MODELS.keys()) == set(TIERS), "DEFAULT_TIER_MODELS has all 6 keys", failures)
+    for t in TIERS:
+        entry = DEFAULT_TIER_MODELS[t]
+        _check(isinstance(entry.get("provider"), str) and entry["provider"], f"DEFAULT_TIER_MODELS[{t}].provider", failures)
+        _check(isinstance(entry.get("model"), str) and entry["model"], f"DEFAULT_TIER_MODELS[{t}].model", failures)
+
+    # Adversarial probes
+    d = classify({
+        "query": "calculate the eigenvalue of this matrix",
+        "skill_tags": ["adversarial", "math"],
+    })
+    _check(d["tier"] == "elite" and d["reason"] == "adversarial_critical_skill",
+           "math + adversarial -> elite wins", failures)
+
+    d = classify({
+        "query": "use the json schema for this tool call",
+        "prev_exit_code": 1,
+        "turn_index": 1,
+    })
+    _check(d["tier"] == "reason" and d["reason"] == "prev_error_recovery",
+           "tooluse + prev_exit_code=1 without format_error -> reason wins", failures)
+
+    d = classify({
+        "query": "ok",
+        "skill_tags": ["adversarial"],
+        "context_tokens": 90000,
+    })
+    _check(d["tier"] == "elite" and d["reason"] == "adversarial_critical_skill",
+           "longctx + adversarial -> elite wins", failures)
+
+    d = classify({"query": ""})
+    _check(d["tier"] == "reason", "empty query -> reason (default)", failures)
+
+    d = classify({
+        "query": "ok",
+        "prev_large_read": True,
+        "skill_tags": ["adversarial"],
+    })
+    _check(d["tier"] == "elite" and d["reason"] == "adversarial_critical_skill",
+           "prev_large_read=True + adversarial -> elite wins", failures)
+
+    d = classify({"query": "CVE exploit bypass privilege escalation", "skill_tags": []})
+    _check(d["tier"] == "elite" and d["reason"] == "security_query",
+           "CVE/exploit query -> elite", failures)
+
+    d = classify({
+        "query": "architect the data pipeline with fundamental tradeoff between latency and consistency in distributed system design",
+        "skill_tags": [],
+    })
+    _check(d["tier"] == "elite" and d["reason"] == "architecture_query",
+           "architecture query -> elite", failures)
+
+    d = classify({"query": "review code", "skill_tags": ["adversarial", "security-critical"]})
+    _check(d["tier"] == "elite" and d["reason"] == "adversarial_critical_skill",
+           "elite skill_tags -> elite", failures)
+
+    d = classify({"query": "CVE exploit bypass privilege escalation", "context_tokens": 90000})
+    _check(d["tier"] == "elite" and d["reason"] == "security_query",
+           "CVE + 90k ctx -> elite not longctx", failures)
+
+    d = classify({"query": "compute eigenvalue of matrix"})
+    _check(d["tier"] == "math", "compute eigenvalue -> math", failures)
+
+    d = classify({"query": "report the value", "skill_tags": ["procedure"]})
+    _check(d["tier"] == "fast" and d["reason"] == "procedure_skill",
+           "procedure tag -> fast", failures)
+
+    d = classify({
+        "query": "audit this smart contract for vulnerabilities",
+        "skill_name": "coverage-led-security-audit",
+    })
+    _check(d["tier"] == "elite" and d["reason"] == "critical_skill_name",
+           "coverage-led-security-audit -> elite", failures)
+
+    d = classify({"query": "ok", "skill_name": "plugin:coverage-led-security-audit"})
+    _check(d["tier"] == "elite" and d["reason"] == "critical_skill_name",
+           "plugin: prefix skill_name -> elite", failures)
+
+    d = classify({"query": "ok", "skill_name": "Coverage-Led-Security-Audit"})
+    _check(d["tier"] == "elite" and d["reason"] == "critical_skill_name",
+           "mixed-case skill_name -> elite", failures)
+
+    d = classify({"query": "dependency injection vulnerability in auth flow"})
+    _check(d["tier"] == "elite" and d["reason"] == "security_query",
+           "dependency injection + vulnerability -> elite (word boundary)", failures)
+
+    d = classify({"query": "ok", "skill_name": "github-pr-review"})
+    _check(d["tier"] == "elite" and d["reason"] == "critical_skill_name",
+           "github-pr-review skill_name -> elite (not reason)", failures)
+
+    if failures:
+        print("SELF-TEST FAIL: " + "; ".join(failures), file=sys.stderr)
+        return 1
+    print("SELF-TEST PASS")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Classify an agent turn as fast|math|longctx|tooluse|elite|reason")
+    parser.add_argument("--json", dest="json_arg", default=None, help="Turn payload as JSON object")
+    parser.add_argument("--self-test", action="store_true")
+    args, _unknown = parser.parse_known_args(argv)
+
+    if args.self_test:
+        return self_test()
+
+    raw = args.json_arg
+    if raw is None:
+        if sys.stdin.isatty():
+            raw = "{}"
+        else:
+            raw = sys.stdin.read()
+    decision = classify_json(raw)
+    _emit(decision)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

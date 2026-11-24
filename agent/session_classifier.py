@@ -7,7 +7,7 @@ or tied verdicts fall back to ``mixed``.
 from __future__ import annotations
 
 import re
-from typing import Any, Iterable, List, Sequence, Tuple
+from typing import Any, Iterable, Sequence
 
 SESSION_TYPES = ("research", "code", "mixed")
 
@@ -107,7 +107,7 @@ def _content_text(content: Any) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        parts: List[str] = []
+        parts: list[str] = []
         for block in content:
             if isinstance(block, str):
                 parts.append(block)
@@ -120,7 +120,7 @@ def _content_text(content: Any) -> str:
 
 
 def _window_text(messages: Iterable[dict]) -> str:
-    parts: List[str] = []
+    parts: list[str] = []
     for msg in messages:
         if not isinstance(msg, dict):
             continue
@@ -176,7 +176,7 @@ def classify(messages: list[dict]) -> tuple[str, float]:
     return label, conf
 
 
-def classify_with_scores(messages: list[dict]) -> Tuple[str, float, dict[str, float]]:
+def classify_with_scores(messages: list[dict]) -> tuple[str, float, dict[str, float]]:
     """Like :func:`classify` but also returns raw research/code scores (tests/debug)."""
     window = (messages or [])[-WINDOW_SIZE:]
     text = _window_text(window)
@@ -189,7 +189,15 @@ def classify_with_scores(messages: list[dict]) -> Tuple[str, float, dict[str, fl
 
 
 def get_routing_hint(messages: list[dict]) -> dict[str, Any]:
-    """LLM-routing + compression-profile hint derived from :func:`classify`."""
+    """LLM-routing + compression-profile hint derived from :func:`classify`.
+
+    TODO(6-tier): this still emits frontier|balanced|fast (session-level).
+    Per-turn 6-tier routing is agent/model_router.py (classifier: rules ->
+    model-tier-classifier.py). Do not swap this vocab without updating
+    tests/test_session_classifier.py and routing_harmonizer consumers.
+    Mapping if a caller ever needs it: frontier=reason/elite,
+    balanced=math/longctx/tooluse, fast=fast.
+    """
     session_type, confidence = classify(messages)
     if session_type not in SESSION_TYPES:
         session_type = "mixed"
