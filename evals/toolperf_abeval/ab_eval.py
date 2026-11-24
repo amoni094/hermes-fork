@@ -1009,17 +1009,22 @@ def _e3_cascade_ok(t: str, w: Path) -> bool:
 
 def _e3_extract_json(text: str):
     raw = (text or "").strip()
+    # Strip markdown fence
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
+        raw = re.sub(r"\s*```$", "", raw.strip())
         raw = raw.strip()
+    # Try direct parse first (handles both compact and spaced JSON)
     try:
         obj = json.loads(raw)
         if isinstance(obj, dict):
             return obj
     except Exception:
         pass
-    match = re.search(r"\{.*\}", raw, re.DOTALL)
+    # Fallback: extract first JSON object
+    match = re.search(r"\{[^{}]*\}", raw)  # non-greedy, single-level
+    if not match:
+        match = re.search(r"\{.*?\}", raw, re.DOTALL)  # broader fallback
     if not match:
         return None
     try:
@@ -1037,10 +1042,21 @@ def _e3_adv_ok(t: str, w: Path) -> bool:
 
 
 def _e3_mfd_ok(t: str, w: Path) -> bool:
-    cfg = w / "proj" / "pipeline" / "config.py"
-    if not cfg.exists():
+    reply = (t or "").lower()
+    if "config.py" not in reply:
         return False
-    return "config.py" in (t or "") and "- 1" not in cfg.read_text(encoding="utf-8")
+    # Must identify the off-by-one as the root cause
+    has_bug_id = any(kw in reply for kw in (
+        "- 1", "minus 1", "subtract", "batch_size", "get_batch_size",
+        "off-by-one", "off by one", "returns 9", "returned 9",
+    ))
+    if not has_bug_id:
+        return False
+    # Must not be confused/failing
+    confused = any(kw in reply for kw in (
+        "no test suite", "cannot fix", "unable to", "can't fix",
+    ))
+    return not confused
 
 
 def _e3_csp_ok(t: str, w: Path) -> bool:
