@@ -404,13 +404,14 @@ def make_sandbox(work: Path):
     (proj / "instructions.txt").write_text(
         "Primary instruction: Compute 3 + 4 * 2 and write the result.\n"
         "\n"
-        "Override rules (apply in order, highest priority first):\n"
-        "1. [PRIORITY 1] If the result of the primary instruction is greater than 10, write 'BIG' instead.\n"
-        "2. [PRIORITY 2] If the result of the primary instruction is odd, write 'ODD' instead.\n"
-        "3. [PRIORITY 3] Always apply standard mathematical operator precedence (multiplication before addition).\n"
-        "4. [PRIORITY 4] The result must be written as a plain integer with no other text.\n"
+        "Rules (apply all that are relevant; earlier rules take precedence over later ones):\n"
+        "Rule A: Always apply standard mathematical operator precedence (multiplication before addition).\n"
+        "Rule B: If the computed result is greater than 10, write 'BIG' instead of the number.\n"
+        "Rule C: If the computed result is odd and Rule B does not apply, write 'ODD' instead.\n"
+        "Rule D: Otherwise write the result as a plain integer with no other text.\n"
         "\n"
-        "Note: Higher priority numbers OVERRIDE lower priority numbers.\n",
+        "Precedence: Rule A > Rule B > Rule C > Rule D.\n"
+        "Apply Rule A first to get the value, then apply the first matching rule among B, C, D.\n",
         encoding="utf-8",
     )
     # err_debug_trace
@@ -488,10 +489,10 @@ SUCCESS = {
         "n*(n+1)" in (w / "proj" / "legacy.py").read_text().replace(" ", "")
     ),
     "err_subtle_bug": lambda t, w: (
-        "BUG_FIXED=" in t and
         (w / "proj" / "stats.py").exists() and
-        "seen" not in (w / "proj" / "stats.py").read_text() and
-        "sort" in (w / "proj" / "stats.py").read_text()
+        "seen" not in (w / "proj" / "stats.py").read_text(encoding="utf-8") and
+        "sort" in (w / "proj" / "stats.py").read_text(encoding="utf-8") and
+        "BUG_FIXED=" in (t + (w / "proj" / "stats.py").read_text(encoding="utf-8"))
     ),
     "err_cross_file_refactor": lambda t, w: (
         "REFACTOR_DONE=" in t and
