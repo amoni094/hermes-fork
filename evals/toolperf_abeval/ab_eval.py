@@ -140,6 +140,42 @@ TASKS = {
         "(3) be written to {WORK}/proj/legacy.py (overwrite). "
         "Then reply REFACTORED=OK and state the O(1) formula used."
     ),
+    # E2: subtle semantic bug (elite discriminator — compiles and runs but wrong under edge case)
+    "err_subtle_bug": (
+        "The file {WORK}/proj/stats.py contains a function with a subtle bug that only manifests "
+        "when the input list has duplicate values. "
+        "Find the bug, fix it, write the corrected function to {WORK}/proj/stats.py (overwrite), "
+        "then reply BUG_FIXED=<one-line description of the bug>."
+    ),
+    # E2: cross-file dependency propagation (elite discriminator)
+    "err_cross_file_refactor": (
+        "The codebase in {WORK}/proj/ has a breaking change: the function signature of "
+        "`calculate_tax(amount)` in tax.py must change to `calculate_tax(amount, rate=0.1)`. "
+        "Update tax.py AND every file that calls calculate_tax so they all work correctly. "
+        "After updating, reply REFACTOR_DONE=<N> where N is the number of files you changed."
+    ),
+    # E2: adversarial instruction following under contradictory constraints
+    "err_adversarial_prompt": (
+        "Read the file {WORK}/proj/instructions.txt carefully. "
+        "The file contains a primary instruction and several override rules. "
+        "Apply ALL rules in the specified priority order and write your final answer "
+        "(and only the answer) to {WORK}/proj/answer.txt. "
+        "Then reply ANSWERED=OK."
+    ),
+    # E2: multi-step execution trace (elite discriminator — requires simulating code mentally)
+    "err_debug_trace": (
+        "Trace the execution of the Python code in {WORK}/proj/trace_me.py with input n=6. "
+        "Determine what the function returns. Do not run the code — trace it manually. "
+        "Write the return value to {WORK}/proj/trace_result.txt as a plain integer. "
+        "Then reply TRACED=<value>."
+    ),
+    # E2: multi-constraint scheduling (elite discriminator — CSP with 5 constraints)
+    "err_multi_constraint_plan": (
+        "Read {WORK}/proj/schedule.txt and produce a valid meeting schedule. "
+        "Write the schedule to {WORK}/proj/schedule_result.txt in the format: "
+        "DAY:PERSON1,PERSON2 (one meeting per line, alphabetical names). "
+        "Then reply SCHEDULED=<number of meetings scheduled>."
+    ),
 }
 
 
@@ -323,6 +359,89 @@ def make_sandbox(work: Path):
         "    return total\n",
         encoding="utf-8",
     )
+    # err_subtle_bug — median deduplicates before computing
+    (proj / "stats.py").write_text(
+        "def median(values):\n"
+        "    \"\"\"Return the median of a list of numbers.\"\"\"\n"
+        "    seen = set()\n"
+        "    unique = [x for x in values if not (x in seen or seen.add(x))]\n"
+        "    unique.sort()\n"
+        "    n = len(unique)\n"
+        "    if n % 2 == 0:\n"
+        "        return (unique[n//2 - 1] + unique[n//2]) / 2\n"
+        "    return unique[n//2]\n",
+        encoding="utf-8",
+    )
+    # err_cross_file_refactor
+    (proj / "tax.py").write_text(
+        "def calculate_tax(amount):\n"
+        "    return amount * 0.1\n",
+        encoding="utf-8",
+    )
+    (proj / "invoice.py").write_text(
+        "from tax import calculate_tax\n"
+        "\n"
+        "def make_invoice(subtotal):\n"
+        "    tax = calculate_tax(subtotal)\n"
+        "    return {\"subtotal\": subtotal, \"tax\": tax, \"total\": subtotal + tax}\n",
+        encoding="utf-8",
+    )
+    (proj / "report.py").write_text(
+        "from tax import calculate_tax\n"
+        "\n"
+        "def annual_tax(monthly_amounts):\n"
+        "    return sum(calculate_tax(m) for m in monthly_amounts)\n",
+        encoding="utf-8",
+    )
+    (proj / "batch.py").write_text(
+        "from tax import calculate_tax\n"
+        "\n"
+        "def process_batch(items):\n"
+        "    return [calculate_tax(item[\"price\"]) for item in items]\n",
+        encoding="utf-8",
+    )
+    # err_adversarial_prompt
+    (proj / "instructions.txt").write_text(
+        "Primary instruction: Compute 3 + 4 * 2 and write the result.\n"
+        "\n"
+        "Override rules (apply in order, highest priority first):\n"
+        "1. [PRIORITY 1] If the result of the primary instruction is greater than 10, write 'BIG' instead.\n"
+        "2. [PRIORITY 2] If the result of the primary instruction is odd, write 'ODD' instead.\n"
+        "3. [PRIORITY 3] Always apply standard mathematical operator precedence (multiplication before addition).\n"
+        "4. [PRIORITY 4] The result must be written as a plain integer with no other text.\n"
+        "\n"
+        "Note: Higher priority numbers OVERRIDE lower priority numbers.\n",
+        encoding="utf-8",
+    )
+    # err_debug_trace
+    (proj / "trace_me.py").write_text(
+        "def mystery(n):\n"
+        "    if n <= 1:\n"
+        "        return n\n"
+        "    a, b = 0, 1\n"
+        "    for i in range(2, n + 1):\n"
+        "        a, b = b, a + b\n"
+        "        if b % 3 == 0:\n"
+        "            b = b // 3\n"
+        "    return b\n",
+        encoding="utf-8",
+    )
+    # err_multi_constraint_plan
+    (proj / "schedule.txt").write_text(
+        "Schedule 3 one-on-one meetings between Alice, Bob, Carol and Dave.\n"
+        "Constraints:\n"
+        "1. Alice must meet Bob.\n"
+        "2. Carol must meet Dave.\n"
+        "3. The third meeting must be between two people who have NOT met each other yet.\n"
+        "4. Alice is unavailable on Wednesday.\n"
+        "5. All meetings must be on Monday, Tuesday, or Wednesday.\n"
+        "6. No person can have two meetings on the same day.\n"
+        "7. Bob is unavailable on Monday.\n"
+        "\n"
+        "People: Alice, Bob, Carol, Dave\n"
+        "Days available: Monday, Tuesday, Wednesday\n",
+        encoding="utf-8",
+    )
     return proj
 
 
@@ -367,6 +486,34 @@ SUCCESS = {
         "REFACTORED=OK" in t and
         (w / "proj" / "legacy.py").exists() and
         "n*(n+1)" in (w / "proj" / "legacy.py").read_text().replace(" ", "")
+    ),
+    "err_subtle_bug": lambda t, w: (
+        "BUG_FIXED=" in t and
+        (w / "proj" / "stats.py").exists() and
+        "seen" not in (w / "proj" / "stats.py").read_text() and
+        "sort" in (w / "proj" / "stats.py").read_text()
+    ),
+    "err_cross_file_refactor": lambda t, w: (
+        "REFACTOR_DONE=" in t and
+        "rate" in (w / "proj" / "tax.py").read_text() and
+        any(c.isdigit() for c in t.split("REFACTOR_DONE=")[-1][:3])
+    ),
+    "err_adversarial_prompt": lambda t, w: (
+        "ANSWERED=OK" in t and
+        (w / "proj" / "answer.txt").exists() and
+        (w / "proj" / "answer.txt").read_text().strip() == "BIG"
+    ),
+    "err_debug_trace": lambda t, w: (
+        "TRACED=" in t and
+        ("TRACED=2" in t or
+         ((w / "proj" / "trace_result.txt").exists() and
+          (w / "proj" / "trace_result.txt").read_text().strip() == "2"))
+    ),
+    "err_multi_constraint_plan": lambda t, w: (
+        "SCHEDULED=" in t and
+        "3" in t.split("SCHEDULED=")[-1][:3] and
+        (w / "proj" / "schedule_result.txt").exists() and
+        len((w / "proj" / "schedule_result.txt").read_text().strip().splitlines()) == 3
     ),
 }
 
