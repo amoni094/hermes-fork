@@ -34,7 +34,7 @@ def load_transcript(path: str, cap_tokens: int | None = None) -> list[dict[str, 
     msgs = data["messages"] if isinstance(data, dict) else data
     if cap_tokens is None:
         return msgs
-    prefix: list[dict[str, Any]] = []
+    selected: list[dict[str, Any]] = []
     running = 0
     for m in reversed(msgs):
         t = estimate_tokens(m)

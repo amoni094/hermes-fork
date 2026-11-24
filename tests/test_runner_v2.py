@@ -15,7 +15,7 @@ sys.path.insert(0, str(REPO))
 # ---------------------------------------------------------------------------
 # Import runner without executing main()
 # ---------------------------------------------------------------------------
-from evals.compaction.runner import (  # noqa: E402
+from evals.compaction.runner import (
     validate_questions,
     report_question_validation,
     flatten_transcript_text,
@@ -23,7 +23,14 @@ from evals.compaction.runner import (  # noqa: E402
     wilson_ci,
     compute_head_hit_rate,
     run_policy_cycles,
+    run_policy,
     QUESTION_PROMPT,
+    where_hint_stratum,
+    score_by_where_stratum,
+    tokens_cost_usd,
+    attach_arm_cost_fields,
+    reset_eval_usage,
+    EVAL_USAGE,
 )
 
 
@@ -63,7 +70,7 @@ class TestValidateQuestions:
     def test_all_valid(self):
         msgs = _make_messages(10)
         qs = _make_questions(msgs)
-        valid, invalid, by_tier = validate_questions(qs, msgs)
+        valid, invalid, _by_tier = validate_questions(qs, msgs)
         assert valid == len(qs)
         assert invalid == []
 
@@ -86,7 +93,7 @@ class TestValidateQuestions:
     def test_tier_counts(self):
         msgs = _make_messages(10)
         qs = _make_questions(msgs)
-        valid, invalid, by_tier = validate_questions(qs, msgs)
+        _valid, _invalid, by_tier = validate_questions(qs, msgs)
         assert by_tier.get("easy", 0) == 2
         assert by_tier.get("medium", 0) == 2
         assert by_tier.get("hard", 0) == 2
@@ -201,3 +208,103 @@ class TestRunPolicyCycles:
         # Output files written per cycle
         for i in range(1, 4):
             assert (tmp_path / f"cycle{i}").is_dir()
+
+
+# ---------------------------------------------------------------------------
+# Item 9: where-hint exam stratification
+# ---------------------------------------------------------------------------
+
+class TestWhereStratum:
+    def test_stratum_boundaries(self):
+        assert where_hint_stratum("") == "untiered"
+        assert where_hint_stratum(None) == "untiered"
+        assert where_hint_stratum("   ") == "untiered"
+        assert where_hint_stratum("x" * 19) == "hard"
+        assert where_hint_stratum("x" * 20) == "medium"
+        assert where_hint_stratum("x" * 60) == "medium"
+        assert where_hint_stratum("x" * 61) == "easy"
+
+    def test_score_by_where_stratum(self):
+        questions = [
+            {"q": "h1", "gold": "a", "where": "x" * 19},           # hard
+            {"q": "h2", "gold": "b", "where": "y" * 10},           # hard
+            {"q": "m1", "gold": "c", "where": "z" * 20},           # medium
+            {"q": "e1", "gold": "d", "where": "w" * 61},           # easy
+            {"q": "u1", "gold": "e", "where": ""},                 # untiered
+        ]
+        results = [
+            {"score": 2},  # hard hit
+            {"score": 0},  # hard miss  -> 50.0%
+            {"score": 2},  # medium     -> 100.0%
+            {"score": 1},  # easy       -> 50.0%
+            {"score": 0},  # untiered   -> 0.0%
+        ]
+        by = score_by_where_stratum(results, questions)
+        assert by["hard"] == {"recall_pct": 50.0, "n": 2}
+        assert by["medium"] == {"recall_pct": 100.0, "n": 1}
+        assert by["easy"] == {"recall_pct": 50.0, "n": 1}
+        assert by["untiered"] == {"recall_pct": 0.0, "n": 1}
+
+
+# ---------------------------------------------------------------------------
+# Item 10: cost-per-task logging
+# ---------------------------------------------------------------------------
+
+class TestCostLogging:
+    def test_tokens_cost_usd(self):
+        assert tokens_cost_usd(1000, 100) == 0.0045  # 1000*3e-6 + 100*15e-6
+
+    def test_zero_questions_guard(self):
+        reset_eval_usage()
+        summary = {"compaction_input_tokens": 0, "compaction_output_tokens": 0}
+        attach_arm_cost_fields(summary, [])
+        assert summary["n_tasks"] >= 1
+        assert summary["cost_per_task_usd"] == summary["total_cost_usd"] / summary["n_tasks"]
+
+    def test_usage_reset_per_arm(self, tmp_path):
+        """Arm B exam tokens must not include arm A's EVAL_USAGE."""
+        import evals.compaction.runner as R
+        from evals.compaction.policies import POLICIES
+
+        def fake_call(prompt, max_tokens=2000):
+            R.EVAL_USAGE["prompt_tokens"] += 1000
+            R.EVAL_USAGE["completion_tokens"] += 100
+            R.EVAL_USAGE["calls"] += 1
+            if "Score this answer" in prompt:
+                return '{"score": 2, "why": "ok"}'
+            return "answer"
+
+        def fake_compress(spec, messages):
+            return messages, MagicMock(
+                _last_summary_error=None,
+                routing_hint=None,
+                _session_type=None,
+            ), {
+                "compaction_calls": 1,
+                "compaction_input_tokens": 50,
+                "compaction_output_tokens": 5,
+                "compaction_model": "test",
+                "compaction_cost_usd": 0.01,
+            }
+
+        msgs = _make_messages(10)
+        qs = _make_questions(msgs)
+        # Leave leftover usage as if arm A of a previous run leaked.
+        R.EVAL_USAGE["prompt_tokens"] = 999_999
+        R.EVAL_USAGE["completion_tokens"] = 999_999
+
+        with (
+            patch("evals.compaction.runner._compress_with_policy", side_effect=fake_compress),
+            patch("evals.compaction.runner._call", side_effect=fake_call),
+        ):
+            a = run_policy("current", POLICIES["current"], msgs, qs, tmp_path / "arm_a")
+            b = run_policy("lean", POLICIES["lean"], msgs, qs, tmp_path / "arm_b")
+
+        assert a["exam_input_tokens"] == b["exam_input_tokens"]
+        assert a["exam_output_tokens"] == b["exam_output_tokens"]
+        # Leftover 999_999 from before arm A must not appear in either arm.
+        assert a["exam_input_tokens"] < 999_999
+        assert b["exam_input_tokens"] < 999_999
+        # Compaction sidecar is preserved.
+        assert a.get("compaction_cost_usd") == 0.01
+        assert b.get("compaction_cost_usd") == 0.01

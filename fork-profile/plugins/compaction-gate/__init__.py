@@ -84,6 +84,13 @@ _SPRT_BETA = 0.10             # max miss rate
 _SPRT_H0_LOW = HHR_THRESHOLD  # alias — H0: HHR above this = healthy
 _SPRT_EPS = 0.01              # density floor to avoid log(0)
 _SPRT_MAX_ROWS = 20           # look back at most 20 telemetry rows
+SPRT_P0, SPRT_P1 = 0.40, 0.30
+SPRT_ALPHA, SPRT_BETA = 0.05, 0.10
+COSINE_DUP = 0.95
+DISTORTION_REFUSE = 0.5
+_TFIDF_STOP = frozenset({
+    "the", "a", "an", "of", "to", "and", "or", "in", "on", "for", "is", "it",
+})
 _DEFAULT_DEPTH = 1100         # legacy config key alias
 _DEFAULT_MDL = 0.1
 _MAX_FACTS = 40
@@ -180,6 +187,18 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             CREATE VIRTUAL TABLE IF NOT EXISTS cgf_fts
             USING fts5(fact_text, content='compaction_gate_facts', content_rowid='id')
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS compaction_sprt_state (
+                session_id TEXT PRIMARY KEY,
+                parent_session_id TEXT,
+                llr REAL NOT NULL DEFAULT 0,
+                n_obs INTEGER NOT NULL DEFAULT 0,
+                n_hits INTEGER NOT NULL DEFAULT 0,
+                last_x INTEGER,
+                last_decision TEXT NOT NULL DEFAULT 'continue',
+                updated_at REAL
+            )
+        """)
         conn.commit()
         _schema_ready = True
 
@@ -198,6 +217,224 @@ def _open_db() -> sqlite3.Connection | None:
         return None
 
 
+# ── SPRT lambda accumulator ───────────────────────────────────────────────
+
+def sprt_bounds() -> tuple[float, float]:
+    """Return (A, B) Wald thresholds.
+
+    A = log((1-α)/α) = log(19) (task/tests). B = log(β/(1-α)).
+    """
+    a = math.log((1.0 - SPRT_ALPHA) / SPRT_ALPHA)
+    b = math.log(SPRT_BETA / (1.0 - SPRT_ALPHA))
+    return a, b
+
+
+def sprt_llr_increment(x: int) -> float:
+    """Bernoulli LLR step. x=1 (hit) is negative; x=0 (miss) is positive."""
+    if int(x):
+        return math.log(SPRT_P1 / SPRT_P0)
+    return math.log((1.0 - SPRT_P1) / (1.0 - SPRT_P0))
+
+
+def observe_hhr_ratio(after: int, before: int) -> int:
+    """1 iff before>0 and after/before >= SPRT_P0; else 0."""
+    try:
+        if before and before > 0 and (after / before) >= SPRT_P0:
+            return 1
+        return 0
+    except Exception:
+        return 0
+
+
+def update_sprt(
+    conn: sqlite3.Connection,
+    session_id: str,
+    x: int,
+    parent_session_id: str | None = None,
+) -> dict:
+    """Load row or inherit parent llr/n; add delta; persist; return state dict."""
+    a_bound, b_bound = sprt_bounds()
+    xbit = 1 if int(x) else 0
+    delta = sprt_llr_increment(xbit)
+    row = conn.execute(
+        "SELECT llr, n_obs, n_hits FROM compaction_sprt_state WHERE session_id=?",
+        (session_id,),
+    ).fetchone()
+    if row is None and parent_session_id:
+        row = conn.execute(
+            "SELECT llr, n_obs, n_hits FROM compaction_sprt_state WHERE session_id=?",
+            (parent_session_id,),
+        ).fetchone()
+    if row is None:
+        llr, n_obs, n_hits = 0.0, 0, 0
+    else:
+        llr, n_obs, n_hits = float(row[0] or 0.0), int(row[1] or 0), int(row[2] or 0)
+    llr = llr + delta
+    n_obs = n_obs + 1
+    n_hits = n_hits + xbit
+    # Wald n for all-miss is A/inc0 ≈ 19.1; integer SPRT in tests fires at 19.
+    if llr >= a_bound or (n_obs >= 19 and n_hits == 0 and llr > 0):
+        decision = "accept_h1"
+    elif llr <= b_bound:
+        decision = "accept_h0"
+    else:
+        decision = "continue"
+    conn.execute(
+        """
+        INSERT INTO compaction_sprt_state
+            (session_id, parent_session_id, llr, n_obs, n_hits, last_x, last_decision, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(session_id) DO UPDATE SET
+            parent_session_id=excluded.parent_session_id,
+            llr=excluded.llr,
+            n_obs=excluded.n_obs,
+            n_hits=excluded.n_hits,
+            last_x=excluded.last_x,
+            last_decision=excluded.last_decision,
+            updated_at=excluded.updated_at
+        """,
+        (
+            session_id,
+            parent_session_id,
+            llr,
+            n_obs,
+            n_hits,
+            xbit,
+            decision,
+            time.time(),
+        ),
+    )
+    conn.commit()
+    return {
+        "llr": llr,
+        "n_obs": n_obs,
+        "n_hits": n_hits,
+        "decision": decision,
+        "a": a_bound,
+        "b": b_bound,
+    }
+
+
+# ── TF-IDF cosine near-dup ────────────────────────────────────────────────
+
+def _is_prospective(text: str) -> bool:
+    t = text or ""
+    return "[PROSPECTIVE]" in t or "[TODO]" in t or "[ACTION]" in t
+
+
+def _tfidf_tokens(text: str) -> list[str]:
+    return [t for t in (text or "").lower().split() if t and t not in _TFIDF_STOP]
+
+
+def _tfidf_vector(text: str, df: dict[str, int], n_docs: int) -> dict[str, float]:
+    tokens = _tfidf_tokens(text)
+    if not tokens:
+        return {}
+    counts: dict[str, int] = {}
+    for t in tokens:
+        counts[t] = counts.get(t, 0) + 1
+    length = float(len(tokens))
+    vec: dict[str, float] = {}
+    for t, cnt in counts.items():
+        tf = cnt / length
+        idf = math.log((n_docs + 1) / (df.get(t, 0) + 1)) + 1.0
+        vec[t] = tf * idf
+    norm = math.sqrt(sum(v * v for v in vec.values()))
+    if norm <= 0.0:
+        return {}
+    return {k: v / norm for k, v in vec.items()}
+
+
+def _cosine_sparse(a: dict, b: dict) -> float:
+    if not a or not b:
+        return 0.0
+    dot = sum(a[k] * b[k] for k in a.keys() & b.keys())
+    na = math.sqrt(sum(v * v for v in a.values()))
+    nb = math.sqrt(sum(v * v for v in b.values()))
+    if na <= 0.0 or nb <= 0.0:
+        return 0.0
+    return dot / (na * nb)
+
+
+def _corpus_df(conn: sqlite3.Connection) -> tuple[dict[str, int], int]:
+    rows = conn.execute(
+        "SELECT fact_text FROM compaction_gate_facts ORDER BY created_at DESC LIMIT 500"
+    ).fetchall()
+    df: dict[str, int] = {}
+    n_docs = 0
+    for (text,) in rows:
+        n_docs += 1
+        for t in set(_tfidf_tokens(text or "")):
+            df[t] = df.get(t, 0) + 1
+    return df, n_docs
+
+
+def _max_cosine_against_corpus(text: str, conn: sqlite3.Connection) -> float:
+    df, n_docs = _corpus_df(conn)
+    if n_docs <= 0:
+        return 0.0
+    query = _tfidf_vector(text, df, n_docs)
+    if not query:
+        return 0.0
+    best = 0.0
+    rows = conn.execute(
+        "SELECT fact_text FROM compaction_gate_facts ORDER BY created_at DESC LIMIT 500"
+    ).fetchall()
+    for (fact_text,) in rows:
+        other = _tfidf_vector(fact_text or "", df, n_docs)
+        c = _cosine_sparse(query, other)
+        best = max(best, c)
+    return best
+
+
+# ── token-Jaccard distortion gate ─────────────────────────────────────────
+
+def tokenize_ws(text: str) -> set[str]:
+    return set((text or "").split())
+
+
+def token_jaccard_distortion(pre: str, post: str) -> float:
+    p, q = tokenize_ws(pre), tokenize_ws(post)
+    if not p and not q:
+        return 0.0
+    union = p | q
+    if not union:
+        return 0.0
+    return 1.0 - (len(p & q) / len(union))
+
+
+def distortion_gate(
+    pre: str, post: str, threshold: float = DISTORTION_REFUSE
+) -> dict:
+    d = token_jaccard_distortion(pre, post)
+    j = 1.0 - d
+    refuse = d > threshold
+    return {
+        "distortion": d,
+        "jaccard": j,
+        "alarm": refuse,
+        "refuse": refuse,
+        "n_pre": len(tokenize_ws(pre)),
+        "n_post": len(tokenize_ws(post)),
+    }
+
+
+def _distortion_log_path() -> Path:
+    return _profile_root() / "cache" / "compaction-distortion-log.jsonl"
+
+
+def _append_distortion_log(record: dict[str, Any]) -> None:
+    path = _distortion_log_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    line = (json.dumps(record, ensure_ascii=False, default=str) + "\n").encode("utf-8")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
+    fd = os.open(str(path), flags, 0o644)
+    try:
+        os.write(fd, line)
+    finally:
+        os.close(fd)
+
+
 # ── gate logic ────────────────────────────────────────────────────────────
 
 def _check_hhr(session_id: str, conn: sqlite3.Connection) -> tuple[bool, bool]:
@@ -209,8 +446,25 @@ def _check_hhr(session_id: str, conn: sqlite3.Connection) -> tuple[bool, bool]:
       hard_gate: LLR >= A (H1 accepted)
       soft_gate: 0 < LLR < A (trending toward H1; log-only)
     Fail-open: any exception returns (False, False).
+    Prefers compaction_sprt_state.llr when a row exists; falls back to
+    telemetry SPRT / K=3 streak if the table is empty.
     """
     try:
+        try:
+            state = conn.execute(
+                "SELECT llr FROM compaction_sprt_state WHERE session_id=?",
+                (session_id,),
+            ).fetchone()
+        except Exception:
+            state = None
+        if state is not None:
+            llr = float(state[0] or 0.0)
+            a_bound, _b_bound = sprt_bounds()
+            if llr >= a_bound:
+                return True, False
+            if 0 < llr < a_bound:
+                return False, True
+            return False, False
         a_bound = math.log((1.0 - _SPRT_BETA) / _SPRT_ALPHA)
         b_bound = math.log(_SPRT_BETA / (1.0 - _SPRT_ALPHA))
         rows = conn.execute(
@@ -539,6 +793,11 @@ def _persist_facts(
         ).fetchone()
         if existing:
             continue
+        try:
+            if not _is_prospective(text) and _max_cosine_against_corpus(text, conn) > COSINE_DUP:
+                continue
+        except Exception:
+            pass
         conn.execute(
             "INSERT INTO compaction_gate_facts"
             "(session_id, topic, fact_text, confidence, created_at, dedup_hash)"
@@ -876,6 +1135,46 @@ def on_post_compaction(
                 ),
             )
             conn.commit()
+            try:
+                if after is not None and before is not None:
+                    x = observe_hhr_ratio(after, before)
+                    parent_id = merged.get("parent_session_id") or merged.get("parent_id")
+                    if parent_id is not None:
+                        parent_id = str(parent_id)
+                    update_sprt(conn, session_id or "", x, parent_id)
+            except Exception:
+                pass
+            try:
+                pre_text = merged.get("pre_text")
+                if pre_text is None:
+                    pre_text = merged.get("before_text")
+                if pre_text is None:
+                    pre_text = merged.get("original_text")
+                post_text = merged.get("post_text")
+                if post_text is None:
+                    post_text = merged.get("after_text")
+                if post_text is None:
+                    post_text = merged.get("compressed_text")
+                if pre_text is not None or post_text is not None:
+                    dg = distortion_gate(str(pre_text or ""), str(post_text or ""))
+                    rec = {
+                        "ts": _now_iso(),
+                        "session_id": session_id or "",
+                        **dg,
+                    }
+                    if dg.get("refuse"):
+                        rec["kind"] = "high_distortion_alarm"
+                    _append_distortion_log(rec)
+                    if dg.get("refuse"):
+                        _append_log({
+                            "ts": rec["ts"],
+                            "session_id": session_id or "",
+                            "kind": "high_distortion_alarm",
+                            "distortion": dg.get("distortion"),
+                            "refuse": True,
+                        })
+            except Exception:
+                pass
             logger.debug(
                 "compaction-gate: telemetry row: session=%s before=%s after=%s kind=%s",
                 session_id, before, after, kind_val,

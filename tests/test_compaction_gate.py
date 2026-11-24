@@ -2,7 +2,7 @@
 Run: PYTHONPATH=hermes-fork python3 -m pytest hermes-fork/tests/test_compaction_gate.py -v
 """
 from __future__ import annotations
-import importlib.util, sqlite3, time
+import importlib.util, math, sqlite3, time
 from pathlib import Path
 from types import ModuleType
 import pytest
@@ -105,3 +105,148 @@ def test_hhr_sprt_soft_mixed(mc):
     mc.execute("INSERT INTO compaction_telemetry(session_id,after_tokens,before_tokens)VALUES(?,?,?)", ("s9", 700, 1000))
     mc.commit(); ff, fs = cg._check_hhr("s9", mc)
     assert fs and not ff
+
+
+def _fact_item(text: str) -> dict:
+    return {"text": text, "redundant": False, "mdl_saving": 1.0}
+
+
+def test_sprt_bounds():
+    a, b = cg.sprt_bounds()
+    assert abs(a - math.log(19)) < 1e-9
+    assert b < 0
+
+
+def test_sprt_increments():
+    assert cg.sprt_llr_increment(1) < 0
+    assert cg.sprt_llr_increment(0) > 0
+
+
+def test_sprt_persist_across_reopen(tmp_path):
+    db = tmp_path / "sprt_reopen.db"
+    conn = sqlite3.connect(str(db))
+    cg._schema_ready = False
+    cg._ensure_schema(conn)
+    for _ in range(5):
+        last = cg.update_sprt(conn, "s-reopen", 0)
+    llr = last["llr"]
+    conn.close()
+    conn2 = sqlite3.connect(str(db))
+    row = conn2.execute(
+        "SELECT llr, n_obs FROM compaction_sprt_state WHERE session_id=?",
+        ("s-reopen",),
+    ).fetchone()
+    assert row is not None
+    assert abs(row[0] - llr) < 1e-12
+    assert row[1] == 5
+    conn2.close()
+
+
+def test_sprt_inherit_parent(mc):
+    parent = cg.update_sprt(mc, "parent", 0)
+    child = cg.update_sprt(mc, "child", 1, parent_session_id="parent")
+    expected = parent["llr"] + cg.sprt_llr_increment(1)
+    assert abs(child["llr"] - expected) < 1e-12
+    assert child["n_obs"] == parent["n_obs"] + 1
+
+
+def test_sprt_needs_many_misses_not_3(mc):
+    d = None
+    for _ in range(3):
+        d = cg.update_sprt(mc, "s-miss3", 0)
+    assert d["decision"] == "continue"
+
+
+def test_sprt_h1_fires_at_19_misses(mc):
+    d = None
+    for _ in range(19):
+        d = cg.update_sprt(mc, "s-miss19", 0)
+    assert d["decision"] == "accept_h1"
+
+
+def test_check_hhr_reads_state_table(mc):
+    a, _ = cg.sprt_bounds()
+    mc.execute(
+        "INSERT INTO compaction_sprt_state(session_id, llr, n_obs, n_hits, last_decision) "
+        "VALUES (?,?,?,?,?)",
+        ("s-state", a, 0, 0, "continue"),
+    )
+    mc.commit()
+    ff, fs = cg._check_hhr("s-state", mc)
+    assert ff and not fs
+
+
+def test_cosine_identical(mc):
+    t = "compaction gate stores facts from the session archive today"
+    assert cg._persist_facts(mc, "s-cos", [_fact_item(t)]) == 1
+    assert cg._persist_facts(mc, "s-cos", [_fact_item(t)]) == 0
+    df, n = cg._corpus_df(mc)
+    v = cg._tfidf_vector(t, df, n)
+    assert abs(cg._cosine_sparse(v, v) - 1.0) < 1e-9
+
+
+def test_cosine_disjoint(mc):
+    a = "Rate distortion theory sets a hard bound on lossy compression of memory facts"
+    b = "Unrelated cooking recipe uses unsalted butter flour sugar eggs and vanilla extract"
+    assert cg._persist_facts(mc, "s-dis", [_fact_item(a)]) == 1
+    assert cg._persist_facts(mc, "s-dis", [_fact_item(b)]) == 1
+
+
+def test_cosine_near_dup(mc):
+    a = "compaction gate fires at turn 1100"
+    b = "the compaction gate fires at turn 1100"
+    assert cg._persist_facts(mc, "s-near", [_fact_item(a)]) == 1
+    assert cg._persist_facts(mc, "s-near", [_fact_item(b)]) == 0
+
+
+def test_cosine_prospective_kept(mc):
+    a = "ping at 09:00 every weekday morning without fail"
+    b = "[PROSPECTIVE] ping at 09:00"
+    assert cg._persist_facts(mc, "s-pro", [_fact_item(a)]) == 1
+    assert cg._persist_facts(mc, "s-pro", [_fact_item(b)]) == 1
+
+
+def test_sha_still_first(mc, monkeypatch):
+    t = "Exact hash dedup must fire before cosine near duplicate checks"
+    assert cg._persist_facts(mc, "s-sha", [_fact_item(t)]) == 1
+
+    def boom(*_a, **_k):
+        raise AssertionError("cosine should not run on sha hit")
+
+    monkeypatch.setattr(cg, "_max_cosine_against_corpus", boom)
+    assert cg._persist_facts(mc, "s-sha", [_fact_item(t)]) == 0
+
+
+def test_distortion_identical():
+    g = cg.distortion_gate("alpha beta gamma", "alpha beta gamma")
+    assert g["distortion"] == 0.0
+    assert g["refuse"] is False
+
+
+def test_distortion_disjoint():
+    g = cg.distortion_gate("alpha beta", "gamma delta")
+    assert g["distortion"] == 1.0
+    assert g["refuse"] is True
+
+
+def test_distortion_half():
+    g = cg.distortion_gate("a b c d", "a b")
+    assert abs(g["distortion"] - 0.5) < 1e-12
+    assert g["refuse"] is False
+
+
+def test_distortion_just_over():
+    # 5 unique pre, 2 from pre + 3 new post. Jaccard |∩|=2 |∪|=8 → 0.75.
+    # 1 - |∩|/|P| would be 0.6; formula is 1-|∩|/|∪|. Both refuse (strict > 0.5).
+    g = cg.distortion_gate("a b c d e", "a b x y z")
+    assert abs(g["distortion"] - 0.75) < 1e-12
+    assert g["refuse"] is True
+    g60 = cg.distortion_gate("a b c d e", "a b")
+    assert abs(g60["distortion"] - 0.6) < 1e-12
+    assert g60["refuse"] is True
+
+
+def test_distortion_empty():
+    g = cg.distortion_gate("", "")
+    assert g["distortion"] == 0.0
+    assert g["refuse"] is False

@@ -202,6 +202,11 @@ not enforced gates in the agent loop. Do NOT cite them as active enforcement:
   calibration-threshold-updater.py - Reads calibration-log.jsonl; updates Condorcet thresholds; EMA now seeds from prior run (wiring sprint 2)
   context-pressure-reader.py - Reads context token pressure; advisory annotation (wiring sprint 2)
   recall-miss-ttl-adjuster.py - MRAS adaptive TTL adjuster; reads recall-misses.jsonl; closes bottleneck #8 (wiring sprint 2)
+  composite-ue-scorer.py     - Hedge + zlib CCR + trigram-Jaccard cluster UE; composite>0.5 alarm; DPI partial_credit=1-UE
+  amodei-tool-log-monitor.py - Accident-risk flags on tool JSONL: DARK_WINDOW, REWARD_HACK, IRREVERSIBLE, PREPOTENCE, DOMAIN_SHIFT
+  pm-cron-probe.py           - Prospective-memory measurement (Einstein-McDaniel cue/target); fork/scripts only
+  evals/compaction/rif_probe.py - RIF compaction fixture (Rp+/Nrp-/Ctrl); RIF_index = recall_Nrp- - recall_Ctrl
+  evals/compaction/eval_stats.py - Wilson CI, Cohen n/arm, Wald SPRT, Hoeffding n (stdlib; --self-test)
 
 ---
 
@@ -525,6 +530,8 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `eval-hindsight-ingest.py` | Ingest needle lines into local hindsight-episodes.jsonl. | --self-test | cache/hindsight-episodes.json |
 | `eval-memory-planted-needle.py` | eval-memory-planted-needle.py — LongMemEval-style planted-fact recall. | --self-test, --json/stdin | cache/eval-memory-planted-needle.json |
 | `eval-routing-linucb-features.py` | eval-routing-linucb-features.py — 8-d contextual LinUCB on qrels.jsonl. | --self-test | cache/skill-router-index.json, cache/qrels.json, cache/eval-routing-linucb-features.json |
+| `eval-skill-routing.py` | Offline labeled P@k harness for skill-router-index (Hit@k / MRR; seeds skill-query-gt.jsonl). | --self-test | cache/eval/skill-query-gt.jsonl, cache/eval/skill-routing-p-at-k.json |
+| `eval-handoff-fidelity.py` | Score handoff-*.md Status/Pointers/Skills/Next-Step fidelity; alarm if <0.8 or no skills. | --self-test | cache/eval/handoff-fidelity.json |
 | `eval-shadow-synthetic.py` | eval-shadow-synthetic.py — Write synthetic shadow telemetry JSONL. | --self-test |  |
 | `evo-harness-compile.py` | Propose harness-skill updates from session summaries. | --json/stdin |  |
 | `evograph-skill-editor.py` | evograph-skill-editor.py — EvoGraph-Mem failure-aware skill insight editor. | CLI | cache/evograph-insight-graph.json, cache/skill-yield-state.json |
@@ -894,6 +901,9 @@ Runpy two-tier wrappers delegate to `hermes-scripts/<name>.py` when present. Wra
 | `eval-hindsight-ingest.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `eval-memory-planted-needle.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `eval-routing-linucb-features.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
+| `eval-skill-routing.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
+| `eval-skill-routing-cron.py` | Fork profile wrapper: delegates to hermes-scripts/eval-skill-routing.py | runpy-wrapper |
+| `eval-handoff-fidelity.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `eval-shadow-synthetic.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `evograph-skill-editor.py` | evograph-skill-editor.py — EvoGraph-Mem failure-aware skill insight editor. | wrapper+canonical |
 | `evograph-with-homology.py` | evograph-with-homology.py — Daily skill health: evograph build + persistent homology gaps. | wrapper-only |

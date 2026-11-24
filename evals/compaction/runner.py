@@ -39,6 +39,8 @@ from evals.compaction.fixtures import (
 )
 from evals.compaction.policies import EVAL_MODEL, POLICIES, apply_policy
 
+logger = logging.getLogger(__name__)
+
 QUESTION_PROMPT = """You are building a factual recall exam from an AI-agent work session transcript.
 
 Write {n} questions that test SPECIFIC, VERIFIABLE facts from the transcript below. Rules:
@@ -374,6 +376,47 @@ def keyword_search(archive: list, query: str, top_k: int = 6, excerpt_chars: int
 
 EVAL_USAGE = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0}
 
+# Eval-only yardstick ($/token). Not fetched from the network.
+PRICE_INPUT = 3.0 / 1_000_000   # $3/MTok
+PRICE_OUTPUT = 15.0 / 1_000_000  # $15/MTok
+
+
+def tokens_cost_usd(input_tokens: int, output_tokens: int) -> float:
+    # Multiply rates as $ / MTok in one division so 1000-in/100-out == 0.0045 exactly.
+    return (input_tokens * 3.0 + output_tokens * 15.0) / 1_000_000
+
+
+def reset_eval_usage() -> None:
+    EVAL_USAGE["calls"] = 0
+    EVAL_USAGE["prompt_tokens"] = 0
+    EVAL_USAGE["completion_tokens"] = 0
+    EVAL_USAGE["cached_tokens"] = 0
+
+
+def attach_arm_cost_fields(summary: dict, questions: list) -> dict:
+    """Snapshot EVAL_USAGE + compaction meter into per-arm cost fields.
+
+    Existing ``compaction_cost_usd`` (OpenRouter/Jev sidecar) is left untouched.
+    """
+    exam_in = int(EVAL_USAGE.get("prompt_tokens") or 0)
+    exam_out = int(EVAL_USAGE.get("completion_tokens") or 0)
+    exam_cost = tokens_cost_usd(exam_in, exam_out)
+    comp_in = int(summary.get("compaction_input_tokens") or 0)
+    comp_out = int(summary.get("compaction_output_tokens") or 0)
+    n_tasks = max(len(questions), 1)
+    total_in = exam_in + comp_in
+    total_out = exam_out + comp_out
+    total_cost = tokens_cost_usd(total_in, total_out)
+    summary["exam_input_tokens"] = exam_in
+    summary["exam_output_tokens"] = exam_out
+    summary["exam_cost_usd"] = exam_cost
+    summary["total_input_tokens"] = total_in
+    summary["total_output_tokens"] = total_out
+    summary["total_cost_usd"] = total_cost
+    summary["cost_per_task_usd"] = total_cost / n_tasks
+    summary["n_tasks"] = n_tasks
+    return summary
+
 
 def _call(prompt: str, max_tokens: int = 2000) -> str:
     from agent.auxiliary_client import call_llm
@@ -466,6 +509,37 @@ def wilson_ci(recall_pct: float, n: int) -> tuple[float, float]:
     center = (p * n + 2) / (n + 4)
     half = 1.96 * math.sqrt(center * (1.0 - center) / (n + 4))
     return center, half
+
+
+def _eval_stats_wilson_ci(n_correct: int, n_total: int) -> tuple[float, float] | None:
+    """Canonical Wilson (ci_lo, ci_hi) from eval_stats if importable.
+
+    Local ``wilson_ci`` stays for ``ci_width`` printouts (Agresti–Coull).
+    Missing eval_stats must not break existing runs.
+    """
+    try:
+        from evals.compaction.eval_stats import wilson_ci as stats_wilson  # type: ignore[import-not-found]
+    except ImportError:
+        try:
+            from eval_stats import wilson_ci as stats_wilson  # type: ignore[import-not-found]
+        except ImportError:
+            return None
+    try:
+        out = stats_wilson(int(n_correct), int(n_total))
+    except Exception:
+        return None
+    if not isinstance(out, (tuple, list)) or len(out) < 2:
+        return None
+    try:
+        if len(out) >= 3:
+            lo, hi = float(out[-2]), float(out[-1])
+        else:
+            lo, hi = float(out[0]), float(out[1])
+    except (TypeError, ValueError):
+        return None
+    if 0.0 <= lo <= 1.0 and 0.0 <= hi <= 1.0:
+        lo, hi = lo * 100.0, hi * 100.0
+    return lo, hi
 
 
 def combined_score(before_tokens: int, after_tokens: int, recall_pct: float) -> tuple[float, float]:
@@ -568,6 +642,36 @@ def compute_head_hit_rate(questions, summary_head: str) -> float:
     return round(hits / len(pool), 4)
 
 
+def where_hint_stratum(where: str | None) -> str:
+    """Bucket exam items by length of the literal ``where`` span.
+
+    Empty/missing is untiered (never abort). Does not touch ``difficulty``.
+    """
+    if where is None:
+        return "untiered"
+    s = where.strip()
+    if not s:
+        return "untiered"
+    n = len(s)
+    if n < 20:
+        return "hard"
+    if n <= 60:
+        return "medium"
+    return "easy"
+
+
+def score_by_where_stratum(results: list, questions: list) -> dict[str, dict]:
+    """Per-stratum recall for strata present in the (results, questions) zip."""
+    buckets: dict[str, list] = {}
+    for r, qa in zip(results, questions):
+        stratum = qa.get("where_stratum") or where_hint_stratum(qa.get("where"))
+        buckets.setdefault(stratum, []).append(r["score"])
+    return {
+        st: {"recall_pct": _recall_pct(ss), "n": len(ss)}
+        for st, ss in buckets.items()
+    }
+
+
 def score_by_signal_and_difficulty(results, questions):
     """Primary recall is TOKEN_EFFICIENT_SIGNAL only (absent signal_type counts as that)."""
     buckets = {st: [] for st in SIGNAL_TYPES}
@@ -596,6 +700,11 @@ def decorate_arm_metrics(summary: dict, n: int, head_hit_rate: float | None = No
     ratio, combined = combined_score(before, after, recall_pct)
     _center, half = wilson_ci(recall_pct, n)
     half_pct = half * 100.0
+    n_correct = round((recall_pct / 100.0) * n) if n else 0
+    pair = _eval_stats_wilson_ci(n_correct, n)
+    if pair is not None:
+        summary["ci_lo"] = round(pair[0], 1)
+        summary["ci_hi"] = round(pair[1], 1)
     summary["ratio"] = round(ratio, 6)
     summary["combined"] = round(combined, 6)
     summary["ci_width"] = round(2.0 * half_pct, 1)
@@ -709,7 +818,10 @@ def summarized_region(compressor_module, messages, max_msgs: int = 0):
 def generate_questions(messages, n: int, cache_path: Path,
                        exam_sample_msgs: int = 0) -> list:
     if cache_path.exists():
-        return json.loads(cache_path.read_text(encoding="utf-8"))
+        questions = json.loads(cache_path.read_text(encoding="utf-8"))
+        for qa in questions:
+            qa["where_stratum"] = where_hint_stratum(qa.get("where"))
+        return questions
     import agent.context_compressor as cc
 
     region = summarized_region(cc, messages, max_msgs=exam_sample_msgs)
@@ -746,6 +858,8 @@ def generate_questions(messages, n: int, cache_path: Path,
             raise
 
     questions = parsed[:n]
+    for qa in questions:
+        qa["where_stratum"] = where_hint_stratum(qa.get("where"))
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps(questions, indent=1), encoding="utf-8")
     return questions
@@ -1040,6 +1154,7 @@ def _rerank_snippets(question: str, search_results: str, top_k: int = 3) -> str:
 def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
                with_recovery: bool = False, full_lineage=None,
                use_hier: bool = False) -> dict:
+    reset_eval_usage()
     before = copy.deepcopy(messages)
     _original = before
     t0 = time.time()
@@ -1060,6 +1175,8 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
         summary = {"policy": label, "before_tokens": total_tokens(before), "after_tokens": None,
                    "recall_pct": None, "compress_seconds": round(elapsed, 1),
                    "summary_error": comp._last_summary_error, **compaction_cost}
+        summary["by_where_stratum"] = score_by_where_stratum([], questions)
+        attach_arm_cost_fields(summary, questions)
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / f"{label.replace('+', '_')}.json").write_text(
             json.dumps({"summary": summary, "results": []}, indent=1), encoding="utf-8")
@@ -1196,6 +1313,8 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
         "classified_info": classifier_decision,
         **compaction_cost,
     }
+    summary["by_where_stratum"] = score_by_where_stratum(results, questions)
+    attach_arm_cost_fields(summary, questions)
     decorate_arm_metrics(summary, n_primary, head_hit_rate=hit_rate)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / f"{label.replace('+', '_')}.json").write_text(
@@ -1206,6 +1325,7 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
 
 def uncompacted_control(messages, questions, out_dir: Path) -> dict:
     """Control: no compression at all — answer from the full transcript."""
+    reset_eval_usage()
     context_text = serialize_for_exam(messages, char_cap=600_000)  # ~150K tok, within 200K API limit
     results = []
     for qa in questions:
@@ -1239,6 +1359,8 @@ def uncompacted_control(messages, questions, out_dir: Path) -> dict:
         "summary_error": None,
         "head_hit_rate": hit_rate,
     }
+    ctl["by_where_stratum"] = score_by_where_stratum(results, questions)
+    attach_arm_cost_fields(ctl, questions)
     decorate_arm_metrics(ctl, n_primary, head_hit_rate=hit_rate)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "uncompacted_control.json").write_text(
@@ -1281,6 +1403,7 @@ def run_policy_cycles(
         cycle_out = out_dir / f"cycle{cycle}"
         cycle_out.mkdir(parents=True, exist_ok=True)
 
+        reset_eval_usage()
         t0 = time.time()
         _do_hier = use_hier or len(current) > HIER_THRESHOLD
         if _do_hier:
@@ -1402,6 +1525,8 @@ def run_policy_cycles(
             "classified_info": classifier_decision,
             **compaction_cost,
         }
+        summary["by_where_stratum"] = score_by_where_stratum(results, questions)
+        attach_arm_cost_fields(summary, questions)
         decorate_arm_metrics(summary, n_primary, head_hit_rate=hit_rate)
         print(f"  [cycle {cycle}/{n_cycles}] recall={recall_pct:.1f}% hhr={hit_rate:.3f} "
               f"ratio={total_tokens(compressed)/max(total_tokens(current),1):.4f}")
@@ -1509,6 +1634,12 @@ def main():
             "recall_pct": round(100 * sum(scored) / (2 * len(scored)), 1),
             "scores": scored,
         }
+        n_ctl = len(scored)
+        n_correct = round((ctl["recall_pct"] / 100.0) * n_ctl) if n_ctl else 0
+        pair = _eval_stats_wilson_ci(n_correct, n_ctl)
+        if pair is not None:
+            ctl["ci_lo"] = round(pair[0], 1)
+            ctl["ci_hi"] = round(pair[1], 1)
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / "uncompacted_control.json").write_text(json.dumps({"summary": ctl, "results": results}, indent=1), encoding="utf-8")
         summaries.append(ctl)
