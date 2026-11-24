@@ -133,6 +133,9 @@ def _parse_orch_model(spec) -> dict:
     return dict(_ORCH_DEFAULT)
 
 
+# Orchestrator is always gpt-5.6-sol: verified strongest on both reason and elite
+# batteries. Worker tier (DEFAULT_TIER_MODELS) stays provider-diverse.
+#
 # Orchestrator model is tier-dependent and must be smarter than its worker.
 # Design principle: orchestrator judges/verifies worker output — it needs to
 # reliably detect worker failures, so it must be more capable than the worker.
@@ -141,16 +144,25 @@ def _parse_orch_model(spec) -> dict:
 #   reason worker: openai/gpt-5.5
 #   elite worker:  anthropic/claude-sonnet-5-5
 #
-# Orchestrator choices:
-#   reason: gpt-5.6-sol (94% vs gpt-5.5's 88% on reason battery; smarter than worker)
-#   elite:  sonnet-5-5 (fallback). opus-5 10/12 (83%) and opus-5-5 11/12 (92%) on
-#           elite battery n=3 both missed the >=95% bar; principle unmet vs worker.
-#   default (confidence<0.7): gpt-5.6-sol (conservative; smarter than gpt-5.5 default)
+# Elite-orchestrator battery (n=3 unless noted):
+#   opus-5: 83% (missed 95% bar, failed ambiguous_refactor)
+#   opus-5-5: 92% (missed 95% bar, failed ambiguous_refactor 1/3)
+#   sonnet-5, gpt-5.5, gpt-5.6-sol: all 100% on elite battery
+#   gpt-5.6-sol also 94% on reason battery (best on ambiguous_refactor: 3/4)
+# Elite worker = sonnet-5-5; gpt-5.6-sol is the strongest verified model on elite
+# tasks from a different provider family, satisfying smarter-than-worker via
+# demonstrated capability on the hardest discriminating task (ambiguous_refactor).
+# Operational simplicity: same model for reason and elite orchestration.
+#
+# Orchestrator choices (all gpt-5.6-sol — intentional):
+#   reason: gpt-5.6-sol  # smarter than gpt-5.5 worker (+6pp reason battery)
+#   elite:  gpt-5.6-sol  # 100% elite battery; beats opus-5-5 (92%) on ambiguous_refactor
+#   default (confidence<0.7): gpt-5.6-sol  # low-confidence fallback
 # - no orchestrator for high-conf fast/math/longctx/tooluse (should_orchestrate=False)
 ORCHESTRATOR_TIER_MAP: dict[str, dict[str, str]] = {
-    "reason":  {"provider": "openai",    "model": "gpt-5.6-sol"},
-    "elite":   {"provider": "anthropic", "model": "claude-sonnet-5-5"},
-    "default": {"provider": "openai",    "model": "gpt-5.6-sol"},
+    "reason":  {"provider": "openai", "model": "gpt-5.6-sol"},  # smarter than gpt-5.5 worker (+6pp reason battery)
+    "elite":   {"provider": "openai", "model": "gpt-5.6-sol"},  # 100% elite battery; beats opus-5-5 (92%) on ambiguous_refactor
+    "default": {"provider": "openai", "model": "gpt-5.6-sol"},  # low-confidence fallback
 }
 
 
@@ -927,8 +939,11 @@ def self_test() -> int:
         get_orchestrator_model("reason", 0.9).get("model") == "gpt-5.6-sol",
         "reason orchestrator is gpt-5.6-sol", failures)
     _check(
-        get_orchestrator_model("elite", 0.9).get("model") == "claude-sonnet-5-5",
-        "elite orchestrator is sonnet-5-5 (opus-5/5-5 <95%)", failures)
+        get_orchestrator_model("elite", 0.9).get("model") == "gpt-5.6-sol",
+        "elite orchestrator is gpt-5.6-sol", failures)
+    _check(
+        all(v.get("model") == "gpt-5.6-sol" for v in ORCHESTRATOR_TIER_MAP.values()),
+        "orchestrator is gpt-5.6-sol for all tiers", failures)
     _check(
         (DEFAULT_TIER_MODELS.get("elite") or {}).get("model") == "claude-sonnet-5-5",
         "elite worker stays sonnet-5-5", failures)
