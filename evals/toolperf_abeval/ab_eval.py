@@ -111,6 +111,35 @@ TASKS = {
         "Find every Python file under {WORK}/proj/deep/ that imports the module 'crypto_utils'. "
         "Search recursively. Reply with the sorted relative paths (relative to {WORK}/proj)."
     ),
+    # E: security code review (elite/reason discriminator)
+    "err_security_review": (
+        "Review the Python file at {WORK}/proj/vuln_app.py for security vulnerabilities. "
+        "The file contains at least 3 distinct CWE-class vulnerabilities. "
+        "List each vulnerability with: 1) CWE ID, 2) line number, 3) one-sentence description. "
+        "Reply VULNS_FOUND=<count> at the end."
+    ),
+    # E: multi-step logic proof (elite/reason discriminator)
+    "err_logic_proof": (
+        "The file {WORK}/proj/logic_puzzle.txt contains a constraint satisfaction problem. "
+        "Solve it step by step and reply SOLUTION=<answer>."
+    ),
+    # E: multi-step tool chain (elite/tooluse discriminator)
+    "err_multi_tool_chain": (
+        "Complete this 4-step task chain: "
+        "(1) Read {WORK}/proj/data.csv using read_file and find the row where column 'status' is 'PENDING'. "
+        "(2) Extract the 'id' value from that row. "
+        "(3) Write a new file {WORK}/proj/result.txt containing exactly: 'PROCESSED:<id>'. "
+        "(4) Read {WORK}/proj/result.txt back using read_file to verify, then reply CHAIN_OK=<id>."
+    ),
+    # E: ambiguous refactor with tradeoff (reason/elite discriminator)
+    "err_ambiguous_refactor": (
+        "The file {WORK}/proj/legacy.py contains a function with performance and correctness issues. "
+        "Refactor it to fix both issues. The refactored function must: "
+        "(1) return the correct sum (not use the buggy loop), "
+        "(2) run in O(1) not O(n), "
+        "(3) be written to {WORK}/proj/legacy.py (overwrite). "
+        "Then reply REFACTORED=OK and state the O(1) formula used."
+    ),
 }
 
 
@@ -227,6 +256,72 @@ def make_sandbox(work: Path):
     (deep / "utils" / "helpers.py").write_text(non_importing, encoding="utf-8")
     (deep / "utils" / "codec.py").write_text(importing, encoding="utf-8")
     (deep / "__init__.py").write_text("", encoding="utf-8")
+    # err_security_review
+    (proj / "vuln_app.py").write_text(
+        "import os\n"
+        "import subprocess\n"
+        "import pickle\n"
+        "import sqlite3\n"
+        "\n"
+        "def run_command(user_input):\n"
+        "    # CWE-78: OS Command Injection (line 8)\n"
+        "    result = subprocess.run(f\"ls {user_input}\", shell=True, capture_output=True)\n"
+        "    return result.stdout\n"
+        "\n"
+        "def get_user(user_id, db_conn):\n"
+        "    # CWE-89: SQL Injection (line 13)\n"
+        "    cursor = db_conn.cursor()\n"
+        "    cursor.execute(f\"SELECT * FROM users WHERE id = {user_id}\")\n"
+        "    return cursor.fetchone()\n"
+        "\n"
+        "def load_data(blob):\n"
+        "    # CWE-502: Deserialization of Untrusted Data (line 19)\n"
+        "    return pickle.loads(blob)\n"
+        "\n"
+        "def set_permission(path, mode):\n"
+        "    # CWE-732: Incorrect Permission Assignment (line 23)\n"
+        "    os.chmod(path, 0o777)\n"
+        "\n"
+        "def authenticate(username, password):\n"
+        "    # CWE-798: Hard-coded Credentials (line 27)\n"
+        "    if username == \"admin\" and password == \"secret123\":\n"
+        "        return True\n"
+        "    return False\n",
+        encoding="utf-8",
+    )
+    # err_logic_proof
+    (proj / "logic_puzzle.txt").write_text(
+        "Five people (Alice, Bob, Carol, Dave, Eve) sit in seats 1-5 (left to right).\n"
+        "Constraints:\n"
+        "1. Alice sits immediately left of Bob.\n"
+        "2. Carol is not in seat 1 or 5.\n"
+        "3. Dave sits in an odd-numbered seat.\n"
+        "4. Eve is not adjacent to Alice.\n"
+        "5. Bob is not in seat 5.\n"
+        "6. Carol sits to the right of Dave.\n"
+        "Find the unique valid seating arrangement.\n"
+        "Answer format: SOLUTION=Alice:N,Bob:N,Carol:N,Dave:N,Eve:N\n",
+        encoding="utf-8",
+    )
+    # err_multi_tool_chain
+    (proj / "data.csv").write_text(
+        "id,name,status,value\n"
+        "101,alpha,DONE,55\n"
+        "102,beta,PENDING,77\n"
+        "103,gamma,DONE,33\n"
+        "104,delta,SKIP,11\n",
+        encoding="utf-8",
+    )
+    # err_ambiguous_refactor
+    (proj / "legacy.py").write_text(
+        "def sum_to_n(n):\n"
+        "    # BUG: off-by-one, starts at 2 instead of 1; also O(n)\n"
+        "    total = 0\n"
+        "    for i in range(2, n + 1):  # should be range(1, n+1)\n"
+        "        total += i\n"
+        "    return total\n",
+        encoding="utf-8",
+    )
     return proj
 
 
@@ -253,6 +348,24 @@ SUCCESS = {
         w / "proj" / "schema_config.json").read_text(encoding="utf-8"),
     "err_deep_search": lambda t, w: (
         "core/auth.py" in t and "services/signing.py" in t and "utils/codec.py" in t
+    ),
+    "err_security_review": lambda t, w: (
+        "VULNS_FOUND=" in t and
+        any(str(n) in t.split("VULNS_FOUND=")[-1][:3] for n in range(3, 7))
+    ),
+    "err_logic_proof": lambda t, w: (
+        "SOLUTION=" in t and
+        all(x in t for x in ["Alice:2", "Bob:3", "Carol:4", "Dave:1", "Eve:5"])
+    ),
+    "err_multi_tool_chain": lambda t, w: (
+        "CHAIN_OK=102" in t and
+        (w / "proj" / "result.txt").exists() and
+        "PROCESSED:102" in (w / "proj" / "result.txt").read_text()
+    ),
+    "err_ambiguous_refactor": lambda t, w: (
+        "REFACTORED=OK" in t and
+        (w / "proj" / "legacy.py").exists() and
+        "n*(n+1)" in (w / "proj" / "legacy.py").read_text().replace(" ", "")
     ),
 }
 
