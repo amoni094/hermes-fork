@@ -120,9 +120,35 @@ MATH_RE = re.compile(
     r'combinatoric|permutation)\b',
     re.IGNORECASE,
 )
+# Patterns that look like math but are subject-area references, not computation requests
+MATH_FP_RE = re.compile(
+    r"\bmath(?:/cs|\s+corpus|\s+book|\s+research|\s+and\s+cs)\b"
+    r"|\b(?:change|alter|shift)\s+the\s+equation\b",  # idiom
+    re.IGNORECASE,
+)
 TOOL_SCHEMA_RE = re.compile(
     r'\b(json schema|tool call|function call|structured output|patch tool|'
     r'write_file|exact format|strict format)\b',
+    re.IGNORECASE,
+)
+
+# Verbs that start imperative task queries — these should NOT be routed fast
+# even if the query is short and has no question mark.
+IMPERATIVE_TASK_VERBS: frozenset[str] = frozenset({
+    "fix", "wire", "build", "implement", "reconcile", "audit", "refactor",
+    "design", "analyse", "analyze", "consider", "review", "write", "create",
+    "update", "migrate", "deploy", "configure", "debug", "investigate",
+    "optimise", "optimize", "benchmark", "profile", "secure",
+    "activate", "integrate", "convert", "extract", "verify",
+})
+
+_ELITE_AUDIT_NEEDLES = ('adversarial pass', 'wiring audit', 'recursive adversarial')
+_ELITE_AUDIT_RE = re.compile(
+    r'\b(?:' + '|'.join(re.escape(n) for n in _ELITE_AUDIT_NEEDLES) + r')\b',
+    re.IGNORECASE,
+)
+PAST_TENSE_STATUS_RE = re.compile(
+    r'^(?:did\s+(?:you|it|that|they|we)|have\s+you|has\s+it|was\s+it|were\s+(?:they|we|you)|is\s+it\s+(?:done|finished|complete))\b',
     re.IGNORECASE,
 )
 
@@ -235,6 +261,8 @@ def classify(payload: dict | None = None, **kwargs) -> dict:
         return {"tier": "elite", "reason": "security_query", "confidence": 0.90}
     if query and any(p in qlow for p in ELITE_ARCH_NEEDLES):
         return {"tier": "elite", "reason": "architecture_query", "confidence": 0.85}
+    if query and _ELITE_AUDIT_RE.search(query) and not PAST_TENSE_STATUS_RE.search(query):
+        return {"tier": "elite", "reason": "adversarial_audit_query", "confidence": 0.95}
 
     # reason: remaining adversarial tags/names (elite already excluded 'adversarial')
     if tags_l & ADVERSARIAL_TAGS:
@@ -265,7 +293,7 @@ def classify(payload: dict | None = None, **kwargs) -> dict:
         return {"tier": "tooluse", "reason": "tooluse_skill", "confidence": 0.85}
 
     # math (before remaining reason checks; adversarial already excluded)
-    if query and MATH_RE.search(query):
+    if query and MATH_RE.search(query) and not MATH_FP_RE.search(query):
         return {"tier": "math", "reason": "math_query", "confidence": 0.85}
     if tags_l & MATH_TAGS:
         return {"tier": "math", "reason": "math_skill", "confidence": 0.90}
@@ -291,7 +319,12 @@ def classify(payload: dict | None = None, **kwargs) -> dict:
         and not CODEISH_RE.search(query)
         and turn_index == 0
     ):
-        return {"tier": "fast", "reason": "short_simple_query", "confidence": 0.70}
+        # Don't route fast if query starts with an imperative task verb,
+        # or if a math-looking phrase was a subject-area false positive.
+        first3_words = {w.lower().rstrip('.,!?') for w in words[:3]}
+        if not (IMPERATIVE_TASK_VERBS & first3_words) and not MATH_FP_RE.search(query):
+            return {"tier": "fast", "reason": "short_simple_query", "confidence": 0.70}
+        # else fall through to default
 
     return {"tier": "reason", "reason": "default_safe", "confidence": 0.60}
 
@@ -552,6 +585,30 @@ def self_test() -> int:
     d = classify({"query": "ok", "skill_name": "github-pr-review"})
     _check(d["tier"] == "elite" and d["reason"] == "critical_skill_name",
            "github-pr-review skill_name -> elite (not reason)", failures)
+
+    # FIX 1: imperative verb blocks short_simple_query
+    d = classify({'query': 'fix all gaps and then do a recursive adversarial pass and wiring audit'})
+    _check(d['tier'] == 'elite', 'imperative fix + adversarial pass -> elite', failures)  # FIX 1 + FIX 3
+
+    d = classify({'query': 'wire relay_compaction and activate the HHR branch'})
+    _check(d['tier'] == 'reason', 'wire imperative -> reason not fast', failures)  # FIX 1
+
+    d = classify({'query': 'build both the orchestrator layer and the routing layer'})
+    _check(d['tier'] == 'reason', 'build imperative -> reason not fast', failures)  # FIX 1
+
+    # FIX 2: math subject-area reference
+    d = classify({'query': 'in parallel, recursively survey the math/cs corpus for improvements'})
+    _check(d['tier'] != 'math', 'math/cs corpus is not a math task', failures)  # FIX 2
+
+    d = classify({'query': 'does that change the equation for investing here?'})
+    _check(d['tier'] != 'math', 'change the equation idiom is not math', failures)  # FIX 2
+
+    # FIX 3: audit needles
+    d = classify({'query': 'do a recursive adversarial pass and wiring audit'})
+    _check(d['tier'] == 'elite', 'adversarial pass + wiring audit -> elite', failures)  # FIX 3
+
+    d = classify({'query': 'did you do a recursive adversarial pass'})
+    _check(d['tier'] != 'elite', 'past-tense status check not elite', failures)  # FIX 3 guard
 
     if failures:
         print("SELF-TEST FAIL: " + "; ".join(failures), file=sys.stderr)
