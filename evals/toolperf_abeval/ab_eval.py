@@ -146,10 +146,18 @@ SUCCESS = {
 
 def _abeval_worker(pythonpath: str, hermes_home: str, relay_toml: str,
                    work_str: str, query: str, model: str, session_id: str,
-                   result_q):
+                   result_q, *, api_key: str | None = None):
     """Run one ab_eval task in a fresh process with relay ATOF wired."""
     import os
     import sys
+    # Inject the API key into the spawned process environment so AIAgent can
+    # authenticate.  The spawn context doesn't inherit the parent's env changes,
+    # so we set it here explicitly.
+    provider, _, _ = model.partition("/")
+    env_map = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
+    env_var = env_map.get(provider, f"{provider.upper()}_API_KEY")
+    if api_key and not os.environ.get(env_var):
+        os.environ[env_var] = api_key
 
     # Arm isolation: prepend this arm's pythonpath (spawn starts a clean interp).
     for p in reversed(pythonpath.split(os.pathsep)):
@@ -228,6 +236,49 @@ def _abeval_worker(pythonpath: str, hermes_home: str, relay_toml: str,
             pass
 
 
+def _read_provider_key_from_config(provider: str) -> str | None:
+    """Read the API key for a provider from the active Hermes .env / config (best-effort)."""
+    env_map = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY",
+               "deepseek": "DEEPSEEK_API_KEY", "mistral": "MISTRAL_API_KEY"}
+    env_var = env_map.get(provider, f"{provider.upper()}_API_KEY")
+    # Env var takes priority (CI / explicit override)
+    if val := os.environ.get(env_var):
+        return val
+    # Fall back to the hermes profile .env file (secrets stored there via store_secret).
+    # Note: HOME here is ABEVAL_HOME (scratch dir), not the real hermes home —
+    # read from the real hermes home's .env instead.
+    try:
+        import os as _os
+        real_hermes_home = Path(_os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+        env_file = real_hermes_home / ".env"
+        if not env_file.exists():
+            # Profiles subdirectory .env
+            profile = _os.environ.get("HERMES_PROFILE", "")
+            if profile:
+                env_file = real_hermes_home / "profiles" / profile / ".env"
+        if env_file.exists():
+            for line in env_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+                line = line.strip()
+                if line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                if k.strip() == env_var and v.strip():
+                    return v.strip()
+    except Exception:
+        pass
+    # Last resort: hermes config.yaml (rarely has plaintext keys)
+    try:
+        repo_root = str(Path(__file__).parent.parent.parent)
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+        from hermes_cli.config import read_raw_config_readonly
+        cfg: dict = read_raw_config_readonly() or {}
+        prov_cfg = cfg.get("providers", {}).get(provider, {})
+        return prov_cfg.get("api_key") or None
+    except Exception:
+        return None
+
+
 def run(arm: str, model: str, reps: int, pythonpath: str, only=None):
     resdir = ROOT / "results" / model.replace("/", "_") / arm
     resdir.mkdir(parents=True, exist_ok=True)
@@ -275,12 +326,15 @@ mode = "overwrite"
             )
             q = task.replace("{WORK}", str(work))
             session_id = f"abeval-{arm}-{run_id}"
+            provider, _, _ = model.partition("/")
+            api_key = _read_provider_key_from_config(provider)
             ctx = multiprocessing.get_context("spawn")
             result_q = ctx.Queue()
             proc = ctx.Process(
                 target=_abeval_worker,
                 args=(pythonpath, str(HOME), str(relay_config), str(work),
                       q, model, session_id, result_q),
+                kwargs={"api_key": api_key},
             )
             t0 = time.time()
             proc.start()
