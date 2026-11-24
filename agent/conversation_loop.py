@@ -1803,20 +1803,76 @@ def _user_message_text(user_message: Any) -> str:
     return str(user_message or "")
 
 
-def _maybe_apply_session_routing(agent, user_message: Any, conversation_history) -> None:
-    """First-turn smart model routing. Fail-open: a miss leaves the current model."""
-    if conversation_history:
-        return
+def _routing_turn_index(conversation_history) -> int:
+    """0-based index of the current user turn (history does not include it yet)."""
+    if not conversation_history:
+        return 0
+    n = 0
     try:
-        from agent.model_router import route as _route_model
+        for m in conversation_history:
+            role = m.get("role") if isinstance(m, dict) else getattr(m, "role", None)
+            if role == "user":
+                n += 1
+    except Exception:
+        return 0
+    return n
+
+
+def _clear_routing_tier_on_error(agent, result: Any) -> None:
+    """After an error turn, do not inherit that tier on the next classify()."""
+    try:
+        if not isinstance(result, dict):
+            return
+        if result.get("error") or result.get("completed") is False:
+            agent._last_routing_tier = None
+            agent._last_turn_routing_error = True
+    except Exception:
+        pass
+
+
+def _maybe_apply_session_routing(agent, user_message: Any, conversation_history) -> None:
+    """First-turn (or per-turn if configured) smart model routing. Fail-open."""
+    try:
+        from agent.model_router import applies_this_turn, route as _route_model
+        user_cfg = getattr(agent, "user_config", None)
+        # Production agents often omit user_config; tests set it (even {}) so stay hermetic.
+        if user_cfg is None:
+            try:
+                from hermes_cli.config import load_config
+                user_cfg = load_config() or {}
+            except Exception:
+                user_cfg = None
+        cfg_for_route = user_cfg if isinstance(user_cfg, dict) and "smart_model_routing" in user_cfg else None
+        if not applies_this_turn(conversation_history, user_cfg if isinstance(user_cfg, dict) else None):
+            return
+        turn_index = _routing_turn_index(conversation_history)
+        if turn_index <= 0 or getattr(agent, "_last_turn_routing_error", False):
+            prior_tier = None
+        else:
+            prior_tier = getattr(agent, "_last_routing_tier", None)
+        classified: dict[str, Any] = {}
+
+        def _persist_tier(tier: str) -> None:
+            classified["tier"] = tier
+
         decision = _route_model(
             _user_message_text(user_message),
             current_model=getattr(agent, "model", "") or "",
             current_provider=getattr(agent, "provider", "") or "",
+            config=cfg_for_route,
+            turn_index=turn_index,
+            prior_tier=prior_tier,
+            persist_tier=_persist_tier,
         )
     except Exception:
         logger.debug("smart_model_routing: route() failed; staying put", exc_info=True)
         return
+    if classified.get("tier"):
+        try:
+            agent._last_routing_tier = classified["tier"]
+            agent._last_turn_routing_error = False
+        except Exception:
+            pass
     if decision is None:
         return
     try:
@@ -1832,6 +1888,11 @@ def _maybe_apply_session_routing(agent, user_message: Any, conversation_history)
             "smart_model_routing: switch to %s failed; staying on %s",
             decision.model, getattr(agent, "model", ""), exc_info=True,
         )
+        try:
+            agent._last_routing_tier = None
+            agent._last_turn_routing_error = True
+        except Exception:
+            pass
         return
     if not getattr(agent, "quiet_mode", False):
         try:
@@ -1907,6 +1968,7 @@ def run_conversation(
     if isinstance(result, dict):
         result["user_intervened"] = bool(getattr(agent, "_turn_user_intervened", False))
     _close_durable_failed_turn(agent, result)
+    _clear_routing_tier_on_error(agent, result)
     return result
 
 

@@ -116,6 +116,9 @@ class _FakeAgent:
         self.provider = "openai"
         self.quiet_mode = True
         self.switched = None
+        self.user_config = {}
+        self._last_routing_tier = None
+        self._last_turn_routing_error = False
 
     def switch_model(self, **kwargs):
         self.switched = kwargs
@@ -218,5 +221,160 @@ def test_defaults_off_with_classifier_slot():
     from hermes_cli.config_defaults import DEFAULT_CONFIG
     sm = DEFAULT_CONFIG["smart_model_routing"]
     assert sm["enabled"] is False
+    assert sm["classifier"] == "llm"
+    assert sm["per_turn"] is False
     assert set(sm["tiers"]) == {"light", "standard", "heavy"}
     assert DEFAULT_CONFIG["auxiliary"]["routing_classifier"]["timeout"] == 15
+
+
+def test_applies_this_turn():
+    assert model_router.applies_this_turn(None) is True
+    assert model_router.applies_this_turn([]) is True
+    assert model_router.applies_this_turn([{"role": "user"}]) is False
+    assert model_router.applies_this_turn(
+        [{"role": "user"}], {"smart_model_routing": {"per_turn": True}}
+    ) is True
+    assert model_router.applies_this_turn(
+        [{"role": "user"}], {"smart_model_routing": {"classifier": "rules"}}
+    ) is True
+    assert model_router.applies_this_turn(
+        [{"role": "user"}], {"smart_model_routing": {"classifier": "llm"}}
+    ) is False
+
+
+def test_rules_classifier_mode(monkeypatch):
+    monkeypatch.setattr(model_router, "_classify_rules", lambda text, *a, **k: "fast")
+    assert model_router.classify_complexity("restart vpn", _cfg(classifier="rules")) == "fast"
+
+
+def test_llm_mode_skips_rules(monkeypatch):
+    called = []
+    monkeypatch.setattr(model_router, "_classify_rules", lambda text, *a, **k: called.append(text) or "fast")
+    import agent.auxiliary_client as aux
+    monkeypatch.setattr(aux, "get_text_auxiliary_client", lambda *a, **k: (None, None))
+    assert model_router.classify_complexity("do something", _cfg()) is None
+    assert called == []
+
+
+def test_low_confidence_rules_escalates_to_reason(monkeypatch):
+    class _Mod:
+        def classify(self, payload):
+            return {"tier": "fast", "confidence": 0.4, "reason": "x"}
+    monkeypatch.setattr(model_router, "_load_rules_classifier", lambda: _Mod())
+    assert model_router._classify_rules("x") == "reason"
+
+
+def test_fast_falls_back_to_light_target():
+    assert model_router._tier_target("fast", _cfg()) == ("gpt-4o-mini", "")
+
+
+def test_session_routing_per_turn_fires_on_history(monkeypatch):
+    from agent import conversation_loop
+    agent = _FakeAgent()
+    agent.user_config = {"smart_model_routing": {"per_turn": True}}
+    monkeypatch.setattr(
+        model_router, "route",
+        lambda *a, **k: RoutingDecision(
+            tier="light", model="gpt-4o-mini", provider="openai",
+            api_key="sk", base_url="https://api.openai.com/v1", api_mode="",
+        ),
+    )
+    conversation_loop._maybe_apply_session_routing(
+        agent, "hi", [{"role": "user", "content": "x"}]
+    )
+    assert agent.model == "gpt-4o-mini"
+
+
+def test_classify_rules_passes_turn_index_and_prior_tier(monkeypatch):
+    seen = {}
+
+    class _Mod:
+        def classify(self, payload):
+            seen.update(payload)
+            return {"tier": "fast", "confidence": 0.9, "reason": "x"}
+
+    monkeypatch.setattr(model_router, "_load_rules_classifier", lambda: _Mod())
+    assert model_router._classify_rules("ok", turn_index=2, prior_tier="fast") == "fast"
+    assert seen["turn_index"] == 2
+    assert seen["prior_tier"] == "fast"
+
+
+def test_classify_rules_first_turn_drops_prior_tier(monkeypatch):
+    seen = {}
+
+    class _Mod:
+        def classify(self, payload):
+            seen.update(payload)
+            return {"tier": "reason", "confidence": 0.9, "reason": "x"}
+
+    monkeypatch.setattr(model_router, "_load_rules_classifier", lambda: _Mod())
+    assert model_router._classify_rules("ok", turn_index=0, prior_tier="fast") == "reason"
+    assert seen["turn_index"] == 0
+    assert seen["prior_tier"] is None
+
+
+def test_session_routing_passes_turn_index_and_prior_tier(monkeypatch):
+    from agent import conversation_loop
+    captured = {}
+
+    def fake_route(*a, **k):
+        captured.update(k)
+
+    agent = _FakeAgent()
+    agent._last_routing_tier = "fast"
+    agent.user_config = {"smart_model_routing": {"per_turn": True}}
+    monkeypatch.setattr(model_router, "route", fake_route)
+    conversation_loop._maybe_apply_session_routing(
+        agent,
+        "what about the other one",
+        [{"role": "user", "content": "x"}, {"role": "assistant", "content": "y"}],
+    )
+    assert captured["turn_index"] == 1
+    assert captured["prior_tier"] == "fast"
+
+
+def test_session_routing_error_turn_clears_prior_tier(monkeypatch):
+    from agent import conversation_loop
+    captured = {}
+
+    def fake_route(*a, **k):
+        captured.update(k)
+
+    agent = _FakeAgent()
+    agent._last_routing_tier = "fast"
+    agent._last_turn_routing_error = True
+    agent.user_config = {"smart_model_routing": {"per_turn": True}}
+    monkeypatch.setattr(model_router, "route", fake_route)
+    conversation_loop._maybe_apply_session_routing(
+        agent, "try again", [{"role": "user", "content": "x"}]
+    )
+    assert captured["turn_index"] == 1
+    assert captured["prior_tier"] is None
+
+
+def test_clear_routing_tier_on_error():
+    from agent import conversation_loop
+    agent = _FakeAgent()
+    agent._last_routing_tier = "fast"
+    conversation_loop._clear_routing_tier_on_error(agent, {"error": "boom", "completed": False})
+    assert agent._last_routing_tier is None
+    assert agent._last_turn_routing_error is True
+
+
+def test_note_escalated_tier_overwrites_prior():
+    agent = _FakeAgent()
+    agent._last_routing_tier = "fast"
+    model_router.note_escalated_tier(agent, "reason")
+    assert agent._last_routing_tier == "reason"
+
+
+def test_routing_turn_index_counts_user_messages():
+    from agent import conversation_loop
+    assert conversation_loop._routing_turn_index(None) == 0
+    assert conversation_loop._routing_turn_index([]) == 0
+    assert conversation_loop._routing_turn_index([{"role": "user", "content": "a"}]) == 1
+    assert conversation_loop._routing_turn_index([
+        {"role": "user", "content": "a"},
+        {"role": "assistant", "content": "b"},
+        {"role": "user", "content": "c"},
+    ]) == 2
