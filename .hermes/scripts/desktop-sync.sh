@@ -1,14 +1,39 @@
 #!/usr/bin/env bash
-# desktop-sync.sh — opportunistic backup of Hermes memory stack to F:/Hermes on DESKTOP-PH4F2DK
+# desktop-sync.sh — full Hermes backup to F:/Hermes on DESKTOP-PH4F2DK
 # Runs nightly at 2:30 AM. Skips silently if desktop unreachable.
 # Laptop is always source of truth. Desktop is backup only — never written back.
 #
-# What gets backed up:
-#   ~/.hermes/{skills,memory-facts,cron,scripts,config.yaml,memory/,state/,resources/}
-#   ~/.hermes/profiles/fork/{skills,memory-facts,memories,scripts,config.yaml,cron/jobs.json}
-#   ~/.hindsight/  (excl. models/ and logs)
-#   FalkorDB RDB snapshot  (Graphiti knowledge graph)
-#   Postgres dump  (Hindsight vector store, ~hindsight db)
+# What gets backed up (everything that matters, nothing reinstallable):
+#
+#   BUNDLE 1 — hermes-home (~/.hermes default profile):
+#     config.yaml, memories/, plugins/, scripts/, hermes-scripts/, skills/,
+#     skills-security/, skills-quarantine/, memory-facts/, cron/, state/,
+#     state-snapshots/, resources/, omni/, kanban/, veto/, reports/,
+#     session-exports/, agent-hooks/, hook_outputs/, telemetry/, mcp/,
+#     pastes/, checkpoints/, pending/, research/
+#
+#   BUNDLE 2 — hermes-fork profile (~/.hermes/profiles/fork/):
+#     All subdirs EXCEPT cache/, logs/, terminal-sessions/, audio_cache/,
+#     image_cache/, images/, browser_screenshots/ (ephemeral/large)
+#
+#   BUNDLE 3 — ~/.hindsight/ (excl. models/ — HuggingFace weights, reinstallable)
+#
+#   BUNDLE 4 — FalkorDB RDB snapshot (Graphiti knowledge graph)
+#
+#   BUNDLE 5 — Postgres dump (Hindsight vector store)
+#
+# NOT backed up (reinstallable or already in git):
+#   .hermes/tools/          — Python runtimes (3.1G, uv-managed, reinstallable)
+#   .hermes/hermes-agent/   — upstream source repo (8.2G, in git)
+#   .hermes/hermes-fork/    — fork source repo (2.5G, in git + pushed)
+#   .hermes/installs/       — package cache (4.6G, reinstallable)
+#   .hermes/backups/        — existing local backups (redundant here)
+#   .hermes/integrations.disabled/ — disabled, recoverable
+#   .hermes/cache/          — ephemeral cache
+#   .hermes/bin/            — hermes executable (reinstallable via uv)
+#   .hermes/lsp/            — language server binaries (reinstallable)
+#   fork/cache/, fork/logs/, fork/lsp/, fork/bin/, fork/lib/  — ephemeral/reinstallable
+#   fork/state-snapshots/   — 263M compaction snapshots (recoverable, not critical)
 #
 # Uses tar+scp — Windows OpenSSH has no rsync daemon.
 
@@ -50,7 +75,7 @@ if [[ -z "$DESKTOP_HOST" ]]; then
     log "SKIP: desktop not reachable (tried Tailscale $DESKTOP_HOST_TS and LAN $DESKTOP_HOST_LAN)"
     exit 0
 fi
-log "Desktop reachable — starting sync to $DESKTOP_BASE"
+log "Desktop reachable at $DESKTOP_HOST — starting full sync to $DESKTOP_BASE"
 
 # Helper: rotate old backups on desktop (keep last N by name pattern)
 rotate_desktop() {
@@ -60,68 +85,105 @@ rotate_desktop() {
         2>/dev/null || true
 }
 
-# --- 2. Hermes config/memory/skills (targeted — skip venv/cache/backups) ---
-log "Syncing Hermes config+skills+memory ..."
+# Helper: scp + rotate, sets ERRORS on failure
+ship() {
+    local archive="$1" dest_dir="$2" pattern="$3" label="$4" keep="${5:-3}"
+    if [[ ! -s "$archive" ]]; then
+        log "ERROR: $label archive empty or missing"
+        ERRORS=$((ERRORS+1))
+        return
+    fi
+    local size
+    size=$(du -sh "$archive" | cut -f1)
+    local fname
+    fname=$(basename "$archive")
+    scp $SSH_OPTS "$archive" "${DESKTOP_HOST}:${dest_dir}/${fname}" 2>&1 | tee -a "$LOG" \
+        && rotate_desktop "${dest_dir//\//\\}" "$pattern" "$keep" \
+        && log "$label synced (${size})" \
+        || { log "ERROR: $label scp failed"; ERRORS=$((ERRORS+1)); }
+}
+
+# --- 2. BUNDLE 1: Hermes default profile (everything that matters) ---
+log "Bundle 1: Hermes default profile ..."
 HERMES_ARCHIVE="$TMPDIR_SYNC/hermes-${DATE}.tar.gz"
 
-# Only back up what matters — total ~200MB not 15GB
 tar -czf "$HERMES_ARCHIVE" \
     --exclude='*.pyc' \
     --exclude='__pycache__' \
     --exclude='*.sock' \
+    --exclude='.hermes/sessions' \
+    --exclude='.hermes/sessions.bak.*' \
+    --exclude='.hermes/backup-broken' \
+    --exclude='.hermes/integrations' \
+    --exclude='.hermes/integrations.disabled' \
+    --exclude='.hermes/backups' \
+    --exclude='.hermes/cache' \
+    --exclude='.hermes/tools' \
+    --exclude='.hermes/hermes-agent' \
+    --exclude='.hermes/hermes-fork' \
+    --exclude='.hermes/installs' \
+    --exclude='.hermes/bin' \
+    --exclude='.hermes/lsp' \
+    --exclude='.hermes/profiles' \
+    --exclude='.hermes/logs' \
     -C "$HOME" \
     .hermes/config.yaml \
+    .hermes/memories/ \
+    .hermes/plugins/ \
     .hermes/scripts/ \
+    .hermes/hermes-scripts/ \
     .hermes/skills/ \
+    .hermes/skills-security/ \
+    .hermes/skills-quarantine/ \
     .hermes/memory-facts/ \
     .hermes/cron/ \
     .hermes/state/ \
+    .hermes/state-snapshots/ \
     .hermes/resources/ \
-    .hermes/skills-security/ \
-    2>/dev/null
-# tar exits non-zero on harmless warnings (sockets) — only fail if archive is empty
-[[ -s "$HERMES_ARCHIVE" ]] || { log "ERROR: hermes tar produced empty archive"; ERRORS=$((ERRORS+1)); }
+    .hermes/omni/ \
+    .hermes/kanban/ \
+    .hermes/veto/ \
+    .hermes/reports/ \
+    .hermes/session-exports/ \
+    .hermes/agent-hooks/ \
+    .hermes/hook_outputs/ \
+    .hermes/telemetry/ \
+    .hermes/mcp/ \
+    .hermes/pastes/ \
+    .hermes/checkpoints/ \
+    .hermes/pending/ \
+    .hermes/research/ \
+    2>/dev/null || true
 
-if [[ -f "$HERMES_ARCHIVE" ]]; then
-    SIZE=$(du -sh "$HERMES_ARCHIVE" | cut -f1)
-    scp $SSH_OPTS "$HERMES_ARCHIVE" "${DESKTOP_HOST}:${DESKTOP_BASE}/hermes-home/hermes-${DATE}.tar.gz" 2>&1 | tee -a "$LOG" \
-        && rotate_desktop "F:\\Hermes\\hermes-home" "hermes-*.tar.gz" 3 \
-        && log "Hermes synced (${SIZE})" \
-        || { log "ERROR: hermes scp failed"; ERRORS=$((ERRORS+1)); }
-fi
+ship "$HERMES_ARCHIVE" "${DESKTOP_BASE}/hermes-home" "hermes-*.tar.gz" "Bundle 1 (hermes default)" 3
 
-# --- 2b. Hermes fork profile (skills, memory, cron config — no output cache) ---
-log "Syncing Hermes fork profile ..."
+# --- 3. BUNDLE 2: Hermes fork profile ---
+log "Bundle 2: Hermes fork profile ..."
 FORK_ARCHIVE="$TMPDIR_SYNC/hermes-fork-${DATE}.tar.gz"
 
 tar -czf "$FORK_ARCHIVE" \
     --exclude='*.pyc' \
     --exclude='__pycache__' \
     --exclude='*.sock' \
-    --exclude='.hermes/profiles/fork/cron/output' \
-    --exclude='.hermes/profiles/fork/logs' \
     --exclude='.hermes/profiles/fork/cache' \
-    --exclude='.hermes/profiles/fork/sessions' \
+    --exclude='.hermes/profiles/fork/logs' \
     --exclude='.hermes/profiles/fork/terminal-sessions' \
     --exclude='.hermes/profiles/fork/audio_cache' \
     --exclude='.hermes/profiles/fork/image_cache' \
     --exclude='.hermes/profiles/fork/images' \
     --exclude='.hermes/profiles/fork/browser_screenshots' \
+    --exclude='.hermes/profiles/fork/lsp' \
+    --exclude='.hermes/profiles/fork/bin' \
+    --exclude='.hermes/profiles/fork/lib' \
+    --exclude='.hermes/profiles/fork/state-snapshots' \
     -C "$HOME" \
     .hermes/profiles/fork/ \
-    2>/dev/null
-[[ -s "$FORK_ARCHIVE" ]] || { log "ERROR: fork tar produced empty archive"; ERRORS=$((ERRORS+1)); }
+    2>/dev/null || true
 
-if [[ -f "$FORK_ARCHIVE" ]]; then
-    SIZE=$(du -sh "$FORK_ARCHIVE" | cut -f1)
-    scp $SSH_OPTS "$FORK_ARCHIVE" "${DESKTOP_HOST}:${DESKTOP_BASE}/hermes-fork/hermes-fork-${DATE}.tar.gz" 2>&1 | tee -a "$LOG" \
-        && rotate_desktop "F:\\Hermes\\hermes-fork" "hermes-fork-*.tar.gz" 3 \
-        && log "Hermes fork profile synced (${SIZE})" \
-        || { log "ERROR: fork scp failed"; ERRORS=$((ERRORS+1)); }
-fi
+ship "$FORK_ARCHIVE" "${DESKTOP_BASE}/hermes-fork" "hermes-fork-*.tar.gz" "Bundle 2 (fork profile)" 3
 
-# --- 3. ~/.hindsight (excl. models — they're 500MB HuggingFace weights, reinstallable) ---
-log "Syncing ~/.hindsight ..."
+# --- 4. BUNDLE 3: ~/.hindsight (excl. models — HuggingFace weights, reinstallable) ---
+log "Bundle 3: ~/.hindsight ..."
 HINDSIGHT_ARCHIVE="$TMPDIR_SYNC/hindsight-${DATE}.tar.gz"
 
 tar -czf "$HINDSIGHT_ARCHIVE" \
@@ -129,60 +191,46 @@ tar -czf "$HINDSIGHT_ARCHIVE" \
     --exclude='*.log' \
     -C "$HOME" \
     .hindsight/ \
-    2>/dev/null || { log "ERROR: hindsight tar failed"; ERRORS=$((ERRORS+1)); }
+    2>/dev/null || true
 
-if [[ -f "$HINDSIGHT_ARCHIVE" ]]; then
-    SIZE=$(du -sh "$HINDSIGHT_ARCHIVE" | cut -f1)
-    scp $SSH_OPTS "$HINDSIGHT_ARCHIVE" "${DESKTOP_HOST}:${DESKTOP_BASE}/hindsight/hindsight-${DATE}.tar.gz" 2>&1 | tee -a "$LOG" \
-        && rotate_desktop "F:\\Hermes\\hindsight" "hindsight-*.tar.gz" 3 \
-        && log "Hindsight synced (${SIZE})" \
-        || { log "ERROR: hindsight scp failed"; ERRORS=$((ERRORS+1)); }
-fi
+ship "$HINDSIGHT_ARCHIVE" "${DESKTOP_BASE}/hindsight" "hindsight-*.tar.gz" "Bundle 3 (hindsight)" 3
 
-# --- 4. FalkorDB RDB snapshot ---
-log "Syncing FalkorDB ..."
+# --- 5. BUNDLE 4: FalkorDB RDB snapshot ---
+log "Bundle 4: FalkorDB ..."
 FALKORDB_VOL="$HOME/.local/share/containers/storage/volumes/falkordb_data/_data"
 
 if [[ -f "$FALKORDB_VOL/dump.rdb" ]]; then
-    # Trigger fresh snapshot
     podman exec falkordb redis-cli BGSAVE 2>/dev/null | grep -q "Background saving started" && sleep 5 || sleep 2
     RDB_COPY="$TMPDIR_SYNC/falkordb-${DATE}.rdb"
     cp "$FALKORDB_VOL/dump.rdb" "$RDB_COPY"
-    SIZE=$(du -sh "$RDB_COPY" | cut -f1)
-    scp $SSH_OPTS "$RDB_COPY" "${DESKTOP_HOST}:${DESKTOP_BASE}/falkordb/falkordb-${DATE}.rdb" 2>&1 | tee -a "$LOG" \
-        && rotate_desktop "F:\\Hermes\\falkordb" "falkordb-*.rdb" 3 \
-        && log "FalkorDB synced (${SIZE})" \
-        || { log "ERROR: FalkorDB scp failed"; ERRORS=$((ERRORS+1)); }
+    ship "$RDB_COPY" "${DESKTOP_BASE}/falkordb" "falkordb-*.rdb" "Bundle 4 (FalkorDB)" 3
 else
     log "WARN: FalkorDB dump.rdb not found — is falkordb container running?"
 fi
 
-# --- 5. Postgres dump (hindsight db, port 5432) ---
-log "Syncing Postgres ..."
+# --- 6. BUNDLE 5: Postgres dump (hindsight db) ---
+log "Bundle 5: Postgres ..."
 PG_BIN="$HOME/.pg0/installation/18.1.0/bin"
 PG_DUMP="$TMPDIR_SYNC/hindsight-pg-${DATE}.sql.gz"
 
 if "$PG_BIN/pg_isready" -h localhost -p 5432 -U hindsight &>/dev/null 2>&1; then
     PGPASSFILE="$HOME/.pgpass" "$PG_BIN/pg_dump" \
         -h localhost -p 5432 -U hindsight hindsight 2>/dev/null \
-        | gzip > "$PG_DUMP" && {
-        SIZE=$(du -sh "$PG_DUMP" | cut -f1)
-        scp $SSH_OPTS "$PG_DUMP" "${DESKTOP_HOST}:${DESKTOP_BASE}/postgres/hindsight-pg-${DATE}.sql.gz" 2>&1 | tee -a "$LOG" \
-            && rotate_desktop "F:\\Hermes\\postgres" "hindsight-pg-*.sql.gz" 3 \
-            && log "Postgres synced (${SIZE})" \
-            || { log "ERROR: Postgres scp failed"; ERRORS=$((ERRORS+1)); }
-    } || { log "ERROR: pg_dump failed"; ERRORS=$((ERRORS+1)); }
+        | gzip > "$PG_DUMP" \
+        && ship "$PG_DUMP" "${DESKTOP_BASE}/postgres" "hindsight-pg-*.sql.gz" "Bundle 5 (Postgres)" 3 \
+        || { log "ERROR: pg_dump failed"; ERRORS=$((ERRORS+1)); }
 else
     log "WARN: Postgres not ready at :5432 — skipping"
 fi
 
-# --- 6. Manifest ---
+# --- 7. Manifest ---
 cat > "$TMPDIR_SYNC/last-sync.json" << EOF
 {
   "timestamp": "${STAMP}",
   "date": "${DATE}",
   "source_host": "$(hostname)",
   "destination": "${DESKTOP_BASE}",
+  "bundles": ["hermes-home", "hermes-fork", "hindsight", "falkordb", "postgres"],
   "errors": ${ERRORS}
 }
 EOF
