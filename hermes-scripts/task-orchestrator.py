@@ -120,27 +120,50 @@ def _parse_model_spec(spec: str, default_provider: str = "anthropic") -> dict:
 
 
 # Classify + verify are stdlib. Logged, not used to classify.
-# Cheapest model that scored 100% on mechanical toolperf tasks.
-_ORCH_DEFAULT = {"provider": "deepseek", "model": "deepseek-flash"}
+_ORCH_DEFAULT = {"provider": "openai", "model": "gpt-5.5"}
 
 
 def _parse_orch_model(spec) -> dict:
     if isinstance(spec, dict):
-        prov = str(spec.get("provider") or "deepseek").strip() or "deepseek"
-        model = str(spec.get("model") or "deepseek-flash").strip() or "deepseek-flash"
+        prov = str(spec.get("provider") or "openai").strip() or "openai"
+        model = str(spec.get("model") or "gpt-5.5").strip() or "gpt-5.5"
         return {"provider": prov, "model": model}
     if isinstance(spec, str) and spec.strip():
-        return _parse_model_spec(spec, default_provider="deepseek")
+        return _parse_model_spec(spec, default_provider="openai")
     return dict(_ORCH_DEFAULT)
 
 
-ORCHESTRATOR_MODEL = _parse_orch_model(
-    os.environ.get("HERMES_ORCHESTRATOR_MODEL") or _ORCH_DEFAULT
-)
+# Orchestrator model is tier-dependent:
+# - reason tasks: gpt-5.5 orchestrates (can handle ambiguous decomposition and
+#   verification judgment; flash can't reliably verify a reasoning task output)
+# - elite tasks: sonnet-5 orchestrates elite workers (capability match;
+#   flash verifying a security audit is a mismatch)
+# - low-confidence fallback (confidence < 0.7): gpt-5.5 (safe default)
+# - no orchestrator for fast/math/longctx/tooluse (should_orchestrate=False)
+# Note: elite WORKER = sonnet-5-5 (ceiling hedge); elite ORCHESTRATOR = sonnet-5
+# (same measured accuracy as 5-5 on elite battery, lower cost per orchestration call)
+# Switch elite orchestrator to sonnet-5-5 if sonnet-5 fails verification on future harder tasks.
+ORCHESTRATOR_TIER_MAP: dict[str, dict[str, str]] = {
+    "reason":  {"provider": "openai",    "model": "gpt-5.5"},
+    "elite":   {"provider": "anthropic", "model": "claude-sonnet-5"},
+    "default": {"provider": "openai",    "model": "gpt-5.5"},  # low-confidence fallback
+}
+
+
+def get_orchestrator_model(tier: str, confidence: float) -> dict[str, str]:
+    """Return the orchestrator model for a given worker tier and classifier confidence."""
+    try:
+        conf = float(confidence)
+    except (TypeError, ValueError):
+        conf = 0.0
+    if conf < ORCHESTRATE_CONFIDENCE_FLOOR:
+        return dict(ORCHESTRATOR_TIER_MAP["default"])
+    t = (tier or "").strip().lower()
+    return dict(ORCHESTRATOR_TIER_MAP.get(t, ORCHESTRATOR_TIER_MAP["default"]))
 
 
 def _orch_model_str(spec=None) -> str:
-    d = _parse_orch_model(spec if spec is not None else ORCHESTRATOR_MODEL)
+    d = _parse_orch_model(spec if spec is not None else ORCHESTRATOR_TIER_MAP["default"])
     return f"{d['provider']}/{d['model']}"
 
 
@@ -682,6 +705,7 @@ def orchestrate(
     classifier_extra: dict | None = None,
     accept_fn: Callable[[str, Path], bool] | None = None,
     orchestrator_model=None,
+    orchestrator_model_override: dict | None = None,
 ) -> dict:
     models = _apply_overrides(tier_models, fast_model_override, slow_model_override)
     hermes_base = _strip_profile_home(hermes_home or _hermes_base)
@@ -699,9 +723,18 @@ def orchestrate(
     model = classification["model"]
     keys = api_keys if isinstance(api_keys, dict) else {}
     worker_model = f"{provider}/{model}" if provider else str(model)
-    orch_model = _orch_model_str(orchestrator_model)
     conf = _safe_confidence(classification.get("confidence"), 0.6)
     do_orch = should_orchestrate(tier, conf)
+    override = (
+        orchestrator_model_override
+        if orchestrator_model_override is not None
+        else orchestrator_model
+    )
+    if override is not None:
+        orch_spec = override
+    else:
+        orch_spec = get_orchestrator_model(tier, conf)
+    orch_model = _orch_model_str(orch_spec)
 
     result = _invoke_worker(
         pythonpath or "",
@@ -878,16 +911,26 @@ def self_test() -> int:
            f"DEFAULT_TIER_MODELS keys {sorted(keys)}", failures)
     _check("elite" in KNOWN_TIERS, "KNOWN_TIERS includes elite", failures)
     _check(
-        _orch_model_str() == "deepseek/deepseek-flash"
-        or bool(os.environ.get("HERMES_ORCHESTRATOR_MODEL")),
-        f"ORCHESTRATOR_MODEL default {_orch_model_str()}", failures)
+        {"reason", "elite", "default"} <= set(ORCHESTRATOR_TIER_MAP.keys()),
+        "ORCHESTRATOR_TIER_MAP has reason+elite+default", failures)
     _check(
-        (
-            isinstance(ORCHESTRATOR_MODEL, dict)
-            and ORCHESTRATOR_MODEL.get("provider") == "deepseek"
-        )
-        or bool(os.environ.get("HERMES_ORCHESTRATOR_MODEL")),
-        "ORCHESTRATOR_MODEL is dict", failures)
+        get_orchestrator_model("reason", 0.9) == ORCHESTRATOR_TIER_MAP["reason"],
+        "orch model reason high-conf", failures)
+    _check(
+        get_orchestrator_model("elite", 0.9) == ORCHESTRATOR_TIER_MAP["elite"],
+        "orch model elite high-conf", failures)
+    _check(
+        get_orchestrator_model("elite", 0.9).get("model") == "claude-sonnet-5",
+        "elite orchestrator is sonnet-5 not 5-5", failures)
+    _check(
+        (DEFAULT_TIER_MODELS.get("elite") or {}).get("model") == "claude-sonnet-5-5",
+        "elite worker stays sonnet-5-5", failures)
+    _check(
+        get_orchestrator_model("fast", 0.4) == ORCHESTRATOR_TIER_MAP["default"],
+        "orch model low-conf fast -> default", failures)
+    _check(
+        get_orchestrator_model("fast", 0.95) == ORCHESTRATOR_TIER_MAP["default"],
+        "orch model high-conf fast -> default (should_orchestrate handles skip)", failures)
     _check(should_orchestrate("fast", 0.80) is False, "high-conf fast skips orch", failures)
     _check(should_orchestrate("math", 0.85) is False, "high-conf math skips orch", failures)
     _check(should_orchestrate("longctx", 0.90) is False, "high-conf longctx skips orch", failures)
