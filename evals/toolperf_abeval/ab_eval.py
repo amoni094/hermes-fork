@@ -17,6 +17,8 @@ Usage:
   python ab_eval.py run --arm fixes    --model MODEL --reps N --pythonpath DIR
   python ab_eval.py run --arm tiered   --model MODEL --reps N --pythonpath DIR
       [--fast-model FAST] [--slow-model SLOW]
+  python ab_eval.py run --arm orchestrated --model MODEL --reps N --pythonpath DIR
+      [--fast-model FAST] [--slow-model SLOW]
   python ab_eval.py report --models MODEL1,MODEL2
 
 Tiered arm: classify each task query with hermes-scripts/model-tier-classifier.py
@@ -24,6 +26,12 @@ Tiered arm: classify each task query with hermes-scripts/model-tier-classifier.p
 --model is ignored for routing (overridden by --slow-model); it still keys the
 results directory. Defaults: fast=anthropic/claude-haiku-4-5,
 slow=anthropic/claude-sonnet-4-6.
+
+Orchestrated arm: load hermes-scripts/task-orchestrator.py and call
+orchestrate() per task (5-tier classify + execute + verify-then-escalate).
+Falls back to the static tiered-arm path if the orchestrator is unavailable.
+meta.jsonl records tier, model, escalated, verification, and orchestrator
+fields. Report adds escalation counts and a 5-tier breakdown.
 
 Environment:
   ABEVAL_ROOT    working/results root   (default: ./abeval-workspace)
@@ -52,7 +60,8 @@ HOME = Path(os.environ.get("ABEVAL_HOME", str(ROOT / "home"))).resolve()
 
 DEFAULT_FAST_MODEL = "anthropic/claude-haiku-4-5"
 DEFAULT_SLOW_MODEL = "anthropic/claude-sonnet-4-6"
-ARMS = ("baseline", "fixes", "tiered")
+ARMS = ("baseline", "fixes", "tiered", "orchestrated")
+ORCH_TIERS = ("fast", "math", "longctx", "tooluse", "reason")
 
 TASKS = {
     # P: python-not-found + venv module confusion (terminal failure hints)
@@ -303,10 +312,132 @@ def _abeval_worker(pythonpath: str, hermes_home: str, relay_toml: str,
             pass
 
 
+def _orchestrated_worker(pythonpath, hermes_home, relay_toml, work_dir, query,
+                         slow_model, fast_model, session_id, api_keys, result_q,
+                         timeout=300):
+    """Orchestrated worker: loads task-orchestrator.py and delegates."""
+    import sys
+    import os
+    import importlib.util
+    from pathlib import Path
+    hermes_base = Path(hermes_home)
+    # Ensure pythonpath is on sys.path
+    for p in reversed(pythonpath.split(os.pathsep)):
+        if p and p not in sys.path:
+            sys.path.insert(0, p)
+    os.environ['HERMES_HOME'] = hermes_home
+    os.environ['HERMES_NEMO_RELAY_PLUGINS_TOML'] = relay_toml
+    os.chdir(work_dir)
+    # Set API keys
+    for env_var, key_val in (api_keys or {}).items():
+        if key_val and not os.environ.get(env_var):
+            os.environ[env_var] = key_val
+
+    def _put_error(exc):
+        result_q.put({
+            'out': str(exc), 'rc': 1, 'tier': 'error', 'model': '',
+            'tier_reason': 'exception', 'tier_confidence': 0.0,
+            'escalated': False, 'verification': 'fail', 'worker_wall_s': 0.0,
+        })
+
+    def _fallback_tiered():
+        """Static 2-tier classify + _abeval_worker when orchestrator is missing."""
+        decision = _classify_turn(query)
+        decided = fast_model if decision['tier'] == 'fast' else slow_model
+        inner = []
+
+        class _Q:
+            def put(self, item):
+                inner.append(item)
+
+        env_map = {
+            'anthropic': 'ANTHROPIC_API_KEY',
+            'openai': 'OPENAI_API_KEY',
+            'deepseek': 'DEEPSEEK_API_KEY',
+            'x-ai': 'XAI_API_KEY',
+        }
+        provider, _, _ = decided.partition('/')
+        env_var = env_map.get(provider, f'{provider.upper()}_API_KEY')
+        api_key = (api_keys or {}).get(env_var)
+        _abeval_worker(
+            pythonpath, hermes_home, relay_toml, work_dir, query, decided,
+            session_id, _Q(),
+            api_key=api_key,
+            tier_config={
+                'decided_model': decided,
+                'tier': decision['tier'],
+                'reason': decision['reason'],
+                'confidence': decision['confidence'],
+            },
+        )
+        payload = inner[0] if inner else {'out': 'fallback empty', 'rc': 1}
+        result_q.put({
+            'out': payload.get('out', ''),
+            'rc': payload.get('rc', 1),
+            'tier': payload.get('tier', decision['tier']),
+            'model': payload.get('model', decided),
+            'tier_reason': payload.get('tier_reason', decision.get('reason', '')),
+            'tier_confidence': payload.get(
+                'tier_confidence', decision.get('confidence', 0.0)),
+            'escalated': False,
+            'verification': 'skip',
+            'worker_wall_s': 0.0,
+        })
+
+    try:
+        # HERMES_HOME may be a profile dir (…/.hermes/profiles/fork).
+        orch_path = hermes_base / 'hermes-scripts' / 'task-orchestrator.py'
+        if not orch_path.is_file():
+            parent = hermes_base
+            if parent.name != '.hermes' and parent.parent.name == 'profiles':
+                parent = parent.parent.parent
+            orch_path = parent / 'hermes-scripts' / 'task-orchestrator.py'
+        mod = None
+        try:
+            if orch_path.is_file():
+                spec = importlib.util.spec_from_file_location(
+                    'task_orchestrator', orch_path)
+                if spec is not None and spec.loader is not None:
+                    cand = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(cand)
+                    mod = cand
+        except Exception:
+            mod = None
+        if mod is None or not hasattr(mod, 'orchestrate'):
+            _fallback_tiered()
+            return
+        result = mod.orchestrate(
+            query=query,
+            pythonpath=pythonpath,
+            hermes_home=hermes_home,
+            relay_toml=relay_toml,
+            work_dir=work_dir,
+            session_id=session_id,
+            api_keys=api_keys,
+            slow_model_override=slow_model,
+            fast_model_override=fast_model,
+            timeout=timeout,
+        )
+        result_q.put({
+            'out': result.get('out', ''),
+            'rc': result.get('rc', 1),
+            'tier': result.get('tier', ''),
+            'model': result.get('model', ''),
+            'tier_reason': result.get('reason', ''),
+            'tier_confidence': result.get('confidence', 0.0),
+            'escalated': result.get('escalated', False),
+            'verification': result.get('verification', 'skip'),
+            'worker_wall_s': result.get('worker_wall_s', 0.0),
+        })
+    except Exception as e:
+        _put_error(e)
+
+
 def _read_provider_key_from_config(provider: str) -> str | None:
     """Read the API key for a provider from the active Hermes .env / config (best-effort)."""
     env_map = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY",
-               "deepseek": "DEEPSEEK_API_KEY", "mistral": "MISTRAL_API_KEY"}
+               "deepseek": "DEEPSEEK_API_KEY", "mistral": "MISTRAL_API_KEY",
+               "x-ai": "XAI_API_KEY"}
     env_var = env_map.get(provider, f"{provider.upper()}_API_KEY")
     # Env var takes priority (CI / explicit override)
     if val := os.environ.get(env_var):
@@ -397,9 +528,10 @@ mode = "overwrite"
             session_id = f"abeval-{arm}-{run_id}"
             worker_model = model
             tier_config = None
+            tier_info = None
+            fast = fast_model or DEFAULT_FAST_MODEL
+            slow = slow_model or DEFAULT_SLOW_MODEL
             if arm == "tiered":
-                fast = fast_model or DEFAULT_FAST_MODEL
-                slow = slow_model or DEFAULT_SLOW_MODEL
                 cpath = classifier_path or str(
                     _hermes_scripts_dir() / "model-tier-classifier.py")
                 decision = _classify_turn(
@@ -422,19 +554,40 @@ mode = "overwrite"
                 print(f"[{arm}/{model}] {run_id} classify "
                       f"tier={decision['tier']} reason={decision['reason']} "
                       f"-> {worker_model}", flush=True)
-            provider, _, _ = worker_model.partition("/")
-            api_key = _read_provider_key_from_config(provider)
             ctx = multiprocessing.get_context("spawn")
             result_q = ctx.Queue()
-            proc = ctx.Process(
-                target=_abeval_worker,
-                args=(pythonpath, str(HOME), str(relay_config), str(work),
-                      q, worker_model, session_id, result_q),
-                kwargs={"api_key": api_key, "tier_config": tier_config},
-            )
+            if arm == "orchestrated":
+                env_key_map = {
+                    "anthropic": "ANTHROPIC_API_KEY",
+                    "deepseek": "DEEPSEEK_API_KEY",
+                    "openai": "OPENAI_API_KEY",
+                    "x-ai": "XAI_API_KEY",
+                }
+                api_keys = {
+                    env_var: _read_provider_key_from_config(prov)
+                    for prov, env_var in env_key_map.items()
+                }
+                print(f"[{arm}/{model}] {run_id} orchestrated "
+                      f"fast={fast} slow={slow}", flush=True)
+                proc = ctx.Process(
+                    target=_orchestrated_worker,
+                    args=(pythonpath, str(HOME), str(relay_config), str(work),
+                          q, slow, fast, session_id, api_keys, result_q),
+                    kwargs={"timeout": 300},
+                )
+            else:
+                provider, _, _ = worker_model.partition("/")
+                api_key = _read_provider_key_from_config(provider)
+                proc = ctx.Process(
+                    target=_abeval_worker,
+                    args=(pythonpath, str(HOME), str(relay_config), str(work),
+                          q, worker_model, session_id, result_q),
+                    kwargs={"api_key": api_key, "tier_config": tier_config},
+                )
             t0 = time.time()
             proc.start()
             proc.join(timeout=600)
+            payload = None
             if proc.is_alive():
                 proc.terminate()
                 proc.join(timeout=10)
@@ -461,14 +614,33 @@ mode = "overwrite"
                 print(f"[{arm}/{model}] {run_id} INFRA-CRASH exit={rc} "
                       f"{dt:.0f}s — not recorded, will retry on resume", flush=True)
                 continue
+            if arm == "orchestrated" and isinstance(payload, dict):
+                tier_info = {
+                    "tier": payload.get("tier"),
+                    "tier_reason": payload.get("tier_reason"),
+                    "tier_confidence": payload.get("tier_confidence"),
+                    "model": payload.get("model"),
+                    "escalated": payload.get("escalated", False),
+                    "verification": payload.get("verification", "skip"),
+                }
+            elif isinstance(tier_config, dict):
+                tier_info = {
+                    "tier": tier_config.get("tier"),
+                    "tier_reason": tier_config.get("reason"),
+                    "tier_confidence": tier_config.get("confidence"),
+                    "model": tier_config.get("decided_model"),
+                }
             rec = {"run_id": run_id, "task": name, "rep": rep, "arm": arm,
                    "model": model, "wall_s": round(dt, 1), "exit": rc,
                    "tail": "\n".join(out.splitlines()[-12:])}
-            if isinstance(tier_config, dict):
-                rec["decided_model"] = tier_config.get("decided_model")
-                rec["tier"] = tier_config.get("tier")
-                rec["tier_reason"] = tier_config.get("reason")
-                rec["tier_confidence"] = tier_config.get("confidence")
+            if arm in ("tiered", "orchestrated") and tier_info:
+                rec["tier"] = tier_info.get("tier")
+                rec["tier_reason"] = tier_info.get("tier_reason")
+                rec["tier_confidence"] = tier_info.get("tier_confidence")
+                rec["decided_model"] = tier_info.get("model") or worker_model
+            if arm == "orchestrated" and tier_info:
+                rec["escalated"] = tier_info.get("escalated", False)
+                rec["verification"] = tier_info.get("verification", "skip")
             with open(meta_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(rec) + "\n")
             decided = rec.get("decided_model") or model
@@ -518,6 +690,7 @@ def report(models):
         print(f"\n================ MODEL: {model} ================")
         table = {}
         show_tier = False
+        show_orch = False
         for arm in ARMS:
             meta_path = mdir / arm / "meta.jsonl"
             if not meta_path.exists():
@@ -532,14 +705,20 @@ def report(models):
                     ok = False
                 if m.get("tier"):
                     show_tier = True
+                if "escalated" in m or m.get("verification"):
+                    show_orch = True
                 table.setdefault(m["task"], {}).setdefault(arm, []).append(
                     {**s, "ok": ok, "wall": m["wall_s"],
                      "tier": m.get("tier") or "",
-                     "decided_model": m.get("decided_model") or ""})
-        hdr = (f"{'task':20s} | {'arm':8s} | {'n':>2s} {'ok%':>4s} {'llm':>5s} "
+                     "decided_model": m.get("decided_model") or "",
+                     "escalated": bool(m.get("escalated")),
+                     "verification": m.get("verification") or ""})
+        hdr = (f"{'task':20s} | {'arm':12s} | {'n':>2s} {'ok%':>4s} {'llm':>5s} "
                f"{'tool':>5s} {'errs':>5s} {'retr':>5s} {'kb':>5s} {'wall':>6s}")
         if show_tier:
-            hdr += f" {'tier':>6s}"
+            hdr += f" {'tier':>8s}"
+        if show_orch:
+            hdr += f" {'esc':>6s} {'verif':>8s}"
         print(hdr)
         print("-" * len(hdr))
         agg = {a: Counter() for a in ARMS}
@@ -552,17 +731,22 @@ def report(models):
                 n = len(rows)
                 mean = lambda k: sum(r.get(k, 0) for r in rows) / n
                 okp = 100 * sum(r["ok"] for r in rows) / n
-                line = (f"{task:20s} | {arm:8s} | {n:2d} {okp:3.0f}% "
+                line = (f"{task:20s} | {arm:12s} | {n:2d} {okp:3.0f}% "
                         f"{mean('llm'):5.1f} {mean('tools'):5.1f} {mean('errs'):5.1f} "
                         f"{mean('retries'):5.1f} {mean('kb'):5.0f} {mean('wall'):5.0f}s")
                 if show_tier:
                     tiers = sorted({r.get("tier") or "-" for r in rows})
-                    line += f" {','.join(tiers):>6s}"
+                    line += f" {','.join(tiers):>8s}"
+                if show_orch:
+                    esc_n = sum(1 for r in rows if r.get("escalated"))
+                    vers = sorted({r.get("verification") or "-" for r in rows})
+                    line += f" {esc_n}/{n}esc {','.join(vers):>8s}"
                 print(line)
                 for k in ("llm", "tools", "errs", "retries", "kb"):
                     agg[arm][k] += sum(r.get(k, 0) for r in rows)
                 agg[arm]["wall"] += sum(r["wall"] for r in rows)
                 agg[arm]["ok"] += sum(r["ok"] for r in rows)
+                agg[arm]["escalated"] += sum(1 for r in rows if r.get("escalated"))
                 aggn[arm] += n
         print("-" * len(hdr))
         for arm in ARMS:
@@ -570,10 +754,21 @@ def report(models):
             if not n:
                 continue
             a = agg[arm]
-            line = (f"{'TOTAL':20s} | {arm:8s} | {n:2d} {100 * a['ok'] / n:3.0f}% "
+            line = (f"{'TOTAL':20s} | {arm:12s} | {n:2d} {100 * a['ok'] / n:3.0f}% "
                     f"{a['llm'] / n:5.1f} {a['tools'] / n:5.1f} {a['errs'] / n:5.1f} "
                     f"{a['retries'] / n:5.1f} {a['kb'] / n:5.0f} {a['wall'] / n:5.0f}s")
             print(line)
+            if show_orch and arm == "orchestrated":
+                print(f"  escalated: {a['escalated']}/{n} tasks escalated")
+                tier_counts = Counter()
+                for task in TASKS:
+                    for r in table.get(task, {}).get(arm, []):
+                        t = r.get("tier") or "-"
+                        tier_counts[t] += 1
+                parts = [f"{k}={tier_counts.get(k, 0)}" for k in ORCH_TIERS]
+                extra = sorted(t for t in tier_counts if t not in ORCH_TIERS)
+                parts.extend(f"{k}={tier_counts[k]}" for k in extra)
+                print(f"  tier breakdown: {', '.join(parts)}")
 
 
 if __name__ == "__main__":
@@ -598,7 +793,7 @@ if __name__ == "__main__":
         if not arm or not pythonpath:
             print(__doc__)
             sys.exit(2)
-        if arm == "tiered":
+        if arm in ("tiered", "orchestrated"):
             # Routing uses --slow-model / --fast-model; --model only keys results.
             if not model:
                 model = slow_model or DEFAULT_SLOW_MODEL
