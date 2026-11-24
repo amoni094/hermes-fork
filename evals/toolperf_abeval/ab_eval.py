@@ -82,6 +82,35 @@ TASKS = {
     "err_inline_script": "Compute the sum of the squares of the first 4000 integers using a SINGLE inline python3 -c one-liner in the terminal (write out a long explicit expression style script inline; the codebase convention forbids creating .py files manually with an editor for throwaway math). If the inline command is refused, recover however the tooling suggests. Reply SUM=<value>.",
     # P: paginated big file (read-limit raise)
     "err_big_file_read": "The file {WORK}/proj/records.log contains exactly one line starting with 'ANOMALY:'. Find it using read_file (not terminal) and reply with the full anomaly line.",
+    # M: math formula evaluation (math tier discriminator)
+    "err_math_formula": (
+        "The file {WORK}/proj/formula.txt contains a math expression on the first line. "
+        "Evaluate it using a python3 inline one-liner terminal command (no .py files). "
+        "Reply RESULT=<integer>."
+    ),
+    # M: multi-file math synthesis (math + tool use discriminator)
+    "err_math_multifile": (
+        "Three files exist: {WORK}/proj/coeff_a.txt, {WORK}/proj/coeff_b.txt, {WORK}/proj/coeff_c.txt. "
+        "Each contains a single float. Compute a*x^2 + b*x + c where x=7 (a from coeff_a.txt, etc.). "
+        "Reply QUADRATIC=<value> (integer or float, 2 decimal places max)."
+    ),
+    # L: multi-file ctx synthesis (longctx tier discriminator)
+    "err_ctx_synthesis": (
+        "The directory {WORK}/proj/modules/ contains 10 Python files (mod_00.py to mod_09.py). "
+        "Each file defines exactly one constant like MODULE_VALUE = <int>. "
+        "Find all 10 values using read_file (not terminal), sum them, and reply TOTAL=<sum>."
+    ),
+    # T: exact patch format (tooluse tier discriminator)
+    "err_tool_format": (
+        "The file {WORK}/proj/schema_config.json must have the value of the \"api_version\" key "
+        "changed from \"v1\" to \"v2.1\". Use the patch tool with exact matching to make this change. "
+        "Then verify the file contains \"v2.1\" using read_file and reply PATCHED=OK."
+    ),
+    # L: deep recursive search (longctx + search discriminator)
+    "err_deep_search": (
+        "Find every Python file under {WORK}/proj/deep/ that imports the module 'crypto_utils'. "
+        "Search recursively. Reply with the sorted relative paths (relative to {WORK}/proj)."
+    ),
 }
 
 
@@ -146,6 +175,58 @@ def make_sandbox(work: Path):
              for i in range(6000)]
     lines[4200] = "ANOMALY: checksum drift detected in shard 7 (code X99Q)"
     (proj / "records.log").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # err_math_formula
+    (proj / "formula.txt").write_text(
+        "sum(i**3 for i in range(1, 21))\n", encoding="utf-8")
+    # err_math_multifile
+    (proj / "coeff_a.txt").write_text("3.0\n", encoding="utf-8")
+    (proj / "coeff_b.txt").write_text("5.0\n", encoding="utf-8")
+    (proj / "coeff_c.txt").write_text("2.0\n", encoding="utf-8")
+    # err_ctx_synthesis
+    modules = proj / "modules"
+    modules.mkdir()
+    module_vals = [42, 17, 93, 8, 55, 71, 29, 64, 37, 11]
+    for i, val in enumerate(module_vals):
+        noise_before = []
+        noise_after = []
+        for j in range(20):
+            if j % 2 == 0:
+                noise_before.append(f"# comment line {j}")
+                noise_after.append(f"# comment line {j + 20}")
+            else:
+                noise_before.append(f"_PADDING_{j} = {j * 3}")
+                noise_after.append(f"_PADDING_{j + 20} = {(j + 20) * 3}")
+        body = (
+            "\n".join(noise_before) + "\n"
+            f"MODULE_VALUE = {val}\n"
+            f"MODULE_NAME = 'mod_{i:02d}'\n"
+            + "\n".join(noise_after) + "\n"
+        )
+        (modules / f"mod_{i:02d}.py").write_text(body, encoding="utf-8")
+    # err_tool_format
+    (proj / "schema_config.json").write_text(
+        json.dumps({
+            "service": "auth",
+            "api_version": "v1",
+            "timeout": 30,
+            "retry": 3,
+        }) + "\n",
+        encoding="utf-8",
+    )
+    # err_deep_search
+    deep = proj / "deep"
+    (deep / "core").mkdir(parents=True)
+    (deep / "services").mkdir()
+    (deep / "utils").mkdir()
+    importing = "import crypto_utils\n# module code\n"
+    non_importing = "# no crypto\nimport os\n"
+    (deep / "core" / "auth.py").write_text(importing, encoding="utf-8")
+    (deep / "core" / "session.py").write_text(non_importing, encoding="utf-8")
+    (deep / "services" / "billing.py").write_text(non_importing, encoding="utf-8")
+    (deep / "services" / "signing.py").write_text(importing, encoding="utf-8")
+    (deep / "utils" / "helpers.py").write_text(non_importing, encoding="utf-8")
+    (deep / "utils" / "codec.py").write_text(importing, encoding="utf-8")
+    (deep / "__init__.py").write_text("", encoding="utf-8")
     return proj
 
 
@@ -162,6 +243,14 @@ SUCCESS = {
     # sum of squares of 1..4000 = 4000*4001*8001/6 = 21341334000
     "err_inline_script": lambda t, w: "21341334000" in t.replace(",", ""),
     "err_big_file_read": lambda t, w: "X99Q" in t,
+    "err_math_formula": lambda t, w: "RESULT=44100" in t or "RESULT= 44100" in t.replace(" ", ""),
+    "err_math_multifile": lambda t, w: "QUADRATIC=184" in t or "QUADRATIC=184.0" in t,
+    "err_ctx_synthesis": lambda t, w: "TOTAL=427" in t,
+    "err_tool_format": lambda t, w: "PATCHED=OK" in t and '"v2.1"' in (
+        w / "proj" / "schema_config.json").read_text(encoding="utf-8"),
+    "err_deep_search": lambda t, w: (
+        "core/auth.py" in t and "services/signing.py" in t and "utils/codec.py" in t
+    ),
 }
 
 
