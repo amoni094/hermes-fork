@@ -57,6 +57,8 @@ _RULES_TO_LEGACY = {
 _USER_FENCE = "<<<HERMES_ROUTING_REQUEST>>>"
 _rules_mod = None
 _rules_tried = False
+# Last rules-classifier payload for ATOF / persist (fail-open, overwritten each classify).
+LAST_RULES_DETAIL: dict[str, Any] = {}
 
 
 @dataclass(frozen=True)
@@ -177,6 +179,7 @@ def _classify_rules(
     turn_index: int = 0,
     prior_tier: str | None = None,
 ) -> str | None:
+    global LAST_RULES_DETAIL
     try:
         mod = _load_rules_classifier()
         if mod is None or not hasattr(mod, "classify"):
@@ -207,14 +210,33 @@ def _classify_rules(
             conf_f = float(conf) if conf is not None else 0.0
         except (TypeError, ValueError):
             conf_f = 0.0
+        orig = str(d.get("tier") or "").strip().lower()
+        if orig == "slow":
+            orig = "reason"
+        reason = str(d.get("reason") or "").strip()
+        _ESC_REASONS = frozenset({
+            "prev_error_recovery", "reason_escalation", "tool_format_error", "low_confidence",
+        })
         if conf_f < 0.65:
+            LAST_RULES_DETAIL = {
+                "tier": "reason",
+                "reason": reason or "low_confidence",
+                "confidence": conf_f,
+                "escalated": True,
+                "original_tier": orig,
+            }
             return "reason"
-        tier = str(d.get("tier") or "").strip().lower()
-        if tier == "slow":
-            tier = "reason"
-        if tier in VALID_TIERS:
-            return tier
-        return None
+        if orig not in VALID_TIERS:
+            return None
+        escalated = reason in _ESC_REASONS
+        LAST_RULES_DETAIL = {
+            "tier": orig,
+            "reason": reason,
+            "confidence": conf_f,
+            "escalated": escalated,
+            "original_tier": orig,
+        }
+        return orig
     except Exception:
         logger.debug("smart_model_routing: rules classify failed", exc_info=True)
         return None
@@ -260,6 +282,50 @@ def note_escalated_tier(agent, tier: str) -> None:
     try:
         agent._last_routing_tier = t
         agent._last_turn_routing_error = False
+        agent._last_routing_escalated = True
+    except Exception:
+        pass
+    stamp_routing_atof(
+        agent,
+        tier=t,
+        tier_reason="note_escalated_tier",
+        tier_confidence=0.95,
+        decided_model=str(getattr(agent, "model", "") or ""),
+        escalated=True,
+    )
+
+
+def stamp_routing_atof(
+    agent: Any,
+    *,
+    tier: str = "",
+    tier_reason: str = "",
+    tier_confidence: float = 0.0,
+    decided_model: str = "",
+    escalated: bool = False,
+) -> None:
+    """Attach routing fields to the live ATOF ``hermes.turn`` end event. Fail-open."""
+    try:
+        if tier:
+            agent._last_routing_tier = tier
+        agent._last_routing_reason = tier_reason
+        agent._last_routing_confidence = float(tier_confidence or 0.0)
+        agent._last_routing_model = decided_model
+        agent._last_routing_escalated = bool(escalated)
+    except Exception:
+        pass
+    try:
+        from agent.relay_runtime import current_turn
+        turn = current_turn()
+        if turn is None:
+            return
+        turn.routing_atof = {
+            "tier": str(tier or ""),
+            "tier_reason": str(tier_reason or ""),
+            "tier_confidence": float(tier_confidence or 0.0),
+            "decided_model": str(decided_model or ""),
+            "escalated": bool(escalated),
+        }
     except Exception:
         pass
 
@@ -333,6 +399,8 @@ def classify_complexity(
 
     ``smart_model_routing.classifier``: ``llm`` (default), ``rules``, or ``hybrid``.
     """
+    global LAST_RULES_DETAIL
+    LAST_RULES_DETAIL = {}
     try:
         text = (user_message if isinstance(user_message, str) else str(user_message or "")).strip()
     except Exception:

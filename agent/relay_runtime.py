@@ -924,6 +924,7 @@ class RelayTurnContext:
     _active_registered: bool = field(default=False, repr=False)
     relay_enabled: bool = True
     closed: bool = False
+    routing_atof: dict[str, Any] = field(default_factory=dict)
 
 
 _CURRENT_TURN: contextvars.ContextVar[RelayTurnContext | None] = contextvars.ContextVar(
@@ -1128,8 +1129,17 @@ class RelaySessionCoordinator:
     def _close_turn_scope(self, host: RelayRuntime, turn: RelayTurnContext, *, outcome: str) -> None:
         """Pop the turn's logical LLM children, then the turn scope itself (LIFO)."""
         self._finish_logical_calls(turn, outcome=outcome)
+        output: dict[str, Any] = {"outcome": outcome}
+        try:
+            extra = getattr(turn, "routing_atof", None)
+            if isinstance(extra, dict):
+                for key in ("tier", "tier_reason", "tier_confidence", "decided_model", "escalated"):
+                    if key in extra:
+                        output[key] = extra[key]
+        except Exception:
+            pass
         failure = host._close_scope_handle(
-            turn.lease.session, turn.handle, output={"outcome": outcome}, failure_label="turn scope close failed",
+            turn.lease.session, turn.handle, output=output, failure_label="turn scope close failed",
         )
         if failure:
             logger.warning("Hermes Relay turn finalization failed: %s", failure)

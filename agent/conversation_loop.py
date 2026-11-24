@@ -1833,7 +1833,12 @@ def _clear_routing_tier_on_error(agent, result: Any) -> None:
 def _maybe_apply_session_routing(agent, user_message: Any, conversation_history) -> None:
     """First-turn (or per-turn if configured) smart model routing. Fail-open."""
     try:
-        from agent.model_router import applies_this_turn, route as _route_model
+        from agent.model_router import (
+            LAST_RULES_DETAIL,
+            applies_this_turn,
+            route as _route_model,
+            stamp_routing_atof,
+        )
         user_cfg = getattr(agent, "user_config", None)
         # Production agents often omit user_config; tests set it (even {}) so stay hermetic.
         if user_cfg is None:
@@ -1844,6 +1849,18 @@ def _maybe_apply_session_routing(agent, user_message: Any, conversation_history)
                 user_cfg = None
         cfg_for_route = user_cfg if isinstance(user_cfg, dict) and "smart_model_routing" in user_cfg else None
         if not applies_this_turn(conversation_history, user_cfg if isinstance(user_cfg, dict) else None):
+            # per_turn=false inherit path: still stamp the last classified tier
+            prev = getattr(agent, "_last_routing_tier", None)
+            if prev:
+                agent._last_routing_tier = prev
+            stamp_routing_atof(
+                agent,
+                tier=str(prev or ""),
+                tier_reason="inherited",
+                tier_confidence=1.0,
+                decided_model=str(getattr(agent, "model", "") or ""),
+                escalated=False,
+            )
             return
         turn_index = _routing_turn_index(conversation_history)
         if turn_index <= 0 or getattr(agent, "_last_turn_routing_error", False):
@@ -1854,6 +1871,13 @@ def _maybe_apply_session_routing(agent, user_message: Any, conversation_history)
 
         def _persist_tier(tier: str) -> None:
             classified["tier"] = tier
+            try:
+                if isinstance(LAST_RULES_DETAIL, dict) and LAST_RULES_DETAIL:
+                    classified.setdefault("reason", LAST_RULES_DETAIL.get("reason") or "")
+                    classified.setdefault("confidence", LAST_RULES_DETAIL.get("confidence") or 0.0)
+                    classified.setdefault("escalated", bool(LAST_RULES_DETAIL.get("escalated")))
+            except Exception:
+                pass
 
         decision = _route_model(
             _user_message_text(user_message),
@@ -1873,6 +1897,25 @@ def _maybe_apply_session_routing(agent, user_message: Any, conversation_history)
             agent._last_turn_routing_error = False
         except Exception:
             pass
+    else:
+        prev = getattr(agent, "_last_routing_tier", None)
+        if prev:
+            try:
+                agent._last_routing_tier = prev
+            except Exception:
+                pass
+    try:
+        decided = str(getattr(decision, "model", None) or getattr(agent, "model", "") or "")
+        stamp_routing_atof(
+            agent,
+            tier=str(classified.get("tier") or getattr(agent, "_last_routing_tier", "") or ""),
+            tier_reason=str(classified.get("reason") or ""),
+            tier_confidence=float(classified.get("confidence") or 0.0),
+            decided_model=decided,
+            escalated=bool(classified.get("escalated")),
+        )
+    except Exception:
+        pass
     if decision is None:
         return
     try:
