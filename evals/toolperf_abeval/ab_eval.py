@@ -417,6 +417,9 @@ def _orchestrated_worker(pythonpath, hermes_home, relay_toml, work_dir, query,
             slow_model_override=slow_model,
             fast_model_override=fast_model,
             timeout=timeout,
+            # Toolperf tasks are mechanical error-recovery procedures;
+            # inject procedure tag so classifier routes to fast tier by default.
+            classifier_extra={"skill_tags": ["procedure"]},
         )
         result_q.put({
             'out': result.get('out', ''),
@@ -569,9 +572,12 @@ mode = "overwrite"
                 }
                 print(f"[{arm}/{model}] {run_id} orchestrated "
                       f"fast={fast} slow={slow}", flush=True)
+                # Pass real HERMES_HOME (not ABEVAL_HOME) so orchestrator finds hermes-scripts/
+                import os as _os
+                real_hermes_home = _os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))
                 proc = ctx.Process(
                     target=_orchestrated_worker,
-                    args=(pythonpath, str(HOME), str(relay_config), str(work),
+                    args=(pythonpath, real_hermes_home, str(relay_config), str(work),
                           q, slow, fast, session_id, api_keys, result_q),
                     kwargs={"timeout": 300},
                 )
