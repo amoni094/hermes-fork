@@ -436,6 +436,72 @@ def test_reason_followup_what_about_short():
     assert depth != "elite"
 
 
+def test_reason_rename_always_deep():
+    """rename is always cross-file — no word-count gate."""
+    from agent.reason_depth import needs_deep_reason
+    depth, reason = needs_deep_reason("rename all references to X in the plugin")
+    assert depth == "deep" and "refactor" in reason
+
+
+def test_reason_rename_short_also_deep():
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason("rename the config key")
+    assert depth == "deep"
+
+
+def test_reason_audit_analytical():
+    """audit/harden/review keywords -> analytical when >15 words."""
+    from agent.reason_depth import needs_deep_reason
+    depth, reason = needs_deep_reason(
+        "audit the AppArmor profile for firefox and check for over-permissions "
+        "that might allow filesystem access outside the browser sandbox",
+    )
+    assert depth == "analytical" and "analytical" in reason
+
+
+def test_reason_tier_inherit_elite():
+    """'y' with prior_tier=elite inherits elite."""
+    from agent.reason_depth import needs_deep_reason
+    depth, reason = needs_deep_reason("y", prior_tier="elite")
+    assert depth == "elite" and "inherit" in reason
+
+
+def test_reason_tier_inherit_deep():
+    from agent.reason_depth import needs_deep_reason
+    depth, reason = needs_deep_reason("do it", prior_tier="deep")
+    assert depth == "deep" and "inherit" in reason
+
+
+def test_reason_tier_inherit_do_all():
+    from agent.reason_depth import needs_deep_reason
+    depth, reason = needs_deep_reason("do all", prior_tier="analytical")
+    assert depth == "analytical" and "inherit" in reason
+
+
+def test_reason_tier_inherit_do_n():
+    from agent.reason_depth import needs_deep_reason
+    depth, reason = needs_deep_reason("do 3", prior_tier="elite")
+    assert depth == "elite" and "inherit" in reason
+
+
+def test_reason_tier_inherit_no_prior():
+    """Without prior_tier, 'y' falls through to simple."""
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason("y")
+    assert depth == "simple"
+
+
+def test_reason_tier_inherit_long_query_no_inherit():
+    """A substantive query starting with 'yes' should NOT inherit."""
+    from agent.reason_depth import needs_deep_reason
+    _depth, _reason = needs_deep_reason(
+        "yes but also make sure it handles the edge case where the config file is missing",
+        prior_tier="elite",
+    )
+    # > 4 words, should not inherit — route on content
+    assert "inherit" not in _reason
+
+
 def test_reason_deep_multi_constraint():
     from agent.reason_depth import needs_deep_reason
     depth, reason = needs_deep_reason(

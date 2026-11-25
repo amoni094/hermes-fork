@@ -42,9 +42,11 @@ _MULTI_CONSTRAINT_RE = re.compile(
 )
 
 _MULTI_ACTION_RE = re.compile(
-    r"\b(refactor|rename|restructure|reorganise|reorganize|overhaul)\b",
+    r"\b(refactor|restructure|reorganise|reorganize|overhaul)\b",
     re.IGNORECASE,
 )
+# rename is always cross-file regardless of query length
+_RENAME_RE = re.compile(r"\brename\b", re.IGNORECASE)
 
 DEPTH_SIMPLE = "simple"
 DEPTH_ANALYTICAL = "analytical"
@@ -60,14 +62,40 @@ def needs_deep_reason(
 ) -> tuple[str, str]:
     """Return ``(depth, reason_string)``.
 
-    depth is ``simple`` (deepseek-v4-pro), ``deep`` (gpt-5.5), or
-    ``elite`` (sonnet-5-5 for trajectory). ``turn_index`` / ``prior_tier``
-    are part of the public signature so callers can pass the same routing
-    state as the classifier; trajectory uses ``consecutive_reason_turns``.
+    depth is ``simple`` (deepseek-v4-pro), ``analytical`` (grok-4.7),
+    ``deep`` (gpt-5.6-sol), or ``elite`` (claude-opus-5 for trajectory).
+    ``turn_index`` / ``prior_tier`` are part of the public signature so
+    callers can pass the same routing state as the classifier; trajectory
+    uses ``consecutive_reason_turns``.
+
+    Tier-inherit: single-token acknowledgments ("y", "do it", "do all",
+    "do N") carry forward the prior depth rather than re-routing.  This
+    preserves the model context for approval turns in a long thread.
     """
-    _ = (turn_index, prior_tier)
     q = query if isinstance(query, str) else str(query or "")
     words = q.split()
+
+    # TIER-INHERIT: single-token acknowledgments carry forward prior depth.
+    # Covers: y/yes/n/no, "do it", "do all", "do N" (single digit/option),
+    # "go ahead", "proceed", "confirmed", "ok", "sure", "yep", "nope".
+    _ACK_RE = re.compile(
+        r"^(y|yes|n|no|yep|nope|ok|okay|sure|confirmed|proceed|go ahead"
+        r"|do (it|all|that|\d+)|done|correct|right|exactly|perfect|great"
+        r"|sounds good|looks good|that works|ship it|lgtm)\.?$",
+        re.IGNORECASE,
+    )
+    if prior_tier and len(words) <= 4 and _ACK_RE.match(q.strip()):
+        # Map prior tier string back to depth — prior_tier is the depth label
+        # or a tier name from the 6-tier classifier; normalise to depth names.
+        _TIER_TO_DEPTH = {
+            "elite": DEPTH_ELITE,
+            "deep": DEPTH_DEEP,
+            "analytical": DEPTH_ANALYTICAL,
+            "simple": DEPTH_SIMPLE,
+        }
+        inherited = _TIER_TO_DEPTH.get(prior_tier)
+        if inherited:
+            return inherited, f"tier_inherit:{prior_tier}"
 
     # TRAJECTORY: 2+ consecutive reason turns = accumulating context state.
     # Guard: cheap follow-ups (short query starting with a clarification word)
@@ -85,15 +113,21 @@ def needs_deep_reason(
     if _MULTI_ACTION_RE.search(q) and len(words) > 20:
         return DEPTH_DEEP, "complex_refactor"
 
+    # RENAME: always cross-file regardless of query length
+    if _RENAME_RE.search(q):
+        return DEPTH_DEEP, "complex_refactor"
+
     # LONG MULTI-CLAUSE: very long query with multiple joins
     if len(words) > 50:
         return DEPTH_DEEP, "complex_query"
 
-    # ANALYTICAL: multi-step reasoning, constraint-solving, proof-like — gpt-5.4-mini
+    # ANALYTICAL: multi-step reasoning, constraint-solving, proof-like — grok-4.7
     # Signals: debug/trace/prove/logic keywords, or medium-length queries with specific operators
+    # Also covers security hardening work (audit/assess/inspect/harden/review/examine)
     if len(words) > 15 and re.search(
         r'\b(debug|trace|prove|proof|logic|constraint|deduce|infer|verify|analyse|analyze'
-        r'|step.by.step|walk.through|explain.why|reason.through)\b',
+        r'|step.by.step|walk.through|explain.why|reason.through'
+        r'|audit|assess|inspect|harden|review|examine)\b',
         q, re.IGNORECASE
     ):
         return DEPTH_ANALYTICAL, "analytical_reasoning"
