@@ -227,6 +227,28 @@ class TrajStep:
     required: bool = True
 
 
+# opus-5 (not opus-4-5) often completes the work but omits machine-checked
+# reply tokens (VALIDATED=OK, FIXED=OK, …). Injected only for those models,
+# or when TRAJ_TOKEN_STRICT=1 (opt-in for other strict-token models).
+TRAJ_TOKEN_STRICT_PROMPT = (
+    "You are a precise coding assistant. Each task prompt ends with a required "
+    "reply token (e.g. REPLY VALIDATED=OK). You MUST include that exact token "
+    "verbatim in your final reply. Never omit it, even if you explain your "
+    "reasoning. The token is machine-checked."
+)
+
+
+def traj_token_strict_prompt(model: str, env: dict | None = None) -> str | None:
+    """Return ephemeral system prompt for reply-token enforcement, else None."""
+    lookup = env if env is not None else os.environ
+    m = model or ""
+    if str(lookup.get("TRAJ_TOKEN_STRICT", "")).strip() == "1":
+        return TRAJ_TOKEN_STRICT_PROMPT
+    if "opus-5" in m and "opus-4-5" not in m:
+        return TRAJ_TOKEN_STRICT_PROMPT
+    return None
+
+
 TRAJECTORY_TASKS: dict[str, list[TrajStep]] = {
     "traj_refactor_chain": [
         TrajStep(
@@ -1407,6 +1429,7 @@ def _trajectory_inner(pythonpath, hermes_home, work_str, task_name, model,
             max_iterations=30,
             platform="toolperf_abeval",
             cwd=work_str,
+            ephemeral_system_prompt=traj_token_strict_prompt(model),
         )
         workdir = Path(work_str)
         steps = TRAJECTORY_TASKS[task_name]

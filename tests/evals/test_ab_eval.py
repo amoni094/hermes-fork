@@ -172,3 +172,15 @@ def test_abeval_worker_exception_still_puts(tmp_path: Path, monkeypatch: pytest.
     assert len(q) == 1
     assert q[0]["rc"] == 1
     assert "RuntimeError" in q[0]["out"]
+
+
+def test_traj_token_strict_prompt_opus5_only():
+    fn = ab_eval.traj_token_strict_prompt
+    prompt = ab_eval.TRAJ_TOKEN_STRICT_PROMPT
+    empty = {}
+    assert fn("anthropic/claude-opus-5", env=empty) == prompt
+    assert fn("claude-opus-5", env=empty) == prompt
+    assert fn("anthropic/claude-opus-4-5", env=empty) is None
+    assert fn("anthropic/claude-sonnet-4-6", env=empty) is None
+    assert fn("anthropic/claude-opus-4-5", env={"TRAJ_TOKEN_STRICT": "1"}) == prompt
+    assert fn("anthropic/claude-sonnet-4-6", env={"TRAJ_TOKEN_STRICT": "0"}) is None
