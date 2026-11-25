@@ -10,6 +10,27 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+# Follow-up filter: cheap follow-up queries that look like reason turns to the
+# 6-tier classifier but are NOT trajectory-hard reasoning.  Phrases that start
+# or dominate a short query and indicate clarification / incremental steering
+# rather than a new independent reasoning task.  These should NOT increment the
+# trajectory latch — treat them as simple even if consecutive_reason_turns >= 2.
+#
+# Rule: query is a follow-up IFF len(words) <= 12 AND it starts with one of
+# these patterns.  Longer queries (>12 words) are treated as substantive even
+# if they start with "can" / "is there" etc., because the user is asking
+# something new and complex.
+_FOLLOWUP_START_RE = re.compile(
+    r"^(also[,\s]|can (you|it|she|he|we|i)\b|is there\b|what about\b|"
+    r"how (do|does|about|come)\b|just\b|and\b|ok[,\s]|okay[,\s]|"
+    r"so\b|wait[,\s]|actually[,\s]|does (it|that|this)\b|"
+    r"why (is|does|did|would|not)\b|when (is|does|will|should)\b|"
+    r"where (is|does|can|should)\b|which (one|is|should|would)\b|"
+    r"any (other|more|alternatives|suggestions)\b|"
+    r"what (if|else|other|does|is the|are the|about)\b)",
+    re.IGNORECASE,
+)
+
 # Signals that force gpt-5.5 (interpretive / multi-constraint reasoning)
 _MULTI_CONSTRAINT_RE = re.compile(
     r"\b(reconcile|conflicting|ambiguous|without breaking|"
@@ -48,9 +69,13 @@ def needs_deep_reason(
     q = query if isinstance(query, str) else str(query or "")
     words = q.split()
 
-    # TRAJECTORY: 2+ consecutive reason turns = accumulating context state
+    # TRAJECTORY: 2+ consecutive reason turns = accumulating context state.
+    # Guard: cheap follow-ups (short query starting with a clarification word)
+    # do NOT qualify — they steer an existing thread rather than extend it.
     if consecutive_reason_turns >= 2:
-        return DEPTH_ELITE, "trajectory_depth"
+        is_followup = len(words) <= 12 and bool(_FOLLOWUP_START_RE.match(q.strip()))
+        if not is_followup:
+            return DEPTH_ELITE, "trajectory_depth"
 
     # MULTI-CONSTRAINT: explicit reconciliation or conflicting requirements
     if _MULTI_CONSTRAINT_RE.search(q):

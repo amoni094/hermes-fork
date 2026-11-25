@@ -388,6 +388,54 @@ def test_reason_deep_trajectory():
     assert depth == "elite" and "trajectory" in reason
 
 
+def test_reason_followup_does_not_elite_can():
+    """Short 'can you' follow-up should NOT promote to elite even at consecutive>=2."""
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason(
+        "can she open pdf files?",
+        consecutive_reason_turns=3,
+    )
+    assert depth != "elite"
+
+
+def test_reason_followup_does_not_elite_also():
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason(
+        "also what about the caching layer?",
+        consecutive_reason_turns=2,
+    )
+    assert depth != "elite"
+
+
+def test_reason_followup_does_not_elite_is_there():
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason(
+        "is there another free pdf app instead of edge?",
+        consecutive_reason_turns=2,
+    )
+    assert depth != "elite"
+
+
+def test_reason_followup_long_query_still_elites():
+    """A query that starts with 'can' but is >12 words IS substantive -> elite."""
+    from agent.reason_depth import needs_deep_reason
+    depth, reason = needs_deep_reason(
+        "can you explain how the memory consolidation and retrieval pipeline "
+        "interacts with the graphiti knowledge graph during compaction?",
+        consecutive_reason_turns=2,
+    )
+    assert depth == "elite" and "trajectory" in reason
+
+
+def test_reason_followup_what_about_short():
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason(
+        "what about the wifi password?",
+        consecutive_reason_turns=2,
+    )
+    assert depth != "elite"
+
+
 def test_reason_deep_multi_constraint():
     from agent.reason_depth import needs_deep_reason
     depth, reason = needs_deep_reason(
