@@ -26,6 +26,7 @@ _MULTI_ACTION_RE = re.compile(
 )
 
 DEPTH_SIMPLE = "simple"
+DEPTH_ANALYTICAL = "analytical"
 DEPTH_DEEP = "deep"
 DEPTH_ELITE = "elite"
 
@@ -62,5 +63,14 @@ def needs_deep_reason(
     # LONG MULTI-CLAUSE: very long query with multiple joins
     if len(words) > 50:
         return DEPTH_DEEP, "complex_query"
+
+    # ANALYTICAL: multi-step reasoning, constraint-solving, proof-like — gpt-5.4-mini
+    # Signals: debug/trace/prove/logic keywords, or medium-length queries with specific operators
+    if len(words) > 15 and re.search(
+        r'\b(debug|trace|prove|proof|logic|constraint|deduce|infer|verify|analyse|analyze'
+        r'|step.by.step|walk.through|explain.why|reason.through)\b',
+        q, re.IGNORECASE
+    ):
+        return DEPTH_ANALYTICAL, "analytical_reasoning"
 
     return DEPTH_SIMPLE, "reason_simple"

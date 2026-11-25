@@ -617,6 +617,8 @@ def _apply_reason_depth(
         spec = block.get("reason_elite_model") or block.get("reason_deep_model") or block.get("reason_model")
     elif depth == "deep":
         spec = block.get("reason_deep_model") or block.get("reason_model")
+    elif depth == "analytical":
+        spec = block.get("reason_analytical_model") or block.get("reason_model")
     else:
         spec = block.get("reason_model")
     model, provider = _parse_model_spec(spec, default_provider=fallback_provider)
