@@ -76,6 +76,26 @@ DEFAULT_SLOW_MODEL = "anthropic/claude-sonnet-4-6"
 ARMS = ("baseline", "fixes", "tiered", "orchestrated", "trajectory")
 TABLE_ARMS = ("baseline", "fixes", "tiered", "orchestrated")
 ORCH_TIERS = ("fast", "math", "longctx", "tooluse", "reason", "elite")
+PROVIDER_ENV = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
+    "mistral": "MISTRAL_API_KEY",
+    "x-ai": "XAI_API_KEY",
+    "xai": "XAI_API_KEY",
+}
+
+
+def _provider_env_var(provider: str) -> str:
+    p = (provider or "").strip().lower()
+    if not p:
+        return "API_KEY"
+    return PROVIDER_ENV.get(p, f"{p.upper()}_API_KEY")
+
+
+def _pin_eval_model(agent) -> None:
+    """Disable live smart routing so --model / decided_model is the model under test."""
+    agent.user_config = {"smart_model_routing": {"enabled": False}}
 
 TASKS = {
     # P: python-not-found + venv module confusion (terminal failure hints)
@@ -1305,8 +1325,7 @@ def _abeval_worker(pythonpath: str, hermes_home: str, relay_toml: str,
     if isinstance(tier_config, dict) and tier_config.get("decided_model"):
         model = str(tier_config["decided_model"])
     provider, _, _ = model.partition("/")
-    env_map = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
-    env_var = env_map.get(provider, f"{provider.upper()}_API_KEY")
+    env_var = _provider_env_var(provider)
     if api_key and not os.environ.get(env_var):
         os.environ[env_var] = api_key
 
@@ -1341,12 +1360,11 @@ def _abeval_worker(pythonpath: str, hermes_home: str, relay_toml: str,
 
         from run_agent import AIAgent
         provider, _, model_name = model.partition("/")
-        api_key = None
-        if provider == "anthropic":
-            api_key = os.environ.get("ANTHROPIC_API_KEY") or None
+        env_var = _provider_env_var(provider)
+        resolved_key = os.environ.get(env_var) or api_key
 
         agent = AIAgent(
-            api_key=api_key,
+            api_key=resolved_key,
             base_url=None,
             provider=provider or None,
             model=model_name or model,
@@ -1359,6 +1377,7 @@ def _abeval_worker(pythonpath: str, hermes_home: str, relay_toml: str,
             platform="toolperf_abeval",
             cwd=work_str,
         )
+        _pin_eval_model(agent)
 
         result = agent.run_conversation(query)
         if isinstance(result, dict):
@@ -1404,8 +1423,7 @@ def _trajectory_inner(pythonpath, hermes_home, work_str, task_name, model,
         if v is not None:
             os.environ[str(k)] = str(v)
     provider, _, _ = model.partition("/")
-    env_map = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
-    env_var = env_map.get(provider, f"{provider.upper()}_API_KEY")
+    env_var = _provider_env_var(provider)
     if api_key and not os.environ.get(env_var):
         os.environ[env_var] = api_key
     for p in reversed(pythonpath.split(os.pathsep)):
@@ -1426,9 +1444,9 @@ def _trajectory_inner(pythonpath, hermes_home, work_str, task_name, model,
     try:
         from run_agent import AIAgent
         provider, _, model_name = model.partition("/")
+        env_var = _provider_env_var(provider)
         agent = AIAgent(
-            api_key=api_key if provider == "anthropic" else (
-                os.environ.get(env_var) or api_key),
+            api_key=os.environ.get(env_var) or api_key,
             base_url=None,
             provider=provider or None,
             model=model_name or model,
@@ -1442,6 +1460,7 @@ def _trajectory_inner(pythonpath, hermes_home, work_str, task_name, model,
             cwd=work_str,
             ephemeral_system_prompt=traj_token_strict_prompt(model),
         )
+        _pin_eval_model(agent)
         workdir = Path(work_str)
         steps = TRAJECTORY_TASKS[task_name]
         last_out = ""
@@ -1639,15 +1658,8 @@ def _orchestrated_worker(pythonpath, hermes_home, relay_toml, work_dir, query,
             def put(self, item):
                 inner.append(item)
 
-        env_map = {
-            'anthropic': 'ANTHROPIC_API_KEY',
-            'openai': 'OPENAI_API_KEY',
-            'deepseek': 'DEEPSEEK_API_KEY',
-            'x-ai': 'XAI_API_KEY',
-            'xai': 'XAI_API_KEY',
-        }
         provider, _, _ = decided.partition('/')
-        env_var = env_map.get(provider, f'{provider.upper()}_API_KEY')
+        env_var = _provider_env_var(provider)
         api_key = (api_keys or {}).get(env_var)
         _abeval_worker(
             pythonpath, hermes_home, relay_toml, work_dir, query, decided,
@@ -1727,10 +1739,7 @@ def _orchestrated_worker(pythonpath, hermes_home, relay_toml, work_dir, query,
 
 def _read_provider_key_from_config(provider: str) -> str | None:
     """Read the API key for a provider from the active Hermes .env / config (best-effort)."""
-    env_map = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY",
-               "deepseek": "DEEPSEEK_API_KEY", "mistral": "MISTRAL_API_KEY",
-               "x-ai": "XAI_API_KEY"}
-    env_var = env_map.get(provider, f"{provider.upper()}_API_KEY")
+    env_var = _provider_env_var(provider)
     # Env var takes priority (CI / explicit override)
     if val := os.environ.get(env_var):
         return val
@@ -1865,15 +1874,10 @@ mode = "overwrite"
             ctx = multiprocessing.get_context("spawn")
             result_q = ctx.Queue()
             if arm == "orchestrated":
-                env_key_map = {
-                    "anthropic": "ANTHROPIC_API_KEY",
-                    "deepseek": "DEEPSEEK_API_KEY",
-                    "openai": "OPENAI_API_KEY",
-                    "x-ai": "XAI_API_KEY",
-                }
                 api_keys = {
                     env_var: _read_provider_key_from_config(prov)
-                    for prov, env_var in env_key_map.items()
+                    for prov, env_var in PROVIDER_ENV.items()
+                    if env_var
                 }
                 print(f"[{arm}/{model}] {run_id} orchestrated "
                       f"fast={fast} slow={slow}", flush=True)

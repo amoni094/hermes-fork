@@ -97,10 +97,12 @@ def test_abeval_worker_puts_final_response(tmp_path: Path, monkeypatch: pytest.M
     agent_pkg.relay_runtime = fake_relay
 
     closed = {"n": 0}
+    created: dict = {}
 
     class FakeAgent:
         def __init__(self, **kw):
             self.kw = kw
+            created["agent"] = self
 
         def run_conversation(self, query):
             return {"final_response": f"VALUE=ENV_OK_4477:{query}"}
@@ -135,6 +137,9 @@ def test_abeval_worker_puts_final_response(tmp_path: Path, monkeypatch: pytest.M
     assert closed["n"] == 1
     assert coord.released is not None
     assert registry.shutdown is True
+    assert created["agent"].kw["provider"] == "anthropic"
+    assert created["agent"].kw["model"] == "claude-haiku-4-5"
+    assert created["agent"].user_config == {"smart_model_routing": {"enabled": False}}
 
 
 def test_abeval_worker_exception_still_puts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -245,3 +250,65 @@ def test_e4_invoice_checker_and(tmp_path: Path):
     assert ab_eval.SUCCESS["err_hypothesis_invoice"](
         ok.replace("invoice.py", "tax.py"), work
     ) is False
+
+
+def test_e4_authz_checker_accepts_prose_root_and_annotated_leak(tmp_path: Path):
+    work = tmp_path
+    (work / "proj").mkdir()
+    (work / "proj" / "leak.txt").write_text(
+        "A_puts: alice GET /api/me\nB_hits: bob GET /api/me\nB_sees_A: bob got alice\n",
+        encoding="utf-8",
+    )
+    reply = (
+        "ROOT=process-global GET cache keyed without Authorization/session\n"
+        "The cache key omits auth so B sees A's payload.\n"
+    )
+    assert ab_eval.SUCCESS["err_authz_cache"](reply, work) is True
+    bad = reply.replace("ROOT=process-global GET cache keyed without Authorization/session",
+                        "ROOT=token_log")
+    assert ab_eval.SUCCESS["err_authz_cache"](bad, work) is False
+    (work / "proj" / "leak.txt").write_text("A_puts\nB_hits\nB_sees_A\n", encoding="utf-8")
+    assert ab_eval.SUCCESS["err_authz_cache"]("ROOT=cache_key_omits_auth\n", work) is True
+
+
+def test_e4_path_checker_accepts_compact_tokens_case_insensitive(tmp_path: Path):
+    work = tmp_path
+    reply = (
+        "equivalent=no\n"
+        "prefix_v1=false\n"
+        "prefix_v2=true\n"
+        "link_v1=false\n"
+        "link_v2=true\n"
+    )
+    (work / "_abeval_reply.txt").write_text(reply, encoding="utf-8")
+    assert ab_eval.SUCCESS["err_path_semantic_diff"](reply, work) is True
+
+
+def test_e4_path_prompt_requires_exact_tokens():
+    prompt = ab_eval.TASKS["err_path_semantic_diff"]
+    assert "PREFIX_V1=False" in prompt
+    assert "PREFIX_V2=True" in prompt
+    assert "LINK_V1=False" in prompt
+    assert "LINK_V2=True" in prompt
+    assert "MUST reply with these exact tokens" in prompt
+
+
+def test_e4_invoice_checker_accepts_two_step_arith_and_root_variants(tmp_path: Path):
+    work = tmp_path
+    two_step = (
+        "ROOT=coupon double apply\n"
+        "ARITH=10000*90//100=9000; 9000*90//100=8100\n"
+        "ELIM_H1=float\nELIM_H2=old_sum\nELIM_H3=trunc\n"
+        "files: lines.py invoice.py\n"
+    )
+    assert ab_eval.SUCCESS["err_hypothesis_invoice"](two_step, work) is True
+    twice = two_step.replace("ROOT=coupon double apply", "ROOT=coupon applied twice")
+    assert ab_eval.SUCCESS["err_hypothesis_invoice"](twice, work) is True
+    missing_arith = two_step.replace("8100", "9000")
+    assert ab_eval.SUCCESS["err_hypothesis_invoice"](missing_arith, work) is False
+
+
+def test_provider_env_var_aliases_xai():
+    assert ab_eval._provider_env_var("xai") == "XAI_API_KEY"
+    assert ab_eval._provider_env_var("x-ai") == "XAI_API_KEY"
+    assert ab_eval._provider_env_var("anthropic") == "ANTHROPIC_API_KEY"

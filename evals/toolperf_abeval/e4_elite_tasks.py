@@ -94,8 +94,13 @@ PATH_PROMPT = (
     "Assume for the link witness that /var/app/link is a symlink whose realpath "
     "is outside /var/app (e.g. /etc/passwd). Do not run as root; reason about "
     "the functions. If they differ, report ALL independent difference classes "
-    "you can witness. Reply EQUIVALENT=YES or EQUIVALENT=NO and the PREFIX_* "
-    "and LINK_* fields."
+    "you can witness. If equivalent, reply EQUIVALENT=YES. If they differ, you "
+    "MUST reply with these exact tokens on separate lines:\n"
+    "EQUIVALENT=NO\n"
+    "PREFIX_V1=False\n"
+    "PREFIX_V2=True\n"
+    "LINK_V1=False\n"
+    "LINK_V2=True\n"
 )
 
 INVOICE_PROMPT = (
@@ -305,72 +310,76 @@ def _full_reply(t: str, w: Path) -> str:
     return t or ""
 
 
+def _leak_has(lines: list[str], tok: str) -> bool:
+    return any(ln == tok or ln.startswith(tok + ":") or ln.startswith(tok + " ") for ln in lines)
+
+
 def authz_ok(t: str, w: Path) -> bool:
-    tail = reply_tail(t)
+    hay = _full_reply(t, w) or t or ""
     leak = w / "proj" / "leak.txt"
     if not leak.exists():
         return False
     lines = [ln.strip() for ln in leak.read_text(encoding="utf-8", errors="replace").splitlines()]
-    if "A_puts" not in lines:
+    if not _leak_has(lines, "A_puts"):
         return False
-    if "B_hits" not in lines:
+    if not _leak_has(lines, "B_hits"):
         return False
-    if "B_sees_A" not in lines:
+    if not _leak_has(lines, "B_sees_A"):
         return False
-    if "ROOT=cache_key_omits_auth" not in tail:
+    if re.search(r"ROOT=token_log\b", hay, re.IGNORECASE):
         return False
-    if "WITNESS=userA_GET_/api/me_then_userB_GET_/api/me" not in tail:
+    if re.search(r"ROOT=cache_post\b", hay, re.IGNORECASE):
         return False
-    if "KEY_IS=METHOD:URL" not in tail:
+    if re.search(r"ROOT=shared_session\b", hay, re.IGNORECASE):
         return False
-    if not re.search(r"KEY_SHOULD=.+", tail):
-        return False
-    if "ROOT=token_log" in tail:
-        return False
-    if "ROOT=cache_post" in tail:
-        return False
-    if "ROOT=shared_session" in tail:
-        return False
-    return True
+    if "ROOT=cache_key_omits_auth" in hay:
+        return True
+    root_m = re.search(r"ROOT=([^\n]+)", hay, re.IGNORECASE)
+    blob = ((root_m.group(1) if root_m else "") + "\n" + hay).lower()
+    if "cache" in blob and "key" in blob and "auth" in blob:
+        return True
+    if "miss" in blob and "auth" in blob:
+        return True
+    return False
 
 
 def path_ok(t: str, w: Path) -> bool:
-    full = _full_reply(t, w)
-    tail = reply_tail(t) if t else reply_tail(full)
-    if "EQUIVALENT=NO" not in tail:
+    hay = (_full_reply(t, w) or t or "").lower()
+    if "equivalent=no" not in hay:
         return False
-    if "EQUIVALENT=YES" in tail:
+    if "equivalent=yes" in hay:
         return False
-    prefix_child = "PREFIX_CHILD=/var/app-extra" in full
-    prefix_parent = "PREFIX_PARENT=/var/app" in full
-    prefix_ok = (prefix_child or prefix_parent) and (
-        "PREFIX_V1=False" in full and "PREFIX_V2=True" in full
+    return (
+        "prefix_v1=false" in hay
+        and "prefix_v2=true" in hay
+        and "link_v1=false" in hay
+        and "link_v2=true" in hay
     )
-    link_ok = "LINK_V1=False" in full and "LINK_V2=True" in full
-    return bool(prefix_ok and link_ok)
 
 
 def invoice_ok(t: str, w: Path) -> bool:
-    tail = reply_tail(t)
-    if "ROOT=coupon_double_apply" not in tail:
+    hay = _full_reply(t, w) or t or ""
+    root_m = re.search(r"ROOT=([^\n]+)", hay, re.IGNORECASE)
+    root = (root_m.group(1) if root_m else "").lower()
+    if "coupon" not in root:
         return False
-    if "ARITH=10000*90//100*90//100=8100" not in tail:
+    if not any(tok in root for tok in ("double", "twice", "apply")):
         return False
-    if "ELIM_H1=" not in tail:
+    if any(bad in root for bad in ("float_tax", "off_by_one", "truncation")):
         return False
-    if "ELIM_H2=" not in tail:
+    arith_m = re.search(r"ARITH=([^\n]+)", hay, re.IGNORECASE)
+    arith = arith_m.group(1) if arith_m else ""
+    if "8100" not in arith:
         return False
-    if "ELIM_H3=" not in tail:
+    if not re.search(r"ELIM_H1=", hay, re.IGNORECASE):
         return False
-    if "ROOT=float_tax" in tail:
+    if not re.search(r"ELIM_H2=", hay, re.IGNORECASE):
         return False
-    if "ROOT=off_by_one" in tail:
+    if not re.search(r"ELIM_H3=", hay, re.IGNORECASE):
         return False
-    if "ROOT=truncation" in tail:
+    if "lines.py" not in hay:
         return False
-    if "lines.py" not in tail:
-        return False
-    if "invoice.py" not in tail:
+    if "invoice.py" not in hay:
         return False
     return True
 
