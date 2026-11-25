@@ -63,6 +63,11 @@ from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 
+_ABE_DIR = Path(__file__).resolve().parent
+if str(_ABE_DIR) not in sys.path:
+    sys.path.insert(0, str(_ABE_DIR))
+from e4_elite_tasks import E4_SUCCESS, E4_TAGS, E4_TASKS, E4_TAIL_N, seed_e4
+
 ROOT = Path(os.environ.get("ABEVAL_ROOT", "abeval-workspace")).resolve()
 HOME = Path(os.environ.get("ABEVAL_HOME", str(ROOT / "home"))).resolve()
 
@@ -213,7 +218,10 @@ TASKS = {
         "so every constraint holds. Output exactly one line of the form "
         "SOLUTION: A=N B=N C=N D=N E=N F=N G=N"
     ),
+    # E4 elite-discrimination tasks are registered below.
 }
+
+TASKS.update(E4_TASKS)
 
 
 # ---------------------------------------------------------------------------
@@ -693,7 +701,7 @@ Output format: SOLUTION: A=N B=N C=N D=N E=N F=N G=N
 """
 
 
-def make_sandbox(work: Path):
+def make_sandbox(work: Path, task: str | None = None):
     proj = work / "proj"
     if proj.exists():
         shutil.rmtree(proj)
@@ -972,6 +980,7 @@ def make_sandbox(work: Path):
     (pipe / "main.py").write_text(_E3_PIPE_MAIN_PY, encoding="utf-8")
     # err_constraint_propagation
     (proj / "slots.txt").write_text(_E3_SLOTS_TXT, encoding="utf-8")
+    seed_e4(proj, task)
     return proj
 
 
@@ -1164,6 +1173,7 @@ SUCCESS = {
     "err_multi_file_debug": _e3_mfd_ok,
     "err_constraint_propagation": _e3_csp_ok,
 }
+SUCCESS.update(E4_SUCCESS)
 
 # Per-task skill_tags for 6-tier classify. Blanket ['procedure'] sent
 # security/math/longctx tasks to the fast model.
@@ -1187,6 +1197,7 @@ TASK_TAGS: dict[str, list[str]] = {
     "err_deep_search": ["longctx"],
     "err_tool_format": ["schema", "tooluse"],
 }
+TASK_TAGS.update(E4_TAGS)
 
 _SIX_TIERS = ("fast", "math", "longctx", "tooluse", "reason", "elite")
 _FALLBACK_TIER_MODELS = {
@@ -1791,7 +1802,7 @@ def run(arm: str, model: str, reps: int, pythonpath: str, only=None,
                 continue  # resume support
             work = ROOT / "runs" / model.replace("/", "_") / arm / run_id
             work.mkdir(parents=True, exist_ok=True)
-            make_sandbox(work)
+            make_sandbox(work, name)
             atof = resdir / f"{run_id}.atof.jsonl"
             relay_config = work / "relay-plugins.toml"
             relay_config.write_text(
@@ -1932,7 +1943,11 @@ mode = "overwrite"
                 }
             rec = {"run_id": run_id, "task": name, "rep": rep, "arm": arm,
                    "model": model, "wall_s": round(dt, 1), "exit": rc,
-                   "tail": "\n".join(out.splitlines()[-12:])}
+                   "tail": "\n".join(out.splitlines()[-E4_TAIL_N:])}
+            try:
+                (work / "_abeval_reply.txt").write_text(out or "", encoding="utf-8")
+            except OSError:
+                pass
             if arm in ("tiered", "orchestrated") and tier_info:
                 rec["tier"] = tier_info.get("tier")
                 rec["tier_reason"] = tier_info.get("tier_reason")
@@ -2125,7 +2140,10 @@ if __name__ == "__main__":
                 return sys.argv[i + 1]
         return default
 
-    if cmd == "run":
+    if cmd == "list":
+        for name in TASKS:
+            print(name)
+    elif cmd == "run":
         arm = _flag("--arm")
         model = _flag("--model")
         reps = int(_flag("--reps", "1"))

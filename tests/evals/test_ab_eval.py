@@ -184,3 +184,64 @@ def test_traj_token_strict_prompt_opus5_only():
     assert fn("anthropic/claude-sonnet-4-6", env=empty) is None
     assert fn("anthropic/claude-opus-4-5", env={"TRAJ_TOKEN_STRICT": "1"}) == prompt
     assert fn("anthropic/claude-sonnet-4-6", env={"TRAJ_TOKEN_STRICT": "0"}) is None
+
+
+def test_e4_tasks_registered():
+    for name in (
+        "err_authz_cache",
+        "err_path_semantic_diff",
+        "err_hypothesis_invoice",
+    ):
+        assert name in ab_eval.TASKS
+        assert name in ab_eval.SUCCESS
+        assert "{WORK}" in ab_eval.TASKS[name]
+
+
+def test_e4_authz_checker_and(tmp_path: Path):
+    work = tmp_path
+    (work / "proj").mkdir()
+    (work / "proj" / "leak.txt").write_text("A_puts\nB_hits\nB_sees_A\n", encoding="utf-8")
+    ok = (
+        "ROOT=cache_key_omits_auth\n"
+        "WITNESS=userA_GET_/api/me_then_userB_GET_/api/me\n"
+        "KEY_IS=METHOD:URL\n"
+        "KEY_SHOULD=METHOD:URL:AUTH\n"
+    )
+    assert ab_eval.SUCCESS["err_authz_cache"](ok, work) is True
+    assert ab_eval.SUCCESS["err_authz_cache"](ok.replace("ROOT=cache_key_omits_auth", "ROOT=token_log"), work) is False
+    (work / "proj" / "leak.txt").write_text("A_puts\nB_hits\n", encoding="utf-8")
+    assert ab_eval.SUCCESS["err_authz_cache"](ok, work) is False
+
+
+def test_e4_path_checker_needs_both_witnesses(tmp_path: Path):
+    work = tmp_path
+    prefix_only = (
+        "EQUIVALENT=NO\nPREFIX_CHILD=/var/app-extra\nPREFIX_V1=False\nPREFIX_V2=True\n"
+    )
+    both = prefix_only + "LINK_V1=False\nLINK_V2=True\n"
+    (work / "_abeval_reply.txt").write_text(both, encoding="utf-8")
+    assert ab_eval.SUCCESS["err_path_semantic_diff"](both, work) is True
+    (work / "_abeval_reply.txt").write_text(prefix_only, encoding="utf-8")
+    assert ab_eval.SUCCESS["err_path_semantic_diff"](prefix_only, work) is False
+    yes = both.replace("EQUIVALENT=NO", "EQUIVALENT=YES")
+    (work / "_abeval_reply.txt").write_text(yes, encoding="utf-8")
+    assert ab_eval.SUCCESS["err_path_semantic_diff"](yes, work) is False
+
+
+def test_e4_invoice_checker_and(tmp_path: Path):
+    work = tmp_path
+    ok = (
+        "ROOT=coupon_double_apply\n"
+        "ARITH=10000*90//100*90//100=8100\n"
+        "ELIM_H1=float_cannot_make_8100\n"
+        "ELIM_H2=old_sum_unused\n"
+        "ELIM_H3=truncation_is_90_not_8100\n"
+        "files: lines.py invoice.py\n"
+    )
+    assert ab_eval.SUCCESS["err_hypothesis_invoice"](ok, work) is True
+    assert ab_eval.SUCCESS["err_hypothesis_invoice"](
+        ok.replace("ROOT=coupon_double_apply", "ROOT=truncation"), work
+    ) is False
+    assert ab_eval.SUCCESS["err_hypothesis_invoice"](
+        ok.replace("invoice.py", "tax.py"), work
+    ) is False
