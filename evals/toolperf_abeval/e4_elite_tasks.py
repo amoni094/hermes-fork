@@ -97,10 +97,10 @@ PATH_PROMPT = (
     "you can witness. If equivalent, reply EQUIVALENT=YES. If they differ, you "
     "MUST reply with these exact tokens on separate lines:\n"
     "EQUIVALENT=NO\n"
-    "PREFIX_V1=False\n"
-    "PREFIX_V2=True\n"
-    "LINK_V1=False\n"
-    "LINK_V2=True\n"
+    "PREFIX_V1=<True|False>\n"
+    "PREFIX_V2=<True|False>\n"
+    "LINK_V1=<True|False>\n"
+    "LINK_V2=<True|False>\n"
 )
 
 INVOICE_PROMPT = (
@@ -335,11 +335,24 @@ def authz_ok(t: str, w: Path) -> bool:
     if "ROOT=cache_key_omits_auth" in hay:
         return True
     root_m = re.search(r"ROOT=([^\n]+)", hay, re.IGNORECASE)
-    blob = ((root_m.group(1) if root_m else "") + "\n" + hay).lower()
-    if "cache" in blob and "key" in blob and "auth" in blob:
+    if not root_m:
+        return False
+    root_val = root_m.group(1).lower()
+    # Must identify cache-keying omits auth — all three concepts required in ROOT= value
+    has_cache = "cache" in root_val
+    has_key_concept = any(tok in root_val for tok in ("key", "omit", "without", "miss", "exclud"))
+    has_auth = any(tok in root_val for tok in ("auth", "token", "session", "bearer"))
+    if has_cache and has_key_concept and has_auth:
         return True
-    if "miss" in blob and "auth" in blob:
-        return True
+    # Also accept KEY_IS= identifying the missing dimension
+    key_is_m = re.search(r"KEY_IS=([^\n]+)", hay, re.IGNORECASE)
+    if key_is_m:
+        ki = key_is_m.group(1).lower()
+        if any(tok in ki for tok in ("auth", "token", "session", "bearer")):
+            # The model correctly identified that KEY_IS is missing auth
+            # but this alone is not sufficient without ROOT identification
+            if has_cache:
+                return True
     return False
 
 
@@ -363,13 +376,13 @@ def invoice_ok(t: str, w: Path) -> bool:
     root = (root_m.group(1) if root_m else "").lower()
     if "coupon" not in root:
         return False
-    if not any(tok in root for tok in ("double", "twice", "apply")):
+    if not any(tok in root for tok in ("double", "twice")):
         return False
     if any(bad in root for bad in ("float_tax", "off_by_one", "truncation")):
         return False
     arith_m = re.search(r"ARITH=([^\n]+)", hay, re.IGNORECASE)
     arith = arith_m.group(1) if arith_m else ""
-    if "8100" not in arith:
+    if "8100" not in arith or not any(tok in arith for tok in ("0.9", "90", "0.81", "twice", "double")):
         return False
     if not re.search(r"ELIM_H1=", hay, re.IGNORECASE):
         return False

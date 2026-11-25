@@ -286,10 +286,10 @@ def test_e4_path_checker_accepts_compact_tokens_case_insensitive(tmp_path: Path)
 
 def test_e4_path_prompt_requires_exact_tokens():
     prompt = ab_eval.TASKS["err_path_semantic_diff"]
-    assert "PREFIX_V1=False" in prompt
-    assert "PREFIX_V2=True" in prompt
-    assert "LINK_V1=False" in prompt
-    assert "LINK_V2=True" in prompt
+    assert "PREFIX_V1=<True|False>" in prompt
+    assert "PREFIX_V2=<True|False>" in prompt
+    assert "LINK_V1=<True|False>" in prompt
+    assert "LINK_V2=<True|False>" in prompt
     assert "MUST reply with these exact tokens" in prompt
 
 

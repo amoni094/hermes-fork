@@ -66,7 +66,17 @@ from pathlib import Path
 _ABE_DIR = Path(__file__).resolve().parent
 if str(_ABE_DIR) not in sys.path:
     sys.path.insert(0, str(_ABE_DIR))
-from e4_elite_tasks import E4_SUCCESS, E4_TAGS, E4_TASKS, E4_TAIL_N, seed_e4
+try:
+    from e4_elite_tasks import E4_SUCCESS, E4_TAGS, E4_TASKS, E4_TAIL_N, seed_e4
+except ImportError as _e4_err:
+    import warnings
+    warnings.warn(f"e4_elite_tasks not available: {_e4_err}; E4 tasks disabled", stacklevel=1)
+    E4_TASKS = {}
+    E4_SUCCESS = {}
+    E4_TAGS = {}
+    E4_TAIL_N = 12
+    def seed_e4(proj, task=None):
+        pass
 
 ROOT = Path(os.environ.get("ABEVAL_ROOT", "abeval-workspace")).resolve()
 HOME = Path(os.environ.get("ABEVAL_HOME", str(ROOT / "home"))).resolve()
@@ -265,6 +275,11 @@ TRAJ_TOKEN_STRICT_PROMPT = (
     "reasoning. The token is machine-checked."
 )
 
+_OPUS5_STRICT_RE = re.compile(
+    r"claude-opus-5(?:-\d{8})?$",  # claude-opus-5 or claude-opus-5-YYYYMMDD
+    re.IGNORECASE,
+)
+
 
 def traj_token_strict_prompt(model: str, env: dict | None = None) -> str | None:
     """Return ephemeral system prompt for reply-token enforcement, else None."""
@@ -272,7 +287,7 @@ def traj_token_strict_prompt(model: str, env: dict | None = None) -> str | None:
     m = model or ""
     if str(lookup.get("TRAJ_TOKEN_STRICT", "")).strip() == "1":
         return TRAJ_TOKEN_STRICT_PROMPT
-    if "opus-5" in m and "opus-4-5" not in m:
+    if _OPUS5_STRICT_RE.search(m):
         return TRAJ_TOKEN_STRICT_PROMPT
     return None
 
@@ -1575,7 +1590,28 @@ def _trajectory_worker(task_name, model, rep, root, pythonpath, extra_env):
             step_pass_rate = 0.0
             final_ok = False
     dt = time.time() - t0
-    if rc != 0 and not out.strip() and not step_results:
+    if rc == -9:
+        # Timeout — record as a data point, not an infra crash
+        # (skipping timeouts inflates success rate)
+        rec = {
+            "run_id": run_id,
+            "task": task_name,
+            "rep": rep,
+            "arm": "trajectory",
+            "model": model,
+            "wall_s": round(dt, 1),
+            "exit": -9,
+            "tail": "[TIMEOUT]",
+            "step_results": [],
+            "step_pass_rate": 0.0,
+            "final_ok": False,
+        }
+        with open(meta_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+        print(f"[trajectory/{model}] {task_name}-r{rep} {dt:.0f}s TIMEOUT",
+              flush=True)
+        return rec
+    elif rc != 0 and not out.strip() and not step_results:
         print(f"[trajectory/{model}] {run_id} INFRA-CRASH exit={rc} "
               f"{dt:.0f}s — not recorded, will retry on resume", flush=True)
         return None
@@ -1749,20 +1785,23 @@ def _read_provider_key_from_config(provider: str) -> str | None:
     try:
         import os as _os
         real_hermes_home = Path(_os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
-        env_file = real_hermes_home / ".env"
-        if not env_file.exists():
-            # Profiles subdirectory .env
-            profile = _os.environ.get("HERMES_PROFILE", "")
-            if profile:
-                env_file = real_hermes_home / "profiles" / profile / ".env"
-        if env_file.exists():
+        profile = _os.environ.get("HERMES_PROFILE", "")
+        env_files = [real_hermes_home / ".env"]
+        if profile:
+            env_files.append(real_hermes_home / "profiles" / profile / ".env")
+        for env_file in env_files:
+            if not env_file.exists():
+                continue
             for line in env_file.read_text(encoding="utf-8", errors="ignore").splitlines():
                 line = line.strip()
                 if line.startswith("#") or "=" not in line:
                     continue
                 k, _, v = line.partition("=")
-                if k.strip() == env_var and v.strip():
-                    return v.strip()
+                v = v.strip()
+                if len(v) >= 2 and v[0] == v[-1] and v[0] in ('"', "'"):
+                    v = v[1:-1].strip()
+                if k.strip() == env_var and v:
+                    return v
     except Exception:
         pass
     # Last resort: hermes config.yaml (rarely has plaintext keys)
@@ -1923,7 +1962,17 @@ mode = "overwrite"
                 except Exception:
                     out, rc = "", proc.exitcode if proc.exitcode not in (None, 0) else 1
             dt = time.time() - t0
-            if rc != 0 and not out.strip():
+            if rc == -9:
+                # Timeout — record as a data point, not an infra crash
+                rec = {"run_id": run_id, "task": name, "rep": rep, "arm": arm,
+                       "model": model, "wall_s": round(dt, 1), "exit": -9,
+                       "tail": "[TIMEOUT]"}
+                with open(meta_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(rec) + "\n")
+                print(f"[{arm}/{model}] {run_id} {dt:.0f}s TIMEOUT exit=-9",
+                      flush=True)
+                continue
+            elif rc != 0 and not out.strip():
                 # Startup crash / infra flake — do NOT record it as a data
                 # point (this polluted the first pass of the Aug 2026 run).
                 print(f"[{arm}/{model}] {run_id} INFRA-CRASH exit={rc} "
@@ -2015,7 +2064,13 @@ def report(models):
             if not meta_path.exists():
                 continue
             for line in meta_path.read_text(encoding="utf-8-sig").splitlines():
-                m = json.loads(line)
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    m = json.loads(line)
+                except (ValueError, KeyError):
+                    continue
                 s = score_run(mdir / arm / f"{m['run_id']}.atof.jsonl") or {}
                 work = ROOT / "runs" / model.replace("/", "_") / arm / m["run_id"]
                 try:
