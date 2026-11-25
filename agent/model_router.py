@@ -577,7 +577,11 @@ def _reason_split_enabled(config: dict[str, Any]) -> bool:
     block = config.get("smart_model_routing") or {}
     if not isinstance(block, dict):
         return False
-    return bool(block.get("reason_deep_model") or block.get("reason_elite_model"))
+    return bool(
+        block.get("reason_deep_model")
+        or block.get("reason_elite_model")
+        or block.get("reason_analytical_model")
+    )
 
 
 def _apply_reason_depth(

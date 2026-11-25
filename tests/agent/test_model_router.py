@@ -485,9 +485,16 @@ def test_reason_tier_inherit_do_n():
 
 
 def test_reason_tier_inherit_no_prior():
-    """Without prior_tier, 'y' falls through to simple."""
+    """Without prior_tier, 'y' falls through to simple (not elite)."""
     from agent.reason_depth import needs_deep_reason
     depth, _reason = needs_deep_reason("y")
+    assert depth == "simple"
+
+
+def test_reason_bare_ack_no_prior_consecutive():
+    """'y' with consecutive_reason_turns=2 but no prior_tier must NOT hit elite."""
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason("y", consecutive_reason_turns=2)
     assert depth == "simple"
 
 

@@ -53,6 +53,22 @@ DEPTH_ANALYTICAL = "analytical"
 DEPTH_DEEP = "deep"
 DEPTH_ELITE = "elite"
 
+# Tier-inherit: single-token acknowledgments that carry forward the prior depth.
+# Covers y/yes/n/no, "do it", "do all", "do N", "go ahead", "lgtm", etc.
+# Only fires when prior_tier is set AND len(words) <= 4.
+_ACK_RE = re.compile(
+    r"^(y|yes|n|no|yep|nope|ok|okay|sure|confirmed|proceed|go ahead"
+    r"|do (it|all|that|\d+)|done|correct|right|exactly|perfect|great"
+    r"|sounds good|looks good|that works|ship it|lgtm)\.?$",
+    re.IGNORECASE,
+)
+_TIER_TO_DEPTH: dict[str, str] = {
+    "elite": DEPTH_ELITE,
+    "deep": DEPTH_DEEP,
+    "analytical": DEPTH_ANALYTICAL,
+    "simple": DEPTH_SIMPLE,
+}
+
 
 def needs_deep_reason(
     query: str,
@@ -75,24 +91,7 @@ def needs_deep_reason(
     q = query if isinstance(query, str) else str(query or "")
     words = q.split()
 
-    # TIER-INHERIT: single-token acknowledgments carry forward prior depth.
-    # Covers: y/yes/n/no, "do it", "do all", "do N" (single digit/option),
-    # "go ahead", "proceed", "confirmed", "ok", "sure", "yep", "nope".
-    _ACK_RE = re.compile(
-        r"^(y|yes|n|no|yep|nope|ok|okay|sure|confirmed|proceed|go ahead"
-        r"|do (it|all|that|\d+)|done|correct|right|exactly|perfect|great"
-        r"|sounds good|looks good|that works|ship it|lgtm)\.?$",
-        re.IGNORECASE,
-    )
     if prior_tier and len(words) <= 4 and _ACK_RE.match(q.strip()):
-        # Map prior tier string back to depth — prior_tier is the depth label
-        # or a tier name from the 6-tier classifier; normalise to depth names.
-        _TIER_TO_DEPTH = {
-            "elite": DEPTH_ELITE,
-            "deep": DEPTH_DEEP,
-            "analytical": DEPTH_ANALYTICAL,
-            "simple": DEPTH_SIMPLE,
-        }
         inherited = _TIER_TO_DEPTH.get(prior_tier)
         if inherited:
             return inherited, f"tier_inherit:{prior_tier}"
@@ -100,9 +99,12 @@ def needs_deep_reason(
     # TRAJECTORY: 2+ consecutive reason turns = accumulating context state.
     # Guard: cheap follow-ups (short query starting with a clarification word)
     # do NOT qualify — they steer an existing thread rather than extend it.
+    # Also guard single-character / bare-ack queries (y/n/ok) without a
+    # prior_tier -- these should not escalate to elite on their own.
     if consecutive_reason_turns >= 2:
         is_followup = len(words) <= 12 and bool(_FOLLOWUP_START_RE.match(q.strip()))
-        if not is_followup:
+        is_bare_ack = len(words) <= 4 and bool(_ACK_RE.match(q.strip()))
+        if not is_followup and not is_bare_ack:
             return DEPTH_ELITE, "trajectory_depth"
 
     # MULTI-CONSTRAINT: explicit reconciliation or conflicting requirements
