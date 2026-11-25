@@ -116,6 +116,24 @@ def main(argv: list[str] | None = None) -> int:
         for q, lab, pred in mismatches[:12]:
             print(f"  gold={lab} pred={pred} q={q[:80]!r}")
 
+    # IPS off-policy estimate (deterministic logging policy → accuracy).
+    try:
+        sig_path = _hermes_base / "hermes-scripts" / "routing-tier-signals.py"
+        spec = importlib.util.spec_from_file_location("routing_tier_signals", sig_path)
+        if spec is not None and spec.loader is not None:
+            smod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(smod)
+            golds = [str(lab) for (_q, lab, *_r) in examples]
+            ips = smod.ips_accuracy(golds, list(result.get("preds") or []))
+            print(f"IPS n={ips['n']} ips_hat={float(ips['ips_hat'])*100:.1f}% clipped={ips['n_clipped']}")
+            try:
+                mdb_ips = prec.load_metrics_db()
+                mdb_ips.write_metric("ips_ope", ips, source="routing-add-example")
+            except Exception:
+                pass
+    except Exception as exc:
+        print("WARN: IPS OPE failed:", type(exc).__name__, file=sys.stderr)
+
     prev_acc = None
     try:
         mdb = prec.load_metrics_db()

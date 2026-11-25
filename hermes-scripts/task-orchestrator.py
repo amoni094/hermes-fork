@@ -734,6 +734,15 @@ def orchestrate(
         hermes_base = _hermes_base
 
     classification = _classify_task(query or "", hermes_base, models, extra=classifier_extra)
+    try:
+        sig_path = hermes_base / "hermes-scripts" / "routing-tier-signals.py"
+        spec = importlib.util.spec_from_file_location("_orch_rts", sig_path)
+        if spec is not None and spec.loader is not None:
+            smod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(smod)
+            classification = smod.maybe_shed_reason_load(classification)
+    except Exception:
+        pass
     tier = classification["tier"]
     provider = classification["provider"]
     model = classification["model"]
@@ -968,6 +977,10 @@ def self_test() -> int:
     _check(should_orchestrate("fast", 0.60) is True, "low-conf fast orch", failures)
     _check(should_orchestrate("math", 0.69) is True, "conf < 0.7 orch", failures)
     _check(should_orchestrate("fast", 0.70) is False, "conf == 0.7 skips", failures)
+
+    # load-shed is gated off by default
+    _check(os.environ.get("HERMES_ROUTING_LOAD_AWARE", "") != "1",
+           "load-aware shed default off", failures)
     for k, v in DEFAULT_TIER_MODELS.items():
         _check(isinstance(v, dict) and v.get("provider") and v.get("model"),
                f"tier {k} has provider/model", failures)

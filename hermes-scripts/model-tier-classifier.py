@@ -43,6 +43,7 @@ _hermes_root = (
 
 import argparse
 import json
+import math
 import re
 import sys
 import time
@@ -420,6 +421,139 @@ def _strong_directional_signal(query: str, words: list[str], context_tokens: int
     return False
 
 
+HOMELAB_MECH_RE = re.compile(
+    r"\b(crons?|readme|sandbox\s+errors?|acp\s+retr\w*)\b",
+    re.IGNORECASE,
+)
+HOMELAB_MECH_BLOCK_RE = re.compile(
+    r"\b(adversarial|recursive|security|exploit|cve-?\d|audit pass|wiring audit)\b",
+    re.IGNORECASE,
+)
+SHORT_CORRECTION_RE = re.compile(
+    r"^[A-Za-z0-9][\w .'\-]{0,40}\bnot\b[\w .'\-]{1,40}$",
+    re.IGNORECASE,
+)
+_CORRECTION_BLOCK_START = frozenset({
+    "do", "don't", "dont", "never", "not", "please", "deploy", "delete",
+    "drop", "sudo", "rm",
+})
+
+
+def _homelab_mechanical(query: str, n_words: int) -> bool:
+    """Harchol-Balter SITA: short homelab ops are small jobs → fast."""
+    if n_words < 2 or n_words > 12:
+        return False
+    if not query or not HOMELAB_MECH_RE.search(query):
+        return False
+    if HOMELAB_MECH_BLOCK_RE.search(query):
+        return False
+    stripped = query.strip()
+    # Planning/recommendation questions stay reason ("can you stagger the crons").
+    if re.match(r"^(can|could|should|would|why|how|what|is|are|when)\b", stripped, re.IGNORECASE):
+        return False
+    return True
+
+
+def _short_correction(query: str, n_words: int) -> bool:
+    """Raaijmakers-Shiffrin: short distinctive 'X not Y' probes are retrieval."""
+    q = (query or "").strip()
+    if n_words < 2 or n_words > 6 or "?" in q:
+        return False
+    if not SHORT_CORRECTION_RE.match(q):
+        return False
+    first = q.split()[0].lower().rstrip(".,!?")
+    if first in _CORRECTION_BLOCK_START:
+        return False
+    if re.search(r"\b(deploy|delete|drop|sudo|production|exploit|credential|secret|password)\b", q, re.IGNORECASE):
+        return False
+    return True
+
+
+def pac_confidence_bound(n: int, delta: float = 0.05) -> float:
+    """Hoeffding PAC bound: 1 - sqrt(log(1/delta)/(2n)). n=60,δ=0.05 → ~0.84."""
+    try:
+        nn = int(n)
+        dd = float(delta)
+    except (TypeError, ValueError):
+        return 0.65
+    if nn <= 0 or not (0.0 < dd < 1.0):
+        return 0.65
+    return max(0.0, min(1.0, 1.0 - math.sqrt(math.log(1.0 / dd) / (2.0 * nn))))
+
+
+def calibration_check(n: int = 60, delta: float = 0.05) -> dict:
+    """Classifier-level PAC check. Does not rewrite live rule constants."""
+    try:
+        from pathlib import Path as _P
+        import importlib.util as _ilu
+        path = _P(__file__).resolve().parent / "routing-tier-signals.py"
+        spec = _ilu.spec_from_file_location("_rts_cal", path)
+        if spec is None or spec.loader is None:
+            raise ImportError("no signals module")
+        mod = _ilu.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.calibration_check(n, delta)
+    except Exception:
+        bound = pac_confidence_bound(n, delta)
+        return {"n": n, "delta": delta, "pac_bound": bound, "n_below_bound": None}
+
+
+_RTS_MOD = None
+_RTS_LABELLED: list | None = None
+_RTS_LOAD_FAILED = False
+
+
+def _load_routing_signals():
+    """Load routing-tier-signals + audit labels once. Fail-closed."""
+    global _RTS_MOD, _RTS_LABELLED, _RTS_LOAD_FAILED
+    if _RTS_LOAD_FAILED:
+        return None, []
+    if _RTS_MOD is not None:
+        return _RTS_MOD, _RTS_LABELLED or []
+    try:
+        from pathlib import Path as _P
+        import importlib.util as _ilu
+        path = _P(__file__).resolve().parent / "routing-tier-signals.py"
+        if not path.is_file():
+            _RTS_LOAD_FAILED = True
+            return None, []
+        spec = _ilu.spec_from_file_location("_rts_pp", path)
+        if spec is None or spec.loader is None:
+            _RTS_LOAD_FAILED = True
+            return None, []
+        mod = _ilu.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        labelled: list = []
+        try:
+            prec_path = path.with_name("routing-precision-cron.py")
+            pspec = _ilu.spec_from_file_location("_rts_prec", prec_path)
+            if pspec is not None and pspec.loader is not None:
+                pmod = _ilu.module_from_spec(pspec)
+                pspec.loader.exec_module(pmod)
+                labelled = [(q, lab) for (q, lab, *_r) in getattr(pmod, "CANONICAL_AUDIT", [])]
+        except Exception:
+            labelled = []
+        _RTS_MOD = mod
+        _RTS_LABELLED = labelled
+        return mod, labelled
+    except Exception:
+        _RTS_LOAD_FAILED = True
+        return None, []
+
+
+def _postprocess_decision(decision: dict, data: dict) -> dict:
+    """Fail-closed corpus signals. Import errors → original decision."""
+    if not isinstance(decision, dict):
+        return decision
+    try:
+        mod, labelled = _load_routing_signals()
+        if mod is None:
+            return decision
+        return mod.apply_signals(decision, data, labelled or [])
+    except Exception:
+        return decision
+
+
 def classify(payload: dict | None = None, **kwargs) -> dict:
     """Return {tier, reason, confidence} for one turn. Missing keys use defaults.
 
@@ -429,7 +563,14 @@ def classify(payload: dict | None = None, **kwargs) -> dict:
     """
     data = dict(payload or {})
     data.update(kwargs)
+    decision = _classify_body(data)
+    try:
+        return _postprocess_decision(decision, data)
+    except Exception:
+        return decision
 
+
+def _classify_body(data: dict) -> dict:
     query = _as_str(data.get("query", ""))
     skill_tags = _as_tags(data.get("skill_tags", []))
     skill_name = _as_str(data.get("skill_name", "")).strip()
@@ -545,6 +686,26 @@ def classify(payload: dict | None = None, **kwargs) -> dict:
         return {"tier": "fast", "reason": "procedure_skill", "confidence": 0.80}
     if prev_tool_calls >= 2 and prev_exit_code == 0 and turn_index > 0:
         return {"tier": "fast", "reason": "mechanical_continuation", "confidence": 0.75}
+
+    # Homelab mechanical ops (SITA): short cron/readme/acp/sandbox jobs → fast.
+    if _homelab_mechanical(query, n_words):
+        return {"tier": "fast", "reason": "homelab_mechanical", "confidence": 0.78}
+
+    # SAM short 'X not Y' correction overrides continuation_bias.
+    if turn_index > 0 and _short_correction(query, n_words):
+        return {"tier": "fast", "reason": "short_correction", "confidence": 0.78}
+
+    # Fast-thread short imperative stays fast (does not override elite/security above).
+    if (
+        turn_index > 0
+        and prior_tier == "fast"
+        and 2 <= n_words < 10
+        and "?" not in query
+        and not HOMELAB_MECH_BLOCK_RE.search(query)
+    ):
+        first3 = {w.lower().rstrip(".,!?") for w in words[:3]}
+        if IMPERATIVE_TASK_VERBS & first3:
+            return {"tier": "fast", "reason": "fast_thread_imperative", "confidence": 0.72}
 
     # Continuation bias: short ambiguous follow-ups inherit the previous turn's tier.
     # Runs after elite/math/tooluse/longctx (already returned) and after explicit
@@ -958,6 +1119,26 @@ def self_test() -> int:
     })
     _check(d['tier'] == 'reason', 'reasoning thread hold skips short_simple', failures)
 
+    # corpus-mined predicates
+    d = classify({'query': 'bible street not court', 'turn_index': 3, 'prior_tier': 'reason'})
+    _check(d['tier'] == 'fast' and d['reason'] == 'short_correction', 'SAM X-not-Y correction', failures)
+    d = classify({'query': 'do not deploy this', 'turn_index': 2, 'prior_tier': 'reason'})
+    _check(d['reason'] != 'short_correction', 'do-not-deploy is not a short correction', failures)
+    d = classify({'query': 'fix the acp retreive tool error'})
+    _check(d['tier'] == 'fast' and d['reason'] == 'homelab_mechanical', 'acp retrieve -> fast', failures)
+    d = classify({'query': 'fix all crons with sandbox errors'})
+    _check(d['tier'] == 'fast' and d['reason'] == 'homelab_mechanical', 'cron sandbox -> fast', failures)
+    d = classify({'query': 'update the hermes-fork readme on git'})
+    _check(d['tier'] == 'fast' and d['reason'] == 'homelab_mechanical', 'readme -> fast', failures)
+    d = classify({'query': 'fix all gaps and then do a recursive adversarial pass and wiring audit'})
+    _check(d['tier'] == 'elite', 'homelab must not steal elite audit', failures)
+    d = classify({'query': 'fix all whichever way is best', 'turn_index': 1, 'prior_tier': 'fast'})
+    _check(d['tier'] == 'fast' and d['reason'] == 'fast_thread_imperative', 'fast-thread imperative', failures)
+    d = classify({'query': 'fix the hindsight gate issue'})
+    _check(d['tier'] == 'reason', 'hindsight gate stays reason', failures)
+    bound = pac_confidence_bound(60, 0.05)
+    _check(0.83 < bound < 0.86, 'PAC bound ~0.84', failures)
+
     if failures:
         print("SELF-TEST FAIL: " + "; ".join(failures), file=sys.stderr)
         return 1
@@ -969,10 +1150,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Classify an agent turn as fast|math|longctx|tooluse|elite|reason")
     parser.add_argument("--json", dest="json_arg", default=None, help="Turn payload as JSON object")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--calibration-check", action="store_true")
     args, _unknown = parser.parse_known_args(argv)
 
     if args.self_test:
         return self_test()
+    if args.calibration_check:
+        print(json.dumps(calibration_check(), indent=2))
+        return 0
 
     raw = args.json_arg
     if raw is None:

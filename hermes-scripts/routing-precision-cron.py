@@ -219,6 +219,50 @@ def main() -> int:
         alerts.append("ALERT: elite precision degraded")
         print("ALERT: elite precision degraded")
 
+    # Hamming drift vs last week's predictions (Cover/stability). Alarm if >10% changed.
+    curr_preds = {}
+    for (q, _lab, *_rest), pred in zip(CANONICAL_AUDIT, result.get("preds") or []):
+        curr_preds[q] = pred
+    pred_path = _hermes_root / "cache" / "routing-precision-preds.json"
+    try:
+        pred_path.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    prev_preds = {}
+    try:
+        raw_prev = json.loads(pred_path.read_text(encoding="utf-8"))
+        if isinstance(raw_prev, dict):
+            prev_preds = {str(k): str(v) for k, v in raw_prev.items()}
+    except (OSError, FileNotFoundError, json.JSONDecodeError, TypeError):
+        prev_preds = {}
+    hamming = {"n_shared": 0, "n_changed": 0, "frac": 0.0, "alarm": False, "changed": []}
+    try:
+        sig_path = _hermes_base / "hermes-scripts" / "routing-tier-signals.py"
+        spec = importlib.util.spec_from_file_location("routing_tier_signals", sig_path)
+        if spec is not None and spec.loader is not None:
+            smod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(smod)
+            hamming = smod.hamming_drift(prev_preds, curr_preds)
+    except Exception:
+        keys = sorted(set(prev_preds) & set(curr_preds))
+        if keys:
+            changed = [k for k in keys if prev_preds[k] != curr_preds[k]]
+            frac = len(changed) / len(keys)
+            hamming = {
+                "n_shared": len(keys),
+                "n_changed": len(changed),
+                "frac": frac,
+                "alarm": frac > 0.10,
+                "changed": changed[:20],
+            }
+    if hamming.get("alarm"):
+        msg = (
+            f"ALERT: classifier Hamming drift "
+            f"{float(hamming.get('frac') or 0)*100:.1f}% of queries changed tier"
+        )
+        alerts.append(msg)
+        print(msg)
+
     payload = {
         "ts": ts,
         "n": result["n"],
@@ -229,12 +273,20 @@ def main() -> int:
         "elite_precision": elite_prec,
         "per_tier": {k: {kk: vv for kk, vv in v.items() if kk not in ("tp", "fp", "fn")} for k, v in pt.items()},
         "alerts": alerts,
+        "hamming": {k: v for k, v in hamming.items() if k != "changed"},
     }
     try:
         mdb = load_metrics_db()
         mdb.write_metric("precision_audit", payload, source="cron")
+        mdb.write_metric("hamming_drift", hamming, source="cron")
     except Exception as exc:
         print("WARN: routing_metrics write failed:", type(exc).__name__, file=sys.stderr)
+    try:
+        tmp = pred_path.with_suffix(pred_path.suffix + ".tmp")
+        tmp.write_text(json.dumps(curr_preds, indent=2) + "\n", encoding="utf-8")
+        os.replace(str(tmp), str(pred_path))
+    except Exception as exc:
+        print("WARN: pred snapshot write failed:", type(exc).__name__, file=sys.stderr)
 
     print(
         f"PRECISION_AUDIT ts={ts} accuracy={acc*100:.1f}% "
