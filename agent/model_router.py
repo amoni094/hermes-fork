@@ -25,6 +25,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from agent.reason_depth import needs_deep_reason
+
 logger = logging.getLogger(__name__)
 
 CLASSIFIER_SYSTEM = (
@@ -250,6 +252,7 @@ def route(
     config: dict[str, Any] | None = None,
     turn_index: int = 0,
     prior_tier: str | None = None,
+    consecutive_reason_turns: int = 0,
     persist_tier=None,
 ) -> RoutingDecision | None:
     """Classify ``user_message`` and return a target, or ``None`` to stay put.
@@ -265,11 +268,40 @@ def route(
             config=config,
             turn_index=turn_index,
             prior_tier=prior_tier,
+            consecutive_reason_turns=consecutive_reason_turns,
             persist_tier=persist_tier,
         )
     except Exception:
         logger.debug("smart_model_routing: route() failed; staying put", exc_info=True)
         return None
+
+
+def bump_consecutive_reason_turns(
+    agent: Any,
+    decided_tier: str | None,
+    *,
+    on_escalation: bool = False,
+    reset: bool = False,
+) -> int:
+    """Update ``agent._consecutive_reason_turns``. Returns the new count."""
+    try:
+        if reset:
+            agent._consecutive_reason_turns = 0
+            return 0
+        t = str(decided_tier or "").strip().lower()
+        if t == "slow":
+            t = "reason"
+        if on_escalation and t == "reason":
+            agent._consecutive_reason_turns = 1
+            return 1
+        if t == "reason":
+            n = int(getattr(agent, "_consecutive_reason_turns", 0) or 0) + 1
+            agent._consecutive_reason_turns = n
+            return n
+        agent._consecutive_reason_turns = 0
+        return 0
+    except Exception:
+        return 0
 
 
 def note_escalated_tier(agent, tier: str) -> None:
@@ -285,6 +317,7 @@ def note_escalated_tier(agent, tier: str) -> None:
         agent._last_routing_escalated = True
     except Exception:
         pass
+    consec = bump_consecutive_reason_turns(agent, t, on_escalation=True)
     stamp_routing_atof(
         agent,
         tier=t,
@@ -292,6 +325,9 @@ def note_escalated_tier(agent, tier: str) -> None:
         tier_confidence=0.95,
         decided_model=str(getattr(agent, "model", "") or ""),
         escalated=True,
+        reason_depth="simple" if t == "reason" else None,
+        reason_depth_reason="escalation" if t == "reason" else None,
+        consecutive_reason_turns=consec,
     )
 
 
@@ -303,6 +339,9 @@ def stamp_routing_atof(
     tier_confidence: float = 0.0,
     decided_model: str = "",
     escalated: bool = False,
+    reason_depth: str | None = None,
+    reason_depth_reason: str | None = None,
+    consecutive_reason_turns: int = 0,
 ) -> None:
     """Attach routing fields to the live ATOF ``hermes.turn`` end event. Fail-open."""
     try:
@@ -312,6 +351,8 @@ def stamp_routing_atof(
         agent._last_routing_confidence = float(tier_confidence or 0.0)
         agent._last_routing_model = decided_model
         agent._last_routing_escalated = bool(escalated)
+        agent._last_reason_depth = reason_depth
+        agent._last_reason_depth_reason = reason_depth_reason
     except Exception:
         pass
     try:
@@ -325,6 +366,9 @@ def stamp_routing_atof(
             "tier_confidence": float(tier_confidence or 0.0),
             "decided_model": str(decided_model or ""),
             "escalated": bool(escalated),
+            "reason_depth": reason_depth,
+            "reason_depth_reason": reason_depth_reason,
+            "consecutive_reason_turns": int(consecutive_reason_turns or 0),
         }
     except Exception:
         pass
@@ -338,6 +382,7 @@ def _route(
     config: dict[str, Any] | None,
     turn_index: int = 0,
     prior_tier: str | None = None,
+    consecutive_reason_turns: int = 0,
     persist_tier=None,
 ) -> RoutingDecision | None:
     if config is None:
@@ -366,13 +411,26 @@ def _route(
         logger.debug("smart_model_routing: classifier returned None; staying on %s", current_model)
         return None
     tier = _clamp_min_tier(tier, config)
+    model, provider = _tier_target(tier, config)
+    if tier != "reason" and isinstance(LAST_RULES_DETAIL, dict):
+        LAST_RULES_DETAIL["reason_depth"] = None
+        LAST_RULES_DETAIL["reason_depth_reason"] = None
+    if tier == "reason":
+        model, provider = _apply_reason_depth(
+            user_message,
+            config,
+            turn_index=turn_index,
+            prior_tier=prior_tier,
+            consecutive_reason_turns=consecutive_reason_turns,
+            fallback_model=model,
+            fallback_provider=provider,
+        )
     if persist_tier is not None:
         try:
             persist_tier(tier)
         except Exception:
             pass
 
-    model, provider = _tier_target(tier, config)
     if not model:
         return None
     provider = (provider or current_provider).strip()
@@ -498,6 +556,125 @@ def _clamp_min_tier(tier: str, config: dict[str, Any]) -> str:
     if not floor or floor not in _TIER_RANK:
         return tier
     return floor if _TIER_RANK[tier] < _TIER_RANK[floor] else tier
+
+
+def _parse_model_spec(raw: Any, default_provider: str = "") -> tuple[str, str]:
+    """Accept ``provider/model``, a bare model id, or ``{model, provider}``."""
+    if isinstance(raw, dict):
+        model = str(raw.get("model") or "").strip()
+        provider = str(raw.get("provider") or default_provider or "").strip()
+        return model, provider
+    s = str(raw or "").strip()
+    if not s:
+        return "", default_provider
+    if "/" in s:
+        provider, model = s.split("/", 1)
+        return model.strip(), provider.strip()
+    return s, default_provider
+
+
+def _reason_split_enabled(config: dict[str, Any]) -> bool:
+    block = config.get("smart_model_routing") or {}
+    if not isinstance(block, dict):
+        return False
+    return bool(block.get("reason_deep_model") or block.get("reason_elite_model"))
+
+
+def _apply_reason_depth(
+    query: str,
+    config: dict[str, Any],
+    *,
+    turn_index: int,
+    prior_tier: str | None,
+    consecutive_reason_turns: int,
+    fallback_model: str,
+    fallback_provider: str,
+) -> tuple[str, str]:
+    """Override the reason-tier model when the config-driven split is on.
+
+    Off by default: missing ``reason_deep_model`` / ``reason_elite_model`` keeps
+    ``tiers.reason``. Stores depth on ``LAST_RULES_DETAIL`` for ATOF.
+    """
+    global LAST_RULES_DETAIL
+    detail = LAST_RULES_DETAIL if isinstance(LAST_RULES_DETAIL, dict) else {}
+    if not _reason_split_enabled(config):
+        detail["reason_depth"] = None
+        detail["reason_depth_reason"] = None
+        LAST_RULES_DETAIL = detail
+        return fallback_model, fallback_provider
+
+    depth, depth_reason = needs_deep_reason(
+        query,
+        turn_index=turn_index,
+        prior_tier=prior_tier,
+        consecutive_reason_turns=consecutive_reason_turns,
+    )
+    block = config.get("smart_model_routing") or {}
+    if not isinstance(block, dict):
+        block = {}
+    spec: Any = None
+    if depth == "elite":
+        spec = block.get("reason_elite_model") or block.get("reason_deep_model") or block.get("reason_model")
+    elif depth == "deep":
+        spec = block.get("reason_deep_model") or block.get("reason_model")
+    else:
+        spec = block.get("reason_model")
+    model, provider = _parse_model_spec(spec, default_provider=fallback_provider)
+    if not model:
+        model, provider = fallback_model, fallback_provider
+    detail["reason_depth"] = depth
+    detail["reason_depth_reason"] = depth_reason
+    LAST_RULES_DETAIL = detail
+    return model, provider
+
+
+def upgrade_inherited_reason_model(
+    agent: Any,
+    query: str,
+    config: dict[str, Any],
+    *,
+    consecutive_reason_turns: int,
+    turn_index: int = 0,
+    prior_tier: str | None = "reason",
+) -> tuple[str, str | None, str | None]:
+    """Re-select simple/deep/elite while inheriting the reason tier. Fail-open.
+
+    Needed because ``per_turn=false`` skips re-classification; trajectory
+    still has to promote to the elite model on later turns.
+    """
+    current_model = str(getattr(agent, "model", "") or "")
+    if not _reason_split_enabled(config):
+        return current_model, None, None
+    fb_m, fb_p = _tier_target("reason", config)
+    model, provider = _apply_reason_depth(
+        query,
+        config,
+        turn_index=turn_index,
+        prior_tier=prior_tier,
+        consecutive_reason_turns=consecutive_reason_turns,
+        fallback_model=fb_m,
+        fallback_provider=fb_p,
+    )
+    detail = LAST_RULES_DETAIL if isinstance(LAST_RULES_DETAIL, dict) else {}
+    depth = detail.get("reason_depth")
+    depth_reason = detail.get("reason_depth_reason")
+    if not model or model == current_model:
+        return current_model, depth, depth_reason
+    creds = _resolve_tier_credentials(model, provider)
+    if creds is None:
+        return current_model, depth, depth_reason
+    try:
+        agent.switch_model(
+            new_model=model,
+            new_provider=provider,
+            api_key=creds["api_key"],
+            base_url=creds.get("base_url", ""),
+            api_mode=creds.get("api_mode", "chat_completions"),
+        )
+        return model, depth, depth_reason
+    except Exception:
+        logger.debug("smart_model_routing: inherited reason-depth switch failed", exc_info=True)
+        return current_model, depth, depth_reason
 
 
 def _lookup_tier_entry(tier: str, config: dict[str, Any]) -> tuple[str, str]:

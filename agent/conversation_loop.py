@@ -1826,6 +1826,7 @@ def _clear_routing_tier_on_error(agent, result: Any) -> None:
         if result.get("error") or result.get("completed") is False:
             agent._last_routing_tier = None
             agent._last_turn_routing_error = True
+            agent._consecutive_reason_turns = 0
     except Exception:
         pass
 
@@ -1836,8 +1837,10 @@ def _maybe_apply_session_routing(agent, user_message: Any, conversation_history)
         from agent.model_router import (
             LAST_RULES_DETAIL,
             applies_this_turn,
+            bump_consecutive_reason_turns,
             route as _route_model,
             stamp_routing_atof,
+            upgrade_inherited_reason_model,
         )
         user_cfg = getattr(agent, "user_config", None)
         # Production agents often omit user_config; tests set it (even {}) so stay hermetic.
@@ -1853,13 +1856,30 @@ def _maybe_apply_session_routing(agent, user_message: Any, conversation_history)
             prev = getattr(agent, "_last_routing_tier", None)
             if prev:
                 agent._last_routing_tier = prev
+            prior_consec = int(getattr(agent, "_consecutive_reason_turns", 0) or 0)
+            consec = bump_consecutive_reason_turns(agent, prev)
+            depth = "simple" if prev == "reason" else None
+            depth_reason = "inherited" if prev == "reason" else None
+            decided_model = str(getattr(agent, "model", "") or "")
+            if prev == "reason" and isinstance(cfg_for_route, dict):
+                decided_model, depth, depth_reason = upgrade_inherited_reason_model(
+                    agent,
+                    _user_message_text(user_message),
+                    cfg_for_route,
+                    consecutive_reason_turns=prior_consec,
+                    turn_index=_routing_turn_index(conversation_history),
+                    prior_tier=prev,
+                )
             stamp_routing_atof(
                 agent,
                 tier=str(prev or ""),
                 tier_reason="inherited",
                 tier_confidence=1.0,
-                decided_model=str(getattr(agent, "model", "") or ""),
+                decided_model=decided_model,
                 escalated=False,
+                reason_depth=depth,
+                reason_depth_reason=depth_reason,
+                consecutive_reason_turns=consec,
             )
             return
         turn_index = _routing_turn_index(conversation_history)
@@ -1876,6 +1896,8 @@ def _maybe_apply_session_routing(agent, user_message: Any, conversation_history)
                     classified.setdefault("reason", LAST_RULES_DETAIL.get("reason") or "")
                     classified.setdefault("confidence", LAST_RULES_DETAIL.get("confidence") or 0.0)
                     classified.setdefault("escalated", bool(LAST_RULES_DETAIL.get("escalated")))
+                    classified["reason_depth"] = LAST_RULES_DETAIL.get("reason_depth")
+                    classified["reason_depth_reason"] = LAST_RULES_DETAIL.get("reason_depth_reason")
             except Exception:
                 pass
 
@@ -1886,6 +1908,7 @@ def _maybe_apply_session_routing(agent, user_message: Any, conversation_history)
             config=cfg_for_route,
             turn_index=turn_index,
             prior_tier=prior_tier,
+            consecutive_reason_turns=int(getattr(agent, "_consecutive_reason_turns", 0) or 0),
             persist_tier=_persist_tier,
         )
     except Exception:
@@ -1904,15 +1927,23 @@ def _maybe_apply_session_routing(agent, user_message: Any, conversation_history)
                 agent._last_routing_tier = prev
             except Exception:
                 pass
+    decided_tier = str(classified.get("tier") or getattr(agent, "_last_routing_tier", "") or "")
+    consec = bump_consecutive_reason_turns(agent, decided_tier if classified.get("tier") else None)
     try:
         decided = str(getattr(decision, "model", None) or getattr(agent, "model", "") or "")
+        depth = classified.get("reason_depth")
+        if decided_tier != "reason":
+            depth = None
         stamp_routing_atof(
             agent,
-            tier=str(classified.get("tier") or getattr(agent, "_last_routing_tier", "") or ""),
+            tier=decided_tier,
             tier_reason=str(classified.get("reason") or ""),
             tier_confidence=float(classified.get("confidence") or 0.0),
             decided_model=decided,
             escalated=bool(classified.get("escalated")),
+            reason_depth=depth,
+            reason_depth_reason=classified.get("reason_depth_reason") if decided_tier == "reason" else None,
+            consecutive_reason_turns=consec,
         )
     except Exception:
         pass
@@ -1934,6 +1965,7 @@ def _maybe_apply_session_routing(agent, user_message: Any, conversation_history)
         try:
             agent._last_routing_tier = None
             agent._last_turn_routing_error = True
+            agent._consecutive_reason_turns = 0
         except Exception:
             pass
         return

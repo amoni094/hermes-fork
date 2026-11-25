@@ -1133,7 +1133,10 @@ class RelaySessionCoordinator:
         try:
             extra = getattr(turn, "routing_atof", None)
             if isinstance(extra, dict):
-                for key in ("tier", "tier_reason", "tier_confidence", "decided_model", "escalated"):
+                for key in (
+                    "tier", "tier_reason", "tier_confidence", "decided_model", "escalated",
+                    "reason_depth", "reason_depth_reason", "consecutive_reason_turns",
+                ):
                     if key in extra:
                         output[key] = extra[key]
         except Exception:

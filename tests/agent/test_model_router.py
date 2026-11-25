@@ -378,3 +378,157 @@ def test_routing_turn_index_counts_user_messages():
         {"role": "assistant", "content": "b"},
         {"role": "user", "content": "c"},
     ]) == 2
+
+
+def test_reason_deep_trajectory():
+    from agent.reason_depth import needs_deep_reason
+    depth, reason = needs_deep_reason(
+        "fix this bug", turn_index=3, consecutive_reason_turns=2,
+    )
+    assert depth == "elite" and "trajectory" in reason
+
+
+def test_reason_deep_multi_constraint():
+    from agent.reason_depth import needs_deep_reason
+    depth, reason = needs_deep_reason(
+        "reconcile the config and state files without breaking the existing tests",
+    )
+    assert depth == "deep" and "constraint" in reason
+
+
+def test_reason_simple_factual():
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason("is memory working as it should be?", turn_index=0)
+    assert depth == "simple"
+
+
+def test_reason_simple_short_continuation():
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason(
+        "is it synced with local?",
+        turn_index=1,
+        prior_tier="reason",
+        consecutive_reason_turns=1,
+    )
+    assert depth == "simple"
+
+
+def test_reason_deep_complex_refactor():
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason(
+        "refactor the entire authentication module to use the new session manager "
+        "while keeping backward compatibility with existing tests",
+        turn_index=0,
+    )
+    assert depth == "deep"
+
+
+def _reason_split_cfg():
+    return {
+        "smart_model_routing": {
+            "enabled": True,
+            "classifier": "llm",
+            "tiers": {
+                "reason": {"model": "gpt-5.5", "provider": "openai"},
+                "fast": {"model": "gpt-4o-mini", "provider": "openai"},
+            },
+            "reason_model": "deepseek/deepseek-v4-pro",
+            "reason_deep_model": "openai/gpt-5.5",
+            "reason_elite_model": "anthropic/claude-sonnet-5-5",
+        }
+    }
+
+
+def _fake_creds(model, provider):
+    return {
+        "provider": provider,
+        "api_key": "sk-test",
+        "base_url": "https://example.invalid",
+        "api_mode": "chat_completions",
+    }
+
+
+def test_route_reason_simple_uses_reason_model(monkeypatch):
+    monkeypatch.setattr(model_router, "classify_complexity", lambda *a, **k: "reason")
+    monkeypatch.setattr(model_router, "_resolve_tier_credentials", _fake_creds)
+    d = model_router.route(
+        "is memory working as it should be?",
+        current_model="gpt-4o-mini",
+        current_provider="openai",
+        config=_reason_split_cfg(),
+    )
+    assert d is not None
+    assert d.model == "deepseek-v4-pro"
+    assert d.provider == "deepseek"
+    assert model_router.LAST_RULES_DETAIL.get("reason_depth") == "simple"
+
+
+def test_route_reason_deep_uses_gpt55(monkeypatch):
+    monkeypatch.setattr(model_router, "classify_complexity", lambda *a, **k: "reason")
+    monkeypatch.setattr(model_router, "_resolve_tier_credentials", _fake_creds)
+    d = model_router.route(
+        "reconcile the config and state files without breaking the existing tests",
+        current_model="gpt-4o-mini",
+        current_provider="openai",
+        config=_reason_split_cfg(),
+    )
+    assert d is not None
+    assert d.model == "gpt-5.5"
+    assert d.provider == "openai"
+    assert model_router.LAST_RULES_DETAIL.get("reason_depth") == "deep"
+
+
+def test_route_reason_elite_on_trajectory(monkeypatch):
+    monkeypatch.setattr(model_router, "classify_complexity", lambda *a, **k: "reason")
+    monkeypatch.setattr(model_router, "_resolve_tier_credentials", _fake_creds)
+    d = model_router.route(
+        "fix this bug",
+        current_model="gpt-4o-mini",
+        current_provider="openai",
+        config=_reason_split_cfg(),
+        consecutive_reason_turns=2,
+    )
+    assert d is not None
+    assert d.model == "claude-sonnet-5-5"
+    assert d.provider == "anthropic"
+    assert model_router.LAST_RULES_DETAIL.get("reason_depth") == "elite"
+
+
+def test_route_reason_split_off_without_deep_model(monkeypatch):
+    monkeypatch.setattr(model_router, "classify_complexity", lambda *a, **k: "reason")
+    monkeypatch.setattr(model_router, "_resolve_tier_credentials", _fake_creds)
+    cfg = {
+        "smart_model_routing": {
+            "enabled": True,
+            "classifier": "llm",
+            "tiers": {"reason": {"model": "gpt-5.5", "provider": "openai"}},
+            "reason_model": "deepseek/deepseek-v4-pro",
+        }
+    }
+    d = model_router.route(
+        "reconcile the config and state files without breaking the existing tests",
+        current_model="gpt-4o-mini",
+        current_provider="openai",
+        config=cfg,
+    )
+    assert d is not None
+    assert d.model == "gpt-5.5"
+    assert model_router.LAST_RULES_DETAIL.get("reason_depth") is None
+
+
+def test_note_escalated_tier_sets_consecutive_reason_turns():
+    agent = _FakeAgent()
+    agent._last_routing_tier = "fast"
+    model_router.note_escalated_tier(agent, "reason")
+    assert agent._last_routing_tier == "reason"
+    assert agent._consecutive_reason_turns == 1
+
+
+def test_clear_routing_tier_on_error_resets_consecutive():
+    from agent import conversation_loop
+    agent = _FakeAgent()
+    agent._last_routing_tier = "reason"
+    agent._consecutive_reason_turns = 3
+    conversation_loop._clear_routing_tier_on_error(agent, {"error": "boom", "completed": False})
+    assert agent._last_routing_tier is None
+    assert agent._consecutive_reason_turns == 0
