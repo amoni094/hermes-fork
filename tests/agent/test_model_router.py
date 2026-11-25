@@ -437,7 +437,7 @@ def test_reason_followup_what_about_short():
 
 
 def test_reason_rename_always_deep():
-    """rename is always cross-file — no word-count gate."""
+    """rename + code object is always cross-file — no word-count gate."""
     from agent.reason_depth import needs_deep_reason
     depth, reason = needs_deep_reason("rename all references to X in the plugin")
     assert depth == "deep" and "refactor" in reason
@@ -449,8 +449,37 @@ def test_reason_rename_short_also_deep():
     assert depth == "deep"
 
 
+def test_reason_rename_non_code_not_deep():
+    """rename without a code object should NOT go deep."""
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason("rename your tone")
+    assert depth == "simple"
+
+
+def test_reason_rename_non_code_output_not_deep():
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason("rename your output format")
+    assert depth == "simple"
+
+
 def test_reason_audit_analytical():
-    """audit/harden/review keywords -> analytical when >15 words."""
+    """audit keyword -> analytical at >5 words (short gate, not >15)."""
+    from agent.reason_depth import needs_deep_reason
+    depth, reason = needs_deep_reason(
+        "audit the AppArmor profile for firefox",
+    )
+    assert depth == "analytical" and "analytical" in reason
+
+
+def test_reason_harden_short_analytical():
+    """harden at >=5 words fires analytical."""
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason("harden the firefox sandbox profile")
+    assert depth == "analytical"
+
+
+def test_reason_audit_long_analytical():
+    """Long audit query also hits analytical."""
     from agent.reason_depth import needs_deep_reason
     depth, reason = needs_deep_reason(
         "audit the AppArmor profile for firefox and check for over-permissions "
@@ -506,6 +535,54 @@ def test_reason_tier_inherit_long_query_no_inherit():
         prior_tier="elite",
     )
     # > 4 words, should not inherit — route on content
+    assert "inherit" not in _reason
+
+
+def test_reason_followup_just_short_suppressed():
+    """'just' at <=5 words suppresses elite via tight cap."""
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason("just do it now", consecutive_reason_turns=2)
+    assert depth != "elite"
+
+
+def test_reason_followup_just_long_not_suppressed():
+    """'just rewrite the entire auth module' (6w) > tight cap -> should elite."""
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason(
+        "just rewrite the entire auth module", consecutive_reason_turns=2
+    )
+    assert depth == "elite"
+
+
+def test_reason_followup_and_short_suppressed():
+    """'and do it' at <=5 words is a tight-cap follow-up."""
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason("and do it", consecutive_reason_turns=2)
+    assert depth != "elite"
+
+
+def test_reason_followup_and_long_not_suppressed():
+    """'and implement the full OAuth2 flow with PKCE' (8w) > tight cap -> elite."""
+    from agent.reason_depth import needs_deep_reason
+    depth, _reason = needs_deep_reason(
+        "and implement the full OAuth2 flow with PKCE", consecutive_reason_turns=2
+    )
+    assert depth == "elite"
+
+
+def test_reason_ack_punctuated_inherits():
+    """'right?' and 'ok?' with punctuation should inherit prior tier."""
+    from agent.reason_depth import needs_deep_reason
+    for ack in ("right?", "ok?", "yes!", "lgtm."):
+        depth, reason = needs_deep_reason(ack, prior_tier="elite")
+        assert depth == "elite" and "inherit" in reason, f"Failed for {ack!r}"
+
+
+def test_reason_ack_do_n_capped():
+    """'do 99' (>2 digits) should NOT inherit (digit cap at 1-2)."""
+    from agent.reason_depth import needs_deep_reason
+    _depth, _reason = needs_deep_reason("do 999", prior_tier="elite")
+    # digit cap: \d{1,2} only, so 'do 999' falls through to normal routing
     assert "inherit" not in _reason
 
 

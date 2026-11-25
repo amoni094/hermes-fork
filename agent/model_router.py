@@ -647,7 +647,15 @@ def upgrade_inherited_reason_model(
 
     Needed because ``per_turn=false`` skips re-classification; trajectory
     still has to promote to the elite model on later turns.
+
+    ``prior_tier`` defaults to ``'reason'`` (the 6-tier name) for backward compat,
+    but we prefer to pass the last *depth* label (elite/deep/analytical/simple)
+    so that ACK tier-inherit works correctly.  Callers should pass
+    ``agent._last_reason_depth`` when available.
     """
+    # Resolve the best prior_tier: use the stored depth label if available,
+    # fall back to the passed prior_tier (which may be the 6-tier name 'reason').
+    resolved_prior = getattr(agent, "_last_reason_depth", None) or prior_tier
     current_model = str(getattr(agent, "model", "") or "")
     if not _reason_split_enabled(config):
         return current_model, None, None
@@ -656,7 +664,7 @@ def upgrade_inherited_reason_model(
         query,
         config,
         turn_index=turn_index,
-        prior_tier=prior_tier,
+        prior_tier=resolved_prior,
         consecutive_reason_turns=consecutive_reason_turns,
         fallback_model=fb_m,
         fallback_provider=fb_p,
