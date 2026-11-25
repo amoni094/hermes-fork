@@ -119,6 +119,7 @@ class _FakeAgent:
         self.user_config = {}
         self._last_routing_tier = None
         self._last_turn_routing_error = False
+        self.ephemeral_system_prompt = None
 
     def switch_model(self, **kwargs):
         self.switched = kwargs
@@ -730,3 +731,78 @@ def test_clear_routing_tier_on_error_resets_consecutive():
     conversation_loop._clear_routing_tier_on_error(agent, {"error": "boom", "completed": False})
     assert agent._last_routing_tier is None
     assert agent._consecutive_reason_turns == 0
+
+
+def test_upgrade_inherited_reason_prior_tier_reason_does_not_elite():
+    """upgrade_inherited_reason_model with prior_tier='reason' (the 6-tier name)
+    must not activate inherit (because 'reason' is not a depth label).
+    With consecutive=2 and query='y', the bare-ack guard should suppress elite.
+    """
+    agent = _FakeAgent()
+    # _last_reason_depth is not set — simulates first turn of a reason sequence
+    _model, depth, _ = model_router.upgrade_inherited_reason_model(
+        agent,
+        query="y",
+        config=_reason_split_cfg(),
+        consecutive_reason_turns=2,
+        prior_tier="reason",
+    )
+    # 'y' is a bare ACK -> should not elite even with consecutive=2
+    assert depth != "elite"
+
+
+def test_upgrade_inherited_reason_last_depth_elite_inherits():
+    """When agent._last_reason_depth='elite', 'y' inherits elite."""
+    agent = _FakeAgent()
+    agent._last_reason_depth = "elite"  # stored from prior turn
+    _model, depth, _ = model_router.upgrade_inherited_reason_model(
+        agent,
+        query="y",
+        config=_reason_split_cfg(),
+        consecutive_reason_turns=2,
+        prior_tier="reason",  # the old 6-tier name — should be overridden by _last_reason_depth
+    )
+    assert depth == "elite"
+
+
+def test_route_reason_analytical_only_config_enables_split(monkeypatch):
+    """_reason_split_enabled must return True when only reason_analytical_model is set."""
+    monkeypatch.setattr(model_router, "classify_complexity", lambda *a, **k: "reason")
+    monkeypatch.setattr(model_router, "_resolve_tier_credentials", _fake_creds)
+    cfg = {
+        "smart_model_routing": {
+            "enabled": True,
+            "tiers": {"reason": {"model": "deepseek-v4-pro", "provider": "deepseek"}},
+            "reason_model": "deepseek/deepseek-v4-pro",
+            "reason_analytical_model": {"model": "grok-4.7", "provider": "xai"},
+            # intentionally NO reason_deep_model or reason_elite_model
+        }
+    }
+    d = model_router.route(
+        "audit the AppArmor profile for firefox and check for over-permissions",
+        current_model="gpt-4o-mini",
+        current_provider="openai",
+        config=cfg,
+    )
+    assert d is not None
+    assert model_router.LAST_RULES_DETAIL.get("reason_depth") == "analytical"
+
+
+def test_upgrade_inherited_applies_opus5_strict_prompt(monkeypatch):
+    """Live elite turns on opus-5 get the token-strict ephemeral system prompt."""
+    monkeypatch.setattr(model_router, "_resolve_tier_credentials", _fake_creds)
+    agent = _FakeAgent()
+    agent._last_reason_depth = "elite"
+    cfg = _reason_split_cfg()
+    cfg["smart_model_routing"]["reason_elite_model"] = "anthropic/claude-opus-5"
+    _model, depth, _ = model_router.upgrade_inherited_reason_model(
+        agent,
+        query="y",
+        config=cfg,
+        consecutive_reason_turns=2,
+        prior_tier="reason",
+    )
+    assert depth == "elite"
+    assert "opus-5" in agent.model
+    assert agent.ephemeral_system_prompt
+    assert "REPLY VALIDATED=OK" in agent.ephemeral_system_prompt

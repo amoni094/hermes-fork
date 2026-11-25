@@ -584,6 +584,45 @@ def _reason_split_enabled(config: dict[str, Any]) -> bool:
     )
 
 
+# opus-5 (not opus-4-5) omits machine-checked reply tokens unless prompted.
+_DEFAULT_ELITE_STRICT_PROMPT = (
+    "You are a precise coding assistant. Each task prompt ends with a required "
+    "reply token (e.g. REPLY VALIDATED=OK or FIXED=OK). You MUST include that "
+    "exact token verbatim in your final reply. Never omit it, even if you "
+    "explain your reasoning. The token is machine-checked."
+)
+
+
+def _is_opus5_class(model: str) -> bool:
+    m = model or ""
+    return "opus-5" in m and "opus-4-5" not in m
+
+
+def _maybe_apply_reason_elite_strict_prompt(
+    agent: Any,
+    model: str,
+    depth: str | None,
+    config: dict[str, Any],
+) -> None:
+    """Attach traj token-strict prompt for live opus-5 elite turns. Fail-open."""
+    if depth != "elite" or not _is_opus5_class(model):
+        return
+    existing = getattr(agent, "ephemeral_system_prompt", None)
+    if existing:
+        return
+    block = config.get("smart_model_routing") or {}
+    if not isinstance(block, dict):
+        block = {}
+    if "reason_elite_strict_prompt" in block:
+        raw = block.get("reason_elite_strict_prompt")
+        if not raw:
+            return
+        prompt = str(raw)
+    else:
+        prompt = _DEFAULT_ELITE_STRICT_PROMPT
+    agent.ephemeral_system_prompt = prompt
+
+
 def _apply_reason_depth(
     query: str,
     config: dict[str, Any],
@@ -673,6 +712,9 @@ def upgrade_inherited_reason_model(
     depth = detail.get("reason_depth")
     depth_reason = detail.get("reason_depth_reason")
     if not model or model == current_model:
+        _maybe_apply_reason_elite_strict_prompt(
+            agent, model or current_model, depth, config,
+        )
         return current_model, depth, depth_reason
     creds = _resolve_tier_credentials(model, provider)
     if creds is None:
@@ -685,6 +727,7 @@ def upgrade_inherited_reason_model(
             base_url=creds.get("base_url", ""),
             api_mode=creds.get("api_mode", "chat_completions"),
         )
+        _maybe_apply_reason_elite_strict_prompt(agent, model, depth, config)
         return model, depth, depth_reason
     except Exception:
         logger.debug("smart_model_routing: inherited reason-depth switch failed", exc_info=True)
