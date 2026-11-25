@@ -807,6 +807,8 @@ DEFAULT_CONFIG = {
     # different provider than the session's current one.
     "smart_model_routing": {
         "enabled": False,
+        "classifier": "llm",
+        "per_turn": False,
         "default_tier": "standard",
         "tiers": {
             "light": "",

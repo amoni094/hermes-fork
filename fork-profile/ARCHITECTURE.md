@@ -4,7 +4,7 @@ Patterns ported from Denuto (jesterG1979/hello_agent) + Hermes-native patterns.
 This is the authoritative single source of truth for how Hermes is structured,
 what rules are enforced, and what the invariants are.
 
-Last updated: 2026-10-29 Wave 25 saturation (14 plugins, 151 cron jobs, lifecycle.db inventory + inter-script edges)
+Last updated: 2026-11-24 Wave 26 (lefthook + pre-push regression gate; eval-compaction-bridge-0001; compaction-rouge-score-nightly-0001; R-D advisor token-count fallback)
 
 ---
 
@@ -31,10 +31,7 @@ than implying it runs. Gate gaps accumulate into a backlog.
 - User-owned skills require `hermes curator adopt` before any curator write.
 - No procedure lives only in memory or in session history.
 - GATE: skillspector_guard.py runs on cron every 235m (post-facto batch scan).
-- GATE (H-I1: skillspector pre-commit hook): CLOSED — pre-commit hook installed at
-  ~/.hermes/hermes-fork/.git/hooks/pre-commit; scans staged SKILL.md files via
-  `HERMES_PROFILE=fork python3 ~/.hermes/scripts/skillspector_guard.py --enforce`
-  and blocks the commit (exit 1) on high-risk findings. Fail-open: absent guard → warn + exit 0.
+- GATE (H-I1: skillspector pre-commit hook): SUPERSEDED by lefthook lint + pre-push regression gate (installed 2026-11-24). Live `~/.hermes/hermes-fork/.git/hooks/pre-commit` is lefthook; skillspector remains only as `pre-commit.old`. Cron `skillspector_guard.py` every 235m is unchanged.
 
 ### H-I2 — Memory surfaces have strict ownership (one writer per fact class)
 - skills: reusable procedures and task-specific patterns
@@ -175,9 +172,10 @@ Source: Denuto harness-and-memory-contract.md.
 - Appended to annotation output as: "Compaction advisory: aggressiveness=X.XX, focus=TOPIC".
 - Persists `cache/rd-compaction-advisory.json` (atomic). DPI property test flags plans that
   would drop pre-compact-annotate focus tokens (Cover–Thomas data-processing inequality).
-- WIRING (Wave 18): context-pressure-guard `on_pre_compress` reads aggressiveness and applies
-  it as compressor `lambda_` (monotone-increasing within a session) and writes
-  `cache/rd-lambda-target.json` for lambda-tuner (no hook parameter exposed).
+- WIRING (Wave 18 → ADV-022): context-pressure-guard registers `pre_compress` (not `on_pre_compress`)
+  and is invoked via `fire_pre_compress()` in `agent/compaction_events.py` → called from
+  `agent/conversation_compression.py` before `_pre_compress_memory_context`. Applies lyapunov-map
+  lambda (memoryless, not +0.05 per turn) and writes `cache/rd-lambda-target.json` for lambda-tuner.
   Proposal: `proposals/wave18-rd-compaction-wiring.json` (HIGH, plugin_update).
   Does not patch `agent/context_compressor.py`. Fail-open (H-I7).
   Hard core: `new_lambda = min(0.95, max(current, proposed, session_floor))`.
@@ -233,6 +231,29 @@ not enforced gates in the agent loop. Do NOT cite them as active enforcement:
   ue-calibration-bridge.py   - Bridge: UE scores -> calibration-log.jsonl for Platt-scaling pipeline
   memory-access-decay.py     - Canonical access-weighted decay (fork/scripts wrapper delegates here)
   memory-auto-improvement.py - Canonical auto-improvement proposer (cron 03:00; fork/scripts wrapper)
+  delegation-audit-hook.py   - post_tool_call pre-call logger for delegate_task; JSONL + lifecycle.db delegation_audit (success_rate NULL until outcome)
+  tool-review-log-schema.py  - Idempotent DDL for tool_review_log + anytime_eval_log in lifecycle.db (--apply / --self-test)
+  anytime-eval-feeder.py     - Incremental calibration-log.jsonl -> eval-scores.jsonl feeder (state: anytime-eval-feeder-state.json)
+  delegation-blind-spot-audit.py - Decision resolvability audit (Wilson interval + value contrast); structurally_ambiguous vs resolvable; cache/decision_audit_state.json
+  causal-regret-minimizer.py - Label-free causal-critique coherence; updates only when interventional+confound flags present; cache/skill-causal-coherence.json
+  anytime-nspi-evaluator.py  - Normalized signed primal integral over anytime_eval_runs arms; cache/nspi-state.json
+  skill-communication-pruning.py - Minimal PoA-preserving skill communication graph (epsilon-BR pruning); cache/communication-graph.json; cron 45 2 * * *
+  skill-spectral-ranking.py  - Dominant eigenmix of skill transition operator T; cache/routing-spectral-state.json; cron 30 */6 * * *
+  skill-evidence-rate.py     - MIRA greedy evidence acquisition (IG/cost) for subagents; cache/subagent-evidence.json; cron 15 */4 * * *
+  optimization-pass-ordering.py - Anytime pass-order sensitivity over anytime_eval_runs; cache/pass-ordering-state.json; cron 0 5 * * *
+  skill-order-rank.py         - Pairwise (s_i,s_j) success rank from eval/calibration traces; cache/skill-order-rank.json; cron 22 3 * * *
+  artifact-lifecycle-policy.py - Store-full / store-IR / regenerate cost policy; cache/artifact_cost_policy.json; cron 24 3 * * *
+  task-kalman-throttle.py     - 10-dim KF invoke/skip throttle; cache/task-kalman-throttle.json + task-kf-state.db; cron 27 * * * *
+  gpu-joule-point-calibration.py - RAPL/DRM joule-point power caps (~45% TDP); cache/gpu-power-caps.json; cron 28 4 * * *
+  cost-attribution.py         - Linear memory-injection cost vs depth; cache/workflow-cost-ledger.json; cron 32 3 * * *
+  compression-cost-tracker.py - Quadratic compression-lever cost curves; cache/compression-lever-costs.json; cron 34 3 * * *
+  bounded-rationality-policy.py - Complexity-budget knapsack over skill_kl_history + tracegrant_grants; cache/bounded-rationality-state.json; cron 0 7 * * *
+  compliance-score-collector.py - tool_review_log -> (accuracy, explainability, robustness) jsonl; cron */15; companion compliance-score-hook
+  turn-behavior-collector.py - per-turn stats into anytime_eval_log + turn-behavior.jsonl; cron 0 3 * * *; companion turn-behavior-logger
+  skill-graph-edge-builder.py - co-access edges from calibration-log.jsonl; preserves nodes; cron 15 2 * * * (after skill-graph-builder)
+  skill-lift-tracker.py - ACES skill lift (mean UE without minus with) from calibration-log.jsonl; two-sample 95% CI; --self-test/--report/--json/--skill
+  skill-latency-collector.py - aggregate skill-latency.jsonl to skill-latency-stats.json; cron */30; companion skill-latency-logger
+  tool-review-scorer.py - backfill tool_review_log from delegation_audit (300/run); cron */15 * * * *
 
 ## Knowledge Corpus (theory-grounded skills — wave 3, 2026-09-22)
 
@@ -251,20 +272,28 @@ Six books ingested as fork skills to formally ground bottleneck reasoning:
 
 Live plugins under ~/.hermes/profiles/fork/plugins/, enabled in config.yaml plugins.enabled:
 
-  context-pressure-guard - pre_llm_call + pre_compress: injects [CONTEXT PRESSURE HIGH] at consecutive_high >= 2; nudges compressor lambda +0.05 per turn at cap
+  context-pressure-guard - pre_llm_call + pre_compress: injects [CONTEXT PRESSURE HIGH] at consecutive_high >= 2; applies lyapunov-map lambda (memoryless, not +0.05 per turn). pre_compress registered; fire site in agent/conversation_compression.py (agent= kwarg wired since Wave 25 cold audit fix)
   tool-result-audit      - post_tool_call: tool-auth-shim.py injection-risk audit on EXTERNAL-tier tool results (shadow; never blocks)
-  jev-compaction         - pre_compress + on_session_end: per-message RR/Jev relevance scoring; prunes low-RR tool results before compression
+  jev-compaction         - on_session_end + pre_compress: per-message RR/Jev relevance scoring; prunes low-RR tool results before compression. pre_compress registered; agent= kwarg wired (Wave 25 cold audit fix)
   cobra-guard            - pre_tool_call / post_tool_call / on_session_start: wraps cobra-skip-guard.py probe-cache logic; WARN-only, fail-open (HERMES_COBRA_GUARD=0 disables)
   orca-status            - posts agent lifecycle events to ORCA_AGENT_HOOK_ENDPOINT; silent no-op when unset
-  tool-auth-gate         - pre_tool_call Agentao-style proposal/authorize split (arXiv:2608.13574); DENY_ALWAYS / DENY_IN_CONTEXT / ALLOW against escalate_tools and deny_tools
-  hindsight              - long-term memory plugin (enabled)
-  governance-hard-block  - H-I8 fail-closed pre_tool_call; LIVE in plugins.enabled (deployed Wave 18 via CLI; proposal prop_d16153f3 deployed)
+  tool-auth-gate         - pre_tool_call Agentao-style proposal/authorize split (arXiv:2608.13574); DENY_ALWAYS / DENY_IN_CONTEXT / ALLOW against escalate_tools and deny_tools; does NOT cover execute_code/terminal or hermes-fork/plugins paths
+  hindsight              - long-term memory plugin (enabled); bank_id_template='hermes-{profile}' → bank 'hermes-fork' (pre-created 2026-11-23; auto_retain=true, auto_recall=true); on_post_compaction token kwargs probe order: tokens_before/tokens_after → context_tokens_before/after → before_tokens/after_tokens (fixed 2026-11-23, prior NULL bug)
+  governance-hard-block  - H-I8 fail-closed pre_tool_call; DISABLED (plugin.yaml + config.yaml settings.enabled: false; register() early-returns; hook never registered; tool-auth-gate is NOT a full substitute — see coverage gap note above)
   jev-turn-evaluator     - in plugins.enabled (shadow gate, shadow_jev_evaluator=true; Wave 19 GATE CLOSED)
   memory-ransac-gate     - post_tool_call RANSAC outlier gate; rejects tool results that are geometric outliers relative to memory corpus; fail-open (Wave 18 ADV-001 fixed)
   camofox                - Camofox anti-detection browser tools over camofox-browser REST (browser_navigate/snapshot/click/type/...)
-  deductive-verifier     - pre_tool_call semantic predicate gate; blocks CRITICAL command patterns (complements governance-hard-block)
+  deductive-verifier     - pre_tool_call semantic predicate gate; blocks CRITICAL command patterns (complements governance-hard-block); DV-B-001 fixed: returns message= not reason= so dispatcher actually enforces blocks
+  compaction-gate        - pre_compress + post_compaction; session-depth gate (TURN_THRESHOLD=1100) + HHR branch (Wald SPRT (alpha=0.05, beta=0.10) on after_tokens/before_tokens < 0.35 threshold); on_post_compaction writes compaction_telemetry to state.db activating HHR; MDL fact scoring + SHA-256 dedup; persists to compaction_gate_facts (SQLite + FTS5 cgf_fts); fail-open (never blocks compression); writes cache/compaction-gate-log.jsonl (operator-only dark output — CG-F-001)
+  compaction-signal-fuser  - no_agent cron every 2h; reads cache/compaction-trigger-signal.json (relevance), cache/prequential-compaction-log.jsonl (prequential), cache/context-ac-rate-segments.json (ac-rate); naive-Bayes log-odds fusion; writes cache/compaction-fused-signal.json consumed by compaction-gate _check_fused_signal()
+  compaction-confidence-decay - no_agent cron every 6h; Anderson RIF: Jaccard>=0.5 competitor decays older compaction_gate_facts confidence 15% per overlap, floor 0.05; writes cache/compaction-decay-stats.json
   post-tool-compliance   - post_tool_call observation-only compliance scorer; writes cache/compliance-scores.jsonl (fail-open)
   decision-audit         - post_tool_call resolvability logger; every 10 calls writes decision-audit-log.jsonl + delegation_audit (fail-open)
+  skill-access-logger    - post_tool_call shadow hook; logs skill_view to cache/skill-access.log and cache/calibration-log.jsonl (scope=skill_name) for skill-graph-builder co-access edges (fail-open)
+  skill-routing-nudge    - pre_llm_call nudge; companion skill-router-index.py at profiles/fork/scripts/; _router_script_path() peels HERMES_HOME==profile_dir correctly (ADV-022 fix)
+  compliance-score-hook  - post_tool_call SAFE-AI triple (accuracy/explainability/robustness) -> compliance-scores.jsonl (fail-open)
+  turn-behavior-logger   - post_tool_call per-turn entropy/success/tokens -> anytime_eval_log + turn-behavior.jsonl (fail-open)
+  skill-latency-logger   - pre_tool_call + post_tool_call elapsed_ms -> skill-latency.jsonl and tool_review_log (fail-open)
 
 ---
 
@@ -306,10 +335,8 @@ Live plugins under ~/.hermes/profiles/fork/plugins/, enabled in config.yaml plug
 
 ### CLOSED (verified on-disk, not hypothetical)
 
-  H-I1 pre-commit hook: installed at ~/.hermes/hermes-fork/.git/hooks/pre-commit;
-    scans staged SKILL.md files via skillspector_guard.py --enforce (HERMES_PROFILE=fork);
-    blocks on high-risk findings (exit 1); fail-open when guard absent.
-    Wave 8. Adversarial pass: PASS.
+  H-I1 pre-commit hook: SUPERSEDED by lefthook lint + pre-push regression gate (installed 2026-11-24).
+    Live pre-commit is lefthook; skillspector POSIX hook exists only as pre-commit.old.
 
   H-I8 advisory gate: tool_guardrails.py _governance_pre_check() wired as pre-check
     for HIGH-risk tool calls on .hermes paths. Fire-and-forget, fail-open.
@@ -409,7 +436,7 @@ Live plugins under ~/.hermes/profiles/fork/plugins/, enabled in config.yaml plug
     SEMANTIC/FATAL remain in-process only — fixing those requires redesigning callers.
 
   rd-compaction-advisor wired via pre_compress: aggressiveness is persisted to
-    cache/rd-compaction-advisory.json; context-pressure-guard.on_pre_compress applies
+    cache/rd-compaction-advisory.json; context-pressure-guard pre_compress hook applies
     it as monotone lambda and writes cache/rd-lambda-target.json for lambda-tuner.
     context_compressor.py is not patched. DPI focus-token gate in the advisor.
     Proposal: proposals/wave18-rd-compaction-wiring.json.
@@ -439,7 +466,7 @@ Live plugins under ~/.hermes/profiles/fork/plugins/, enabled in config.yaml plug
 | skill-integrity.json dark (no consumer) | skillspector_guard.py end-of-main block reads skill-integrity.json; prints INTEGRITY-FAIL: SKILL (REASON) for status!='ok'; fail-open | CLOSED |
 | skill-merkle.json dark (no consumer) | skillspector_guard.py end-of-main block reads skill-merkle.json; prints MERKLE-DRIFT: SKILL for drift/changed==True; fail-open | CLOSED |
 | BN-08: retry-budget-guard in-process only (restart resets AUTH/RESOURCE budgets) | PersistentBudgetState class added; AUTH+RESOURCE tracked cross-restart in cache/retry-budget-state.json; 24h window expiry; atomic save; TRANSIENT/SEMANTIC/FATAL remain in-process only | CLOSED |
-| H-I1: skillspector-guard pre-commit hook (cron batch scan != pre-commit hook) | POSIX sh hook written to ~/.hermes/hermes-fork/.git/hooks/pre-commit; scans staged SKILL.md files; runs skillspector_guard.py --enforce with HERMES_PROFILE=fork; fail-open if guard absent; chmod +x | CLOSED |
+| H-I1: skillspector-guard pre-commit hook (cron batch scan != pre-commit hook) | SUPERSEDED by lefthook lint + pre-push regression gate (installed 2026-11-24). Live pre-commit is lefthook; skillspector only as pre-commit.old | SUPERSEDED |
 
 Adversarial cold pass (Task 4): 5/5 PASS — no HIGH/CRITICAL findings. LOW observations: cron ordering for alarm-summary (scheduling, not a code defect); HERMES_PROFILE=fork hardcoded in hook (correct for this repo). No patches required.
 
@@ -651,7 +678,7 @@ Recursive 3-pass + cold adversarial on H-I8 bypass (temp+rename) and ssl_guard s
 |---|---|---|---|
 | Memory | Markov kernels; lenses GetPut; Curry/Robinson sheaf glue | Restriction to overlap agrees; nonzero Čech H¹ = locally ok, globally inconsistent | `sheaf-memory-gluing.py` |
 | Scheduler / cron | Bregman Lagrangian; MDP (Puterman); Lyapunov | Named energy non-increase on the loop | `loop-pid.py cmd_lyapunov_check` (pre-existing) |
-| Compressor | DPI / Fano; rate-distortion | I(dec;Y) ≤ I(dec;X); lambda monotone; focus tokens survive | `rd-compaction-advisor.py --self-test`; `context-pressure-guard.on_pre_compress` |
+| Compressor | DPI / Fano; rate-distortion | I(dec;Y) ≤ I(dec;X); lambda monotone; focus tokens survive | `rd-compaction-advisor.py --self-test`; `context-pressure-guard pre_compress hook` |
 | Plugins / tool dispatch | Honda session types; Lynch I/O automata; Jacobs coalgebra | AG(tool_call → pre_hook_complete); AF(request → response) under fairness | `docs/agent-loop-io-automata.md`; `governance-hard-block` |
 | Skill routing | Pearl do-calculus; Schölkopf CRL | Refuse causal claims that are only observational | `skill-routing-causal-audit.py` |
 | Governance | Lamport crash-boundary; OCC | Illegal transition raises; HIGH write needs approved proposal | `improvement_governance.py` + `governance-hard-block` |
@@ -663,7 +690,7 @@ Recursive 3-pass + cold adversarial on H-I8 bypass (temp+rename) and ssl_guard s
 
   Plugin: `~/.hermes/profiles/fork/plugins/governance-hard-block/`
   Proposal: prop_d16153f3 HIGH pending_review.
-  **LIVE in plugins.enabled** — governance-hard-block enforcing (Wave 18). Proposals deployed.
+  **DISABLED** — governance-hard-block plugin.yaml settings.enabled: false; hook is inactive. prop_d16153f3 pending_review. tool-auth-gate covers the primary DENY surface.
   Bootstrap exception: `plugins/governance-hard-block/**` only.
   Adversarial: `mv /tmp/x config.yaml` and `os.replace` are matched via rename primitives
   + path regex. Residual: execute_code that builds the dest path at runtime with no
@@ -719,6 +746,7 @@ Recursive 3-pass + cold adversarial on H-I8 bypass (temp+rename) and ssl_guard s
   memory-ransac-gate/      — RANSAC outlier gate with register(ctx) (ADV-001 fixed)
   post-tool-compliance/    — installed; path-doubling bug fixed, flock added (Wave 25 adversarial pass)
   decision-audit/          — installed; path-doubling bug fixed, flock+WAL+CREATE TABLE added (Wave 25 adversarial pass)
+  lambda-tuner/            — session-type classifier + adaptive compression profiles (enabled Wave 26)
 
   Governance: prop_b38d4e62 (skill-graph-builder, runtime, approved) and
   prop_d28ae98f (delegate-outcome-logger, runtime, approved). New runtime
@@ -1347,13 +1375,14 @@ New scripts (stdlib only, H-I6 compliant):
   hermes-scripts/eval-compaction-data-bridge.py    - bridge: writes pre/mid/post text + current-token-count.json; feeds AEP + chain-rule-MI
   hermes-scripts/eval-compaction-distortion-gate.py - char/n-gram Jaccard distortion gate; --self-test PASS
   Fixtures: cache/scratch/synthetic-transcript.json, cache/scratch/compaction-questions.json
-  Patch: rd-compaction-advisor.py reads cache/current-token-count.json when --current-tokens omitted.
+  Patch: rd-compaction-advisor.py reads cache/current-token-count.json when --current-tokens omitted (scheduler does not pass job.argv; no-arg cron is the live path).
+  R-D advisor cron: wrapper rd-compaction-advisor-cron.py forces --from-log; HERMES_HOME=/var/home/rainbow/.hermes + HERMES_PROFILE=fork.
 
-Cron recommendation: pre_compress hook should call eval-compaction-data-bridge.py on every
-  compaction to keep AEP/MI/advisor from reporting zeros in production.
+eval-compaction-data-bridge: wired to cron eval-compaction-bridge-0001 (every 6h, 2026-11-24).
+ROUGE scoring: wired to cron compaction-rouge-score-nightly-0001 (04:50 daily, 2026-11-24).
 
 Remaining gaps (not closed this wave):
-  - OPEN: LLM runner.py exam stratification (answerer + judge; questions must span head/middle/tail).
+  - OPEN: exam *generation* spanning head/middle/tail of the transcript. Scoring stratification is CLOSED (Wave 26): `by_where_stratum` in run_policy / run_policy_cycles / uncompacted_control (where-span length buckets, not transcript position).
   - Jev-adversarial: replant needles inside tool dumps before treating Jev as dominant.
   - N=6 needles is underpowered. Need >= 30 independent needles (10/band) for policy ranking.
   - Live pre_compress hook calling distortion gate and refusing high-D summaries.
@@ -1479,7 +1508,7 @@ New scripts (stdlib only, H-I6 compliant):
 Remaining gaps (not closed this wave):
   - No live stepper: synthetic history is a bootstrap, not a session loop.
     Something must call loop-pid.py step between turns or the file goes stale.
-  - History cap 20 in cmd_step: Lyapunov/CUSUM/passivity need a longer ring buffer (or side log).
+  - CLOSED: History cap raised 20→200 in cmd_step (Lyapunov/CUSUM/passivity need longer ring buffer).
   - Gain mismatch: lyapunov-check uses default Kp/Ki/Kd, not the plant's actual gains.
   - CLOSED: SPRT alpha overshoot — A_boot wired into shadow-gate-sprt / sprt-effective-decision.
   - CLOSED: ISS n=0 fail-closed (iss-justification-gate.py).
@@ -1609,7 +1638,7 @@ Veto producer before effective merge before consumers:
 
 ## Wave 25 — Coherence, Consistency & Wiring Audit (2026-10-28)
 
-Full-stack audit: runtime, scripts (562 total), cron (151 jobs), plugins (14 enabled), skills (224), openshell policy, governance plugin.
+Full-stack audit: runtime, scripts (562 total), cron (165 jobs), plugins (17 enabled), skills (224), openshell policy, governance plugin.
 
 Last updated: 2026-10-28
 
@@ -1637,7 +1666,7 @@ All items below were offline due to SANDBOX_FAIL caused by C1. With openshell po
 
 - **block-bootstrap-sprt.json A_boot**: A_boot=11.94 confirmed present (audit concern was false). shadow-gate-sprt will use the correct bootstrap threshold.
 - **All 562 scripts**: compile clean.
-- **All 14 enabled plugins**: compile clean, hook names valid, no phantom entries.
+- **All 17 enabled plugins**: compile clean, hook names valid, no phantom entries.
 - **HERMES_PROFILE=fork env on all 151 cron jobs**: confirmed.
 
 ### Low Findings Fixed
@@ -1659,12 +1688,46 @@ Items 8-13 from Wave 22-Eval remain open (LLM exam stratification, 47 monitor wr
 - W25-M7: loop-pid has no live stepper between sessions; all history is synthetic (200-step bootstrap). Lyapunov/CUSUM evaluations run against synthetic data only.
 - W25-M8: PAC-Bayes bound using m=232 skills (not labeled queries) — bound vacuous. Advisory alarm fires. Non-blocking.
 
+## Wave 26 — Compaction eval + regression wiring (2026-11-24)
 
+Stale claims corrected this wave:
+
+- H-I1 skillspector pre-commit: SUPERSEDED by lefthook lint + pre-push regression gate (installed 2026-11-24). Live hook is lefthook; skillspector only as `pre-commit.old`.
+- fork-regression-check.py: wired to pre-push hook (2026-11-24), expanded with plugin-refinement/approval-INV/hook-contract/cron-FTS checks.
+- R-D advisor cron: wrapper `rd-compaction-advisor-cron.py` forces `--from-log` (scheduler does not pass job.argv). Script also auto-falls back to `_current_from_log` / `cache/current-token-count.json` when `--current-tokens` omitted. `HERMES_HOME=/var/home/rainbow/.hermes` + `HERMES_PROFILE=fork`.
+- eval-compaction-data-bridge: wired to cron eval-compaction-bridge-0001 (every 6h, 2026-11-24).
+- ROUGE scoring: wired to cron compaction-rouge-score-nightly-0001 (04:50 daily, 2026-11-24).
+
+Harness / gate landings:
+
+- SPRT table: `compaction_sprt_state` in state.db; `check_hhr` reads persisted LLR
+- TF-IDF dedup: skip facts with cosine > 0.95 vs corpus; `[PROSPECTIVE]` always inserted
+- Distortion gate: `distortion_gate()` in plugin; alarm if token-Jaccard > 0.5; full refuse needs host hook
+- Exam stratification: `by_where_stratum` in summary; hard <20, medium 20–60, easy >60 chars
+- Cost logging: `cost_per_task_usd` in summary; `PRICE_INPUT`/`PRICE_OUTPUT` in runner.py
+- UE scorer
+- RIF probe: `evals/compaction/rif_probe.py`; RIF_index = recall(Nrp−) − recall(Ctrl)
+- Amodei monitor
+- PM probe
+- P@k harness
+- Handoff fidelity
+- eval_stats CI/SPRT: `wilson_ci`, `cohen_n_per_arm`, `sprt_decide`, `hoeffding_n` in `evals/compaction/eval_stats.py`
 
 ## Artefact Inventory
 
 Generated: 2026-10-28T09:06:14.711666+00:00 (Wave 25 saturation pass).
 Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
+
+### Wave G — cron scheduling / pass-order / cost (2026-11-16)
+
+| Script | Purpose | Inputs | Outputs |
+|--------|---------|--------|---------|
+| `skill-order-rank.py` | Pairwise skill/tool pass-order ranking | anytime_eval_log, calibration-log.jsonl | cache/skill-order-rank.json |
+| `artifact-lifecycle-policy.py` | Store-full / store-IR / regenerate cost policy | fact_lifecycle, cache files | cache/artifact_cost_policy.json |
+| `task-kalman-throttle.py` | 10-dim KF invoke/skip throttle | tool_review_log | cache/task-kalman-throttle.json, cache/task-kf-state.db |
+| `gpu-joule-point-calibration.py` | Joule-point power caps (~45% TDP) | RAPL/DRM/nvidia-smi | cache/gpu-power-caps.json |
+| `cost-attribution.py` | Linear memory-injection cost vs depth | anytime_eval_log, delegation_audit | cache/workflow-cost-ledger.json |
+| `compression-cost-tracker.py` | Quadratic compression-lever cost curves | calibration-log.jsonl | cache/compression-lever-costs.json |
 
 - Canonical scripts: 378
 - Fork wrappers/scripts: 296
@@ -1694,6 +1757,8 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `am-sentry.py` | am-sentry.py — AM-Sentry memory poisoning defense: passive scanner for injection patterns. | CLI |  |
 | `anytime-routing-campaign.py` | N-arm routing campaign: frozen reference arm + signed primal integral over anytime_eval_runs. | --self-test, lifecycle.db | cache/anytime-routing-results.json |
 | `anytime-skill-evaluator.py` | Anytime evaluation of skill arms from routing events. | --self-test | cache/anytime-skill-eval.json |
+| `anytime-eval-feeder.py` | Feed predicted_confidence from calibration-log.jsonl into eval-scores.jsonl (dedupe by ts). | --self-test, --limit N | cache/eval-scores.jsonl, cache/anytime-eval-feeder-state.json |
+| `anytime-nspi-evaluator.py` | Anytime NSPI evaluator over anytime_eval_runs (A/B/C arms). | --self-test, --run, lifecycle.db | cache/nspi-state.json |
 | `appa-path-taint.py` | Named-variable path-taint propagation over Hermes delegation logs. | CLI |  |
 | `authguard-integrity-checker.py` | Auth/integrity checker for allowlisted paths. | --self-test |  |
 | `autonomy-router-mdp.py` | MDP autonomy router: escalate to human-in-the-loop by confidence. | --self-test | cache/autonomy-routing-state.json |
@@ -1712,6 +1777,7 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `canvas-offload.py` | canvas-offload.py — Mermaid canvas symbolic memory for Hermes sessions. | CLI |  |
 | `cascade-error-budget-allocator.py` | cascade-error-budget-allocator.py | CLI | cache/cascade-allocation.json, cache/cascade-risk.json |
 | `causal-critique-ranker.py` | Rank critiques by causal relevance. | --self-test |  |
+| `causal-regret-minimizer.py` | Epistemic regret minimizer: causal-coherence only when interventional+confound flags present. | --self-test, --run | cache/skill-causal-coherence.json, cache/causal-events.jsonl |
 | `causal-memory-annotator.py` | causal-memory-annotator.py — Pearl causal ladder annotation for memory commits. | --self-test | cache/ue-blackbox-scores.json |
 | `cbf-barrier-compiler.py` | Control-barrier-function compiler for safety constraints. | --self-test |  |
 | `cbf-loop-constraint.py` | Control-barrier-function gate between loop-PID output and irreversible actions (STL safety). | --self-test | cache/cbf-safe-action.json, lifecycle.db cbf_log |
@@ -1753,7 +1819,9 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `cusum-h-calibrator.py` | cusum-h-calibrator.py — Calibrate Page CUSUM threshold h for ARL_0 >= 500. | --self-test | cache/loop-pid-state.json, cache/cusum-h-calibration.json |
 | `dcr-reconcile.py` | dcr-reconcile.py — Divergent-Convergent Reconciliation for Hermes. | CLI |  |
 | `delegate-outcome-logger.py` | Write per-subagent outcome to lifecycle.db after delegation. | --self-test, lifecycle.db | lifecycle.db |
+| `delegation-audit-hook.py` | Pre-call delegate_task logger (JSONL + delegation_audit, success_rate NULL). | --self-test | cache/delegation-outcomes.jsonl |
 | `delegation-audit-logger.py` | Delegation episode audit report. | --self-test |  |
+| `delegation-blind-spot-audit.py` | Delegation decision resolvability (Wilson + value contrast); never flags data_limited. | --self-test, --run, lifecycle.db | cache/decision_audit_state.json |
 | `diff-impact.py` | diff-impact.py — code impact analysis from git diffs. | --json/stdin |  |
 | `divergence-curvature-monitor.py` | divergence-curvature-monitor.py | CLI |  |
 | `dual-backend-memory-fuser.py` | dual-backend-memory-fuser.py | --json/stdin |  |
@@ -2013,24 +2081,28 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `skill-beta-seed.py` | skill-beta-seed.py — seed Beta priors from BM25 self-rank reciprocal rank. | --self-test | cache/skill-beta-state-seeded.json, cache/skill-beta-state.json, cache/skill-router-index.json |
 | `skill-bootstrap.py` | ESL-4: .632 bootstrap skill test-error estimator (ESL §7.11). | CLI |  |
 | `skill-caskg.py` | skill-caskg.py — CaSKG candidate DAG: skill-load → terminal-outcome edges. | CLI | cache/skill-caskg-dag.json |
+| `skill-communication-pruning.py` | Minimal communication graph preserving PoA via epsilon-best-response pruning. | --self-test, --run, lifecycle.db / calibration-log | cache/communication-graph.json |
 | `skill-composition-gf.py` | skill-composition-gf.py — ordinary generating function blow-up of skill DAG walks. | --self-test | cache/concept-lattice.json, cache/skill-router-index.json, cache/skill-composition-gf.json |
 | `skill-dependency-verifier.py` | skill-dependency-verifier.py | CLI |  |
 | `skill-description-entropy.py` | skill-description-entropy.py — character-level entropy of skill descriptions. | --self-test | cache/skill-description-entropy.json |
 | `skill-embedding-geometry.py` | skill-embedding-geometry.py — VIL-1 + VIL-4 | CLI |  |
+| `skill-evidence-rate.py` | MIRA greedy subagent evidence policy: argmax IG(i|S)/cost(i) under token budget. | --self-test, --run | cache/subagent-evidence.json |
 | `skill-graph-builder.py` | Build skill adjacency graph from lifecycle.db for spectral scoring. | --self-test, lifecycle.db | cache/skill-graph.json |
 | `skill-graph-reachability-verifier.py` | skill-graph-reachability-verifier.py | CLI |  |
 | `skill-graph-walk.py` | skill-graph-walk.py — Graph-of-Skills dependency traversal for the Hermes skill library. | CLI | cache/provides-taxonomy.json |
 | `skill-gw-compare.py` | skill-gw-compare.py — OT-7 | CLI |  |
 | `skill-integrity-check.py` | skill-integrity-check.py — HMAC-SHA256 integrity baseline for all SKILL.md files. | CLI | cache/skill-integrity.json |
+| `skill-lift-tracker.py` | ACES skill lift: mean UE without-skill minus with-skill from calibration-log.jsonl; two-sample 95% CI. | --self-test, --report, --json, --skill | cache/calibration-log.jsonl, cache/skill-beta-state.json |
 | `skill-persistent-homology.py` | skill-persistent-homology.py — Persistent homology on the Hermes skill graph. | CLI |  |
 | `skill-ranker.py` | skill-ranker.py | CLI |  |
 | `skill-router-index.py` | skill-router-index.py — SkillRouter pattern: TF-IDF semantic index over Hermes skill descriptions. | --json/stdin, routing-events.jsonl | cache/skill-router-index.json, cache/skill-beta-state.json, cache/routing-events.json |
 | `skill-routing-bounds.py` | skill-routing-bounds.py — ROY-9: tail-bounds for skill routing stability. | lifecycle.db | cache/loop-pid-state.json |
+| `skill-spectral-ranking.py` | Dominant eigenvalue of skill transition operator T; eigenvector routing mix. | --self-test, --run, anytime_eval_runs | cache/routing-spectral-state.json |
 | `skill-stacking.py` | ESL-5: nonnegative stacking weights on LOO skill predictions. | CLI |  |
 | `skill-state.py` | skill-state.py — SKILL.state runtime: mutable execution state for long-horizon skills. | CLI |  |
 | `skill-wiki.py` | skill-wiki.py — WikiSkill pattern: co-evolve agent skills with a persistent wiki. | --text/stdin |  |
 | `skill-yield-tracker.py` | SYNAPSE — Skill Yield Normalization and Adaptive Pruning | --json/stdin |  |
-| `skill_confidence_calibration.py` | Conformal + bagged skill success intervals. | --self-test, --B | cache/skill_confidence_intervals.json, cache/routing-calibrated-posterior.json |
+| `skill_confidence_calibration.py` | Conformal + bagged skill success intervals. | --self-test, --B | cache/skill_confidence_intervals.json, cache/skill_calibration.db, cache/routing-calibrated-posterior.json |
 | `skill-variance-regularization.py` | Rerank skills by empirical CI width (variance regularizer). | --self-test | cache/skill-confidence.json |
 | `skill_prune_audit.py` | skill_prune_audit.py — AutoRefine-inspired skill library health check. | --json/stdin |  |
 | `skillopt_score.py` | skillopt_score.py — SkillOpt-inspired skill quality scorer for Hermes. | CLI |  |
@@ -2060,6 +2132,8 @@ Covers the fork profile plus shared `~/.hermes/hermes-scripts/` canonicals.
 | `task-assignment-optimizer.py` | task-assignment-optimizer.py | CLI | cache/task-assignments.json |
 | `test_browser_act_guard.py` | Unit tests for browser_act_guard.py — run: pytest -q ~/.hermes/scripts/test_browser_act_guard.py | --text/stdin, --json/stdin |  |
 | `token-budget-controller.py` | Token Budget Controller for Hermes Agent | --text/stdin |  |
+| `tool-audit-kill-matrix.py` | Mutation kill-matrix auditor for tool-call silent faults. | --self-test | cache/tool-audit-state.json |
+| `tool-review-log-schema.py` | Create tool_review_log and anytime_eval_log tables in lifecycle.db. | --self-test, --apply, lifecycle.db |  |
 | `tool-auth-gate.py` | tool-auth-gate.py — Separate action induction from runtime authorization. | CLI | cache/active-capability-grant.json |
 | `tool-call-safety-filter.py` | Pre-execution tool-call safety filter (renamed from deductive-verifier). | --self-test, --json/stdin | cache/tool-call-safety-filter.db |
 | `tool-effect-validator.py` | tool-effect-validator.py | CLI |  |
@@ -2100,6 +2174,8 @@ Runpy two-tier wrappers delegate to `hermes-scripts/<name>.py` when present. Wra
 | `ann-embeddings-probe.py` | Data collection hook: probe whether real embedding vectors exist. | wrapper-only |
 | `anytime-routing-campaign.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `anytime-skill-evaluator.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
+| `anytime-eval-feeder.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
+| `anytime-nspi-evaluator.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `authguard-integrity-checker.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `autonomy-router-mdp.py` |  | runpy-wrapper |
 | `bandit-model-selector.py` | Thompson Sampling model selector from routing-quality.jsonl. | wrapper-only |
@@ -2111,6 +2187,7 @@ Runpy two-tier wrappers delegate to `hermes-scripts/<name>.py` when present. Wra
 | `callgraph-taint-audit.py` | Fork profile wrapper: delegates to hermes-scripts/callgraph-taint-audit.py | runpy-wrapper |
 | `catastrophic-forgetting-guard.py` | catastrophic-forgetting-guard.py — Continual learning protection for skill patches | wrapper-only |
 | `causal-critique-ranker.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
+| `causal-regret-minimizer.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `causal-memory-annotator.py` | Fork profile wrapper: delegates to hermes-scripts/causal-memory-annotator.py | runpy-wrapper |
 | `cbf-barrier-compiler.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `cbf-loop-constraint.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
@@ -2144,7 +2221,9 @@ Runpy two-tier wrappers delegate to `hermes-scripts/<name>.py` when present. Wra
 | `cusum-h-calibrator.py` | Fork profile wrapper: delegates to hermes-scripts/cusum-h-calibrator.py | runpy-wrapper |
 | `dcr-reconcile.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `delegate-outcome-logger.py` | Write per-subagent outcome to lifecycle.db after delegation. | not yet installed |
+| `delegation-audit-hook.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `delegation-audit-logger.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
+| `delegation-blind-spot-audit.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `dynamical-resource-allocator.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `epistemic-state-tracker.py` | Fork profile wrapper: delegates to hermes-scripts/epistemic-state-tracker.py | runpy-wrapper |
 | `eval-compaction-data-bridge-cron.py` |  | wrapper-only |
@@ -2162,7 +2241,7 @@ Runpy two-tier wrappers delegate to `hermes-scripts/<name>.py` when present. Wra
 | `fair-pagerank-skill-scorer.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `feedback-memory-ranker.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `feedback-robustness-scorer.py` |  | runpy-wrapper |
-| `fork-regression-check.py` | Regression check for hermes-fork protected symbols post-merge. | wrapper-only |
+| `fork-regression-check.py` | Wired to pre-push hook (2026-11-24), expanded with plugin-refinement/approval-INV/hook-contract/cron-FTS checks. | wrapper-only |
 | `fork-state-vacuum.py` | fork-state-vacuum.py — Weekly VACUUM for the fork profile's state.db. | wrapper-only |
 | `gate_audit.py` | gate_audit.py — Audit calibrated gate decisions for consistency and error rates. | wrapper-only |
 | `governance-conflict-detector.py` | Fork profile wrapper: delegates to hermes-scripts/governance-conflict-detector.py | runpy-wrapper |
@@ -2389,6 +2468,7 @@ Runpy two-tier wrappers delegate to `hermes-scripts/<name>.py` when present. Wra
 | `test_plugin_pipeline_theory.py` | Property tests for Wave 18 plugin/hook theory (Honda, Khalil, Soares tiling). | wrapper-only |
 | `tool-auth-shim.py` | Lightweight inspection-game shim for tool result auditing. | wrapper-only |
 | `tool-call-safety-filter.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
+| `tool-review-log-schema.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
 | `trigger-phrase-validator.py` | Validate SKILL.md trigger phrases (OMH trigger_language_packs.py inspired). | wrapper-only |
 | `two-timescale-check.py` | two-timescale-check.py — Khalil ch.11 singular perturbation separation. | wrapper-only |
 | `ue-blackbox-scorer.py` | Fork profile wrapper: delegates to hermes-scripts implementation. | runpy-wrapper |
@@ -3205,7 +3285,7 @@ Three root causes confirmed by adversarial audit (Wave 0, 25 findings):
 | Trim script | Applied to 169 skills; idempotent |
 | Textbook category | Live on next session (prompt_builder reads frontmatter `category:` field; textbook skills demoted to names-only in focus+coding posture via `_NON_CODING_SKILL_CATEGORIES`) |
 | skill-access-logger | ENABLED in config.yaml; wired to post_tool_call |
-| skill-routing-nudge | Created, NOT enabled; pending governance approval |
+| skill-routing-nudge | ENABLED in config.yaml; pre_llm_call hook; companion script at profiles/fork/scripts/skill-router-index.py |
 | memory-consolidate-cron | Script created; NOT scheduled as cron; run manually with --apply |
 
 ### Canonical Script Location
@@ -3213,3 +3293,70 @@ Three root causes confirmed by adversarial audit (Wave 0, 25 findings):
 The live BM25 router is: `profiles/fork/scripts/skill-router-index.py`
 Multiple copies exist in hermes-scripts/ and hermes-fork/ — those are NOT the live copies.
 DO NOT modify other copies expecting live effect.
+
+---
+
+## Billion-context compression (2026-11-09)
+
+Port of billion-context techniques **into** hermes-fork (no bili proxy). Existing
+`ContextCompressor` remains the fallback summariser.
+
+### Scaling (runtime, from model `context_length`; default 128K if unknown)
+
+```
+raw_zone_tokens = min(50_000, int(context_limit * 0.25))
+growth_floor    = max(10_000, int(context_limit * 0.22))
+ccr_min_tokens  = max(500,    int(context_limit * 0.02))
+nudge_threshold = 0.45 * context_limit
+tier2_enabled   = context_limit >= 128_000
+tier3_enabled   = context_limit >= 500_000
+```
+
+### What landed
+
+| Technique | Where | Notes |
+|---|---|---|
+| Growth-gated trigger | `agent/context_compressor.py` `should_compress_info` | Skips auto-compress until growth since last *under-threshold* compression exceeds `growth_floor`. Inactive until first successful compress. Never skips at 90% window. |
+| Incremental fold | existing middle-window + crush on consumed increment | Lean tail budget unchanged (tests). Crush/CCR operate outside `raw_zone_tokens`. |
+| Tiered blocks | plugin `billion-context` post_compaction | Metadata only. Tier-2/3 promotion gated on window size. |
+| Crush pre-pass | `compress()` + `transform_tool_result` | json-fold (lossless) then log-select; fail-open if <10% reduction. |
+| Nudge | plugin `pre_llm_call` `{context: ...}` | Injected at 45% window; cleared on `post_compaction`. Not a conversation row. |
+| First-user pin | `_protect_head_size` | First real user message never dropped after `protect_first_n` decay. |
+| CCR | plugin `transform_tool_result` + `acp_retrieve` | Placeholder for results ≥ `ccr_min_tokens`. |
+| Output steering | plugin `pre_llm_call` | L0–L4-style L1/L2/L3 directives from turn class. |
+
+Core library: `agent/billion_context.py`. Plugin: `profiles/fork/plugins/billion-context/`.
+Enabled in `config.yaml` plugins.enabled. Fail-open on every path.
+
+CCR placeholders may include `relevance:0.NN` (keyword overlap vs last user query / tool query).
+In-memory `_ccr_store` is keyed by session_id; `on_session_finalize` / `on_session_reset` call `clear_ccr_session`.
+`on_session_end` is a no-op (host fires it every turn). Covered ranges come from `note_compress_covered` / `take_last_covered`.
+
+---
+
+## Adaptive retrieval (Mallen 2023 / RetRobust 2023) — 2026-11-09
+
+Heuristic port of arXiv:2212.10511 and arXiv:2310.01558. No NLI model, no fine-tune, no LLM in hooks.
+
+| Technique | Where | Notes |
+|---|---|---|
+| Skill confidence gate | `agent/adaptive_retrieval.py` `should_retrieve_skill`; `skill_utils.should_retrieve_skill`; skill-router `route()`; skill-routing-nudge | skip if BM25 < 0.15 AND query < 6 words AND no tool-name keyword; names-only if BM25 > 0.85; hard-domain forces full. Fail-open to full. |
+| Web-search necessity | plugin `adaptive-retrieval` `pre_tool_call` | Deterministic only. Default shadow (log, do not block). `enforce_web_skip=true` may block stable-fact queries. |
+| Passage pre-filter | `apply_tool_result_guards` via billion-context `transform_tool_result` | Keyword overlap; never drop all passages. First-string-wins: this plugin does **not** register `transform_tool_result`. |
+| Degenerate-result warning | same | Prefixes `[Note: previous tool result may be low-quality…]` on empty/404/error JSON. |
+| Decision log | `cache/adaptive-retrieval-decisions.jsonl` | O_APPEND, fail-open. |
+
+Plugin: `profiles/fork/plugins/adaptive-retrieval/` — **not** in `plugins.enabled`; `settings.enabled=false`, `shadow=true`.
+Core: `agent/adaptive_retrieval.py`.
+
+### Coherence (2026-11-09 audit)
+
+- Growth gate: `last_compression_token_count` starts at 0 (first run and session resume). Skip is inactive until a compress lands under `threshold_tokens`. Skip reason is `None` so callers do not warn as a cooldown block. Value is in-process only (attempt snapshot), not session-DB.
+- Crush in `compress()` runs **after** `_plan_compaction_window` on the canonical (blank-echo-dropped) list, only on `[compress_start, compress_end)`. Aborts still return canonical. `transform_tool_result` crush/CCR is first; `crush_text` no-ops CCR placeholders and already-folded/log-selected bodies.
+- Nudge/steering: `pre_llm_call` `{context:}` is injected into the **current user** `api_content` sidecar (ephemeral for persist, frozen for cache). Not a conversation row. Recomputed each turn from token pressure. `post_compaction` only drops `_nudge_armed`. Mid-turn tool-loop classes (`mechanical_continuation`) do not change the already-stamped sidecar.
+- First-user pin is **additive** with `protect_first_n` (`max(head, first_user_index+1)`). No index conflict.
+- `promote_blocks` runs on `post_compaction` for `kind in {summarize, manual}` only (not micro/prune/native). Covered ranges come from `last_compress_covered` / `note_compress_covered`.
+- Micro-compaction is independent of the growth gate and **off by default**.
+- CCR is disk-backed under `cache/billion-context/ccr/`. `on_session_end` is per-turn in hermes-fork — observer only. Cleanup is `on_session_reset` / `on_session_finalize`.
+- Memory prefetch is in the API request; growth-gate tokens from `last_prompt_tokens` include it. `prompt_builder.py` does not compact conversation history.
+- Lean tail budget is unchanged. Crush middle is bounded to the compressor window, not the larger BC `raw_zone_tokens`.

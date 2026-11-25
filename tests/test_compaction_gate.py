@@ -113,7 +113,9 @@ def _fact_item(text: str) -> dict:
 
 def test_sprt_bounds():
     a, b = cg.sprt_bounds()
-    assert abs(a - math.log(19)) < 1e-9
+    # Wald A = log((1-β)/α) = log(18), not the α=β approx log(19).
+    assert abs(a - math.log((1.0 - cg.SPRT_BETA) / cg.SPRT_ALPHA)) < 1e-9
+    assert abs(a - math.log(18)) < 1e-9
     assert b < 0
 
 
@@ -162,6 +164,19 @@ def test_sprt_h1_fires_at_19_misses(mc):
     for _ in range(19):
         d = cg.update_sprt(mc, "s-miss19", 0)
     assert d["decision"] == "accept_h1"
+
+
+def test_sprt_truncated_reject_at_nmax(mc):
+    """n=N_MAX without crossing A/B must fail-closed, never promote."""
+    d = None
+    # 20 misses + 10 hits: LLR ≈ 0.21 ∈ (B, A) at n=30.
+    xs = [0] * 20 + [1] * 10
+    for x in xs:
+        d = cg.update_sprt(mc, "s-trunc", x)
+    assert d["n_obs"] == cg.SPRT_N_MAX
+    assert d["decision"] == "truncated_reject"
+    ff, fs = cg._check_hhr("s-trunc", mc)
+    assert ff and not fs
 
 
 def test_check_hhr_reads_state_table(mc):
@@ -236,14 +251,15 @@ def test_distortion_half():
 
 
 def test_distortion_just_over():
-    # 5 unique pre, 2 from pre + 3 new post. Jaccard |∩|=2 |∪|=8 → 0.75.
-    # 1 - |∩|/|P| would be 0.6; formula is 1-|∩|/|∪|. Both refuse (strict > 0.5).
+    # Fabrication: 5 unique pre, 2 from pre + 3 new post. |∩|=2 |∪|=8 → 0.75.
     g = cg.distortion_gate("a b c d e", "a b x y z")
     assert abs(g["distortion"] - 0.75) < 1e-12
     assert g["refuse"] is True
+    # Extractive drop (post ⊆ pre): Jaccard 0.6 but DPI forbids refuse.
     g60 = cg.distortion_gate("a b c d e", "a b")
     assert abs(g60["distortion"] - 0.6) < 1e-12
-    assert g60["refuse"] is True
+    assert g60["refuse"] is False
+    assert g60.get("extractive") is True
 
 
 def test_distortion_empty():

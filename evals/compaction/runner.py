@@ -698,16 +698,19 @@ def decorate_arm_metrics(summary: dict, n: int, head_hit_rate: float | None = No
     after = summary["after_tokens"]
     recall_pct = summary["recall_pct"]
     ratio, combined = combined_score(before, after, recall_pct)
-    _center, half = wilson_ci(recall_pct, n)
-    half_pct = half * 100.0
     n_correct = round((recall_pct / 100.0) * n) if n else 0
     pair = _eval_stats_wilson_ci(n_correct, n)
     if pair is not None:
         summary["ci_lo"] = round(pair[0], 1)
         summary["ci_hi"] = round(pair[1], 1)
+        summary["ci_width"] = round(pair[1] - pair[0], 1)
+        half_pct = (pair[1] - pair[0]) / 2.0
+    else:
+        _center, half = wilson_ci(recall_pct, n)
+        half_pct = half * 100.0
+        summary["ci_width"] = round(2.0 * half_pct, 1)
     summary["ratio"] = round(ratio, 6)
     summary["combined"] = round(combined, 6)
-    summary["ci_width"] = round(2.0 * half_pct, 1)
     summary["output_tokens_per_recall_point"] = round(
         output_tokens_per_recall_point(after, recall_pct, n), 1
     )

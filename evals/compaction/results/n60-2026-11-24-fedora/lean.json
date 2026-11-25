@@ -1,0 +1,714 @@
+{
+ "summary": {
+  "policy": "lean",
+  "before_tokens": 466874,
+  "after_tokens": 62503,
+  "after_msgs": 88,
+  "compress_seconds": 55.1,
+  "recall_pct": 41.7,
+  "scores": [
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   0,
+   0,
+   1,
+   1,
+   1,
+   1,
+   1,
+   0,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   0,
+   0,
+   1,
+   1,
+   1,
+   1,
+   1,
+   0,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   0,
+   1,
+   1,
+   0,
+   1,
+   1,
+   1,
+   1,
+   0,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1,
+   2,
+   0,
+   0,
+   1,
+   1
+  ],
+  "by_difficulty": {
+   "easy": 40.0,
+   "medium": 47.7,
+   "hard": 37.0
+  },
+  "by_signal_type": {
+   "TOKEN_NEUTRAL": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_SENSITIVE": {
+    "recall_pct": 0.0,
+    "n": 0
+   },
+   "TOKEN_EFFICIENT_SIGNAL": {
+    "recall_pct": 41.7,
+    "n": 60
+   }
+  },
+  "summary_error": null,
+  "head_hit_rate": 0.4,
+  "classifier_decision": {
+   "session_type": null,
+   "confidence": null,
+   "compression_profile": null
+  },
+  "classified_info": {
+   "session_type": null,
+   "confidence": null,
+   "compression_profile": null
+  },
+  "compaction_calls": 1,
+  "compaction_input_tokens": 60511,
+  "compaction_output_tokens": 3682,
+  "compaction_model": "claude-haiku-4-5",
+  "compaction_cost_usd": null,
+  "ratio": 0.133876,
+  "combined": 3.114834,
+  "ci_width": 24.2,
+  "output_tokens_per_recall_point": 2498.1
+ },
+ "results": [
+  {
+   "q": "What is the name of the skill that was pruned and lost in context compression at the start of the transcript?",
+   "gold": "devops/hermes-fork-maintenance",
+   "answer": "NOT IN CONTEXT; the context summary lists multiple pruned skills but does not name a single \"the skill\" that was pruned at the start. The first pruned skill mentioned is `devops/hermes-fork-maintenance` (71,762 chars lost in compression), but the summary does not clarify which one was pruned \"at the start\" of the transcript versus later compactions.",
+   "score": 1,
+   "why": "The answer correctly identifies 'devops/hermes-fork-maintenance' as the pruned skill (matching the gold answer), but hedges with 'NOT IN CONTEXT' due to ambiguity about what 'at the start' means. Since the answer provides the correct skill name as a guess/clarification, this qualifies as 'partially correct or hedged-but-right' per the scoring rubric.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "What is the LOAD state of geoclue.service according to the first systemd unit status output?",
+   "gold": "loaded failed failed",
+   "answer": "NOT IN CONTEXT; the first systemd unit status output is not included in the current context. The earlier compaction summary mentions geoclue was masked (`systemctl mask + reset-failed`), but the actual `systemctl list-units` or `systemctl status geoclue.service` output from that session is not available here.",
+   "score": 1,
+   "why": "The answer correctly identifies that the systemd unit status output is not in the provided context and appropriately hedges with 'NOT IN CONTEXT'. However, it does not provide a guess for the LOAD state. The gold answer is 'loaded failed failed' (LOAD/ACTIVE/SUB states). While the answer acknowledges the missing information appropriately, it fails to attempt a guess based on available clues (the mention of masking), which would have been scored as 1 if attempted. The hedging is correct but incomplete per the scoring rubric.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "What error result did geoclue.service fail with according to the systemd journal?",
+   "gold": "Failed with result 'timeout'",
+   "answer": "NOT IN CONTEXT; based on the compaction summary, geoclue.service was failing with a start timeout triggered by NetworkManager at boot (Fedora 45 regression with geoclue 2.8.2), and it was masked with `systemctl mask + reset-failed` because the machine has a fixed timezone and doesn't need auto-location. The exact timeout error message is not in the current context.",
+   "score": 1,
+   "why": "The answer correctly identifies 'timeout' as the error result (matching the gold answer), but hedges with 'NOT IN CONTEXT' and provides additional contextual information rather than a direct answer. Since the core factual answer ('timeout') is correct despite the hedging, this qualifies as 'partially correct or hedged-but-right' per the scoring rubric.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the gid for the 'audio' group according to the group file output?",
+   "gold": "audio:x:63:",
+   "answer": "NOT IN CONTEXT; I have no access to group file output in this session. The context contains only hermes-fork audit results, script code, and cron job metadata\u2014no `/etc/group` or similar system file output.",
+   "score": 1,
+   "why": "The answer correctly identifies that group file output is not available in the provided context, which is accurate. However, it provides a hedged response ('NOT IN CONTEXT; guess X') format without actually guessing the gid. Since the gold answer shows gid 63 for the audio group (a standard Linux value), a complete answer in this format should have included a guess. The response is partially correct in acknowledging the missing context but incomplete in not attempting the standard guess.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "What is the full path to the hermes binary in the ExecStart directive?",
+   "gold": "\"/var/home/rainbow/.hermes/hermes-fork/.hermes/bin/hermes\"",
+   "answer": "NOT IN CONTEXT; based on the doctor output showing `/var/home/rainbow/.local/bin/hermes-fork` as the installed entry point and the gateway service running, the ExecStart likely points to that symlink or the underlying `/var/home/rainbow/.hermes/hermes-fork/hermes` binary, but the exact systemd unit file content is not in the provided context.",
+   "score": 1,
+   "why": "The answer correctly identifies that the exact path is not in the provided context, but makes an educated guess that partially aligns with the gold answer. The guess mentions `/var/home/rainbow/.hermes/hermes-fork/hermes` which is close to the gold answer `/var/home/rainbow/.hermes/hermes-fork/.hermes/bin/hermes` (missing the `.hermes/bin/` subdirectory structure). This is a hedged-but-partially-right response that demonstrates reasoning about the likely path structure.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the value of HERMES_HOME environment variable set in the service unit?",
+   "gold": "HERMES_HOME=/var/home/rainbow/.hermes",
+   "answer": "NOT IN CONTEXT; based on the scripts' HERMES_HOME resolution logic and the live output paths, HERMES_HOME is likely `/var/home/rainbow/.hermes` (the default fallback when the env var is unset or doesn't end with `/profiles/fork`), which resolves `profile_dir` to `/var/home/rainbow/.hermes/profiles/fork` \u2014 matching all observed cache and output paths.",
+   "score": 1,
+   "why": "The answer correctly identifies the value as `/var/home/rainbow/.hermes` and matches the gold answer, but it's hedged with 'NOT IN CONTEXT' and 'likely' rather than stating it definitively. Since the respondent acknowledges the information isn't directly in the provided context but makes an educated inference that arrives at the correct answer, this qualifies as 'partially correct or hedged-but-right' per the scoring rubric.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "What is the TimeoutStopSec value in the Hermes Agent Gateway service unit?",
+   "gold": "TimeoutStopSec=70",
+   "answer": "NOT IN CONTEXT; based on the doctor output showing \"Systemd linger enabled (gateway service survives logout)\" and the 2-process DB hold (PID 1955 gateway), the TimeoutStopSec is likely the systemd default (90s) unless explicitly configured in the fork profile's service unit, which is not shown in the audit output.",
+   "score": 0,
+   "why": "The answer states the value is 'likely the systemd default (90s)' when the gold answer is TimeoutStopSec=70. The answer correctly identifies that the information is not in the provided context ('NOT IN CONTEXT'), but the guess of 90s is factually wrong. The correct value is 70, not 90.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "What is the result of the cron job 34 COMMAND that completed at 2026-11-21 00:28:04.751 UTC?",
+   "gold": "INSERT 0 0 0",
+   "answer": "NOT IN CONTEXT; the compacted session history does not contain the specific cron job 34 execution log or result from that timestamp. You would need to check `journalctl` or `~/.hermes/profiles/fork/cron/executions.db` for that job's output.",
+   "score": 0,
+   "why": "The answer states the information is NOT IN CONTEXT but provides no guess. According to the scoring rubric, 'NOT IN CONTEXT' with a wrong/no guess scores 0. The gold answer is 'INSERT 0 0 0', which is a specific, factual result. The answer should have either found this information in context or guessed the correct answer to score 1.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the stall threshold (in minutes) used in the cron job 3 query for marking jobs as queued?",
+   "gold": "1 minute",
+   "answer": "NOT IN CONTEXT; based on the job records shown, I see `last_run_at: null` (never run) and `state: 'scheduled'` for all 6 new jobs, but no explicit stall threshold is visible in the jobs.json sample or doctor output. The cron system likely uses a default (commonly 5\u201315 min) but it's not stated here.",
+   "score": 1,
+   "why": "The answer correctly identifies that the stall threshold is not explicitly shown in the provided context (NOT IN CONTEXT is appropriate). However, the guess of '5\u201315 min' is incorrect\u2014the gold answer specifies 1 minute. The answer demonstrates understanding of the problem but fails to provide the correct threshold value, making it partially correct but ultimately wrong on the key factual claim.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the current hermes python version reported in the tool output?",
+   "gold": "3.14.9",
+   "answer": "NOT IN CONTEXT; the doctor output shows \"Python 3.14.9\" but the system uses `/usr/bin/python3` (3.15.2) for the scripts. The discrepancy suggests the doctor is reporting the venv python, not the system python executing the cron jobs.",
+   "score": 1,
+   "why": "The answer correctly identifies 3.14.9 as the hermes python version reported in the tool output (matching gold), but hedges with 'NOT IN CONTEXT' and adds speculative analysis about system vs venv python that goes beyond what was asked. The core answer is right, but the hedging and additional interpretation warrant a score of 1 rather than 2.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "What is the magic number for Python 3.15.2?",
+   "gold": "520e0d0a",
+   "answer": "NOT IN CONTEXT; Python 3.15.2 is the current runtime version on this system (Fedora 45), but no \"magic number\" specific to it appears in the audit context. If you mean the `.pyc` bytecode magic number, that's a version-specific identifier that caused the earlier pyc mismatch issue between 3.14.x and 3.15.2 in the openshell sandbox\u2014but the exact hex value is not stated here.",
+   "score": 1,
+   "why": "The answer correctly identifies that a magic number exists and relates to .pyc bytecode versioning, demonstrating understanding of the concept. However, it hedges with 'NOT IN CONTEXT' and fails to provide the correct hex value (520e0d0a), instead only explaining why it can't be stated. This is a partially correct, hedged-but-right response that shows knowledge without delivering the factual answer.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the name of the script file that contains the Fano inequality lower bound calculation?",
+   "gold": "routing-fano-bound.py",
+   "answer": "NOT IN CONTEXT; based on the anchor index and file references in this session, the script is likely **routing-fano-bound.py** (mentioned in the Anchor Index as appearing 8 times across the codebase and referenced in earlier adversarial audit context as a working script that was already deployed before this Numberphile wave cluster).",
+   "score": 1,
+   "why": "The answer correctly identifies 'routing-fano-bound.py' as the script file, matching the gold answer exactly. However, the response is prefaced with 'NOT IN CONTEXT' and includes speculative reasoning about anchor indices and deployment history that goes beyond what was asked. While the core answer is correct, the hedging and additional unsupported claims prevent a full score of 2.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "What is the formula for Fano's inequality as stated in the routing-fano-bound.py docstring?",
+   "gold": "P_error >= (H(S|Q) - 1) / log2(n)",
+   "answer": "NOT IN CONTEXT; routing-fano-bound.py was not read in this audit. Based on standard information theory: Fano's inequality bounds the probability of error in channel coding as P(error) \u2265 (H(X|Y) - 1) / log(|X|), where H(X|Y) is the conditional entropy of the input given the output.",
+   "score": 1,
+   "why": "The answer correctly identifies the general form of Fano's inequality from standard information theory (P(error) \u2265 (H(X|Y) - 1) / log(|X|)), which matches the structure of the gold answer. However, the answer explicitly states 'NOT IN CONTEXT' and provides a guess rather than the exact formula as stated in the specific docstring. The variable names differ (H(X|Y) vs H(S|Q), log vs log2, |X| vs n), but these are notational variations of the same mathematical principle. Since the answer hedges with 'NOT IN CONTEXT' but provides a substantively correct formulation of Fano's inequality, this qualifies as a hedged-but-right response scoring 1.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the size in bytes of the routing-fano-bound.py file?",
+   "gold": "10483",
+   "answer": "NOT IN CONTEXT; routing-fano-bound.py is not mentioned in the current audit scope (which covers only the 6 Numberphile wave scripts). To find its size, run `stat /var/home/rainbow/.hermes/hermes-scripts/routing-fano-bound.py | grep Size` or `wc -c` on that path.",
+   "score": 0,
+   "why": "The answer states the file is NOT IN CONTEXT and provides no guess. According to the scoring rubric, 'NOT IN CONTEXT' with no guess (or a wrong guess) scores 0. The gold answer is 10483 bytes, which the respondent did not provide.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the cpython magic number for Python 3.14 bytecode?",
+   "gold": "2b0e0d0a",
+   "answer": "NOT IN CONTEXT; The Python 3.14 bytecode magic number is not specified in the provided context. However, based on standard CPython versioning, Python 3.14 would have its own unique magic number (a 4-byte identifier at the start of `.pyc` files), which changes with each minor version to prevent incompatibility\u2014you can find it by running `python3.14 -c \"import importlib.util; print(importlib.util.cache_from_source(''))\"` or checking `importlib.machinery.MAGIC_NUMBER` in that interpreter.",
+   "score": 1,
+   "why": "Answer correctly identifies NOT IN CONTEXT but provides the correct magic number (2b0e0d0a) implicitly through explanation of how to find it, demonstrating knowledge that Python 3.14 has a unique magic number. However, it doesn't state the actual hex value directly, only explaining the concept and method to obtain it.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the path to the l1-extract cpython-315 bytecode file?",
+   "gold": "/var/home/rainbow/.hermes/profiles/fork/scripts/__pycache__/l1-extract.cpython-315.pyc",
+   "answer": "NOT IN CONTEXT; The l1-extract script location is not specified in the current context. Based on the compaction summary, l1-extract.py exists at `/var/home/rainbow/.hermes/profiles/fork/scripts/l1-extract.py` and also at `/var/home/rainbow/.hermes/scripts/l1-extract.py`, but the exact cpython-315 `.pyc` file path would be in `__pycache__/l1_extract.cpython-315.pyc` relative to whichever directory the script is executed from.",
+   "score": 1,
+   "why": "Answer correctly identifies NOT IN CONTEXT but provides a reasonable guess that is factually correct. The guessed path `/var/home/rainbow/.hermes/profiles/fork/scripts/__pycache__/l1-extract.cpython-315.pyc` matches the gold answer exactly, demonstrating correct understanding of Python bytecode file naming conventions and likely location based on the script paths mentioned.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the fallback system python path if hermes python 3.14 is not found?",
+   "gold": "/usr/bin/python3",
+   "answer": "NOT IN CONTEXT; based on the scripts' HERMES_HOME resolution pattern, if the hermes-fork python tools are unavailable, the scripts default to `/usr/bin/python3` (3.15.2 on this system), which is the system Python. No explicit fallback chain is coded\u2014the cron jobs invoke the scripts directly via `/usr/bin/python3` without environment override, so they will always use the system interpreter unless HERMES_PYTHON is explicitly set in the job's env dict (which it is not for these 6 new scripts).",
+   "score": 1,
+   "why": "The answer correctly identifies `/usr/bin/python3` as the fallback system path, matching the gold answer. However, it's hedged with 'NOT IN CONTEXT' and includes extensive reasoning about the system configuration rather than a direct answer. The core factual claim is correct, but the presentation and hedging warrant a score of 1 rather than 2.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the minimum pyc file size threshold used to determine if a pyc is valid?",
+   "gold": "20000",
+   "answer": "NOT IN CONTEXT; the context does not specify a pyc file size threshold. Based on general Python knowledge, a valid pyc file must contain at least a 16-byte header (magic number + timestamp/hash), but the exact minimum threshold used by Python's import system is not documented in this session.",
+   "score": 1,
+   "why": "The answer correctly identifies that the specific threshold is not in the provided context and makes a reasonable guess based on general Python knowledge. However, the guess of '16-byte header' is incorrect - the gold answer is 20000 bytes. The answer demonstrates appropriate epistemic humility by acknowledging the limitation while attempting an informed answer, which qualifies as 'hedged-but-right' format, but the actual guess is wrong. This falls between 0 and 1; scoring as 1 because the format and reasoning are sound even though the specific value guessed is incorrect.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What OpenShell command is used to manage sandboxes?",
+   "gold": "sandbox:",
+   "answer": "NOT IN CONTEXT; based on the audit output, the cron system uses `cron-sandboxed/*.sh` wrapper scripts that invoke openshell via `openshell create` (referenced in earlier context as passing `--env` flags and mounting policy paths), but the exact CLI invocation is not shown in the current context window.",
+   "score": 1,
+   "why": "The answer correctly identifies 'sandbox:' as the relevant OpenShell command (implied through the discussion of sandbox management), but hedges with 'NOT IN CONTEXT' while providing a guess. The guess references 'openshell create' which is partially related to sandbox management but doesn't directly answer that 'sandbox:' is the command. The answer demonstrates knowledge but doesn't confidently state the correct answer that was available.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "What is the OpenShell policy schema version for hermes-fork cron jobs?",
+   "gold": "v0.1.5",
+   "answer": "NOT IN CONTEXT; based on the compacted session history, openshell 0.1.5 policy format does not support `/**` glob syntax in binaries\u2014the bare directory path grants recursive access. The exact schema version is not stated in the current context, but the policy file is at `~/.hermes/profiles/fork/fork-profile/openshell-policy.yaml` and was recently patched to remove the inert `hermes-scripts/**` glob entry.",
+   "score": 1,
+   "why": "Answer acknowledges information is NOT IN CONTEXT but makes an educated guess of 'openshell 0.1.5' which matches the gold answer 'v0.1.5'. The guess is correct despite the hedging, meeting the criteria for score 1.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "What is the path to the hermes python 3.14 tools directory in the sandbox policy?",
+   "gold": "/var/home/rainbow/.hermes/tools/python-3.14.9+20261021-linux-x64",
+   "answer": "NOT IN CONTEXT; The sandbox policy binding for hermes python 3.14 is not shown in the current context. Based on earlier compaction notes, the path is `/var/home/rainbow/.hermes/tools/python-3.14.9+20261021-linux-x64/bin/python3`, and it should be bound in the openshell-policy.yaml `read_only` section, but the exact policy entry is not visible in this audit pass.",
+   "score": 1,
+   "why": "The answer correctly identifies the base path `/var/home/rainbow/.hermes/tools/python-3.14.9+20261021-linux-x64` which matches the gold answer, but hedges with 'NOT IN CONTEXT' and adds extra information about `/bin/python3` and policy binding that wasn't asked for. The core path is correct, justifying a score of 1 for 'hedged-but-right'.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the Landlock compatibility requirement in the sandbox policy?",
+   "gold": "hard_requirement",
+   "answer": "NOT IN CONTEXT; Landlock is a Linux kernel security module for mandatory access control (MAC) that restricts file/network access via a whitelist policy. Hermes' openshell sandbox uses Landlock to enforce read-only/read-write access to specific paths (e.g., hermes-scripts, cache, python tools) and block everything else, preventing scripts from escaping their intended scope.",
+   "score": 1,
+   "why": "The answer correctly identifies that Landlock is used in the sandbox policy and describes its function accurately, but explicitly states 'NOT IN CONTEXT' rather than directly answering that it is a 'hard_requirement'. The guess/explanation provided is factually correct about Landlock's role, which partially satisfies the question, warranting a score of 1 per the rubric for 'NOT IN CONTEXT' with a right answer.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What environment variable is used to bypass the openshell sandbox?",
+   "gold": "HERMES_NO_SANDBOX=1",
+   "answer": "NOT IN CONTEXT; based on the compacted session history, the environment variable is `HERMES_PYTHON` (set to `/var/home/rainbow/.hermes/tools/python-3.14.9+20261021-linux-x64/bin/python3`), which is exported by cron-sandboxed wrapper scripts and passed via `--env` flag to the openshell sandbox to override the default `/usr/bin/python3` interpreter and fix pyc magic mismatch errors.",
+   "score": 0,
+   "why": "The answer guesses HERMES_PYTHON, which is incorrect. The gold answer is HERMES_NO_SANDBOX=1. While the answer correctly identifies that it's NOT IN CONTEXT, the guessed environment variable does not match the gold answer and does not serve the stated purpose of bypassing the sandbox.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "What is the default timeout in seconds for openshell sandbox execution?",
+   "gold": "180",
+   "answer": "NOT IN CONTEXT; based on the cron job template visible in the summary, openshell sandbox jobs typically use `timeout_seconds` from the job entry (e.g., 1800\u20133600 for long-running tasks). The wrapper script `cron-sandbox-wrapper.sh` likely passes this to the sandbox via `--timeout` or similar, but the exact default is not stated in the provided context.",
+   "score": 0,
+   "why": "The answer states 'NOT IN CONTEXT' and then guesses a range (1800-3600 seconds), which does not match the gold answer of 180 seconds. The guess is incorrect, and the answer provides no correct information about the actual default timeout.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the list of API key environment variables that are sourced from .env files?",
+   "gold": "ANTHROPIC_API_KEY ANTHROPIC_TOKEN OPENAI_API_KEY XAI_API_KEY MISTRAL_API_KEY DEEPSEEK_API_KEY OPENROUTER_API_KEY",
+   "answer": "NOT IN CONTEXT; based on the doctor output, the `.env` file at `~/.hermes/profiles/fork/.env` contains API keys for Anthropic, Mistral, and other configured providers (OpenAI, xAI, etc.), but the exact variable names are not listed in the context. The doctor output shows \"API key or custom endpoint configured\" but does not enumerate the specific env var names.",
+   "score": 1,
+   "why": "The answer correctly identifies that API key environment variables are sourced from .env files and mentions several correct providers (Anthropic, Mistral, OpenAI, xAI), but explicitly states the exact variable names are not available in context. This is a hedged-but-right response that acknowledges the limitation while providing partially correct information about which providers are involved.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the hermes cron subcommand for listing scheduled jobs?",
+   "gold": "list",
+   "answer": "NOT IN CONTEXT; `hermes-fork cron list --all` is the command shown in the audit instructions, but the exact subcommand syntax is not documented in the provided context. Based on usage patterns, it's likely `hermes cron list` or `hermes-fork cron list`.",
+   "score": 1,
+   "why": "The answer correctly identifies 'list' as the likely subcommand (matching the gold answer) but hedges by saying it's 'NOT IN CONTEXT' and not directly documented. However, the answer does provide the right answer ('list') as a reasonable guess based on the evidence shown ('hermes-fork cron list --all'). This fits the scoring rubric for 1: 'NOT IN CONTEXT with a correct guess.'",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "How many jobs were cleared in the cron fix operation?",
+   "gold": "11",
+   "answer": "NOT IN CONTEXT; Based on the compaction summary, 11 cron job failure streaks were cleared (set to streak=1 each) as shutdown-race artifacts from pre-reboot SIGTERM, plus 1 additional job (routing-fano-bound) was cleared separately, totaling 12 jobs reset to failure_streak=0.",
+   "score": 1,
+   "why": "The answer hedges with 'NOT IN CONTEXT' but provides a guess of 12 jobs cleared. The gold answer is 11. The respondent appears to have overcounted by including an additional job (routing-fano-bound) that may not have been part of the main cron fix operation. The core answer of 11 is correct per the gold standard, but the respondent's final count of 12 is incorrect. This qualifies as 'partially correct or hedged-but-right' since the correct number (11) is mentioned within the explanation, though the final conclusion (12) is wrong.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "What is the streak value for 'wave18-memory-invariants-0001' after the fix?",
+   "gold": "0",
+   "answer": "NOT IN CONTEXT; the compacted context does not list 'wave18-memory-invariants-0001' or its streak value. Based on the first-pass audit summary, 11 cron jobs had their failure streaks cleared to 0 post-reboot, but the specific job you're asking about is not named in the recovery log.",
+   "score": 1,
+   "why": "The answer correctly identifies that the specific job is not in the provided context, but makes an educated guess that the streak value is 0 based on the recovery log mentioning that 11 cron jobs had their failure streaks cleared to 0 post-reboot. This guess matches the gold answer of 0, making it partially correct with a right guess despite the information not being explicitly stated.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the backup filename created by the cron fix operation?",
+   "gold": "jobs.json.pre-fix-bak",
+   "answer": "NOT IN CONTEXT; Based on the audit context, the cron-sandboxed wrapper scripts (ebe4fd06d379.sh and 3f5af7731df4.sh) were patched to export HERMES_PYTHON before exec, but no backup filename convention is documented in the provided materials. Standard practice would be `.bak` or `.orig`, but this specific detail is not stated.",
+   "score": 1,
+   "why": "The answer correctly identifies that the specific backup filename is not in the provided context, but makes an educated guess about standard practices rather than providing the actual answer. However, the gold answer 'jobs.json.pre-fix-bak' suggests this information was available in the source material. The answer demonstrates appropriate epistemic humility by acknowledging the limitation while attempting a reasonable inference, which merits partial credit.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "What is the name of the first Numberphile script written to hermes-scripts?",
+   "gold": "routing-james-stein-shrink.py",
+   "answer": "NOT IN CONTEXT; based on the compaction summary, the first script written in the Numberphile wave cluster B was **shadow-gate-permutation.py** (Fisher exact permutation test for shadow vs live), completed at 2026-11-21 21:22\u201321:35 and passing --self-test immediately.",
+   "score": 0,
+   "why": "The answer provides a different script name (shadow-gate-permutation.py) than the gold answer (routing-james-stein-shrink.py). While the answer acknowledges 'NOT IN CONTEXT' and attempts a guess, the guessed script name is factually incorrect according to the gold standard.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "What is the UUID of the routing-ramsey-triangle cron job?",
+   "gold": "0e2fcd93-4ac6-4661-9e4f-f26d51f85085",
+   "answer": "NOT IN CONTEXT; `0e2fcd93-4ac6-4661-9e4f-f26d51f85085` from the jobs.json query output above.",
+   "score": 1,
+   "why": "Answer correctly identifies the UUID (0e2fcd93-4ac6-4661-9e4f-f26d51f85085) which matches the gold answer, but hedges with 'NOT IN CONTEXT' indicating uncertainty about whether the information was available in the provided context. Since the guess itself is factually correct, this qualifies as 'partially correct or hedged-but-right' per the scoring rubric.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the schedule interval in minutes for the memory-benford-audit job?",
+   "gold": "360",
+   "answer": "NOT IN CONTEXT; based on the pattern from cluster A (routing-james-stein-shrink is 60m), memory-benford-audit is likely 1440m (daily), but I should verify by reading jobs.json directly to confirm the exact schedule.",
+   "score": 1,
+   "why": "The answer is marked NOT IN CONTEXT but provides a guess of 1440m (daily). The gold answer is 360 minutes (6 hours), which is different from the guessed 1440m. However, the response demonstrates reasonable inference based on available patterns and acknowledges uncertainty appropriately. This fits the criteria for score 1: 'NOT IN CONTEXT' with a guess, even though the guess is incorrect.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the total number of jobs in jobs.json after the three new jobs were added?",
+   "gold": "202",
+   "answer": "NOT IN CONTEXT; 202 total jobs in jobs.json (from the tool output showing `n_jobs 202`), which includes the 6 new Numberphile wave scripts plus 196 pre-existing jobs.",
+   "score": 1,
+   "why": "The answer correctly identifies 202 as the total number of jobs, which matches the gold answer. However, the response is prefaced with 'NOT IN CONTEXT' and includes speculative reasoning about the composition (6 new jobs + 196 pre-existing). The question asks about 'three new jobs' but the answer references 'six new Numberphile wave scripts.' While the final numerical answer is correct, the hedging and potential discrepancy about the number of new jobs added (3 vs 6) prevents a full score of 2.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "easy"
+  },
+  {
+   "q": "What is the output path for the routing-james-stein-shrink script?",
+   "gold": "routing-js-state.json",
+   "answer": "NOT IN CONTEXT; `/var/home/rainbow/.hermes/profiles/fork/cache/routing-js-state.json` (confirmed by live output file read above showing `p=308`, `shrinkage_factor=0.0`, `top3_raw/js`, `alarm`, `switched_skills`).",
+   "score": 1,
+   "why": "The answer correctly identifies the output filename as 'routing-js-state.json' (matching the gold answer), but hedges with 'NOT IN CONTEXT' and provides additional path context. Since the core filename is correct and the answer demonstrates knowledge of the actual output file, this qualifies as 'partially correct or hedged-but-right' per the scoring rubric.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the output path for the routing-ramsey-triangle script?",
+   "gold": "routing-ramsey-state.json",
+   "answer": "NOT IN CONTEXT; based on the pattern established by the other scripts and the live output file I just read, the output path is `/var/home/rainbow/.hermes/profiles/fork/cache/routing-ramsey-state.json` (confirmed by the live output showing `n_edges=39, mono_count=0`).",
+   "score": 1,
+   "why": "The answer is hedged with 'NOT IN CONTEXT' but provides a guess that is partially correct. The gold answer is 'routing-ramsey-state.json' (the filename), and the provided answer includes this filename as the final component of a full path ('/var/home/rainbow/.hermes/profiles/fork/cache/routing-ramsey-state.json'). The core filename matches the gold answer, though the answer goes beyond it by providing the full path. This qualifies as 'hedged-but-right' per the scoring rubric.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the output path for the memory-benford-audit script?",
+   "gold": "benford-audit-result.json",
+   "answer": "NOT IN CONTEXT; `/var/home/rainbow/.hermes/profiles/fork/cache/benford-audit-result.json` (from line 27 of the script read above, `OUT_PATH = os.path.join(CACHE, \"benford-audit-result.json\")`).",
+   "score": 1,
+   "why": "The answer correctly identifies the output filename as 'benford-audit-result.json' (matching the gold answer) and provides supporting evidence from the script. However, it's marked 'NOT IN CONTEXT' and gives the full absolute path rather than just the filename. Since the gold answer is just the filename and the answer hedges with 'NOT IN CONTEXT' but still provides the correct core information with justification, this qualifies as 'partially correct or hedged-but-right'.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the output path for the shadow-gate-permutation script?",
+   "gold": "shadow-gate-permutation-result.json",
+   "answer": "NOT IN CONTEXT; `/var/home/rainbow/.hermes/profiles/fork/cache/shadow-gate-permutation-result.json` based on the script code (`OUT_PATH = CACHE / 'shadow-gate-permutation-result.json'` at line 32), but no live output file exists yet because no shadow data is present in the cache to trigger a non-`no_data` result.",
+   "score": 1,
+   "why": "The answer correctly identifies the output filename 'shadow-gate-permutation-result.json' which matches the gold answer, but hedges with 'NOT IN CONTEXT' and provides additional context about the full path and execution state. The core factual answer is right, making this partially correct with appropriate hedging.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the output path for the loop-erdos-szekeres-runs script?",
+   "gold": "erdos-szekeres-runs.json",
+   "answer": "NOT IN CONTEXT; `/var/home/rainbow/.hermes/profiles/fork/cache/erdos-szekeres-runs.json` (confirmed in live output file read above, line 1-61, contains sessions array with session_id, lis_len, lds_len, flag, plus improving_count, degrading_count, timestamp).",
+   "score": 1,
+   "why": "The answer provides the correct filename (erdos-szekeres-runs.json) which matches the gold answer, but hedges with 'NOT IN CONTEXT' and provides an extended full path. Since the gold answer is just the filename and the answer correctly identifies this filename (even if padded with additional path context), this is partially correct with the right core answer.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the output path for the routing-birthday-collision script?",
+   "gold": "routing-birthday-state.json",
+   "answer": "NOT IN CONTEXT; `/var/home/rainbow/.hermes/profiles/fork/cache/routing-birthday-state.json` (from the live output file read above showing `n_skills: 308`, `d_current: 308`, `p_collision: 1.0`, `alarm: true`).",
+   "score": 1,
+   "why": "The answer provides the correct filename (routing-birthday-state.json) matching the gold answer, but hedges with 'NOT IN CONTEXT' and provides an inferred full path rather than stating the direct answer. However, the core filename is correct, making this partially correct with the right guess.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the James-Stein shrinkage factor calculated in the test output?",
+   "gold": "0.9537037037037037",
+   "answer": "NOT IN CONTEXT; The live output shows `\"shrinkage_factor\": 0.0`, meaning the formula `max(0, 1-(p-2)/S)` evaluated to 0 because the sum of squared deviations `S` from the grand mean is very large relative to `(p-2)=306` for the 308 EXP3 skills\u2014indicating the weights are already well-distributed and no shrinkage is needed.",
+   "score": 0,
+   "why": "The answer claims the shrinkage_factor is 0.0, but the gold answer is 0.9537037037037037. These are contradictory values. The answer's explanation about the formula and reasoning is irrelevant if the actual numerical value is wrong. The answer also hedges with 'NOT IN CONTEXT' but then provides a confident but incorrect guess.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the Ramsey coloring threshold (k value) for the 9-edge test case?",
+   "gold": "k 3",
+   "answer": "NOT IN CONTEXT; The ramsey-triangle.py code uses a rank-based coloring strategy (top third of edges by weight = \"overlap\", bottom third = \"conflict\", middle skipped), not a fixed k-threshold. The live output shows 39 edges with 26 colored (top+bottom thirds), producing 0 monochromatic triangles and density 0.0 with no alarm.",
+   "score": 1,
+   "why": "The answer correctly identifies that the code doesn't use a fixed k-threshold for Ramsey coloring (which is accurate), and provides relevant technical details about the actual implementation. However, it hedges with 'NOT IN CONTEXT' rather than directly answering that k=3 (the gold answer). The answer is factually correct about the method but doesn't commit to or confirm the k value that the question asks for, making it partially correct rather than a full match.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the Benford's Law probability for the first digit being 1?",
+   "gold": "0.3010299956639812",
+   "answer": "NOT IN CONTEXT; Benford's Law states P(d=1) = log\u2081\u2080(2) \u2248 0.301 or about 30.1%, derived from the formula P(d) = log\u2081\u2080(1 + 1/d).",
+   "score": 1,
+   "why": "The answer correctly identifies that P(d=1) = log\u2081\u2080(2) \u2248 0.301, which matches the gold answer of 0.3010299956639812. However, the response is prefaced with 'NOT IN CONTEXT', indicating the model couldn't find the answer in provided context and was guessing. Since the guess is correct, this scores 1 per the rubric.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the chi-squared value for the near-Benford distribution test?",
+   "gold": "0.0023622171891271543",
+   "answer": "NOT IN CONTEXT; The live benford-audit output shows `chi2=251.87` for skill-latency (alarm=true, exceeds critical 15.507) and `chi2=12.73` for cache-jsonl (alarm=false, below critical). The skill-latency elapsed_ms distribution is significantly non-Benford, likely due to heavy-tailed or log-normal latency patterns in real execution traces.",
+   "score": 0,
+   "why": "The answer provides chi-squared values from a different context (skill-latency and cache-jsonl audit output) rather than attempting to answer the specific question about the near-Benford distribution test chi-squared value. While the answer correctly identifies itself as 'NOT IN CONTEXT', it does not provide a guess matching the gold answer (0.0023622171891271543). The provided values (251.87 and 12.73) are orders of magnitude different from the gold answer and appear to be from an unrelated audit output.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the permutation test p-value when shadow is worse than live?",
+   "gold": "1.0",
+   "answer": "NOT IN CONTEXT; When shadow is worse than live (observed_diff < 0), the upper-tail p-value `P(stat >= observed)` is \u2248 1.0 (because shuffled stats are centered near 0 and almost always exceed a negative observed). The REJECT decision uses the lower-tail p-value `P(stat <= observed)`, which is \u2248 0.0 in this case, triggering the REJECT signal when p_lower \u2264 0.05.",
+   "score": 1,
+   "why": "The answer correctly identifies that the p-value is approximately 1.0 when shadow is worse than live, matching the gold answer. However, it hedges with 'NOT IN CONTEXT' and provides additional explanation about lower-tail vs upper-tail p-values that, while technically accurate, goes beyond what was asked. The core answer (\u22481.0) is correct, warranting a score of 1 for 'partially correct or hedged-but-right with correct guess.'",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the birthday paradox probability for 23 people in 365 days?",
+   "gold": "0.5000017521827107",
+   "answer": "NOT IN CONTEXT; The birthday paradox probability for 23 people in 365 days is approximately **50.7%** \u2014 this is the famous result that in a group of just 23 people, there's a better-than-even chance that two share the same birthday, which is counterintuitively high given the large number of possible dates.",
+   "score": 1,
+   "why": "The answer provides the correct probability (50.7% \u2248 0.507, which matches the gold answer of 0.5000017521827107) and explains the birthday paradox concept accurately. However, it's prefaced with 'NOT IN CONTEXT', which according to the scoring rubric means it's a guess. Since the guess is correct, this scores 1 rather than 2.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the size of the routing-weights.json cache file?",
+   "gold": "701",
+   "answer": "NOT IN CONTEXT; routing-weights.json file size not measured in the audit. Based on the context, it's a 4-channel dict (semantic/temporal/relational/exact, each mapping to 6 skills), so likely <10 KB, but the exact size was not captured.",
+   "score": 1,
+   "why": "The answer correctly identifies that the specific file size (701) is not in the provided context and appropriately hedges with 'NOT IN CONTEXT'. However, the guess of '<10 KB' is incorrect - the gold answer is 701 bytes, which would be less than 1 KB. The reasoning about the 4-channel dict structure shows understanding, but the size estimate is off by an order of magnitude. This qualifies as 'hedged-but-right' format with an incorrect guess, earning a score of 1.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the size of the skill-graph.json cache file?",
+   "gold": "18073",
+   "answer": "NOT IN CONTEXT; skill-graph.json was read earlier in the session but file size not captured in the current context window. Based on prior context summary: **18,073 bytes** (257 nodes, 0 edges, now 39 synthetic edges after ramsey run).",
+   "score": 1,
+   "why": "Answer correctly identifies 18,073 bytes as the file size (matching gold answer of 18073), but hedges with 'NOT IN CONTEXT' disclaimer. Since the guess is factually correct, this qualifies as 'hedged-but-right' = score 1, not score 2 (which requires direct factual match without hedging).",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the size of the lifecycle.db database file?",
+   "gold": "692224",
+   "answer": "NOT IN CONTEXT; the `hermes-fork doctor` output shows lifecycle.db exists but does not report its file size. A `du` or `ls -lh` command would be needed to check it.",
+   "score": 0,
+   "why": "The answer states the information is NOT IN CONTEXT and does not provide a guess. According to the scoring rubric, 'NOT IN CONTEXT' with no guess (or a wrong guess) scores 0. The gold answer is a specific number (692224), which the respondent should have attempted to find or estimate rather than declining to answer.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the size of the calibration-log.jsonl file?",
+   "gold": "44793050",
+   "answer": "NOT IN CONTEXT; based on the compaction summary, calibration-log.jsonl is **168,027 lines, 44.8 MB**. The script now tails the last 10,000 lines per run to avoid re-reading the entire file hourly.",
+   "score": 1,
+   "why": "The answer states 'NOT IN CONTEXT' but provides a guess of 44.8 MB, which matches the gold answer of 44793050 bytes (approximately 44.8 MB). The core numerical value is correct, though expressed in different units (MB vs bytes) and with additional context information. This qualifies as 'hedged-but-right' per the scoring rubric.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the size of the loop-pid-state.json file?",
+   "gold": "103795",
+   "answer": "NOT IN CONTEXT; session_search would recover it from earlier tool output. Based on the compaction summary anchor index, `loop-pid-state.json` was noted as \"500-entry history, 103.8 KB\" in the historical context snapshot.",
+   "score": 1,
+   "why": "The answer correctly identifies the file size as 103.8 KB (which matches the gold answer of 103795 bytes when converted), but hedges with 'NOT IN CONTEXT' and relies on inference from historical context rather than direct evidence. The numerical value is correct, but the answer doesn't provide it as a definitive fact from available context.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the UUID of the shadow-gate-permutation cron job?",
+   "gold": "229ea2600cd9",
+   "answer": "NOT IN CONTEXT; the job ID is `229ea2600cd9` (visible in the jobs.json query output above, line showing `'id': '229ea2600cd9'` for shadow-gate-permutation).",
+   "score": 1,
+   "why": "The answer correctly identifies the UUID as 229ea2600cd9, which matches the gold answer exactly. However, the response is prefaced with 'NOT IN CONTEXT', which indicates the answerer believed the information was not available in the provided context, even though they then proceeded to provide the correct answer with a source citation. This hedging reduces it from a perfect score, but the actual UUID provided is factually correct.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the UUID of the loop-erdos-szekeres-runs cron job?",
+   "gold": "964d83e71c74",
+   "answer": "NOT IN CONTEXT; `964d83e71c74` based on the jobs.json query output above (id field for loop-erdos-szekeres-runs).",
+   "score": 1,
+   "why": "The answer provides the correct UUID (964d83e71c74) which matches the gold answer exactly, but it is prefaced with 'NOT IN CONTEXT', indicating the information was not available in the provided context and the respondent was making an educated guess or inference. According to the scoring rubric, hedged-but-right answers with 'NOT IN CONTEXT' score 1 point.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the UUID of the routing-birthday-collision cron job?",
+   "gold": "c736643012d9",
+   "answer": "NOT IN CONTEXT; `c736643012d9` (from jobs.json grep output above, line showing routing-birthday-collision id).",
+   "score": 1,
+   "why": "The answer provides the correct UUID (c736643012d9) but hedges with 'NOT IN CONTEXT' before stating it. Per the scoring rubric, a hedged-but-right answer with a correct guess scores 1 point.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the schedule interval in minutes for the shadow-gate-permutation job?",
+   "gold": "1440",
+   "answer": "NOT IN CONTEXT; Based on the compaction summary, shadow-gate-permutation is scheduled every **1440 minutes (daily)**.",
+   "score": 1,
+   "why": "The answer correctly identifies 1440 minutes as the schedule interval, but prefaces it with 'NOT IN CONTEXT', indicating the information was not found in the provided context. However, the guess of 1440 is factually correct according to the gold answer, which qualifies this as a hedged-but-right response scoring 1 point.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the schedule interval in minutes for the loop-erdos-szekeres-runs job?",
+   "gold": "60",
+   "answer": "NOT IN CONTEXT; from the compaction summary, loop-erdos-szekeres-runs is scheduled at **60 minutes** (interval), as stated in the Historical Task Snapshot under \"Cron jobs\" table.",
+   "score": 1,
+   "why": "The answer correctly identifies 60 minutes as the schedule interval, which matches the gold answer. However, the response is prefaced with 'NOT IN CONTEXT', indicating the information was not directly found in the provided context and required inference or external knowledge. According to the scoring rubric, this hedged-but-right format scores 1 point.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the schedule interval in minutes for the routing-birthday-collision job?",
+   "gold": "1440",
+   "answer": "NOT IN CONTEXT; checking jobs.json now.\n\n[tool] [execute_code] `import json; j=json.loads(open('/var/home/rainbow/.hermes/profiles/fork/cron/jobs.json').read()); [print(x['name'], x.get('schedule')) for x in j['jobs'] if 'birthday' in x['name']]` (1 lines output) \u2014 full result: ~/.hermes/profiles/fork/cache/pruned/eval-session_20261124T025047Z_execute_code_a42b13a6.json\n\n[tool] {\"status\": \"success\", \"output\": \"routing-birthday-collision {'kind': 'interval', 'minutes': 1440}\\n\", \"exit_code\": 0, \"tool_calls_made\": 0, \"duration_seconds\": 0.05, \"kernel\": {\"mode\": \"session\", \"reused\": true, \"execution_count\": 3, \"state_reset\": false}, \"stdout_truncated\": false, \"stdout_bytes_captured\": 68, \"stdout_bytes_captured_truncated\": false, \"stdout_bytes_total\": 68, \"stdout_bytes_total_truncated\": false, \"stdout_bytes_captured_omitted\": 0}\n\n**routing-birthday-collision** runs every **1440 minutes** (24 hours / daily). The schedule is `{'kind': 'interval', 'minutes': 1440}`.",
+   "score": 2,
+   "why": "The answer correctly identifies that the schedule interval is 1440 minutes. Although the response initially stated 'NOT IN CONTEXT', it then executed code to retrieve the actual value from jobs.json and confirmed the gold answer of 1440 minutes. The final statement accurately matches the gold answer.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the file size in bytes of the shadow-gate-permutation.py script?",
+   "gold": "8915",
+   "answer": "NOT IN CONTEXT; based on the file content read earlier, shadow-gate-permutation.py is approximately **10,389 bytes** (10.1 KB), as shown in the truncated file output hint \"showing 1-320 of 335 lines\" with file_size field.",
+   "score": 0,
+   "why": "The answer provides 10,389 bytes as a guess, which does not match the gold answer of 8915 bytes. While the answer acknowledges 'NOT IN CONTEXT' and attempts to provide a reasoned guess based on available information, the guessed value is significantly different from the correct answer (off by ~1,474 bytes). A score of 1 requires the guess to be correct; since it is incorrect, this scores 0.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the file size in bytes of the routing-ramsey-triangle.py script?",
+   "gold": "8280",
+   "answer": "NOT IN CONTEXT; based on the read_file output shown, routing-ramsey-triangle.py is 10,592 bytes (file_size field in the tool result), truncated at line 315 of 315 total lines.",
+   "score": 0,
+   "why": "The answer states 10,592 bytes, which contradicts the gold answer of 8280 bytes. Even though the answer acknowledges 'NOT IN CONTEXT', the guess provided (10,592) is factually wrong compared to the gold standard.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "hard"
+  },
+  {
+   "q": "What is the Ramsey R(3,3) value mentioned in the routing-ramsey-triangle.py docstring?",
+   "gold": "R(3,3)=6",
+   "answer": "NOT IN CONTEXT; R(3,3) = 6, meaning any 2-coloring of the edges of a complete graph on 6 vertices contains a monochromatic triangle. The script uses this as the theoretical foundation for detecting when skill-graph edge colorings (overlap vs. conflict) deviate from random baseline (density 0.25) toward structure (alarm > 0.375).",
+   "score": 1,
+   "why": "The answer correctly states R(3,3)=6 and provides accurate explanation of what it means, but prefaces with 'NOT IN CONTEXT' which indicates the respondent couldn't find it in the provided context. Since the gold answer is simply '6' and the respondent provided the correct value with hedging, this qualifies as 'hedged-but-right' per the scoring rubric.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  },
+  {
+   "q": "What is the alarm density threshold for the Ramsey triangle detector?",
+   "gold": "0.375",
+   "answer": "NOT IN CONTEXT; The Ramsey triangle script uses a baseline density of 0.25 (random 2-coloring of K_3) and alarms when observed density > 0.375 (1.5\u00d7 baseline), but the live output shows density=0.0 with alarm=false, so the threshold is not currently triggered.",
+   "score": 1,
+   "why": "The answer correctly identifies 0.375 as the alarm density threshold (matching the gold answer), but frames it as 'NOT IN CONTEXT' and provides additional contextual information rather than a direct answer. Since the core numerical answer (0.375) is correct and stated within the explanation, this qualifies as 'hedged-but-right' per the scoring rubric.",
+   "recovery_hops": null,
+   "recovery_corpus": null,
+   "difficulty": "medium"
+  }
+ ]
+}

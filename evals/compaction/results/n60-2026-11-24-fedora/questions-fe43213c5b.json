@@ -1,0 +1,422 @@
+[
+ {
+  "q": "What is the name of the skill that was pruned and lost in context compression at the start of the transcript?",
+  "gold": "devops/hermes-fork-maintenance",
+  "where": "[tool] [skill_view] name=devops/hermes-fork-maintenance (71,762 chars) [SKILL_PRUNED: content lost in compression; reload with skill_view(name='devops/hermes-fork-maintenance')]",
+  "difficulty": "easy",
+  "required_in": "summary"
+ },
+ {
+  "q": "What is the LOAD state of geoclue.service according to the first systemd unit status output?",
+  "gold": "loaded failed failed",
+  "where": "\u25cf geoclue.service loaded failed failed Location Lookup Service",
+  "difficulty": "easy",
+  "required_in": "archive"
+ },
+ {
+  "q": "What error result did geoclue.service fail with according to the systemd journal?",
+  "gold": "Failed with result 'timeout'",
+  "where": "Nov 21 11:27:03 localhost systemd[1]: geoclue.service: Failed with result 'timeout'.",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the gid for the 'audio' group according to the group file output?",
+  "gold": "audio:x:63:",
+  "where": "audio:x:63:\ndisk:x:6:",
+  "difficulty": "easy",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the full path to the hermes binary in the ExecStart directive?",
+  "gold": "\"/var/home/rainbow/.hermes/hermes-fork/.hermes/bin/hermes\"",
+  "where": "ExecStart=\"/var/home/rainbow/.hermes/hermes-fork/.hermes/bin/hermes\" \"gateway\" \"run\"",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the value of HERMES_HOME environment variable set in the service unit?",
+  "gold": "HERMES_HOME=/var/home/rainbow/.hermes",
+  "where": "Environment=\"HERMES_HOME=/var/home/rainbow/.hermes\"",
+  "difficulty": "easy",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the TimeoutStopSec value in the Hermes Agent Gateway service unit?",
+  "gold": "TimeoutStopSec=70",
+  "where": "TimeoutStopSec=70\nStandardOutput=journal",
+  "difficulty": "easy",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the result of the cron job 34 COMMAND that completed at 2026-11-21 00:28:04.751 UTC?",
+  "gold": "INSERT 0 0 0",
+  "where": "2026-11-21 00:28:04.751 UTC [69] LOG:  cron job 34 COMMAND completed: INSERT 0 0 0",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the stall threshold (in minutes) used in the cron job 3 query for marking jobs as queued?",
+  "gold": "1 minute",
+  "where": "WHERE nuq.queue_scrape.locked_at <= now() - interval '1 minute' AND nuq.queue_scrape.status = 'active'",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the current hermes python version reported in the tool output?",
+  "gold": "3.14.9",
+  "where": "Current hermes python: /var/home/rainbow/.hermes/tools/python-3.14.9+20261021-linux-x64/bin/python3",
+  "difficulty": "easy",
+  "required_in": "summary"
+ },
+ {
+  "q": "What is the magic number for Python 3.15.2?",
+  "gold": "520e0d0a",
+  "where": "Python 3.15.2\nmagic: 520e0d0a",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the name of the script file that contains the Fano inequality lower bound calculation?",
+  "gold": "routing-fano-bound.py",
+  "where": "#!/usr/bin/env python3\n\"\"\"routing-fano-bound.py \u2014 Fano inequality lower bound on router error.",
+  "difficulty": "easy",
+  "required_in": "summary"
+ },
+ {
+  "q": "What is the formula for Fano's inequality as stated in the routing-fano-bound.py docstring?",
+  "gold": "P_error >= (H(S|Q) - 1) / log2(n)",
+  "where": "P_error >= (H(S|Q) - 1) / log2(n)\nIf current_error < bound: IMPOSSIBLE (bug). If current_error > bound + 0.15: IMPROVEMENT_POSSIBLE.",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the size in bytes of the routing-fano-bound.py file?",
+  "gold": "10483",
+  "where": "-rwxr-xr-x. 1 rainbow rainbow 10483 Nov 20 15:11 /var/home/rainbow/.hermes/hermes-scripts/routing-fano-bound.py",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the cpython magic number for Python 3.14 bytecode?",
+  "gold": "2b0e0d0a",
+  "where": "python version: 3.14.9 (main, Oct 21 2026, 17:48:02) [Clang 23.1.3 ]\nmagic: 2b0e0d0a",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the path to the l1-extract cpython-315 bytecode file?",
+  "gold": "/var/home/rainbow/.hermes/profiles/fork/scripts/__pycache__/l1-extract.cpython-315.pyc",
+  "where": "/var/home/rainbow/.hermes/profiles/fork/scripts/__pycache__/l1-extract.cpython-315.pyc",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the fallback system python path if hermes python 3.14 is not found?",
+  "gold": "/usr/bin/python3",
+  "where": "return \"/usr/bin/python3\"\n\n\n_SYS_PYTHON = _find_py()",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the minimum pyc file size threshold used to determine if a pyc is valid?",
+  "gold": "20000",
+  "where": "pyc = next((p for p in _PYC_CANDIDATES if p.exists() and p.stat().st_size > 20000), None)",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What OpenShell command is used to manage sandboxes?",
+  "gold": "sandbox:",
+  "where": "SANDBOX COMMANDS\n  sandbox:     Manage sandboxes",
+  "difficulty": "easy",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the OpenShell policy schema version for hermes-fork cron jobs?",
+  "gold": "v0.1.5",
+  "where": "# OpenShell sandbox policy for hermes-fork cron jobs (v0.1.5 schema).",
+  "difficulty": "easy",
+  "required_in": "summary"
+ },
+ {
+  "q": "What is the path to the hermes python 3.14 tools directory in the sandbox policy?",
+  "gold": "/var/home/rainbow/.hermes/tools/python-3.14.9+20261021-linux-x64",
+  "where": "    - /var/home/rainbow/.hermes/tools/python-3.14.9+20261021-linux-x64",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the Landlock compatibility requirement in the sandbox policy?",
+  "gold": "hard_requirement",
+  "where": "landlock:\n  compatibility: hard_requirement",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What environment variable is used to bypass the openshell sandbox?",
+  "gold": "HERMES_NO_SANDBOX=1",
+  "where": "# HERMES_NO_SANDBOX=1: bypass openshell and run directly on host.",
+  "difficulty": "easy",
+  "required_in": "summary"
+ },
+ {
+  "q": "What is the default timeout in seconds for openshell sandbox execution?",
+  "gold": "180",
+  "where": "TIMEOUT_SEC=\"${HERMES_OPENSHELL_TIMEOUT:-180}\"",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the list of API key environment variables that are sourced from .env files?",
+  "gold": "ANTHROPIC_API_KEY ANTHROPIC_TOKEN OPENAI_API_KEY XAI_API_KEY MISTRAL_API_KEY DEEPSEEK_API_KEY OPENROUTER_API_KEY",
+  "where": "_API_KEYS=(\n  ANTHROPIC_API_KEY ANTHROPIC_TOKEN\n  OPENAI_API_KEY\n  XAI_API_KEY\n  MISTRAL_API_KEY\n  DEEPSEEK_API_KEY\n  OPENROUTER_API_KEY\n)",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the hermes cron subcommand for listing scheduled jobs?",
+  "gold": "list",
+  "where": "    list                List scheduled jobs",
+  "difficulty": "easy",
+  "required_in": "archive"
+ },
+ {
+  "q": "How many jobs were cleared in the cron fix operation?",
+  "gold": "11",
+  "where": "\"status\": \"success\", \"output\": \"Cleared 11 jobs:",
+  "difficulty": "easy",
+  "required_in": "summary"
+ },
+ {
+  "q": "What is the streak value for 'wave18-memory-invariants-0001' after the fix?",
+  "gold": "0",
+  "where": "  wave18-memory-invariants-0001 (wave18-memory-invariants-0001): streak 5 -> 0",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the backup filename created by the cron fix operation?",
+  "gold": "jobs.json.pre-fix-bak",
+  "where": "Backup written to jobs.json.pre-fix-bak",
+  "difficulty": "easy",
+  "required_in": "summary"
+ },
+ {
+  "q": "What is the name of the first Numberphile script written to hermes-scripts?",
+  "gold": "routing-james-stein-shrink.py",
+  "where": "wrote /var/home/rainbow/.hermes/hermes-scripts/routing-james-stein-shrink.py size 8280",
+  "difficulty": "easy",
+  "required_in": "summary"
+ },
+ {
+  "q": "What is the UUID of the routing-ramsey-triangle cron job?",
+  "gold": "0e2fcd93-4ac6-4661-9e4f-f26d51f85085",
+  "where": "  \"id\": \"0e2fcd93-4ac6-4661-9e4f-f26d51f85085\",\n  \"name\": \"routing-ramsey-triangle\",",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the schedule interval in minutes for the memory-benford-audit job?",
+  "gold": "360",
+  "where": "    \"minutes\": 360,\n    \"display\": \"every 360m\"\n  },\n  \"no_agent\": true,\n  \"args\": null,\n  \"cwd\": null,\n  \"timeout\": null,\n  \"env\": {\n    \"HERMES_PROFILE\": \"fork\",\n    \"HERMES_HOME\": \"/var/home/rainbow/.hermes\"\n  }\n}\n---\n{\n  \"id\": \"229ea2600cd9\",\n  \"name\": \"shadow-gate-permutation\",",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the total number of jobs in jobs.json after the three new jobs were added?",
+  "gold": "202",
+  "where": "\"n_jobs\": 202,",
+  "difficulty": "easy",
+  "required_in": "summary"
+ },
+ {
+  "q": "What is the output path for the routing-james-stein-shrink script?",
+  "gold": "routing-js-state.json",
+  "where": "  OUT_PATH = os.path.join(CACHE, \"routing-js-state.json\")",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the output path for the routing-ramsey-triangle script?",
+  "gold": "routing-ramsey-state.json",
+  "where": "  OUT_PATH = os.path.join(CACHE, \"routing-ramsey-state.json\")",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the output path for the memory-benford-audit script?",
+  "gold": "benford-audit-result.json",
+  "where": "  OUT_PATH = os.path.join(CACHE, \"benford-audit-result.json\")",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the output path for the shadow-gate-permutation script?",
+  "gold": "shadow-gate-permutation-result.json",
+  "where": "  OUT_PATH = CACHE / 'shadow-gate-permutation-result.json'",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the output path for the loop-erdos-szekeres-runs script?",
+  "gold": "erdos-szekeres-runs.json",
+  "where": "  OUT_PATH = CACHE / 'erdos-szekeres-runs.json'",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the output path for the routing-birthday-collision script?",
+  "gold": "routing-birthday-state.json",
+  "where": "  OUT_PATH = CACHE / 'routing-birthday-state.json'",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the James-Stein shrinkage factor calculated in the test output?",
+  "gold": "0.9537037037037037",
+  "where": "factor 0.9537037037037037 js [9.666666666666668, 1.0833333333333333, 1.0833333333333333, 1.0833333333333333, 1.0833333333333333] skipped False",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the Ramsey coloring threshold (k value) for the 9-edge test case?",
+  "gold": "k 3",
+  "where": "n9 colors Counter({'overlap': 3, 'conflict': 3}) colored 6 k 3",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the Benford's Law probability for the first digit being 1?",
+  "gold": "0.3010299956639812",
+  "where": "P1 0.3010299956639812 list [0.3010299956639812, 0.17609125905568124, 0.12493873660829992, 0.09691001300805642, 0.07918124604762482, 0.06694678963061322, 0.05799194697768673, 0.05115252244738129, 0.04575749056067514]",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the chi-squared value for the near-Benford distribution test?",
+  "gold": "0.0023622171891271543",
+  "where": "chi2 near-benford 0.0023622171891271543 N 1000",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the permutation test p-value when shadow is worse than live?",
+  "gold": "1.0",
+  "where": "shadow worse than live {'signal': 'NO_SIGNAL', 'p_value': 1.0, 'n_shadow': 20, 'n_live': 20, 'observed_diff': -1.0584224841589205, 'timestamp': '2026-11-21T08:49:12.171136+00:00'}",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the birthday paradox probability for 23 people in 365 days?",
+  "gold": "0.5000017521827107",
+  "where": "P23 0.5000017521827107",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the size of the routing-weights.json cache file?",
+  "gold": "701",
+  "where": "routing-weights.json exists True size 701",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the size of the skill-graph.json cache file?",
+  "gold": "18073",
+  "where": "skill-graph.json exists True size 18073",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the size of the lifecycle.db database file?",
+  "gold": "692224",
+  "where": "lifecycle.db exists True size 692224",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the size of the calibration-log.jsonl file?",
+  "gold": "44793050",
+  "where": "calibration-log.jsonl exists True size 44793050",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the size of the loop-pid-state.json file?",
+  "gold": "103795",
+  "where": "loop-pid-state.json exists True size 103795",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the UUID of the shadow-gate-permutation cron job?",
+  "gold": "229ea2600cd9",
+  "where": "  \"id\": \"229ea2600cd9\",\n  \"name\": \"shadow-gate-permutation\",",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the UUID of the loop-erdos-szekeres-runs cron job?",
+  "gold": "964d83e71c74",
+  "where": "  \"id\": \"964d83e71c74\",\n  \"name\": \"loop-erdos-szekeres-runs\",",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the UUID of the routing-birthday-collision cron job?",
+  "gold": "c736643012d9",
+  "where": "  \"id\": \"c736643012d9\",\n  \"name\": \"routing-birthday-collision\",",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the schedule interval in minutes for the shadow-gate-permutation job?",
+  "gold": "1440",
+  "where": "    \"minutes\": 1440,\n    \"display\": \"every 1440m\"\n  },\n  \"no_agent\": true,\n  \"args\": null,\n  \"cwd\": null,\n  \"timeout\": null,\n  \"env\": {\n    \"HERMES_PROFILE\": \"fork\",\n    \"HERMES_HOME\": \"/var/home/rainbow/.hermes\"\n  }\n}\n---\n{\n  \"id\": \"964d83e71c74\",\n  \"name\": \"loop-erdos-szekeres-runs\",",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the schedule interval in minutes for the loop-erdos-szekeres-runs job?",
+  "gold": "60",
+  "where": "    \"minutes\": 60,\n    \"display\": \"every 60m\"\n  },\n  \"no_agent\": true,\n  \"args\": null,\n  \"cwd\": null,\n  \"timeout\": null,\n  \"env\": {\n    \"HERMES_PROFILE\": \"fork\",\n    \"HERMES_HOME\": \"/var/home/rainbow/.hermes\"\n  }\n}\n---\n{\n  \"id\": \"c736643012d9\",\n  \"name\": \"routing-birthday-collision\",",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the schedule interval in minutes for the routing-birthday-collision job?",
+  "gold": "1440",
+  "where": "    \"minutes\": 1440,\n    \"display\": \"every 1440m\"\n  },\n  \"no_agent\": true,\n  \"args\": null,\n  \"cwd\": null,\n  \"timeout\": null,\n  \"env\": {\n    \"HERMES_PROFILE\": \"fork\",\n    \"HERMES_HOME\": \"/var/home/rainbow/.hermes\"\n  }\n}",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the file size in bytes of the shadow-gate-permutation.py script?",
+  "gold": "8915",
+  "where": "wrote /var/home/rainbow/.hermes/hermes-scripts/shadow-gate-permutation.py bytes 8915",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the file size in bytes of the routing-ramsey-triangle.py script?",
+  "gold": "8280",
+  "where": "wrote /var/home/rainbow/.hermes/hermes-scripts/routing-ramsey-triangle.py size 8280",
+  "difficulty": "hard",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the Ramsey R(3,3) value mentioned in the routing-ramsey-triangle.py docstring?",
+  "gold": "R(3,3)=6",
+  "where": "\"\"\"routing-ramsey-triangle.py \u2014 R(3,3)=6 monochromatic triangle density.",
+  "difficulty": "medium",
+  "required_in": "archive"
+ },
+ {
+  "q": "What is the alarm density threshold for the Ramsey triangle detector?",
+  "gold": "0.375",
+  "where": "Alarm when observed density > 0.375 (1.5x baseline).",
+  "difficulty": "medium",
+  "required_in": "archive"
+ }
+]

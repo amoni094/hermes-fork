@@ -204,7 +204,9 @@ not enforced gates in the agent loop. Do NOT cite them as active enforcement:
   recall-miss-ttl-adjuster.py - MRAS adaptive TTL adjuster; reads recall-misses.jsonl; closes bottleneck #8 (wiring sprint 2)
   composite-ue-scorer.py     - Hedge + zlib CCR + trigram-Jaccard cluster UE; composite>0.5 alarm; DPI partial_credit=1-UE
   amodei-tool-log-monitor.py - Accident-risk flags on tool JSONL: DARK_WINDOW, REWARD_HACK, IRREVERSIBLE, PREPOTENCE, DOMAIN_SHIFT
-  model-tier-classifier.py - Fast|slow turn classifier (stdlib); used by evals/toolperf_abeval --arm tiered
+  model-tier-classifier.py - 6-tier stdlib classifier; live via agent/model_router.py when smart_model_routing.classifier=rules
+  model-benchmark.py       - Orchestrate ab_eval.py across models/tasks; tier-calibration winner report
+  task-orchestrator.py     - Classify, spawn worker; skip verify/escalate unless reason/elite or conf<0.7; ATOF orchestrated=
   pm-cron-probe.py           - Prospective-memory measurement (Einstein-McDaniel cue/target); fork/scripts only
   evals/compaction/rif_probe.py - RIF compaction fixture (Rp+/Nrp-/Ctrl); RIF_index = recall_Nrp- - recall_Ctrl
   evals/compaction/eval_stats.py - Wilson CI, Cohen n/arm, Wald SPRT, Hoeffding n (stdlib; --self-test)

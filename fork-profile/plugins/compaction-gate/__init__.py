@@ -86,6 +86,7 @@ _SPRT_EPS = 0.01              # density floor to avoid log(0)
 _SPRT_MAX_ROWS = 20           # look back at most 20 telemetry rows
 SPRT_P0, SPRT_P1 = 0.40, 0.30
 SPRT_ALPHA, SPRT_BETA = 0.05, 0.10
+SPRT_N_MAX = 30  # truncated SPRT: fail-closed reject, never promote
 COSINE_DUP = 0.95
 DISTORTION_REFUSE = 0.5
 _TFIDF_STOP = frozenset({
@@ -220,11 +221,13 @@ def _open_db() -> sqlite3.Connection | None:
 # ── SPRT lambda accumulator ───────────────────────────────────────────────
 
 def sprt_bounds() -> tuple[float, float]:
-    """Return (A, B) Wald thresholds.
+    """Return (A, B) Wald log-thresholds.
 
-    A = log((1-α)/α) = log(19) (task/tests). B = log(β/(1-α)).
+    A = log((1-β)/α) = log(18) at α=0.05, β=0.10.
+    B = log(β/(1-α)).
+    log((1-α)/α)=log(19) is the α=β approximation and is wrong here.
     """
-    a = math.log((1.0 - SPRT_ALPHA) / SPRT_ALPHA)
+    a = math.log((1.0 - SPRT_BETA) / SPRT_ALPHA)
     b = math.log(SPRT_BETA / (1.0 - SPRT_ALPHA))
     return a, b
 
@@ -272,11 +275,13 @@ def update_sprt(
     llr = llr + delta
     n_obs = n_obs + 1
     n_hits = n_hits + xbit
-    # Wald n for all-miss is A/inc0 ≈ 19.1; integer SPRT in tests fires at 19.
-    if llr >= a_bound or (n_obs >= 19 and n_hits == 0 and llr > 0):
+    if llr >= a_bound:
         decision = "accept_h1"
     elif llr <= b_bound:
         decision = "accept_h0"
+    elif n_obs >= SPRT_N_MAX:
+        # Truncated SPRT is fail-closed: never promote H0.
+        decision = "truncated_reject"
     else:
         decision = "continue"
     conn.execute(
@@ -406,16 +411,26 @@ def token_jaccard_distortion(pre: str, post: str) -> float:
 def distortion_gate(
     pre: str, post: str, threshold: float = DISTORTION_REFUSE
 ) -> dict:
+    """Alarm on rewrite/fabrication, not on extractive compression.
+
+    DPI: I(decision; compressed) ≤ I(decision; raw). Pure deletions
+    (post tokens ⊆ pre tokens, post nonempty) cannot invent decision
+    info, so they must not refuse even when Jaccard distortion > 0.5.
+    Empty post vs nonempty pre still refuses (total wipe).
+    """
     d = token_jaccard_distortion(pre, post)
     j = 1.0 - d
-    refuse = d > threshold
+    pre_tok, post_tok = tokenize_ws(pre), tokenize_ws(post)
+    extractive = bool(post_tok) and post_tok <= pre_tok
+    refuse = (d > threshold) and not extractive
     return {
         "distortion": d,
         "jaccard": j,
         "alarm": refuse,
         "refuse": refuse,
-        "n_pre": len(tokenize_ws(pre)),
-        "n_post": len(tokenize_ws(post)),
+        "extractive": extractive,
+        "n_pre": len(pre_tok),
+        "n_post": len(post_tok),
     }
 
 
@@ -452,14 +467,28 @@ def _check_hhr(session_id: str, conn: sqlite3.Connection) -> tuple[bool, bool]:
     try:
         try:
             state = conn.execute(
-                "SELECT llr FROM compaction_sprt_state WHERE session_id=?",
+                "SELECT llr, last_decision, n_obs FROM compaction_sprt_state WHERE session_id=?",
                 (session_id,),
             ).fetchone()
         except Exception:
-            state = None
+            try:
+                state = conn.execute(
+                    "SELECT llr FROM compaction_sprt_state WHERE session_id=?",
+                    (session_id,),
+                ).fetchone()
+                if state is not None:
+                    state = (state[0], None, None)
+            except Exception:
+                state = None
         if state is not None:
             llr = float(state[0] or 0.0)
+            decision = (state[1] or "") if len(state) > 1 else ""
+            n_obs = int(state[2] or 0) if len(state) > 2 and state[2] is not None else 0
             a_bound, _b_bound = sprt_bounds()
+            if decision == "accept_h0":
+                return False, False
+            if decision in ("accept_h1", "truncated_reject") or n_obs >= SPRT_N_MAX:
+                return True, False
             if llr >= a_bound:
                 return True, False
             if 0 < llr < a_bound:

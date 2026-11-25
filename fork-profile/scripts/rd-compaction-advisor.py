@@ -174,27 +174,56 @@ def compute_aggressiveness(
 
 def _current_from_log() -> int | None:
     """Best-effort: only explicit current/prompt/context token fields, not bare 'N tokens'."""
-    log_path = HERMES_HOME / "logs" / "agent.log"
-    if not log_path.exists():
-        return None
-    try:
-        size = os.path.getsize(log_path)
-        with open(log_path, "rb") as f:
-            f.seek(max(0, size - 50000))
-            tail = f.read().decode("utf-8", errors="replace")
-    except OSError:
-        return None
-    matches = re.findall(
+    log_paths: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in (
+        HERMES_HOME / "logs" / "agent.log",
+        _profile_root() / "logs" / "agent.log",
+    ):
+        if candidate not in seen:
+            seen.add(candidate)
+            log_paths.append(candidate)
+
+    token_re = re.compile(
         r"(?:prompt_tokens|context_tokens|current_tokens|approx_tokens)[=:\s]+(\d{3,8})",
-        tail,
         flags=re.IGNORECASE,
     )
-    if not matches:
-        return None
+    for log_path in log_paths:
+        if not log_path.exists():
+            continue
+        try:
+            size = os.path.getsize(log_path)
+            with open(log_path, "rb") as f:
+                f.seek(max(0, size - 50000))
+                tail = f.read().decode("utf-8", errors="replace")
+        except OSError:
+            continue
+        matches = token_re.findall(tail)
+        if not matches:
+            continue
+        try:
+            return int(matches[-1])
+        except ValueError:
+            continue
+
+    count_path = _profile_root() / "cache" / "current-token-count.json"
     try:
-        return int(matches[-1])
-    except ValueError:
+        data = json.loads(count_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
         return None
+    if not isinstance(data, dict):
+        return None
+    for key in ("current_tokens", "tokens", "token_count"):
+        val = data.get(key)
+        if val is None:
+            continue
+        try:
+            n = int(val)
+        except (TypeError, ValueError):
+            continue
+        if n >= 0:
+            return n
+    return None
 
 
 def entropy_adjusted_aggressiveness(
@@ -620,19 +649,16 @@ def main() -> None:
 
     if args.current_tokens is not None:
         current = args.current_tokens
-    elif args.from_log:
+    else:
+        # Cron scheduler does not pass job.argv, so --from-log is never seen
+        # on the 30m job. Always fall back to log / current-token-count.json.
         found = _current_from_log()
         if found is None:
             print(json.dumps({
-                "error": "Could not determine current token count from agent.log. Pass --current-tokens.",
+                "error": "Could not determine current token count from agent.log or cache/current-token-count.json. Pass --current-tokens.",
             }))
             sys.exit(1)
         current = found
-    else:
-        print(json.dumps({
-            "error": "Pass --current-tokens (or --from-log for a best-effort log parse).",
-        }))
-        sys.exit(1)
 
     result = compute_aggressiveness(current, threshold, k=args.k)
     if args.content_entropy is not None:
